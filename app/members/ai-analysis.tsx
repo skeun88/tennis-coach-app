@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
+import { useAudioRecorder, AudioModule, RecordingPresets } from 'expo-audio';
 import { supabase } from '../../lib/supabase';
 import { LessonPlan, DrillSuggestion } from '../../types';
 
@@ -28,7 +28,7 @@ export default function AIAnalysisScreen() {
   }>();
   const router = useRouter();
 
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -72,14 +72,13 @@ export default function AIAnalysisScreen() {
 
   async function startRecording() {
     try {
-      const { granted } = await Audio.requestPermissionsAsync();
-      if (!granted) {
+      const status = await AudioModule.requestRecordingPermissionsAsync();
+      if (!status.granted) {
         Alert.alert('권한 필요', '마이크 권한이 필요합니다.');
         return;
       }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      setRecording(recording);
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
       setIsRecording(true);
       setRecordingDuration(0);
       timerRef.current = setInterval(() => setRecordingDuration(d => d + 1), 1000);
@@ -89,16 +88,15 @@ export default function AIAnalysisScreen() {
   }
 
   async function stopAndAnalyze() {
-    if (!recording) return;
+    if (!isRecording) return;
     if (timerRef.current) clearInterval(timerRef.current);
     setIsRecording(false);
     setIsAnalyzing(true);
     setAnalysisStep(1);
 
     try {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      setRecording(null);
+      await audioRecorder.stop();
+      const uri = audioRecorder.uri;
       if (!uri) throw new Error('녹음 파일을 찾을 수 없습니다.');
 
       const { data: { user } } = await supabase.auth.getUser();
