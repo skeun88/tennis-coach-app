@@ -129,7 +129,7 @@ export default function NewLessonScreen() {
             />
           </View>
           {/* 회원 목록 - 높이 고정 + 스크롤 */}
-          <View style={styles.memberList}>
+          <ScrollView style={styles.memberList} nestedScrollEnabled={true}>
             {members.length === 0 && <Text style={styles.noMember}>등록된 회원이 없습니다</Text>}
             {members
               .filter(m => m.name.includes(memberSearch))
@@ -148,7 +148,7 @@ export default function NewLessonScreen() {
                   </TouchableOpacity>
                 );
               })}
-          </View>
+          </ScrollView>
         </View>
 
         <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={loading}>
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
     marginBottom: 8, borderWidth: 1, borderColor: '#eee',
   },
   searchInput: { flex: 1, paddingVertical: 9, fontSize: 14, color: '#1a1a1a' },
-  memberList: { maxHeight: 220, overflow: 'hidden' },  // 높이 고정 (~4명 보임)
+  memberList: { maxHeight: 220 },  // 높이 고정 (~4명 보임), 넘치면 스크롤
   memberRow: {
     flexDirection: 'row', alignItems: 'center', paddingVertical: 10,
     borderBottomWidth: 1, borderBottomColor: '#f0f0f0', borderRadius: 8,
