@@ -241,6 +241,27 @@ ${transcript}`
       // ── Step 4: Claude 분석 (system prompt 캐싱 + 경량 user prompt) ──
       pushProgress(4, 5, '🧠 AI 레슨 분석 중...')
 
+      // Claude API 호출 (overloaded 시 최대 3회 retry)
+      async function fetchClaude(body: object, retries = 3): Promise<Response> {
+        for (let i = 0; i < retries; i++) {
+          const res = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'x-api-key': ANTHROPIC_API_KEY,
+              'anthropic-version': '2023-06-01',
+              'anthropic-beta': 'prompt-caching-2024-07-31',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+          })
+          if (res.status !== 529 && res.status !== 503) return res
+          const wait = (i + 1) * 3000  // 3초, 6초, 9초
+          console.log(`Claude overloaded, retrying in ${wait}ms... (attempt ${i + 1}/${retries})`)
+          await new Promise(r => setTimeout(r, wait))
+        }
+        throw new Error('Claude 서버가 혼잡합니다. 잠시 후 다시 시도해주세요.')
+      }
+
       const historyContext = (recentPlans || []).map((p, i) =>
         `[${i + 1}회 전 - ${new Date(p.created_at).toLocaleDateString('ko-KR')}]\n` +
         `요약: ${p.summary}\n` +
@@ -270,15 +291,7 @@ ${historyContext || '(이전 레슨 기록 없음)'}
 ## 관련 테니스 교육 자료
 ${knowledgeContext || '(관련 자료 없음)'}`
 
-      const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
-          'anthropic-beta': 'prompt-caching-2024-07-31',  // 프롬프트 캐싱 활성화
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const claudeRes = await fetchClaude({
           model: 'claude-sonnet-4-5',
           max_tokens: 2048,
           stream: wantsStream,
@@ -290,8 +303,7 @@ ${knowledgeContext || '(관련 자료 없음)'}`
             },
           ],
           messages: [{ role: 'user', content: userPrompt }],
-        }),
-      })
+        })
 
       let rawResponse = ''
 
