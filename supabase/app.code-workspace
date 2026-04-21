@@ -1,0 +1,25 @@
+{
+	"folders": [
+		{
+			"path": "../app"
+		},
+		{
+			"path": "../assets"
+		},
+		{
+			"path": "../components"
+		},
+		{
+			"path": "../lib"
+		},
+		{
+			"path": "../node_modules"
+		},
+		{
+			"path": "."
+		},
+		{
+			"path": "../types"
+		}
+	]
+}

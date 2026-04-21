@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "테니스 코치",
+    "slug": "tennis-coach-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a7a4a"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.kibbl.tenniscoach",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a7a4a"
+      },
+      "package": "com.tenniscoach.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "scheme": "tenniscoach",
+    "plugins": [
+      "expo-router",
+      "expo-audio"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1be1b5a5-4743-4a9d-bdf2-286a448fa5e5"
+      }
+    }
+  }
+}
