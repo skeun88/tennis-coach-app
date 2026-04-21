@@ -29,7 +29,7 @@ DECLARE
     '허민기','남지윤','엄재우','추다연','류민수','노해린','안준영','백소연'
   ];
 
-  levels text[] := ARRAY['입문','초급','중급','고급','선수'];
+  levels text[] := ARRAY['완전초보','초급','초중급','중급','중고급','고급'];
   titles text[] := ARRAY[
     '오전 기초반','오전 중급반','오후 초급반','오후 중급반',
     '저녁 고급반','주말 입문반','개인 레슨','그룹 레슨 A',
@@ -87,11 +87,12 @@ BEGIN
     member_phone := '010-' || lpad((floor(random()*9000+1000))::text,4,'0') || '-' || lpad((floor(random()*9000+1000))::text,4,'0');
 
     rand_weight := floor(random()*100)::int;
-    IF    rand_weight < 15 THEN rand_level := '입문';
-    ELSIF rand_weight < 50 THEN rand_level := '초급';
-    ELSIF rand_weight < 80 THEN rand_level := '중급';
-    ELSIF rand_weight < 95 THEN rand_level := '고급';
-    ELSE                        rand_level := '선수';
+    IF    rand_weight < 10 THEN rand_level := '완전초보';
+    ELSIF rand_weight < 30 THEN rand_level := '초급';
+    ELSIF rand_weight < 50 THEN rand_level := '초중급';
+    ELSIF rand_weight < 70 THEN rand_level := '중급';
+    ELSIF rand_weight < 88 THEN rand_level := '중고급';
+    ELSE                        rand_level := '고급';
     END IF;
 
     join_offset := floor(random() * 730)::int; -- 최대 2년 전
