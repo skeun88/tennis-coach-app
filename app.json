@@ -16,9 +16,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.kibbl.tenniscoach",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false,
-        "UIBackgroundModes": ["audio"],
-        "NSMicrophoneUsageDescription": "레슨 피드백 녹음을 위해 마이크 접근이 필요합니다."
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -35,7 +33,13 @@
     "scheme": "tenniscoach",
     "plugins": [
       "expo-router",
-      "expo-audio"
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "레슨 피드백 녹음을 위해 마이크 접근이 필요합니다.",
+          "enableBackgroundRecording": true
+        }
+      ]
     ],
     "extra": {
       "router": {},
