@@ -323,21 +323,44 @@ export default function MemberDetailScreen() {
               </TouchableOpacity>
             </View>
 
-            {memberNotes.map(n => (
-              <View key={n.id} style={styles.noteCard}>
-                <Text style={styles.noteContent}>{n.content}</Text>
-                <View style={styles.noteFooter}>
-                  <Text style={styles.noteDate}>{new Date(n.created_at).toLocaleDateString('ko-KR')}</Text>
-                  <TouchableOpacity onPress={() => Alert.alert('삭제', '이 메모를 삭제하시겠습니까?', [
-                    { text: '취소', style: 'cancel' },
-                    { text: '삭제', style: 'destructive', onPress: () => deleteNote(n.id) },
-                  ])}>
-                    <Ionicons name="trash-outline" size={16} color="#ef4444" />
-                  </TouchableOpacity>
-                </View>
+            {memberNotes.length === 0 ? (
+              <View style={styles.emptyCard}><Text style={styles.emptyText}>메모가 없습니다</Text></View>
+            ) : (
+              <View style={styles.timelineContainer}>
+                <Text style={styles.historyLabel}>메모 히스토리 ({memberNotes.length}건)</Text>
+                {memberNotes.map((n, index) => (
+                  <View key={n.id} style={styles.timelineItem}>
+                    {/* 타임라인 도트 & 라인 */}
+                    <View style={styles.timelineLine}>
+                      <View style={styles.timelineDot} />
+                      {index < memberNotes.length - 1 && <View style={styles.timelineBar} />}
+                    </View>
+                    {/* 내용 */}
+                    <View style={styles.timelineContent}>
+                      <Text style={styles.timelineDate}>
+                        {new Date(n.created_at).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}
+                        {'  '}
+                        <Text style={styles.timelineTime}>
+                          {new Date(n.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                      </Text>
+                      <View style={styles.timelineCard}>
+                        <Text style={styles.noteContent}>{n.content}</Text>
+                        <TouchableOpacity
+                          style={styles.deleteNoteBtn}
+                          onPress={() => Alert.alert('삭제', '이 메모를 삭제하시겠습니까?', [
+                            { text: '취소', style: 'cancel' },
+                            { text: '삭제', style: 'destructive', onPress: () => deleteNote(n.id) },
+                          ])}
+                        >
+                          <Ionicons name="trash-outline" size={14} color="#ef4444" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                ))}
               </View>
-            ))}
-            {memberNotes.length === 0 && <View style={styles.emptyCard}><Text style={styles.emptyText}>메모가 없습니다</Text></View>}
+            )}
           </View>
         )}
 
@@ -419,7 +442,20 @@ const styles = StyleSheet.create({
   noteAddBtn: { backgroundColor: '#1a7a4a', borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
   noteAddBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   noteCard: { backgroundColor: '#fff', marginHorizontal: 16, marginTop: 8, borderRadius: 10, padding: 12 },
-  noteContent: { fontSize: 14, color: '#1a1a1a', lineHeight: 20 },
+  noteContent: { fontSize: 14, color: '#1a1a1a', lineHeight: 20, flex: 1 },
+
+  // Timeline
+  timelineContainer: { marginHorizontal: 16, marginTop: 8 },
+  historyLabel: { fontSize: 12, color: '#888', fontWeight: '600', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
+  timelineItem: { flexDirection: 'row', gap: 12, marginBottom: 4 },
+  timelineLine: { alignItems: 'center', width: 16 },
+  timelineDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#1a7a4a', marginTop: 18 },
+  timelineBar: { width: 2, flex: 1, backgroundColor: '#d1fae5', marginTop: 2 },
+  timelineContent: { flex: 1, paddingBottom: 16 },
+  timelineDate: { fontSize: 11, color: '#888', fontWeight: '600', marginBottom: 6, marginTop: 14 },
+  timelineTime: { color: '#aaa', fontWeight: '400' },
+  timelineCard: { backgroundColor: '#fff', borderRadius: 10, padding: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
+  deleteNoteBtn: { padding: 2 },
   noteFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
   noteDate: { fontSize: 11, color: '#aaa' },
   emptyCard: { margin: 16, padding: 20, alignItems: 'center' },
