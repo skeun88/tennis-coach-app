@@ -11,9 +11,13 @@ import { Lesson } from '../../types';
 
 type ViewTab = '일일' | '주간';
 
+interface LessonWithMembers extends Lesson {
+  memberNames: string[];
+}
+
 interface WeekLesson {
   date: string;
-  lessons: Lesson[];
+  lessons: LessonWithMembers[];
 }
 
 const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -21,7 +25,7 @@ const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
 export default function ScheduleScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<ViewTab>('일일');
-  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [lessons, setLessons] = useState<LessonWithMembers[]>([]);
   const [weekData, setWeekData] = useState<WeekLesson[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(
@@ -50,6 +54,23 @@ export default function ScheduleScreen() {
     });
   })();
 
+  async function attachMemberNames(lessonList: Lesson[]): Promise<LessonWithMembers[]> {
+    if (lessonList.length === 0) return [];
+    const ids = lessonList.map(l => l.id);
+    const { data: lm } = await supabase
+      .from('lesson_members')
+      .select('lesson_id, member:members(name)')
+      .in('lesson_id', ids);
+    const nameMap = new Map<string, string[]>();
+    for (const row of lm ?? []) {
+      const n = (row.member as any)?.name;
+      if (!n) continue;
+      if (!nameMap.has(row.lesson_id)) nameMap.set(row.lesson_id, []);
+      nameMap.get(row.lesson_id)!.push(n);
+    }
+    return lessonList.map(l => ({ ...l, memberNames: nameMap.get(l.id) ?? [] }));
+  }
+
   async function loadDayLessons() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -59,7 +80,7 @@ export default function ScheduleScreen() {
       .eq('coach_id', user.id)
       .eq('date', selectedDate)
       .order('start_time');
-    setLessons(data ?? []);
+    setLessons(await attachMemberNames(data ?? []));
   }
 
   async function loadWeekLessons() {
@@ -73,10 +94,10 @@ export default function ScheduleScreen() {
       .gte('date', startDate)
       .lte('date', endDate)
       .order('start_time');
-
-    const map = new Map<string, Lesson[]>();
+    const withNames = await attachMemberNames(data ?? []);
+    const map = new Map<string, LessonWithMembers[]>();
     for (const d of thisWeekDates) map.set(d, []);
-    for (const l of data ?? []) {
+    for (const l of withNames) {
       if (map.has(l.date)) map.get(l.date)!.push(l);
     }
     setWeekData(thisWeekDates.map(d => ({ date: d, lessons: map.get(d) ?? [] })));
@@ -90,7 +111,7 @@ export default function ScheduleScreen() {
   useFocusEffect(useCallback(() => { loadAll(); }, [activeTab, selectedDate]));
 
   // ─── Day tab render ───────────────────────────────────────────────
-  function renderLesson({ item }: { item: Lesson }) {
+  function renderLesson({ item }: { item: LessonWithMembers }) {
     return (
       <TouchableOpacity style={styles.card} onPress={() => router.push(`/lessons/${item.id}`)}>
         <View style={styles.timeBadge}>
@@ -99,6 +120,12 @@ export default function ScheduleScreen() {
         </View>
         <View style={styles.cardInfo}>
           <Text style={styles.lessonTitle}>{item.title}</Text>
+          {item.memberNames.length > 0 && (
+            <View style={styles.row}>
+              <Ionicons name="person-outline" size={12} color="#1a7a4a" />
+              <Text style={styles.memberNameText}>{item.memberNames.join(', ')}</Text>
+            </View>
+          )}
           {item.location && (
             <View style={styles.row}>
               <Ionicons name="location-outline" size={12} color="#888" />
@@ -144,6 +171,9 @@ export default function ScheduleScreen() {
             >
               <Text style={styles.weekLessonTime}>{lesson.start_time.slice(0, 5)}</Text>
               <Text style={styles.weekLessonTitle} numberOfLines={2}>{lesson.title}</Text>
+              {lesson.memberNames.length > 0 && (
+                <Text style={styles.weekLessonMembers} numberOfLines={1}>{lesson.memberNames.join(', ')}</Text>
+              )}
             </TouchableOpacity>
           ))
         )}
@@ -298,6 +328,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   detail: { fontSize: 12, color: '#888' },
   notes: { fontSize: 12, color: '#aaa', marginTop: 2 },
+  memberNameText: { fontSize: 12, color: '#1a7a4a', fontWeight: '600' },
 
   // Empty
   empty: { alignItems: 'center', padding: 60 },
@@ -339,4 +370,5 @@ const styles = StyleSheet.create({
   },
   weekLessonTime: { fontSize: 11, color: '#1a7a4a', fontWeight: '700', marginBottom: 2 },
   weekLessonTitle: { fontSize: 12, color: '#1a1a1a', fontWeight: '600' },
+  weekLessonMembers: { fontSize: 11, color: '#1a7a4a', marginTop: 2 },
 });
