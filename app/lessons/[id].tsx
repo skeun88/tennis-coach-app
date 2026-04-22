@@ -48,26 +48,39 @@ export default function LessonDetailScreen() {
       .select('member_id, member:members(id, name, level, remaining_credits)')
       .eq('lesson_id', id);
 
-    // 기존 출석 기록 가져오기
+    // 기존 출석 기록 가져오기 (회원 정보 포함)
     const { data: attData } = await supabase
       .from('attendance')
-      .select('id, member_id, status, deduct_credit')
+      .select('id, member_id, status, deduct_credit, member:members(id, name, level, remaining_credits)')
       .eq('lesson_id', id);
 
     const attMap = new Map((attData ?? []).map(a => [a.member_id, a]));
 
-    // lesson_members 기준으로 합치기 (출석 기록 없으면 미체크 상태)
-    const merged: AttendanceRow[] = (lmData ?? []).map(lm => {
-      const member = lm.member as any;
-      const att = attMap.get(lm.member_id);
-      return {
-        id: att?.id ?? '',
-        member_id: lm.member_id,
-        status: (att?.status ?? null) as any,
-        deduct_credit: att?.deduct_credit ?? false,
-        member,
-      };
-    });
+    let merged: AttendanceRow[];
+
+    if (lmData && lmData.length > 0) {
+      // lesson_members 기준으로 합치기
+      merged = lmData.map(lm => {
+        const member = lm.member as any;
+        const att = attMap.get(lm.member_id);
+        return {
+          id: att?.id ?? '',
+          member_id: lm.member_id,
+          status: (att?.status ?? null) as any,
+          deduct_credit: att?.deduct_credit ?? false,
+          member,
+        };
+      });
+    } else {
+      // 기존 레슨: attendance 기록에서 직접 가져오기
+      merged = (attData ?? []).map(a => ({
+        id: a.id,
+        member_id: a.member_id,
+        status: a.status as AttendanceStatus,
+        deduct_credit: a.deduct_credit,
+        member: (a as any).member,
+      }));
+    }
 
     setAttendance(merged);
     setLoading(false);

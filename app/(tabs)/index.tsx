@@ -151,34 +151,51 @@ export default function HomeScreen() {
   async function handleAutoGenLessons() {
     if (!userId || autoGenSuggestion.length === 0) return;
     for (const s of autoGenSuggestion) {
-      const { data: existingLesson } = await supabase
-        .from('lessons')
-        .select('id')
-        .eq('coach_id', userId)
-        .eq('date', today)
-        .eq('title', `${s.name} 레슨`)
-        .maybeSingle();
-      if (existingLesson) continue;
       const { data: member } = await supabase
         .from('members')
         .select('fixed_schedule_time, fixed_lesson_duration')
         .eq('id', s.memberId)
         .single();
       if (!member || !member.fixed_schedule_time) continue;
-      const startTime = member.fixed_schedule_time as string;
+      const startTime = (member.fixed_schedule_time as string).slice(0, 5);
       const durationMins = (member.fixed_lesson_duration as number) ?? 60;
       const [h, m] = startTime.split(':').map(Number);
       const endDate = new Date(2000, 0, 1, h, m + durationMins);
       const endTime = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}:00`;
-      const { data: lesson } = await supabase.from('lessons').insert({
-        coach_id: userId,
-        title: `${s.name} 레슨`,
-        date: today,
-        start_time: startTime,
-        end_time: endTime,
-      }).select().single();
-      if (lesson) {
-        await supabase.from('lesson_members').insert({ lesson_id: lesson.id, member_id: s.memberId });
+
+      // 같은 시간대 기존 레슨 있으면 통합, 없으면 새로 생성
+      const { data: existingLesson } = await supabase
+        .from('lessons')
+        .select('id')
+        .eq('coach_id', userId)
+        .eq('date', today)
+        .eq('start_time', startTime + ':00')
+        .maybeSingle();
+
+      let lessonId: string;
+      if (existingLesson) {
+        lessonId = existingLesson.id;
+      } else {
+        const { data: lesson } = await supabase.from('lessons').insert({
+          coach_id: userId,
+          title: `${today} 레슨`,
+          date: today,
+          start_time: startTime,
+          end_time: endTime,
+        }).select().single();
+        if (!lesson) continue;
+        lessonId = lesson.id;
+      }
+
+      // 이미 등록된 회원이면 skip
+      const { data: already } = await supabase
+        .from('lesson_members')
+        .select('id')
+        .eq('lesson_id', lessonId)
+        .eq('member_id', s.memberId)
+        .maybeSingle();
+      if (!already) {
+        await supabase.from('lesson_members').insert({ lesson_id: lessonId, member_id: s.memberId });
       }
     }
     await loadAll();
