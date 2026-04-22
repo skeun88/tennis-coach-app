@@ -42,11 +42,34 @@ export default function LessonDetailScreen() {
   }
 
   async function loadAttendance() {
-    const { data } = await supabase
-      .from('attendance')
-      .select('id, member_id, status, deduct_credit, member:members(id, name, level, remaining_credits)')
+    // lesson_members에 등록된 전체 회원 가져오기
+    const { data: lmData } = await supabase
+      .from('lesson_members')
+      .select('member_id, member:members(id, name, level, remaining_credits)')
       .eq('lesson_id', id);
-    setAttendance((data ?? []) as any);
+
+    // 기존 출석 기록 가져오기
+    const { data: attData } = await supabase
+      .from('attendance')
+      .select('id, member_id, status, deduct_credit')
+      .eq('lesson_id', id);
+
+    const attMap = new Map((attData ?? []).map(a => [a.member_id, a]));
+
+    // lesson_members 기준으로 합치기 (출석 기록 없으면 미체크 상태)
+    const merged: AttendanceRow[] = (lmData ?? []).map(lm => {
+      const member = lm.member as any;
+      const att = attMap.get(lm.member_id);
+      return {
+        id: att?.id ?? '',
+        member_id: lm.member_id,
+        status: (att?.status ?? null) as any,
+        deduct_credit: att?.deduct_credit ?? false,
+        member,
+      };
+    });
+
+    setAttendance(merged);
     setLoading(false);
   }
 
@@ -87,11 +110,20 @@ export default function LessonDetailScreen() {
   }
 
   async function doUpdate(row: AttendanceRow, newStatus: AttendanceStatus, willDeduct: boolean, creditDelta: number) {
-    // attendance 업데이트
-    await supabase.from('attendance').update({
-      status: newStatus,
-      deduct_credit: willDeduct,
-    }).eq('id', row.id);
+    // 출석 기록 없으면 insert, 있으면 update
+    if (!row.id) {
+      await supabase.from('attendance').insert({
+        lesson_id: id,
+        member_id: row.member_id,
+        status: newStatus,
+        deduct_credit: willDeduct,
+      });
+    } else {
+      await supabase.from('attendance').update({
+        status: newStatus,
+        deduct_credit: willDeduct,
+      }).eq('id', row.id);
+    }
 
     // 크레딧 변화 있으면 member 업데이트
     if (creditDelta !== 0) {
@@ -100,15 +132,9 @@ export default function LessonDetailScreen() {
       }).eq('id', row.member_id);
     }
 
-    // 로컬 상태 업데이트
-    setAttendance(prev => prev.map(a => a.id === row.id ? {
-      ...a,
-      status: newStatus,
-      deduct_credit: willDeduct,
-      member: { ...a.member, remaining_credits: Math.max(0, a.member.remaining_credits + creditDelta) },
-    } : a));
-
+    // 로컬 상태 업데이트 후 리로드
     setUpdating(null);
+    await loadAttendance();
   }
 
   async function deleteLesson() {
@@ -137,6 +163,7 @@ export default function LessonDetailScreen() {
   const presentCount = attendance.filter(a => a.status === '출석').length;
   const totalCount = attendance.length;
   const deductedCount = attendance.filter(a => a.deduct_credit).length;
+  const checkedCount = attendance.filter(a => a.status !== null).length;
 
   return (
     <ScrollView style={styles.container}>
@@ -180,7 +207,7 @@ export default function LessonDetailScreen() {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>출석 체크</Text>
           <View style={styles.sectionMeta}>
-            <Text style={styles.sectionCount}>{presentCount}/{totalCount}명 출석</Text>
+            <Text style={styles.sectionCount}>{checkedCount}/{totalCount}명 체크됨</Text>
             <Text style={styles.deductCount}>· {deductedCount}명 차감</Text>
           </View>
         </View>
@@ -190,15 +217,19 @@ export default function LessonDetailScreen() {
         )}
 
         {attendance.map(a => (
-          <View key={a.id} style={styles.attendanceCard}>
+          <View key={a.member_id} style={styles.attendanceCard}>
             {/* 회원 정보 */}
-            <View style={[styles.avatar, { backgroundColor: STATUS_COLOR[a.status] + '33' }]}>
-              <Text style={[styles.avatarText, { color: STATUS_COLOR[a.status] }]}>
-                {a.member?.name?.slice(0, 1) ?? '?'}
-              </Text>
-            </View>
+            <TouchableOpacity onPress={() => router.push(`/members/${a.member_id}`)}>
+              <View style={[styles.avatar, { backgroundColor: a.status ? STATUS_COLOR[a.status] + '33' : '#f0f0f0' }]}>
+                <Text style={[styles.avatarText, { color: a.status ? STATUS_COLOR[a.status] : '#888' }]}>
+                  {a.member?.name?.slice(0, 1) ?? '?'}
+                </Text>
+              </View>
+            </TouchableOpacity>
             <View style={styles.memberInfo}>
-              <Text style={styles.memberName}>{a.member?.name ?? '알 수 없음'}</Text>
+              <TouchableOpacity onPress={() => router.push(`/members/${a.member_id}`)}>
+                <Text style={styles.memberName}>{a.member?.name ?? '알 수 없음'}</Text>
+              </TouchableOpacity>
               <View style={styles.creditRow}>
                 <Ionicons name="ticket-outline" size={12} color={a.member.remaining_credits <= 2 ? '#ef4444' : '#888'} />
                 <Text style={[styles.creditText, a.member.remaining_credits <= 2 && { color: '#ef4444', fontWeight: '700' }]}>
@@ -213,7 +244,7 @@ export default function LessonDetailScreen() {
             </View>
 
             {/* 상태 버튼 */}
-            {updating === a.id ? (
+            {updating === a.member_id ? (
               <ActivityIndicator size="small" color="#1a7a4a" />
             ) : (
               <View style={styles.statusButtons}>
