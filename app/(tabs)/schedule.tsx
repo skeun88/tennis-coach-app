@@ -128,9 +128,9 @@ export default function ScheduleScreen() {
         </View>
         <View style={styles.cardInfo}>
           <Text style={styles.lessonTitle}>{item.title}</Text>
-          {item.memberNames.length > 0 && (
-            <View style={styles.row}>
-              <Ionicons name="person-outline" size={12} color="#1a7a4a" />
+          <View style={styles.row}>
+            <Ionicons name="person-outline" size={12} color="#1a7a4a" />
+            {item.memberNames.length > 0 ? (
               <View style={styles.memberNameRow}>
                 {item.memberNames.map((name, i) => (
                   <TouchableOpacity key={item.memberIds[i]} onPress={() => router.push(`/members/${item.memberIds[i]}`)}>
@@ -138,8 +138,10 @@ export default function ScheduleScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
-            </View>
-          )}
+            ) : (
+              <Text style={styles.memberNameText}>{item.title}</Text>
+            )}
+          </View>
           {item.location && (
             <View style={styles.row}>
               <Ionicons name="location-outline" size={12} color="#888" />
@@ -185,11 +187,9 @@ export default function ScheduleScreen() {
             >
               <Text style={styles.weekLessonTime}>{lesson.start_time.slice(0, 5)}</Text>
               <Text style={styles.weekLessonTitle} numberOfLines={2}>{lesson.title}</Text>
-              {lesson.memberNames.length > 0 && (
-                <TouchableOpacity onPress={() => lesson.memberIds[0] && router.push(`/members/${lesson.memberIds[0]}`)}>
-                  <Text style={styles.weekLessonMembers} numberOfLines={1}>{lesson.memberNames.join(', ')}</Text>
-                </TouchableOpacity>
-              )}
+              <Text style={styles.weekLessonMembers} numberOfLines={1}>
+                {lesson.memberNames.length > 0 ? lesson.memberNames.join(', ') : lesson.title}
+              </Text>
             </TouchableOpacity>
           ))
         )}
