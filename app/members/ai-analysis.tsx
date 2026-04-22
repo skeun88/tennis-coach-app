@@ -77,6 +77,14 @@ export default function AIAnalysisScreen() {
         Alert.alert('권한 필요', '마이크 권한이 필요합니다.');
         return;
       }
+      // 화면 잠금 중에도 백그라운드 녹음 활성화
+      await AudioModule.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        shouldDuckAndroid: false,
+        playThroughEarpieceAndroid: false,
+      });
       await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
       setIsRecording(true);
