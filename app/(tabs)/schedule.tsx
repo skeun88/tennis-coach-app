@@ -13,6 +13,7 @@ type ViewTab = '일일' | '주간';
 
 interface LessonWithMembers extends Lesson {
   memberNames: string[];
+  memberIds: string[];
 }
 
 interface WeekLesson {
@@ -59,16 +60,23 @@ export default function ScheduleScreen() {
     const ids = lessonList.map(l => l.id);
     const { data: lm } = await supabase
       .from('lesson_members')
-      .select('lesson_id, member:members(name)')
+      .select('lesson_id, member_id, member:members(name)')
       .in('lesson_id', ids);
     const nameMap = new Map<string, string[]>();
+    const idMap = new Map<string, string[]>();
     for (const row of lm ?? []) {
       const n = (row.member as any)?.name;
       if (!n) continue;
       if (!nameMap.has(row.lesson_id)) nameMap.set(row.lesson_id, []);
+      if (!idMap.has(row.lesson_id)) idMap.set(row.lesson_id, []);
       nameMap.get(row.lesson_id)!.push(n);
+      idMap.get(row.lesson_id)!.push(row.member_id);
     }
-    return lessonList.map(l => ({ ...l, memberNames: nameMap.get(l.id) ?? [] }));
+    return lessonList.map(l => ({
+      ...l,
+      memberNames: nameMap.get(l.id) ?? [],
+      memberIds: idMap.get(l.id) ?? [],
+    }));
   }
 
   async function loadDayLessons() {
@@ -123,7 +131,13 @@ export default function ScheduleScreen() {
           {item.memberNames.length > 0 && (
             <View style={styles.row}>
               <Ionicons name="person-outline" size={12} color="#1a7a4a" />
-              <Text style={styles.memberNameText}>{item.memberNames.join(', ')}</Text>
+              <View style={styles.memberNameRow}>
+                {item.memberNames.map((name, i) => (
+                  <TouchableOpacity key={item.memberIds[i]} onPress={() => router.push(`/members/${item.memberIds[i]}`)}>
+                    <Text style={styles.memberNameText}>{name}{i < item.memberNames.length - 1 ? ', ' : ''}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           )}
           {item.location && (
@@ -172,7 +186,9 @@ export default function ScheduleScreen() {
               <Text style={styles.weekLessonTime}>{lesson.start_time.slice(0, 5)}</Text>
               <Text style={styles.weekLessonTitle} numberOfLines={2}>{lesson.title}</Text>
               {lesson.memberNames.length > 0 && (
-                <Text style={styles.weekLessonMembers} numberOfLines={1}>{lesson.memberNames.join(', ')}</Text>
+                <TouchableOpacity onPress={() => lesson.memberIds[0] && router.push(`/members/${lesson.memberIds[0]}`)}>
+                  <Text style={styles.weekLessonMembers} numberOfLines={1}>{lesson.memberNames.join(', ')}</Text>
+                </TouchableOpacity>
               )}
             </TouchableOpacity>
           ))
@@ -328,6 +344,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   detail: { fontSize: 12, color: '#888' },
   notes: { fontSize: 12, color: '#aaa', marginTop: 2 },
+  memberNameRow: { flexDirection: 'row', flexWrap: 'wrap' },
   memberNameText: { fontSize: 12, color: '#1a7a4a', fontWeight: '600' },
 
   // Empty
