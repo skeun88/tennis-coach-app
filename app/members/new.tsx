@@ -9,6 +9,7 @@ import { supabase } from '../../lib/supabase';
 import { MemberLevel } from '../../types';
 
 const LEVELS: MemberLevel[] = ['입문', '초급', '중급', '고급', '선수'];
+const DAYS_KR = ['일', '월', '화', '수', '목', '금', '토'];
 
 export default function NewMemberScreen() {
   const router = useRouter();
@@ -19,6 +20,16 @@ export default function NewMemberScreen() {
   const [level, setLevel] = useState<MemberLevel>('초급');
   const [joinDate, setJoinDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
+  const [scheduleDays, setScheduleDays] = useState<number[]>([]);
+  const [scheduleTime, setScheduleTime] = useState('');
+  const [lessonDuration, setLessonDuration] = useState('60');
+  const [totalCredits, setTotalCredits] = useState('');
+
+  function toggleDay(idx: number) {
+    setScheduleDays(prev =>
+      prev.includes(idx) ? prev.filter(d => d !== idx) : [...prev, idx].sort()
+    );
+  }
   const [loading, setLoading] = useState(false);
 
   async function handleSave() {
@@ -39,6 +50,11 @@ export default function NewMemberScreen() {
       join_date: joinDate,
       notes: notes.trim() || null,
       is_active: true,
+      fixed_schedule_days: scheduleDays,
+      fixed_schedule_time: scheduleTime || null,
+      fixed_lesson_duration: parseInt(lessonDuration) || 60,
+      total_credits: parseInt(totalCredits) || 0,
+      remaining_credits: parseInt(totalCredits) || 0,
     });
 
     setLoading(false);
@@ -87,6 +103,56 @@ export default function NewMemberScreen() {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>고정 레슨 스케줄</Text>
+          <Text style={styles.label}>레슨 요일</Text>
+          <View style={styles.dayRow}>
+            {DAYS_KR.map((d, i) => (
+              <TouchableOpacity
+                key={i}
+                style={[styles.dayBtn, scheduleDays.includes(i) && styles.dayBtnActive]}
+                onPress={() => toggleDay(i)}
+              >
+                <Text style={[styles.dayBtnText, scheduleDays.includes(i) && styles.dayBtnTextActive]}>{d}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={styles.label}>레슨 시작 시간</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="HH:MM (예: 10:00)"
+            value={scheduleTime}
+            onChangeText={setScheduleTime}
+            keyboardType="numbers-and-punctuation"
+          />
+          <Text style={styles.label}>레슨 시간 (분)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="60"
+            value={lessonDuration}
+            onChangeText={setLessonDuration}
+            keyboardType="number-pad"
+          />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>레슨권</Text>
+          <Text style={styles.label}>총 레슨 횟수</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="예: 10"
+            value={totalCredits}
+            onChangeText={setTotalCredits}
+            keyboardType="number-pad"
+          />
+          {totalCredits !== '' && (
+            <View style={styles.creditPreview}>
+              <Ionicons name="layers-outline" size={16} color="#1a7a4a" />
+              <Text style={styles.creditPreviewText}>{totalCredits}회 레슨권 등록됩니다</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>메모</Text>
           <TextInput
             style={[styles.input, styles.textArea]}
@@ -127,4 +193,11 @@ const styles = StyleSheet.create({
     paddingVertical: 14, alignItems: 'center',
   },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  dayRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginBottom: 12 },
+  dayBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },
+  dayBtnActive: { backgroundColor: '#1a7a4a' },
+  dayBtnText: { fontSize: 13, fontWeight: '700', color: '#888' },
+  dayBtnTextActive: { color: '#fff' },
+  creditPreview: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#f0fdf4', borderRadius: 8, padding: 10, marginTop: -4 },
+  creditPreviewText: { fontSize: 14, color: '#1a7a4a', fontWeight: '600' },
 });

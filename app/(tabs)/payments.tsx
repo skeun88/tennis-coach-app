@@ -41,6 +41,7 @@ export default function PaymentsScreen() {
   const [filtered, setFiltered] = useState<Payment[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<Filter>('미납');
+  const [lowCreditMembers, setLowCreditMembers] = useState<{id: string; name: string; phone: string; remaining_credits: number}[]>([]);
 
   async function loadPayments() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -51,6 +52,15 @@ export default function PaymentsScreen() {
       .eq('coach_id', user.id)
       .order('due_date', { ascending: false });
     setPayments(data ?? []);
+
+    const { data: lowCredits } = await supabase
+      .from('members')
+      .select('id, name, phone, remaining_credits')
+      .eq('coach_id', user.id)
+      .eq('is_active', true)
+      .lte('remaining_credits', 1)
+      .order('remaining_credits');
+    setLowCreditMembers(lowCredits ?? []);
   }
 
   useFocusEffect(useCallback(() => { loadPayments(); }, []));
@@ -194,6 +204,28 @@ export default function PaymentsScreen() {
 
       <Text style={styles.count}>{filtered.length}건</Text>
 
+      {lowCreditMembers.length > 0 && (
+        <View style={styles.lowCreditSection}>
+          <View style={styles.lowCreditHeader}>
+            <Ionicons name="warning" size={16} color="#f59e0b" />
+            <Text style={styles.lowCreditTitle}>레슨권 만료 임박 ({lowCreditMembers.length}명)</Text>
+          </View>
+          {lowCreditMembers.map(m => (
+            <View key={m.id} style={styles.lowCreditRow}>
+              <View>
+                <Text style={styles.lowCreditName}>{m.name}</Text>
+                <Text style={styles.lowCreditPhone}>{m.phone}</Text>
+              </View>
+              <View style={[styles.lowCreditBadge, { backgroundColor: m.remaining_credits === 0 ? '#fee2e2' : '#fef3c7' }]}>
+                <Text style={[styles.lowCreditCount, { color: m.remaining_credits === 0 ? '#dc2626' : '#d97706' }]}>
+                  {m.remaining_credits === 0 ? '만료' : `잔여 ${m.remaining_credits}회`}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
       <FlatList
         data={filtered}
         keyExtractor={item => item.id}
@@ -283,4 +315,14 @@ const styles = StyleSheet.create({
   // Empty
   empty: { alignItems: 'center', padding: 60 },
   emptyText: { fontSize: 15, color: '#aaa', fontWeight: '500', marginTop: 12 },
+
+  // Low credit alert
+  lowCreditSection: { backgroundColor: '#fffbeb', marginHorizontal: 16, marginTop: 4, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#fde68a', marginBottom: 4 },
+  lowCreditHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
+  lowCreditTitle: { fontSize: 14, fontWeight: '700', color: '#b45309' },
+  lowCreditRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6, borderTopWidth: 1, borderTopColor: '#fef3c7' },
+  lowCreditName: { fontSize: 14, fontWeight: '700', color: '#1a1a1a' },
+  lowCreditPhone: { fontSize: 12, color: '#888', marginTop: 1 },
+  lowCreditBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  lowCreditCount: { fontSize: 13, fontWeight: '700' },
 });

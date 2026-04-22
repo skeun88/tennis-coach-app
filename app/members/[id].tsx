@@ -30,6 +30,14 @@ export default function MemberDetailScreen() {
   const [level, setLevel] = useState<MemberLevel>('초급');
   const [notes, setNotes] = useState('');
 
+  // Schedule & credits
+  const DAYS_KR = ['일', '월', '화', '수', '목', '금', '토'];
+  const [scheduleDays, setScheduleDays] = useState<number[]>([]);
+  const [scheduleTime, setScheduleTime] = useState('');
+  const [lessonDuration, setLessonDuration] = useState('60');
+  const [totalCredits, setTotalCredits] = useState('0');
+  const [remainingCredits, setRemainingCredits] = useState('0');
+
   // Sub data
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -43,6 +51,11 @@ export default function MemberDetailScreen() {
       setName(data.name); setPhone(data.phone);
       setEmail(data.email ?? ''); setLevel(data.level);
       setNotes(data.notes ?? '');
+      setScheduleDays((data as any).fixed_schedule_days ?? []);
+      setScheduleTime((data as any).fixed_schedule_time?.slice(0, 5) ?? '');
+      setLessonDuration(String((data as any).fixed_lesson_duration ?? 60));
+      setTotalCredits(String((data as any).total_credits ?? 0));
+      setRemainingCredits(String((data as any).remaining_credits ?? 0));
     }
     setLoading(false);
   }
@@ -85,6 +98,11 @@ export default function MemberDetailScreen() {
   async function handleSave() {
     const { error } = await supabase.from('members').update({
       name, phone, email: email || null, level, notes: notes || null,
+      fixed_schedule_days: scheduleDays,
+      fixed_schedule_time: scheduleTime || null,
+      fixed_lesson_duration: parseInt(lessonDuration) || 60,
+      total_credits: parseInt(totalCredits) || 0,
+      remaining_credits: parseInt(remainingCredits) || 0,
     }).eq('id', id!);
     if (error) Alert.alert('오류', '저장에 실패했습니다.');
     else { setEditing(false); loadMember(); }
@@ -173,6 +191,14 @@ export default function MemberDetailScreen() {
                 <InfoRow icon="calendar-outline" label="가입일" value={member.join_date} />
                 <InfoRow icon="fitness-outline" label="레벨" value={member.level} />
                 {member.notes && <InfoRow icon="document-text-outline" label="메모" value={member.notes} />}
+                {(member as any).fixed_schedule_time && (
+                  <InfoRow
+                    icon="time-outline"
+                    label="고정 스케줄"
+                    value={`${((member as any).fixed_schedule_days ?? []).map((d: number) => DAYS_KR[d]).join('·')} ${(member as any).fixed_schedule_time?.slice(0, 5) ?? ''}`}
+                  />
+                )}
+                <InfoRow icon="layers-outline" label="레슨권 잔여" value={`${(member as any).remaining_credits ?? 0}회 / 총 ${(member as any).total_credits ?? 0}회`} />
 
                 <View style={styles.btnRow}>
                   <TouchableOpacity style={styles.editBtn} onPress={() => setEditing(true)}>
@@ -200,6 +226,28 @@ export default function MemberDetailScreen() {
                     </TouchableOpacity>
                   ))}
                 </View>
+                <Text style={styles.editLabel}>레슨 요일</Text>
+                <View style={styles.dayRow}>
+                  {DAYS_KR.map((d, i) => (
+                    <TouchableOpacity
+                      key={i}
+                      style={[styles.dayBtn2, scheduleDays.includes(i) && styles.dayBtn2Active]}
+                      onPress={() => setScheduleDays(prev =>
+                        prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i].sort()
+                      )}
+                    >
+                      <Text style={[styles.dayBtn2Text, scheduleDays.includes(i) && styles.dayBtn2TextActive]}>{d}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={styles.editLabel}>레슨 시작 시간</Text>
+                <TextInput style={styles.editInput} placeholder="HH:MM" value={scheduleTime} onChangeText={setScheduleTime} />
+                <Text style={styles.editLabel}>레슨 시간(분)</Text>
+                <TextInput style={styles.editInput} placeholder="60" value={lessonDuration} onChangeText={setLessonDuration} keyboardType="number-pad" />
+                <Text style={styles.editLabel}>총 레슨권</Text>
+                <TextInput style={styles.editInput} placeholder="0" value={totalCredits} onChangeText={setTotalCredits} keyboardType="number-pad" />
+                <Text style={styles.editLabel}>잔여 레슨권</Text>
+                <TextInput style={styles.editInput} placeholder="0" value={remainingCredits} onChangeText={setRemainingCredits} keyboardType="number-pad" />
                 <Text style={styles.editLabel}>메모</Text>
                 <TextInput style={[styles.editInput, { minHeight: 80 }]} value={notes} onChangeText={setNotes} multiline textAlignVertical="top" />
 
@@ -351,6 +399,11 @@ const styles = StyleSheet.create({
   saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   cancelBtn: { flex: 1, backgroundColor: '#f0f0f0', borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   cancelBtnText: { color: '#666', fontWeight: '700', fontSize: 14 },
+  dayRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginBottom: 12 },
+  dayBtn2: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },
+  dayBtn2Active: { backgroundColor: '#1a7a4a' },
+  dayBtn2Text: { fontSize: 13, fontWeight: '700', color: '#888' },
+  dayBtn2TextActive: { color: '#fff' },
   attendanceRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0', gap: 10 },
   statusDot: { width: 10, height: 10, borderRadius: 5 },
   attendanceTitle: { fontSize: 14, color: '#1a1a1a', fontWeight: '600' },

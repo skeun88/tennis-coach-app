@@ -38,6 +38,7 @@ export default function HomeScreen() {
   const [loadingAttendance, setLoadingAttendance] = useState<string | null>(null);
   const [coachEmail, setCoachEmail] = useState('');
   const [userId, setUserId] = useState<string | null>(null);
+  const [autoGenSuggestion, setAutoGenSuggestion] = useState<{memberId: string; name: string; time: string}[]>([]);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -66,6 +67,7 @@ export default function HomeScreen() {
     });
 
     await loadTodayCards(user.id);
+    await checkAutoGenSchedule(user.id);
   }
 
   async function loadTodayCards(uid: string) {
@@ -129,6 +131,57 @@ export default function HomeScreen() {
     });
 
     setTodayCards(cards);
+  }
+
+  async function checkAutoGenSchedule(uid: string) {
+    const todayDayOfWeek = new Date().getDay();
+    const { data: membersWithSchedule } = await supabase
+      .from('members')
+      .select('id, name, fixed_schedule_days, fixed_schedule_time')
+      .eq('coach_id', uid)
+      .eq('is_active', true)
+      .not('fixed_schedule_time', 'is', null);
+    if (!membersWithSchedule) return;
+    const suggestions = membersWithSchedule
+      .filter(m => m.fixed_schedule_days && m.fixed_schedule_days.includes(todayDayOfWeek))
+      .map(m => ({ memberId: m.id, name: m.name, time: (m.fixed_schedule_time as string).slice(0, 5) }));
+    setAutoGenSuggestion(suggestions);
+  }
+
+  async function handleAutoGenLessons() {
+    if (!userId || autoGenSuggestion.length === 0) return;
+    for (const s of autoGenSuggestion) {
+      const { data: existingLesson } = await supabase
+        .from('lessons')
+        .select('id')
+        .eq('coach_id', userId)
+        .eq('date', today)
+        .eq('title', `${s.name} 레슨`)
+        .maybeSingle();
+      if (existingLesson) continue;
+      const { data: member } = await supabase
+        .from('members')
+        .select('fixed_schedule_time, fixed_lesson_duration')
+        .eq('id', s.memberId)
+        .single();
+      if (!member || !member.fixed_schedule_time) continue;
+      const startTime = member.fixed_schedule_time as string;
+      const durationMins = (member.fixed_lesson_duration as number) ?? 60;
+      const [h, m] = startTime.split(':').map(Number);
+      const endDate = new Date(2000, 0, 1, h, m + durationMins);
+      const endTime = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}:00`;
+      const { data: lesson } = await supabase.from('lessons').insert({
+        coach_id: userId,
+        title: `${s.name} 레슨`,
+        date: today,
+        start_time: startTime,
+        end_time: endTime,
+      }).select().single();
+      if (lesson) {
+        await supabase.from('lesson_members').insert({ lesson_id: lesson.id, member_id: s.memberId });
+      }
+    }
+    await loadAll();
   }
 
   useFocusEffect(useCallback(() => { loadAll(); }, []));
@@ -250,6 +303,24 @@ export default function HomeScreen() {
           <Ionicons name="add-circle-outline" size={22} color="#1a7a4a" />
         </TouchableOpacity>
       </View>
+
+      {todayCards.length === 0 && autoGenSuggestion.length > 0 && (
+        <View style={styles.autoGenBanner}>
+          <View style={styles.autoGenHeader}>
+            <Ionicons name="flash" size={18} color="#1a7a4a" />
+            <Text style={styles.autoGenTitle}>오늘 고정 스케줄 회원이 있어요</Text>
+          </View>
+          {autoGenSuggestion.map(s => (
+            <View key={s.memberId} style={styles.autoGenItem}>
+              <Text style={styles.autoGenTime}>{s.time}</Text>
+              <Text style={styles.autoGenName}>{s.name}</Text>
+            </View>
+          ))}
+          <TouchableOpacity style={styles.autoGenBtn} onPress={handleAutoGenLessons}>
+            <Text style={styles.autoGenBtnText}>레슨 자동 생성</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {todayCards.length === 0 ? (
         <View style={styles.emptyCard}>
@@ -449,4 +520,14 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
   },
   quickLabel: { fontSize: 13, fontWeight: '600', color: '#333', marginTop: 8 },
+
+  // Auto-gen banner
+  autoGenBanner: { backgroundColor: '#f0fdf4', borderRadius: 12, marginHorizontal: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#bbf7d0' },
+  autoGenHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  autoGenTitle: { fontSize: 15, fontWeight: '700', color: '#1a7a4a' },
+  autoGenItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
+  autoGenTime: { fontSize: 14, fontWeight: '700', color: '#1a7a4a', minWidth: 44 },
+  autoGenName: { fontSize: 14, color: '#333', fontWeight: '500' },
+  autoGenBtn: { marginTop: 12, backgroundColor: '#1a7a4a', borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
+  autoGenBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });
