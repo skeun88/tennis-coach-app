@@ -81,7 +81,7 @@ export default function AIAnalysisScreen() {
         return;
       }
       await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
-      await audioRecorder.record();
+      audioRecorder.record();
       setIsRecording(true);
       setRecordingDuration(0);
       timerRef.current = setInterval(() => setRecordingDuration(d => d + 1), 1000);
