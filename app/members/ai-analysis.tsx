@@ -80,6 +80,7 @@ export default function AIAnalysisScreen() {
         Alert.alert('권한 필요', '마이크 권한이 필요합니다.');
         return;
       }
+      await AudioModule.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
       await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
       audioRecorder.record();
       setIsRecording(true);
