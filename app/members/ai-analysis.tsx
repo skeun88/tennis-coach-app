@@ -77,21 +77,21 @@ export default function AIAnalysisScreen() {
         Alert.alert('권한 필요', '마이크 권한이 필요합니다.');
         return;
       }
-      // 화면 잠금 중에도 백그라운드 녹음 활성화
-      await AudioModule.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: true,
-        shouldDuckAndroid: false,
-        playThroughEarpieceAndroid: false,
-      });
+      // 화면 잠금 중에도 백그라운드 녹음 활성화 (실패해도 녹음은 진행)
+      try {
+        await AudioModule.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: true,
+        });
+      } catch (_) {}
       await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
       setIsRecording(true);
       setRecordingDuration(0);
       timerRef.current = setInterval(() => setRecordingDuration(d => d + 1), 1000);
-    } catch (e) {
-      Alert.alert('오류', '녹음을 시작할 수 없습니다.');
+    } catch (e: any) {
+      Alert.alert('오류', `녹음을 시작할 수 없습니다.\n${e?.message ?? ''}`);
     }
   }
 
