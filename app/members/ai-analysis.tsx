@@ -128,60 +128,23 @@ export default function AIAnalysisScreen() {
       formData.append('member_id', memberId);
       formData.append('coach_id', user.id);
 
-      // SSE 스트리밍 요청
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/process-lesson`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Accept': 'text/event-stream',
-        },
-        body: formData,
-      });
+      // React Native는 ReadableStream 미지원 → 일반 JSON 요청
+      // 분석 단계는 타이머로 시뮬레이션
+      const stepTimer = setInterval(() => {
+        setAnalysisStep(prev => (prev < ANALYSIS_STEPS.length ? prev + 1 : prev));
+      }, 4000);
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || '분석에 실패했습니다.');
-      }
-
-      // SSE 스트림 파싱
-      const reader = res.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
       let finalResult: any = null;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          try {
-            const evt = JSON.parse(line.slice(6));
-            if (evt.type === 'progress') {
-              setAnalysisStep(evt.step);
-            } else if (evt.type === 'done') {
-              finalResult = evt;
-            } else if (evt.type === 'error') {
-              throw new Error(evt.error);
-            }
-          } catch (parseErr: any) {
-            if (parseErr.message && !parseErr.message.includes('JSON')) throw parseErr;
-          }
-        }
-      }
-
-      // SSE 미지원 fallback: 일반 JSON 응답
-      if (!finalResult) {
-        const fallbackRes = await fetch(`${SUPABASE_URL}/functions/v1/process-lesson`, {
+      try {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/process-lesson`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
           body: formData,
         });
-        finalResult = await fallbackRes.json();
-        if (!fallbackRes.ok || finalResult.error) throw new Error(finalResult.error || '분석 실패');
+        finalResult = await res.json();
+        if (!res.ok || finalResult.error) throw new Error(finalResult.error || '분석에 실패했습니다.');
+      } finally {
+        clearInterval(stepTimer);
       }
 
       await loadPlans();
