@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from 'expo-audio';
+import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorderState } from 'expo-audio';
 import { supabase } from '../../lib/supabase';
 import { LessonPlan, DrillSuggestion } from '../../types';
 
@@ -32,6 +32,7 @@ export default function AIAnalysisScreen() {
     ...RecordingPresets.HIGH_QUALITY,
     isMeteringEnabled: false,
   });
+  const recorderState = useAudioRecorderState(audioRecorder);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -47,6 +48,22 @@ export default function AIAnalysisScreen() {
     loadPlans();
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
+
+  // 충전 연결/해제 등 시스템 오디오 인터럽트 감지 → 자동 재개
+  useEffect(() => {
+    if (!isRecording) return;
+    if (recorderState.mediaServicesDidReset) {
+      // 오디오 세션이 리셋됨 (충전 연결 등) → 오디오 모드 재설정 후 재개
+      setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true })
+        .then(() => audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY))
+        .then(() => { audioRecorder.record(); })
+        .catch((e: any) => {
+          Alert.alert('녹음 재개 실패', `충전 연결로 인해 녹음이 중단됐어요.\n다시 시작해주세요.\n${e?.message ?? ''}`);
+          if (timerRef.current) clearInterval(timerRef.current);
+          setIsRecording(false);
+        });
+    }
+  }, [recorderState.mediaServicesDidReset, isRecording]);
 
   // 녹음 중 pulse 애니메이션
   useEffect(() => {
