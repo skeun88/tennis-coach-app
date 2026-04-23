@@ -175,6 +175,35 @@ export default function AIAnalysisScreen() {
    * improvement_points / next_goals:
    * DB에 배열로 저장된 경우도, 텍스트 줄바꿈 형식도 모두 처리
    */
+  /**
+   * summary에서 JSON이 섞여있으면 파싱해서 텍스트만 추출
+   */
+  function cleanSummary(val: unknown): string {
+    if (!val) return '';
+    const str = String(val).trim();
+    // JSON 블록이 섞인 경우 ({ 로 시작하면) 파싱 시도
+    if (str.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(str);
+        return parsed.summary || parsed.lesson_flow || str;
+      } catch {
+        // JSON이지만 파싱 실패 → 그대로
+      }
+    }
+    return str;
+  }
+
+  /**
+   * summary에서 키워드 위주 2줄 짧은 요약 생성
+   */
+  function shortSummary(val: unknown): string {
+    const full = cleanSummary(val);
+    if (!full) return '';
+    // 첫 두 문장만 (마침표/느낌표/줄바꿈 기준)
+    const sentences = full.split(/(?<=[.!?\n])/).map(s => s.trim()).filter(Boolean);
+    return sentences.slice(0, 2).join(' ');
+  }
+
   function toStringArray(val: unknown): string[] {
     if (Array.isArray(val)) return val.map(String).filter(Boolean);
     if (typeof val === 'string') {
@@ -345,7 +374,7 @@ export default function AIAnalysisScreen() {
                     ) : null}
                   </View>
                   <Text style={styles.planPreview} numberOfLines={2}>
-                    {plan.summary || '분석 결과를 확인하세요'}
+                    {shortSummary(plan.summary) || '분석 결과를 확인하세요'}
                   </Text>
                 </View>
                 <Ionicons
@@ -362,8 +391,10 @@ export default function AIAnalysisScreen() {
 
                   {plan.summary ? (
                     <View style={styles.planSection}>
-                      <Text style={styles.planSectionTitle}>📌 오늘 레슨 요약</Text>
-                      <Text style={styles.planSectionContent}>{plan.summary}</Text>
+                      <View style={styles.summaryKeywordBox}>
+                        <Text style={styles.summaryKeywordText}>{shortSummary(plan.summary)}</Text>
+                      </View>
+                      <Text style={styles.planSectionContent}>{cleanSummary(plan.summary)}</Text>
                     </View>
                   ) : null}
 
@@ -504,4 +535,19 @@ const styles = StyleSheet.create({
     width: 60, marginTop: 2, flexShrink: 0,
   },
   drillValue: { fontSize: 13, color: '#444', lineHeight: 20, flex: 1 },
+
+  // 상단 키워드 요약
+  summaryKeywordBox: {
+    backgroundColor: '#e8f5ee',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 10,
+  },
+  summaryKeywordText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1a7a4a',
+    lineHeight: 20,
+  },
 });
