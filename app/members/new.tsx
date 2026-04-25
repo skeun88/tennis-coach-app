@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
@@ -24,6 +24,22 @@ export default function NewMemberScreen() {
   const [scheduleTime, setScheduleTime] = useState('');
   const [lessonDuration, setLessonDuration] = useState('60');
   const [totalCredits, setTotalCredits] = useState('');
+  const [lessonPackages, setLessonPackages] = useState<any[]>([]);
+  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from('lesson_packages')
+        .select('*')
+        .eq('coach_id', user.id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+      setLessonPackages(data ?? []);
+    })();
+  }, []);
 
   function toggleDay(idx: number) {
     setScheduleDays(prev =>
@@ -31,6 +47,18 @@ export default function NewMemberScreen() {
     );
   }
   const [loading, setLoading] = useState(false);
+
+  function handleSelectPackage(pkg: any) {
+    if (selectedPackageId === pkg.id) {
+      // 재클릭 시 선택 해제
+      setSelectedPackageId(null);
+    } else {
+      setSelectedPackageId(pkg.id);
+      setTotalCredits(String(pkg.total_credits));
+      setLessonDuration(String(pkg.duration_minutes));
+      if (pkg.days && pkg.days.length > 0) setScheduleDays(pkg.days);
+    }
+  }
 
   async function handleSave() {
     if (!name.trim()) { Alert.alert('입력 오류', '이름을 입력해주세요.'); return; }
@@ -55,6 +83,7 @@ export default function NewMemberScreen() {
       fixed_lesson_duration: parseInt(lessonDuration) || 60,
       total_credits: parseInt(totalCredits) || 0,
       remaining_credits: parseInt(totalCredits) || 0,
+      lesson_package_id: selectedPackageId || null,
     });
 
     setLoading(false);
@@ -135,8 +164,48 @@ export default function NewMemberScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>레슨권</Text>
-          <Text style={styles.label}>총 레슨 횟수</Text>
+          <Text style={styles.sectionTitle}>레슨권 선택</Text>
+          {lessonPackages.length === 0 ? (
+            <View style={styles.noPackageBox}>
+              <Ionicons name="receipt-outline" size={24} color="#ccc" />
+              <Text style={styles.noPackageText}>등록된 레슨권이 없어요</Text>
+              <Text style={styles.noPackageSubText}>설정에서 레슨권을 먼저 등록해주세요</Text>
+            </View>
+          ) : (
+            <View style={styles.packageGrid}>
+              {lessonPackages.map(pkg => {
+                const isSelected = selectedPackageId === pkg.id;
+                const daysLabel = pkg.days?.length > 0
+                  ? pkg.days.map((d: number) => ['일','월','화','수','목','금','토'][d]).join(', ')
+                  : '요일 미지정';
+                return (
+                  <TouchableOpacity
+                    key={pkg.id}
+                    style={[styles.packageCard, { borderColor: pkg.color }, isSelected && { backgroundColor: pkg.color + '18' }]}
+                    onPress={() => handleSelectPackage(pkg)}
+                    activeOpacity={0.8}
+                  >
+                    {isSelected && (
+                      <View style={[styles.packageCheckmark, { backgroundColor: pkg.color }]}>
+                        <Ionicons name="checkmark" size={12} color="#fff" />
+                      </View>
+                    )}
+                    <View style={[styles.packageColorBar, { backgroundColor: pkg.color }]} />
+                    <Text style={styles.packageTitle} numberOfLines={2}>{pkg.title}</Text>
+                    <Text style={styles.packageMeta}>{daysLabel}</Text>
+                    <Text style={styles.packageMeta}>{pkg.duration_minutes}분 · {pkg.total_credits}회</Text>
+                    <Text style={[styles.packagePrice, { color: pkg.color }]}>
+                      {pkg.price.toLocaleString()}원
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+          {/* 직접 횟수 입력 */}
+          <Text style={[styles.label, { marginTop: 12 }]}>
+            {selectedPackageId ? '횟수 조정 (선택사항)' : '총 레슨 횟수 직접 입력'}
+          </Text>
           <TextInput
             style={styles.input}
             placeholder="예: 10"
@@ -200,4 +269,22 @@ const styles = StyleSheet.create({
   dayBtnTextActive: { color: '#fff' },
   creditPreview: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#f0fdf4', borderRadius: 8, padding: 10, marginTop: -4 },
   creditPreviewText: { fontSize: 14, color: '#1a7a4a', fontWeight: '600' },
+  noPackageBox: { alignItems: 'center', paddingVertical: 20, gap: 6 },
+  noPackageText: { fontSize: 14, fontWeight: '600', color: '#aaa' },
+  noPackageSubText: { fontSize: 12, color: '#ccc' },
+  packageGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  packageCard: {
+    width: '47%', borderRadius: 12, borderWidth: 2, padding: 12,
+    position: 'relative', overflow: 'hidden',
+    backgroundColor: '#fff',
+  },
+  packageCheckmark: {
+    position: 'absolute', top: 8, right: 8,
+    width: 20, height: 20, borderRadius: 10,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  packageColorBar: { height: 3, borderRadius: 2, marginBottom: 8 },
+  packageTitle: { fontSize: 14, fontWeight: '700', color: '#1a1a1a', marginBottom: 4 },
+  packageMeta: { fontSize: 11, color: '#888', marginBottom: 2 },
+  packagePrice: { fontSize: 14, fontWeight: '800', marginTop: 4 },
 });
