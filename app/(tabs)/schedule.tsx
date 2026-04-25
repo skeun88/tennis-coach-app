@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   RefreshControl, ScrollView,
@@ -23,37 +23,42 @@ interface WeekLesson {
 
 const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
+function getTodayString(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
+function getWeekDates(): string[] {
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - 3 + i);
+    return d.toISOString().split('T')[0];
+  });
+}
+
+function getThisWeekDates(): string[] {
+  const now = new Date();
+  const day = now.getDay();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((day + 6) % 7));
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return d.toISOString().split('T')[0];
+  });
+}
+
 export default function ScheduleScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<ViewTab>('일일');
   const [lessons, setLessons] = useState<LessonWithMembers[]>([]);
   const [weekData, setWeekData] = useState<WeekLesson[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
-  );
 
-  const today = new Date().toISOString().split('T')[0];
-
-  // 7-day window centered on today (−3 to +3)
-  const weekDates = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - 3 + i);
-    return d.toISOString().split('T')[0];
-  });
-
-  // Week starting Monday of current week
-  const thisWeekDates = (() => {
-    const now = new Date();
-    const day = now.getDay(); // 0=Sun
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - ((day + 6) % 7));
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      return d.toISOString().split('T')[0];
-    });
-  })();
+  // 날짜 state: 포커스 시마다 오늘 날짜로 초기화
+  const [today, setToday] = useState<string>(getTodayString);
+  const [selectedDate, setSelectedDate] = useState<string>(getTodayString);
+  const [weekDates, setWeekDates] = useState<string[]>(getWeekDates);
+  const [thisWeekDates, setThisWeekDates] = useState<string[]>(getThisWeekDates);
 
   async function attachMemberNames(lessonList: Lesson[]): Promise<LessonWithMembers[]> {
     if (lessonList.length === 0) return [];
@@ -79,22 +84,22 @@ export default function ScheduleScreen() {
     }));
   }
 
-  async function loadDayLessons() {
+  async function loadDayLessons(date: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const { data } = await supabase
       .from('lessons')
       .select('*')
       .eq('coach_id', user.id)
-      .eq('date', selectedDate)
+      .eq('date', date)
       .order('start_time');
     setLessons(await attachMemberNames(data ?? []));
   }
 
-  async function loadWeekLessons() {
+  async function loadWeekLessons(weekDates: string[]) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const [startDate, endDate] = [thisWeekDates[0], thisWeekDates[6]];
+    const [startDate, endDate] = [weekDates[0], weekDates[6]];
     const { data } = await supabase
       .from('lessons')
       .select('*')
@@ -104,19 +109,46 @@ export default function ScheduleScreen() {
       .order('start_time');
     const withNames = await attachMemberNames(data ?? []);
     const map = new Map<string, LessonWithMembers[]>();
-    for (const d of thisWeekDates) map.set(d, []);
+    for (const d of weekDates) map.set(d, []);
     for (const l of withNames) {
       if (map.has(l.date)) map.get(l.date)!.push(l);
     }
-    setWeekData(thisWeekDates.map(d => ({ date: d, lessons: map.get(d) ?? [] })));
+    setWeekData(weekDates.map(d => ({ date: d, lessons: map.get(d) ?? [] })));
   }
+
+  // 화면 포커스 시마다 날짜 재계산 + 데이터 로드
+  useFocusEffect(useCallback(() => {
+    const newToday = getTodayString();
+    const newWeekDates = getWeekDates();
+    const newThisWeekDates = getThisWeekDates();
+
+    setToday(newToday);
+    setWeekDates(newWeekDates);
+    setThisWeekDates(newThisWeekDates);
+
+    // selectedDate가 새 weekDates 범위 밖이면 오늘로 리셋
+    setSelectedDate(prev => {
+      const inRange = newWeekDates.includes(prev);
+      return inRange ? prev : newToday;
+    });
+
+    if (activeTab === '일일') {
+      loadDayLessons(newToday);
+    } else {
+      loadWeekLessons(newThisWeekDates);
+    }
+  }, [activeTab]));
 
   async function loadAll() {
-    if (activeTab === '일일') await loadDayLessons();
-    else await loadWeekLessons();
+    if (activeTab === '일일') await loadDayLessons(selectedDate);
+    else await loadWeekLessons(thisWeekDates);
   }
 
-  useFocusEffect(useCallback(() => { loadAll(); }, [activeTab, selectedDate]));
+  // selectedDate 변경 시 데이터 로드
+  const handleSelectDate = useCallback((date: string) => {
+    setSelectedDate(date);
+    loadDayLessons(date);
+  }, []);
 
   // ─── Day tab render ───────────────────────────────────────────────
   function renderLesson({ item }: { item: LessonWithMembers }) {
@@ -163,7 +195,6 @@ export default function ScheduleScreen() {
     const isToday = item.date === today;
     return (
       <View key={item.date} style={[styles.weekDayCol, isToday && styles.weekDayColToday]}>
-        {/* Day header */}
         <View style={[styles.weekDayHeader, isToday && styles.weekDayHeaderToday]}>
           <Text style={[styles.weekDayName, isToday && styles.weekDayNameToday]}>
             {DAYS[d.getDay()]}
@@ -172,8 +203,6 @@ export default function ScheduleScreen() {
             {d.getDate()}
           </Text>
         </View>
-
-        {/* Lesson cards for this day */}
         {item.lessons.length === 0 ? (
           <View style={styles.weekEmptySlot}>
             <Text style={styles.weekEmptyText}>-</Text>
@@ -200,7 +229,6 @@ export default function ScheduleScreen() {
   // ─── Main render ──────────────────────────────────────────────────
   return (
     <View style={styles.container}>
-      {/* Tab switcher */}
       <View style={styles.tabRow}>
         {(['일일', '주간'] as ViewTab[]).map(tab => (
           <TouchableOpacity
@@ -217,7 +245,6 @@ export default function ScheduleScreen() {
 
       {activeTab === '일일' ? (
         <>
-          {/* Day picker strip */}
           <View style={styles.weekStrip}>
             {weekDates.map(date => {
               const d = new Date(date + 'T00:00:00');
@@ -227,7 +254,7 @@ export default function ScheduleScreen() {
                 <TouchableOpacity
                   key={date}
                   style={[styles.dayBtn, isSelected && styles.daySelected]}
-                  onPress={() => setSelectedDate(date)}
+                  onPress={() => handleSelectDate(date)}
                 >
                   <Text style={[styles.dayName, isSelected && styles.dayTextSelected]}>
                     {DAYS[d.getDay()]}
@@ -271,7 +298,6 @@ export default function ScheduleScreen() {
           />
         </>
       ) : (
-        /* Week view */
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -280,7 +306,7 @@ export default function ScheduleScreen() {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={async () => { setRefreshing(true); await loadWeekLessons(); setRefreshing(false); }}
+              onRefresh={async () => { setRefreshing(true); await loadWeekLessons(thisWeekDates); setRefreshing(false); }}
               tintColor="#1a7a4a"
             />
           }
@@ -298,8 +324,6 @@ export default function ScheduleScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f7fa' },
-
-  // Tabs
   tabRow: {
     flexDirection: 'row', backgroundColor: '#fff',
     borderBottomWidth: 1, borderBottomColor: '#eee',
@@ -312,8 +336,6 @@ const styles = StyleSheet.create({
   tabBtnActive: { backgroundColor: '#1a7a4a' },
   tabText: { fontSize: 14, fontWeight: '700', color: '#888' },
   tabTextActive: { color: '#fff' },
-
-  // Day strip
   weekStrip: {
     flexDirection: 'row', backgroundColor: '#fff',
     paddingVertical: 12, paddingHorizontal: 8,
@@ -326,8 +348,6 @@ const styles = StyleSheet.create({
   dayTextSelected: { color: '#fff' },
   dayToday: { color: '#1a7a4a' },
   dateHeader: { fontSize: 14, color: '#888', paddingHorizontal: 16, paddingVertical: 10 },
-
-  // Lesson card (daily)
   card: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
     borderRadius: 12, padding: 14, marginBottom: 8,
@@ -346,20 +366,14 @@ const styles = StyleSheet.create({
   notes: { fontSize: 12, color: '#aaa', marginTop: 2 },
   memberNameRow: { flexDirection: 'row', flexWrap: 'wrap' },
   memberNameText: { fontSize: 12, color: '#1a7a4a', fontWeight: '600' },
-
-  // Empty
   empty: { alignItems: 'center', padding: 60 },
   emptyText: { fontSize: 15, color: '#aaa', fontWeight: '500', marginTop: 12 },
-
-  // FAB
   fab: {
     position: 'absolute', bottom: 24, right: 20,
     width: 56, height: 56, borderRadius: 28,
     backgroundColor: '#1a7a4a', justifyContent: 'center', alignItems: 'center',
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 6,
   },
-
-  // Week view
   weekScroll: { flex: 1 },
   weekScrollContent: { padding: 12, gap: 8, flexDirection: 'row' },
   weekDayCol: {
@@ -367,9 +381,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
   },
-  weekDayColToday: {
-    borderWidth: 2, borderColor: '#1a7a4a',
-  },
+  weekDayColToday: { borderWidth: 2, borderColor: '#1a7a4a' },
   weekDayHeader: {
     backgroundColor: '#f5f7fa', paddingVertical: 10,
     alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#eee',

@@ -53,6 +53,15 @@ export default function TabsLayout() {
           headerTitle: '결제 관리',
         }}
       />
+      <Tabs.Screen
+        name="chat"
+        options={{
+          title: '도움말',
+          tabBarLabel: '도움말',
+          tabBarIcon: ({ color, size }) => <Ionicons name="chatbubble-ellipses" size={size} color={color} />,
+          headerTitle: 'KERRI 도우미',
+        }}
+      />
     </Tabs>
   );
 }

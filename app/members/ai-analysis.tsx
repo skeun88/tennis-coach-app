@@ -127,6 +127,7 @@ export default function AIAnalysisScreen() {
       formData.append('audio', { uri, type: 'audio/m4a', name: 'lesson.m4a' } as any);
       formData.append('member_id', memberId);
       formData.append('coach_id', user.id);
+      formData.append('duration_seconds', String(recordingDuration));
 
       // React Native는 ReadableStream 미지원 → 일반 JSON 요청
       // 분석 단계는 타이머로 시뮬레이션
@@ -136,11 +137,19 @@ export default function AIAnalysisScreen() {
 
       let finalResult: any = null;
       try {
-        const res = await fetch(`${SUPABASE_URL}/functions/v1/process-lesson`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-          body: formData,
-        });
+        const controller = new AbortController();
+        const fetchTimeout = setTimeout(() => controller.abort(), 3 * 60 * 1000); // 3분 타임아웃
+        let res: Response;
+        try {
+          res = await fetch(`${SUPABASE_URL}/functions/v1/process-lesson`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+            body: formData,
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(fetchTimeout);
+        }
         finalResult = await res.json();
         if (!res.ok || finalResult.error) throw new Error(finalResult.error || '분석에 실패했습니다.');
       } finally {
@@ -181,16 +190,30 @@ export default function AIAnalysisScreen() {
   function cleanSummary(val: unknown): string {
     if (!val) return '';
     const str = String(val).trim();
-    // JSON 블록이 섞인 경우 ({ 로 시작하면) 파싱 시도
+
+    // JSON 블록이 포함된 경우 — 전체가 JSON이거나 일부에 섞인 경우 모두 처리
+    // 1) 전체가 JSON 객체인 경우
     if (str.startsWith('{')) {
       try {
         const parsed = JSON.parse(str);
-        return parsed.summary || parsed.lesson_flow || str;
-      } catch {
-        // JSON이지만 파싱 실패 → 그대로
-      }
+        return parsed.summary || parsed.lesson_flow || parsed.content || str;
+      } catch { /* 파싱 실패 시 아래로 */ }
     }
-    return str;
+
+    // 2) 텍스트 안에 JSON 블록이 섞인 경우 (```json ... ``` 또는 { ... } 패턴)
+    // JSON 블록 제거 후 순수 텍스트만 반환
+    let cleaned = str
+      .replace(/```json[\s\S]*?```/g, '')   // 코드블록 제거
+      .replace(/```[\s\S]*?```/g, '')        // 일반 코드블록 제거
+      .replace(/\{[\s\S]*?\}/g, (match) => {  // JSON 객체 — summary 추출 시도
+        try {
+          const p = JSON.parse(match);
+          return p.summary || p.lesson_flow || '';
+        } catch { return ''; }
+      })
+      .trim();
+
+    return cleaned || str;
   }
 
   /**

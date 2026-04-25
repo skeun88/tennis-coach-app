@@ -86,6 +86,8 @@ serve(async (req) => {
       const lessonId = formData.get('lesson_id') as string | null
       const coachId = formData.get('coach_id') as string
       const courtType = (formData.get('court_type') as string) || null
+      const durationSecondsRaw = formData.get('duration_seconds') as string | null
+      const durationSeconds = durationSecondsRaw ? parseInt(durationSecondsRaw, 10) : null
 
       if (!audioFile || !memberId || !coachId) {
         return new Response(JSON.stringify({ error: '필수 파라미터 누락' }), {
@@ -176,7 +178,7 @@ ${transcript}`
             member_id: memberId,
             lesson_id: lessonId || null,
             transcript,
-            duration_seconds: Math.round(audioFile.size / 16000),
+            duration_seconds: durationSeconds ?? Math.round(audioFile.size / 16000),
             recorded_at: new Date().toISOString(),
           })
           .select()
@@ -375,7 +377,7 @@ ${knowledgeContext || '(관련 자료 없음)'}`
           next_goals: nextGoals,
           session_goals: parsed.session_goals || '',
           drill_suggestions: parsed.drill_suggestions || [],
-          duration_minutes: Math.round((audioFile.size / 16000) / 60),
+          duration_minutes: durationSeconds ? Math.round(durationSeconds / 60) : Math.round((audioFile.size / 16000) / 60),
           raw_response: rawResponse,
           transcript_summary: transcriptSummary,  // 요약본 영구 보관
         })
