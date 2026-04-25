@@ -1,5 +1,4 @@
 import { Tabs } from 'expo-router';
-import { TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function TabsLayout() {
@@ -34,14 +33,6 @@ export default function TabsLayout() {
           tabBarLabel: '회원',
           tabBarIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} />,
           headerTitle: '회원 관리',
-          headerRight: () => (
-            <TouchableOpacity
-              onPress={() => require('expo-router').router.push('/lesson-packages/')}
-              style={{ marginRight: 16 }}
-            >
-              <Ionicons name="receipt-outline" size={22} color="#fff" />
-            </TouchableOpacity>
-          ),
         }}
       />
       <Tabs.Screen
