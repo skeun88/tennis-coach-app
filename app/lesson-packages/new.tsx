@@ -50,6 +50,7 @@ export default function NewLessonPackageScreen() {
     const payload = {
       coach_id: user.id,
       title: title.trim(),
+      days: [],
       price: parseInt(price) || 0,
       total_credits: parseInt(totalCredits) || 10,
       duration_minutes: parseInt(durationMinutes) || 60,
