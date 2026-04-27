@@ -291,23 +291,37 @@ export default function MemberDetailScreen() {
                 {lessonPackages.length === 0 ? (
                   <Text style={{ fontSize: 13, color: '#aaa', marginBottom: 12 }}>등록된 레슨권이 없어요</Text>
                 ) : (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                  <View style={styles.editPkgGrid}>
                     <TouchableOpacity
-                      style={[styles.pkgChip, !selectedPackageId && styles.pkgChipSelected]}
+                      style={[styles.editPkgCard, styles.editPkgCardNone, !selectedPackageId && styles.editPkgCardNoneSelected]}
                       onPress={() => setSelectedPackageId(null)}
                     >
-                      <Text style={[styles.pkgChipText, !selectedPackageId && styles.pkgChipTextSelected]}>없음</Text>
+                      {!selectedPackageId && <View style={styles.editPkgCheck}><Ionicons name="checkmark" size={10} color="#fff" /></View>}
+                      <Ionicons name="close-circle-outline" size={20} color={!selectedPackageId ? '#fff' : '#bbb'} />
+                      <Text style={[styles.editPkgNoneText, !selectedPackageId && { color: '#fff' }]}>없음</Text>
                     </TouchableOpacity>
-                    {lessonPackages.map(pkg => (
-                      <TouchableOpacity
-                        key={pkg.id}
-                        style={[styles.pkgChip, { borderColor: pkg.color }, selectedPackageId === pkg.id && { backgroundColor: pkg.color }]}
-                        onPress={() => setSelectedPackageId(pkg.id)}
-                      >
-                        <Text style={[styles.pkgChipText, selectedPackageId === pkg.id && { color: '#fff' }]}>{pkg.title}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+                    {lessonPackages.map(pkg => {
+                      const isSelected = selectedPackageId === pkg.id;
+                      return (
+                        <TouchableOpacity
+                          key={pkg.id}
+                          style={[styles.editPkgCard, { borderColor: pkg.color }, isSelected && { backgroundColor: pkg.color + '18' }]}
+                          onPress={() => setSelectedPackageId(pkg.id)}
+                          activeOpacity={0.8}
+                        >
+                          {isSelected && (
+                            <View style={[styles.editPkgCheck, { backgroundColor: pkg.color }]}>
+                              <Ionicons name="checkmark" size={10} color="#fff" />
+                            </View>
+                          )}
+                          <View style={[styles.editPkgColorBar, { backgroundColor: pkg.color }]} />
+                          <Text style={styles.editPkgTitle} numberOfLines={2}>{pkg.title}</Text>
+                          <Text style={styles.editPkgMeta}>{pkg.duration_minutes}분 · {pkg.total_credits}회</Text>
+                          <Text style={[styles.editPkgPrice, { color: pkg.color }]}>{pkg.price.toLocaleString()}원</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
                 )}
 
                 <View style={styles.btnRow}>
