@@ -110,6 +110,13 @@ export default function AIAnalysisScreen() {
 
   async function stopAndAnalyze() {
     if (!isRecording) return;
+
+    // 최소 30초 미만 녹음 시 분석 거부
+    if (recordingDuration < 30) {
+      Alert.alert('녹음 시간 부족', '최소 30초 이상 녹음해야 분석이 가능합니다.\n현재: ' + recordingDuration + '초');
+      return;
+    }
+
     if (timerRef.current) clearInterval(timerRef.current);
     setIsRecording(false);
     setIsAnalyzing(true);

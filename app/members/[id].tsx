@@ -39,6 +39,7 @@ export default function MemberDetailScreen() {
   const [remainingCredits, setRemainingCredits] = useState('0');
 
   // Sub data
+  const [lessonPackage, setLessonPackage] = useState<{title: string; color: string; total_credits: number; price: number} | null>(null);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [memberNotes, setMemberNotes] = useState<MemberNote[]>([]);
@@ -56,6 +57,12 @@ export default function MemberDetailScreen() {
       setLessonDuration(String((data as any).fixed_lesson_duration ?? 60));
       setTotalCredits(String((data as any).total_credits ?? 0));
       setRemainingCredits(String((data as any).remaining_credits ?? 0));
+      // 레슨권 정보 로드
+      const pkgId = (data as any).lesson_package_id;
+      if (pkgId) {
+        const { data: pkg } = await supabase.from('lesson_packages').select('title, color, total_credits, price').eq('id', pkgId).single();
+        setLessonPackage(pkg);
+      }
     }
     setLoading(false);
   }
@@ -199,6 +206,16 @@ export default function MemberDetailScreen() {
                   />
                 )}
                 <InfoRow icon="layers-outline" label="레슨권 잔여" value={`${(member as any).remaining_credits ?? 0}회 / 총 ${(member as any).total_credits ?? 0}회`} />
+                {lessonPackage && (
+                  <View style={styles.packageBanner}>
+                    <View style={[styles.packageDot, { backgroundColor: lessonPackage.color }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.packageTitle}>{lessonPackage.title}</Text>
+                      <Text style={styles.packageMeta}>{lessonPackage.total_credits}회 · {lessonPackage.price.toLocaleString()}원</Text>
+                    </View>
+                    <Ionicons name="card-outline" size={18} color="#1a7a4a" />
+                  </View>
+                )}
 
                 <View style={styles.btnRow}>
                   <TouchableOpacity style={styles.editBtn} onPress={() => setEditing(true)}>
