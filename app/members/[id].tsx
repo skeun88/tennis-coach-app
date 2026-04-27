@@ -217,16 +217,26 @@ export default function MemberDetailScreen() {
                   />
                 )}
                 <InfoRow icon="layers-outline" label="레슨권 잔여" value={`${(member as any).remaining_credits ?? 0}회 / 총 ${(member as any).total_credits ?? 0}회`} />
-                {lessonPackage && (
-                  <View style={styles.packageBanner}>
-                    <View style={[styles.packageDot, { backgroundColor: lessonPackage.color }]} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.packageTitle}>{lessonPackage.title}</Text>
-                      <Text style={styles.packageMeta}>{lessonPackage.total_credits}회 · {lessonPackage.price.toLocaleString()}원</Text>
-                    </View>
-                    <Ionicons name="card-outline" size={18} color="#1a7a4a" />
-                  </View>
-                )}
+                <View style={styles.packageBanner}>
+                  {lessonPackage ? (
+                    <>
+                      <View style={[styles.packageDot, { backgroundColor: lessonPackage.color }]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.packageTitle}>{lessonPackage.title}</Text>
+                        <Text style={styles.packageMeta}>{lessonPackage.total_credits}회 · {lessonPackage.price.toLocaleString()}원</Text>
+                      </View>
+                      <Ionicons name="card-outline" size={18} color="#1a7a4a" />
+                    </>
+                  ) : (
+                    <>
+                      <Ionicons name="card-outline" size={18} color="#ccc" />
+                      <Text style={[styles.packageMeta, { color: '#bbb', marginLeft: 8 }]}>연결된 레슨권 없음</Text>
+                      <TouchableOpacity onPress={() => setEditing(true)} style={{ marginLeft: 'auto' }}>
+                        <Text style={{ fontSize: 12, color: '#1a7a4a', fontWeight: '600' }}>설정 →</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </View>
 
                 <View style={styles.btnRow}>
                   <TouchableOpacity style={styles.editBtn} onPress={() => setEditing(true)}>
