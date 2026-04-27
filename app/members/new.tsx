@@ -56,7 +56,6 @@ export default function NewMemberScreen() {
       setSelectedPackageId(pkg.id);
       setTotalCredits(String(pkg.total_credits));
       setLessonDuration(String(pkg.duration_minutes));
-      if (pkg.days && pkg.days.length > 0) setScheduleDays(pkg.days);
     }
   }
 
@@ -153,14 +152,6 @@ export default function NewMemberScreen() {
             onChangeText={setScheduleTime}
             keyboardType="numbers-and-punctuation"
           />
-          <Text style={styles.label}>레슨 시간 (분)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="60"
-            value={lessonDuration}
-            onChangeText={setLessonDuration}
-            keyboardType="number-pad"
-          />
         </View>
 
         <View style={styles.section}>
@@ -175,9 +166,6 @@ export default function NewMemberScreen() {
             <View style={styles.packageGrid}>
               {lessonPackages.map(pkg => {
                 const isSelected = selectedPackageId === pkg.id;
-                const daysLabel = pkg.days?.length > 0
-                  ? pkg.days.map((d: number) => ['일','월','화','수','목','금','토'][d]).join(', ')
-                  : '요일 미지정';
                 return (
                   <TouchableOpacity
                     key={pkg.id}
@@ -192,7 +180,6 @@ export default function NewMemberScreen() {
                     )}
                     <View style={[styles.packageColorBar, { backgroundColor: pkg.color }]} />
                     <Text style={styles.packageTitle} numberOfLines={2}>{pkg.title}</Text>
-                    <Text style={styles.packageMeta}>{daysLabel}</Text>
                     <Text style={styles.packageMeta}>{pkg.duration_minutes}분 · {pkg.total_credits}회</Text>
                     <Text style={[styles.packagePrice, { color: pkg.color }]}>
                       {pkg.price.toLocaleString()}원

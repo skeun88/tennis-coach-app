@@ -40,6 +40,8 @@ export default function MemberDetailScreen() {
 
   // Sub data
   const [lessonPackage, setLessonPackage] = useState<{title: string; color: string; total_credits: number; price: number} | null>(null);
+  const [lessonPackages, setLessonPackages] = useState<any[]>([]);
+  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [memberNotes, setMemberNotes] = useState<MemberNote[]>([]);
@@ -59,10 +61,18 @@ export default function MemberDetailScreen() {
       setRemainingCredits(String((data as any).remaining_credits ?? 0));
       // 레슨권 정보 로드
       const pkgId = (data as any).lesson_package_id;
+      setSelectedPackageId(pkgId || null);
       if (pkgId) {
         const { data: pkg } = await supabase.from('lesson_packages').select('title, color, total_credits, price').eq('id', pkgId).single();
         setLessonPackage(pkg);
       }
+    }
+    // 레슨권 목록 로드 (수정 모드용)
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: pkgs } = await supabase.from('lesson_packages')
+        .select('*').eq('coach_id', user.id).eq('is_active', true).order('created_at', { ascending: false });
+      setLessonPackages(pkgs ?? []);
     }
     setLoading(false);
   }
@@ -110,6 +120,7 @@ export default function MemberDetailScreen() {
       fixed_lesson_duration: parseInt(lessonDuration) || 60,
       total_credits: parseInt(totalCredits) || 0,
       remaining_credits: parseInt(remainingCredits) || 0,
+      lesson_package_id: selectedPackageId || null,
     }).eq('id', id!);
     if (error) Alert.alert('오류', '저장에 실패했습니다.');
     else { setEditing(false); loadMember(); }
@@ -259,14 +270,35 @@ export default function MemberDetailScreen() {
                 </View>
                 <Text style={styles.editLabel}>레슨 시작 시간</Text>
                 <TextInput style={styles.editInput} placeholder="HH:MM" value={scheduleTime} onChangeText={setScheduleTime} />
-                <Text style={styles.editLabel}>레슨 시간(분)</Text>
-                <TextInput style={styles.editInput} placeholder="60" value={lessonDuration} onChangeText={setLessonDuration} keyboardType="number-pad" />
                 <Text style={styles.editLabel}>총 레슨권</Text>
                 <TextInput style={styles.editInput} placeholder="0" value={totalCredits} onChangeText={setTotalCredits} keyboardType="number-pad" />
                 <Text style={styles.editLabel}>잔여 레슨권</Text>
                 <TextInput style={styles.editInput} placeholder="0" value={remainingCredits} onChangeText={setRemainingCredits} keyboardType="number-pad" />
                 <Text style={styles.editLabel}>메모</Text>
                 <TextInput style={[styles.editInput, { minHeight: 80 }]} value={notes} onChangeText={setNotes} multiline textAlignVertical="top" />
+
+                <Text style={styles.editLabel}>레슨권 변경</Text>
+                {lessonPackages.length === 0 ? (
+                  <Text style={{ fontSize: 13, color: '#aaa', marginBottom: 12 }}>등록된 레슨권이 없어요</Text>
+                ) : (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                    <TouchableOpacity
+                      style={[styles.pkgChip, !selectedPackageId && styles.pkgChipSelected]}
+                      onPress={() => setSelectedPackageId(null)}
+                    >
+                      <Text style={[styles.pkgChipText, !selectedPackageId && styles.pkgChipTextSelected]}>없음</Text>
+                    </TouchableOpacity>
+                    {lessonPackages.map(pkg => (
+                      <TouchableOpacity
+                        key={pkg.id}
+                        style={[styles.pkgChip, { borderColor: pkg.color }, selectedPackageId === pkg.id && { backgroundColor: pkg.color }]}
+                        onPress={() => setSelectedPackageId(pkg.id)}
+                      >
+                        <Text style={[styles.pkgChipText, selectedPackageId === pkg.id && { color: '#fff' }]}>{pkg.title}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
 
                 <View style={styles.btnRow}>
                   <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
