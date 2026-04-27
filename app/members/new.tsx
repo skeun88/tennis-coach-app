@@ -166,6 +166,9 @@ export default function NewMemberScreen() {
             <View style={styles.packageGrid}>
               {lessonPackages.map(pkg => {
                 const isSelected = selectedPackageId === pkg.id;
+                const daysLabel = pkg.days?.length > 0
+                  ? pkg.days.map((d: number) => ['일','월','화','수','목','금','토'][d]).join(', ')
+                  : null;
                 return (
                   <TouchableOpacity
                     key={pkg.id}
@@ -180,6 +183,7 @@ export default function NewMemberScreen() {
                     )}
                     <View style={[styles.packageColorBar, { backgroundColor: pkg.color }]} />
                     <Text style={styles.packageTitle} numberOfLines={2}>{pkg.title}</Text>
+                    {daysLabel && <Text style={styles.packageMeta}>{daysLabel}</Text>}
                     <Text style={styles.packageMeta}>{pkg.duration_minutes}분 · {pkg.total_credits}회</Text>
                     <Text style={[styles.packagePrice, { color: pkg.color }]}>
                       {pkg.price.toLocaleString()}원
