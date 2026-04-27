@@ -67,7 +67,8 @@ export default function NewLessonPackageScreen() {
 
     setLoading(false);
     if (error) {
-      Alert.alert('오류', '저장에 실패했습니다.');
+      console.error('lesson_packages error:', JSON.stringify(error));
+      Alert.alert('오류', error.message || '저장에 실패했습니다.');
     } else {
       Alert.alert('완료', isEdit ? '레슨권이 수정됐습니다.' : '레슨권이 등록됐습니다.', [
         { text: '확인', onPress: () => router.back() }
