@@ -7,7 +7,6 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 
-const DAYS_KR = ['일', '월', '화', '수', '목', '금', '토'];
 const PRESET_COLORS = ['#1a7a4a', '#2563eb', '#7c3aed', '#dc2626', '#ea580c', '#0891b2', '#65a30d'];
 
 export default function NewLessonPackageScreen() {
@@ -16,7 +15,6 @@ export default function NewLessonPackageScreen() {
   const isEdit = !!editId;
 
   const [title, setTitle] = useState('');
-  const [days, setDays] = useState<number[]>([]);
   const [price, setPrice] = useState('');
   const [totalCredits, setTotalCredits] = useState('10');
   const [durationMinutes, setDurationMinutes] = useState('60');
@@ -31,7 +29,6 @@ export default function NewLessonPackageScreen() {
       const { data } = await supabase.from('lesson_packages').select('*').eq('id', editId).single();
       if (data) {
         setTitle(data.title);
-        setDays(data.days ?? []);
         setPrice(String(data.price));
         setTotalCredits(String(data.total_credits));
         setDurationMinutes(String(data.duration_minutes));
@@ -41,10 +38,6 @@ export default function NewLessonPackageScreen() {
       setLoadingEdit(false);
     })();
   }, [editId]);
-
-  function toggleDay(idx: number) {
-    setDays(prev => prev.includes(idx) ? prev.filter(d => d !== idx) : [...prev, idx].sort());
-  }
 
   async function handleSave() {
     if (!title.trim()) { Alert.alert('입력 오류', '레슨권 제목을 입력해주세요.'); return; }
@@ -57,7 +50,6 @@ export default function NewLessonPackageScreen() {
     const payload = {
       coach_id: user.id,
       title: title.trim(),
-      days,
       price: parseInt(price) || 0,
       total_credits: parseInt(totalCredits) || 10,
       duration_minutes: parseInt(durationMinutes) || 60,
@@ -87,7 +79,6 @@ export default function NewLessonPackageScreen() {
   }
 
   // 미리보기 카드
-  const daysLabel = days.length > 0 ? days.map(d => DAYS_KR[d]).join(', ') : '요일 미지정';
   const priceNum = parseInt(price) || 0;
 
   return (
@@ -101,7 +92,6 @@ export default function NewLessonPackageScreen() {
             <Text style={styles.previewTitle}>{title || '레슨권 제목'}</Text>
           </View>
           <View style={styles.previewMeta}>
-            <Text style={styles.previewMetaText}>📅 {daysLabel}</Text>
             <Text style={styles.previewMetaText}>⏱ {durationMinutes}분</Text>
             <Text style={styles.previewMetaText}>🎾 {totalCredits}회</Text>
             <Text style={styles.previewMetaText}>💳 {priceNum.toLocaleString()}원</Text>
@@ -146,22 +136,6 @@ export default function NewLessonPackageScreen() {
             onChangeText={setDurationMinutes}
             keyboardType="number-pad"
           />
-        </View>
-
-        {/* 레슨 요일 */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>레슨 요일</Text>
-          <View style={styles.dayRow}>
-            {DAYS_KR.map((d, i) => (
-              <TouchableOpacity
-                key={i}
-                style={[styles.dayBtn, days.includes(i) && { backgroundColor: color }]}
-                onPress={() => toggleDay(i)}
-              >
-                <Text style={[styles.dayBtnText, days.includes(i) && styles.dayBtnTextActive]}>{d}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
         </View>
 
         {/* 카드 색상 */}
@@ -223,10 +197,6 @@ const styles = StyleSheet.create({
     fontSize: 15, color: '#1a1a1a', marginBottom: 12, borderWidth: 1, borderColor: '#eee',
   },
   textArea: { minHeight: 80, paddingTop: 10 },
-  dayRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  dayBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },
-  dayBtnText: { fontSize: 14, fontWeight: '700', color: '#888' },
-  dayBtnTextActive: { color: '#fff' },
   colorRow: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
   colorSwatch: { width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
   colorSwatchSelected: { borderWidth: 3, borderColor: '#fff', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
