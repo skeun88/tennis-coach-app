@@ -122,7 +122,7 @@ async function generateScheduleLessons(
   let created = 0;
   for (const date of dates) {
     const { data: lesson, error: lErr } = await sb.from('lessons').insert({
-      coach_id: coachId, title: memberName + ' 레슨', date, start_time: startSt, end_time: endTime,
+      coach_id: coachId, title: memberName, date, start_time: startSt, end_time: endTime,
     }).select('id').single();
     if (lErr || !lesson) continue;
     await sb.from('lesson_members').insert({ lesson_id: lesson.id, member_id: memberId });

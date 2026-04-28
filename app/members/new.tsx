@@ -109,7 +109,7 @@ async function generateScheduleLessons(params: {
   }
   for (const date of dates) {
     const { data: lesson, error: lErr } = await supabase.from('lessons')
-      .insert({ coach_id: coachId, title: memberName + ' 레슨', date, start_time: startSt, end_time: endSt })
+      .insert({ coach_id: coachId, title: memberName, date, start_time: startSt, end_time: endSt })
       .select('id').single();
     if (lErr || !lesson) continue;
     await supabase.from('lesson_members').insert({ lesson_id: lesson.id, member_id: memberId });
