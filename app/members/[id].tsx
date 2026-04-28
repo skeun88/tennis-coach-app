@@ -26,6 +26,50 @@ for (let h = 6; h <= 22; h++) {
 type Tab = 'info' | 'attendance' | 'payment' | 'notes';
 
 
+async function checkConflicts(
+  sb: any,
+  coachId: string,
+  scheduleDays: number[],
+  scheduleTime: string,
+  lessonDuration: number,
+  excludeMemberId?: string,
+): Promise<{ date: string; memberName: string; startTime: string }[]> {
+  if (!scheduleDays.length || !scheduleTime) return [];
+  const parts = scheduleTime.slice(0, 5).split(':').map(Number);
+  const newStart = parts[0] * 60 + parts[1];
+  const newEnd = newStart + lessonDuration;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const checkDates: string[] = [];
+  const cur = new Date(today);
+  for (let i = 0; i < 30; i++) {
+    if (scheduleDays.includes(cur.getDay())) checkDates.push(cur.toISOString().split('T')[0]);
+    cur.setDate(cur.getDate() + 1);
+  }
+  if (!checkDates.length) return [];
+  const { data: existing } = await sb
+    .from('lessons')
+    .select('id, date, start_time, end_time, lesson_members(member_id, member:members(name))')
+    .eq('coach_id', coachId)
+    .in('date', checkDates);
+  const conflicts: { date: string; memberName: string; startTime: string }[] = [];
+  for (const lesson of (existing ?? []) as any[]) {
+    const [lh, lm2] = lesson.start_time.slice(0, 5).split(':').map(Number);
+    const [eh, em] = lesson.end_time.slice(0, 5).split(':').map(Number);
+    const lStart = lh * 60 + lm2;
+    const lEnd = eh * 60 + em;
+    if (newStart < lEnd && newEnd > lStart) {
+      for (const lmRow of lesson.lesson_members ?? []) {
+        if (excludeMemberId && lmRow.member_id === excludeMemberId) continue;
+        const mName = lmRow.member?.name ?? '다른 회원';
+        if (!conflicts.find((cf: any) => cf.date === lesson.date && cf.memberName === mName)) {
+          conflicts.push({ date: lesson.date, memberName: mName, startTime: lesson.start_time.slice(0, 5) });
+        }
+      }
+    }
+  }
+  return conflicts;
+}
+
 async function generateScheduleLessons(
   sb: any,
   coachId: string,
@@ -170,6 +214,30 @@ export default function MemberDetailScreen() {
     if (!user) return;
     const credits = parseInt(totalCredits) || 0;
     const duration = parseInt(lessonDuration) || 60;
+
+    // 충돌 체크
+    if (scheduleDays.length > 0 && scheduleTime) {
+      const conflicts = await checkConflicts(supabase, user.id, scheduleDays, scheduleTime, duration, id as string);
+      if (conflicts.length > 0) {
+        const conflictMsg = conflicts.slice(0, 3).map((cf: any) => {
+          const d = new Date(cf.date + 'T00:00:00');
+          return d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }) + ' ' + cf.startTime + ' - ' + cf.memberName;
+        }).join('\n') + (conflicts.length > 3 ? ('\n' + '외 ' + (conflicts.length - 3) + '건') : '');
+        Alert.alert(
+          '시간 충돌',
+          '선택한 시간대에 이미 레슨이 있습니다:\n\n' + conflictMsg + '\n\n그래도 저장하시겠어요?',
+          [
+            { text: '시간 변경', style: 'cancel' },
+            { text: '그대로 저장', style: 'destructive', onPress: () => doActualSave(user.id, credits, duration) },
+          ]
+        );
+        return;
+      }
+    }
+    await doActualSave(user.id, credits, duration);
+  }
+
+  async function doActualSave(userId: string, credits: number, duration: number) {
     const { data: oldMember } = await supabase.from('members').select('fixed_schedule_days, fixed_schedule_time, join_date').eq('id', id!).single();
     const oldDays: number[] = (oldMember as any)?.fixed_schedule_days ?? [];
     const oldTime: string = (oldMember as any)?.fixed_schedule_time?.slice(0, 5) ?? '';
@@ -195,7 +263,7 @@ export default function MemberDetailScreen() {
       if (needed > 0 && (scheduleChanged || futureLessons.length === 0)) {
         const joinDate = (oldMember as any)?.join_date ?? todayStr;
         scheduledCount = await generateScheduleLessons(
-          supabase, user.id, id!, name, scheduleDays, scheduleTime, duration, needed, joinDate,
+          supabase, userId, id!, name, scheduleDays, scheduleTime, duration, needed, joinDate,
         );
       }
     }

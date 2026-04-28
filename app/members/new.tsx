@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
@@ -11,21 +11,68 @@ import { MemberLevel } from '../../types';
 
 const LEVELS: MemberLevel[] = ['입문', '초급', '중급', '고급', '선수'];
 const DAYS_KR = ['일', '월', '화', '수', '목', '금', '토'];
-
 const HOURS = Array.from({ length: 17 }, (_, i) => String(i + 6).padStart(2, '0')); // 06~22
 const MINUTES = ['00', '10', '20', '30', '40', '50'];
 
+/** 충돌 체크: 같은 코치의 같은 시간대에 다른 레슨 있는지 확인 */
+async function checkConflicts(
+  coachId: string,
+  scheduleDays: number[],
+  scheduleTime: string,
+  lessonDuration: number,
+  excludeMemberId?: string,
+): Promise<{ date: string; memberName: string; startTime: string }[]> {
+  if (!scheduleDays.length || !scheduleTime) return [];
+  const [hh, mm] = scheduleTime.split(':').map(Number);
+  const newStart = hh * 60 + mm;
+  const newEnd = newStart + lessonDuration;
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const checkDates: string[] = [];
+  const cur = new Date(today);
+  for (let i = 0; i < 30; i++) {
+    if (scheduleDays.includes(cur.getDay())) checkDates.push(cur.toISOString().split('T')[0]);
+    cur.setDate(cur.getDate() + 1);
+  }
+  if (!checkDates.length) return [];
+
+  const { data: existing } = await supabase
+    .from('lessons')
+    .select('id, date, start_time, end_time, lesson_members(member_id, member:members(name))')
+    .eq('coach_id', coachId)
+    .in('date', checkDates);
+
+  const conflicts: { date: string; memberName: string; startTime: string }[] = [];
+  for (const lesson of (existing ?? []) as any[]) {
+    const [lh, lm] = lesson.start_time.slice(0, 5).split(':').map(Number);
+    const [eh, em] = lesson.end_time.slice(0, 5).split(':').map(Number);
+    const lStart = lh * 60 + lm;
+    const lEnd = eh * 60 + em;
+    if (newStart < lEnd && newEnd > lStart) {
+      for (const lmRow of lesson.lesson_members ?? []) {
+        if (excludeMemberId && lmRow.member_id === excludeMemberId) continue;
+        const mName = lmRow.member?.name ?? '다른 회원';
+        if (!conflicts.find(cf => cf.date === lesson.date && cf.memberName === mName)) {
+          conflicts.push({ date: lesson.date, memberName: mName, startTime: lesson.start_time.slice(0, 5) });
+        }
+      }
+    }
+  }
+  return conflicts;
+}
+
+/** 고정 스케줄 기반 레슨 자동 생성 */
 async function generateScheduleLessons(params: {
   coachId: string; memberId: string; memberName: string;
   scheduleDays: number[]; scheduleTime: string; lessonDuration: number;
   totalCredits: number; joinDate: string;
 }) {
   const { coachId, memberId, memberName, scheduleDays, scheduleTime, lessonDuration, totalCredits, joinDate } = params;
-  if (scheduleDays.length === 0 || !scheduleTime || totalCredits <= 0) return;
+  if (!scheduleDays.length || !scheduleTime || totalCredits <= 0) return;
   const [hh, mm] = scheduleTime.split(':').map(Number);
   const endMin = hh * 60 + mm + lessonDuration;
-  const endTime = `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}:00`;
   const startSt = scheduleTime + ':00';
+  const endSt = String(Math.floor(endMin / 60)).padStart(2, '0') + ':' + String(endMin % 60).padStart(2, '0') + ':00';
   const cursor = new Date(joinDate + 'T00:00:00');
   const today = new Date(); today.setHours(0, 0, 0, 0);
   if (cursor < today) cursor.setTime(today.getTime());
@@ -37,7 +84,7 @@ async function generateScheduleLessons(params: {
   }
   for (const date of dates) {
     const { data: lesson, error: lErr } = await supabase.from('lessons')
-      .insert({ coach_id: coachId, title: `${memberName} 레슨`, date, start_time: startSt, end_time: endTime })
+      .insert({ coach_id: coachId, title: memberName + ' 레슨', date, start_time: startSt, end_time: endSt })
       .select('id').single();
     if (lErr || !lesson) continue;
     await supabase.from('lesson_members').insert({ lesson_id: lesson.id, member_id: memberId });
@@ -63,7 +110,7 @@ export default function NewMemberScreen() {
   const [loading, setLoading] = useState(false);
   const [timePickerVisible, setTimePickerVisible] = useState(false);
 
-  const scheduleTime = selectedHour ? `${selectedHour}:${selectedMinute}` : '';
+  const scheduleTime = selectedHour ? (selectedHour + ':' + selectedMinute) : '';
 
   useEffect(() => {
     (async () => {
@@ -89,16 +136,11 @@ export default function NewMemberScreen() {
     }
   }
 
-  async function handleSave() {
-    if (!name.trim()) { Alert.alert('입력 오류', '이름을 입력해주세요.'); return; }
-    if (!phone.trim()) { Alert.alert('입력 오류', '전화번호를 입력해주세요.'); return; }
-    setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setLoading(false); return; }
+  async function doSave(userId: string) {
     const credits = parseInt(totalCredits) || 0;
     const duration = parseInt(lessonDuration) || 60;
     const { data: newMember, error } = await supabase.from('members').insert({
-      coach_id: user.id, name: name.trim(), phone: phone.trim(),
+      coach_id: userId, name: name.trim(), phone: phone.trim(),
       email: email.trim() || null, birth_date: birthDate || null,
       level, join_date: joinDate, notes: notes.trim() || null, is_active: true,
       fixed_schedule_days: scheduleDays,
@@ -110,17 +152,48 @@ export default function NewMemberScreen() {
     if (error || !newMember) { setLoading(false); Alert.alert('오류', '회원 등록에 실패했습니다.'); return; }
     if (scheduleDays.length > 0 && scheduleTime && credits > 0) {
       await generateScheduleLessons({
-        coachId: user.id, memberId: newMember.id, memberName: name.trim(),
+        coachId: userId, memberId: newMember.id, memberName: name.trim(),
         scheduleDays, scheduleTime, lessonDuration: duration, totalCredits: credits, joinDate,
       });
     }
     setLoading(false);
     Alert.alert('완료',
       scheduleDays.length > 0 && scheduleTime && credits > 0
-        ? `회원 등록 및 ${credits}개 레슨이 스케줄에 추가됐습니다.`
+        ? (credits + '개 레슨이 스케줄에 추가됐습니다.')
         : '회원이 등록됐습니다.',
       [{ text: '확인', onPress: () => router.back() }]
     );
+  }
+
+  async function handleSave() {
+    if (!name.trim()) { Alert.alert('입력 오류', '이름을 입력해주세요.'); return; }
+    if (!phone.trim()) { Alert.alert('입력 오류', '전화번호를 입력해주세요.'); return; }
+    setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setLoading(false); return; }
+
+    // 충돌 체크
+    if (scheduleDays.length > 0 && scheduleTime) {
+      const duration = parseInt(lessonDuration) || 60;
+      const conflicts = await checkConflicts(user.id, scheduleDays, scheduleTime, duration);
+      if (conflicts.length > 0) {
+        setLoading(false);
+        const conflictMsg = conflicts.slice(0, 3).map(cf => {
+          const d = new Date(cf.date + 'T00:00:00');
+          return d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }) + ' ' + cf.startTime + ' - ' + cf.memberName;
+        }).join('\n') + (conflicts.length > 3 ? ('\n외 ' + (conflicts.length - 3) + '건') : '');
+        Alert.alert(
+          '⚠️ 시간 충돌',
+          '선택한 시간대에 이미 레슨이 있습니다:\n\n' + conflictMsg + '\n\n그래도 등록하시겠어요?',
+          [
+            { text: '시간 변경', style: 'cancel' },
+            { text: '그대로 등록', style: 'destructive', onPress: async () => { setLoading(true); await doSave(user.id); } },
+          ]
+        );
+        return;
+      }
+    }
+    await doSave(user.id);
   }
 
   return (
@@ -165,7 +238,6 @@ export default function NewMemberScreen() {
               </TouchableOpacity>
             ))}
           </View>
-
           <Text style={styles.label}>레슨 시작 시간</Text>
           <TouchableOpacity style={styles.timeSelector} onPress={() => setTimePickerVisible(true)}>
             <Ionicons name="time-outline" size={18} color={scheduleTime ? '#1a7a4a' : '#aaa'} />
@@ -193,8 +265,7 @@ export default function NewMemberScreen() {
                   <TouchableOpacity
                     key={pkg.id}
                     style={[styles.packageCard, { borderColor: pkg.color }, isSelected && { backgroundColor: pkg.color + '18' }]}
-                    onPress={() => handleSelectPackage(pkg)}
-                    activeOpacity={0.8}
+                    onPress={() => handleSelectPackage(pkg)} activeOpacity={0.8}
                   >
                     {isSelected && (
                       <View style={[styles.packageCheckmark, { backgroundColor: pkg.color }]}>
@@ -211,13 +282,7 @@ export default function NewMemberScreen() {
             </View>
           )}
           <Text style={[styles.label, { marginTop: 12 }]}>총 레슨 횟수</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="예: 10"
-            value={totalCredits}
-            onChangeText={setTotalCredits}
-            keyboardType="number-pad"
-          />
+          <TextInput style={styles.input} placeholder="예: 10" value={totalCredits} onChangeText={setTotalCredits} keyboardType="number-pad" />
           {totalCredits !== '' && (
             <View style={styles.creditPreview}>
               <Ionicons name="layers-outline" size={16} color="#1a7a4a" />
@@ -231,12 +296,8 @@ export default function NewMemberScreen() {
         {/* 메모 */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>메모</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="특이사항, 목표, 참고사항 등"
-            value={notes} onChangeText={setNotes}
-            multiline numberOfLines={4} textAlignVertical="top"
-          />
+          <TextInput style={[styles.input, styles.textArea]} placeholder="특이사항, 목표, 참고사항 등"
+            value={notes} onChangeText={setNotes} multiline numberOfLines={4} textAlignVertical="top" />
         </View>
 
         <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={loading}>
@@ -244,7 +305,7 @@ export default function NewMemberScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* 시간 스피너 모달 — Hour / Minute 두 컬럼 */}
+      {/* 시간 스피너 모달 */}
       <Modal visible={timePickerVisible} transparent animationType="slide" onRequestClose={() => setTimePickerVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
@@ -256,45 +317,33 @@ export default function NewMemberScreen() {
             </View>
 
             <View style={styles.spinnerRow}>
-              {/* Hour 컬럼 */}
+              {/* Hour */}
               <View style={styles.spinnerCol}>
                 <Text style={styles.spinnerLabel}>시</Text>
                 <FlatList
-                  data={HOURS}
-                  keyExtractor={item => item}
-                  showsVerticalScrollIndicator={false}
-                  style={styles.spinnerList}
+                  data={HOURS} keyExtractor={item => item}
+                  showsVerticalScrollIndicator={false} style={styles.spinnerList}
                   renderItem={({ item }) => {
                     const isSelected = item === selectedHour;
                     return (
-                      <TouchableOpacity
-                        style={[styles.spinnerItem, isSelected && styles.spinnerItemSelected]}
-                        onPress={() => setSelectedHour(item)}
-                      >
+                      <TouchableOpacity style={[styles.spinnerItem, isSelected && styles.spinnerItemSelected]} onPress={() => setSelectedHour(item)}>
                         <Text style={[styles.spinnerItemText, isSelected && styles.spinnerItemTextSelected]}>{item}</Text>
                       </TouchableOpacity>
                     );
                   }}
                 />
               </View>
-
               <Text style={styles.spinnerColon}>:</Text>
-
-              {/* Minute 컬럼 */}
+              {/* Minute */}
               <View style={styles.spinnerCol}>
                 <Text style={styles.spinnerLabel}>분</Text>
                 <FlatList
-                  data={MINUTES}
-                  keyExtractor={item => item}
-                  showsVerticalScrollIndicator={false}
-                  style={styles.spinnerList}
+                  data={MINUTES} keyExtractor={item => item}
+                  showsVerticalScrollIndicator={false} style={styles.spinnerList}
                   renderItem={({ item }) => {
                     const isSelected = item === selectedMinute;
                     return (
-                      <TouchableOpacity
-                        style={[styles.spinnerItem, isSelected && styles.spinnerItemSelected]}
-                        onPress={() => setSelectedMinute(item)}
-                      >
+                      <TouchableOpacity style={[styles.spinnerItem, isSelected && styles.spinnerItemSelected]} onPress={() => setSelectedMinute(item)}>
                         <Text style={[styles.spinnerItemText, isSelected && styles.spinnerItemTextSelected]}>{item}</Text>
                       </TouchableOpacity>
                     );
@@ -311,7 +360,7 @@ export default function NewMemberScreen() {
               }}
             >
               <Text style={styles.confirmBtnText}>
-                {selectedHour ? `${selectedHour}:${selectedMinute} 선택` : '시간을 선택하세요'}
+                {selectedHour ? (selectedHour + ':' + selectedMinute + ' 선택') : '시간을 선택하세요'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -355,7 +404,6 @@ const styles = StyleSheet.create({
   creditPreviewText: { fontSize: 14, color: '#1a7a4a', fontWeight: '600' },
   saveBtn: { backgroundColor: '#1a7a4a', margin: 16, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  // 모달
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#eee' },
