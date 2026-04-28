@@ -81,6 +81,7 @@ export default function ScheduleScreen() {
   // 드래그 상태
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragTargetMin, setDragTargetMin] = useState(0);
+  const dayScrollRef = useRef<any>(null);
 
   async function attachMemberNames(lessonList: Lesson[]): Promise<LessonWithMembers[]> {
     if (!lessonList.length) return [];
@@ -102,11 +103,36 @@ export default function ScheduleScreen() {
     return lessonList.map(l => ({ ...l, memberNames: nameMap.get(l.id) ?? [], memberIds: idMap.get(l.id) ?? [] }));
   }
 
+  function scrollToCurrentTime() {
+    const now = new Date();
+    const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    const currentMin = kstNow.getUTCHours() * 60 + kstNow.getUTCMinutes();
+    // 현재 시간보다 30분 전부터 보이도록 스크롤
+    const scrollMin = Math.max(START_HOUR * 60, currentMin - 30);
+    const y = ((scrollMin - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+    setTimeout(() => {
+      dayScrollRef.current?.scrollTo({ y: Math.max(0, y), animated: true });
+    }, 300);
+  }
+
   async function loadDayLessons(date: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const { data } = await supabase.from('lessons').select('*').eq('coach_id', user.id).eq('date', date).order('start_time');
     setLessons(await attachMemberNames(data ?? []));
+    // 오늘이면 현재 시간으로 스크롤, 다른 날이면 첫 레슨으로 스크롤
+    const todayStr = toKSTDateStr(new Date());
+    if (date === todayStr) {
+      scrollToCurrentTime();
+    } else {
+      // 첫 레슨 시간으로 스크롤
+      const firstLesson = (data ?? []).sort((a: any, b: any) => a.start_time.localeCompare(b.start_time))[0];
+      if (firstLesson) {
+        const mins = timeToMinutes(firstLesson.start_time) - 30;
+        const y = ((Math.max(START_HOUR * 60, mins) - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+        setTimeout(() => dayScrollRef.current?.scrollTo({ y: Math.max(0, y), animated: true }), 300);
+      }
+    }
   }
 
   async function loadWeekLessons(wDates: string[]) {
@@ -195,10 +221,24 @@ export default function ScheduleScreen() {
     const gridHeight = (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT;
 
     return (
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}
+      <ScrollView ref={dayScrollRef} style={{ flex: 1 }} showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadDayLessons(selectedDate); setRefreshing(false); }} tintColor="#1a7a4a" />}
       >
         <View style={{ height: gridHeight + 20, position: 'relative' }}>
+          {/* 현재 시간 표시선 (오늘만) */}
+          {selectedDate === today && (() => {
+            const now = new Date();
+            const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+            const curMin = kstNow.getUTCHours() * 60 + kstNow.getUTCMinutes();
+            if (curMin < START_HOUR * 60 || curMin > END_HOUR * 60) return null;
+            const lineY = ((curMin - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+            return (
+              <View key="now-line" style={[styles.nowLine, { top: lineY }]}>
+                <View style={styles.nowDot} />
+                <View style={styles.nowLineBar} />
+              </View>
+            );
+          })()}
           {/* 시간 라인들 */}
           {HOURS.map(h => (
             <View key={h} style={[styles.hourRow, { top: (h - START_HOUR) * HOUR_HEIGHT }]}>
@@ -494,4 +534,7 @@ const styles = StyleSheet.create({
   durationBtnTextActive: { color: '#fff' },
   saveBtn: { backgroundColor: '#1a7a4a', borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 8 },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  nowLine: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', zIndex: 10 },
+  nowDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#ef4444', marginLeft: 42 },
+  nowLineBar: { flex: 1, height: 2, backgroundColor: '#ef4444', marginLeft: 2 },
 });
