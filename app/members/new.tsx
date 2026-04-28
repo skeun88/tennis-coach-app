@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
+  Modal, FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +11,67 @@ import { MemberLevel } from '../../types';
 
 const LEVELS: MemberLevel[] = ['입문', '초급', '중급', '고급', '선수'];
 const DAYS_KR = ['일', '월', '화', '수', '목', '금', '토'];
+
+// 시간 옵션: 06:00 ~ 22:00, 30분 단위
+const TIME_OPTIONS: string[] = [];
+for (let h = 6; h <= 22; h++) {
+  TIME_OPTIONS.push(`${String(h).padStart(2, '0')}:00`);
+  if (h < 22) TIME_OPTIONS.push(`${String(h).padStart(2, '0')}:30`);
+}
+
+/** 회원 등록 후 고정 스케줄에 맞게 향후 레슨 자동 생성 */
+async function generateScheduleLessons(params: {
+  coachId: string;
+  memberId: string;
+  memberName: string;
+  scheduleDays: number[];
+  scheduleTime: string;
+  lessonDuration: number;
+  totalCredits: number;
+  joinDate: string;
+}) {
+  const { coachId, memberId, memberName, scheduleDays, scheduleTime, lessonDuration, totalCredits, joinDate } = params;
+  if (scheduleDays.length === 0 || !scheduleTime || totalCredits <= 0) return;
+
+  const [hh, mm] = scheduleTime.split(':').map(Number);
+  const endMinutes = hh * 60 + mm + lessonDuration;
+  const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+
+  const start = new Date(joinDate + 'T00:00:00');
+  const dates: string[] = [];
+  let count = 0;
+  const cursor = new Date(start);
+
+  while (count < totalCredits) {
+    if (scheduleDays.includes(cursor.getDay())) {
+      dates.push(cursor.toISOString().split('T')[0]);
+      count++;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+    if (count >= totalCredits || dates.length > totalCredits * 10) break;
+  }
+
+  for (const date of dates) {
+    const { data: lesson, error: lErr } = await supabase
+      .from('lessons')
+      .insert({
+        coach_id: coachId,
+        title: `${memberName} 레슨`,
+        date,
+        start_time: scheduleTime + ':00',
+        end_time: endTime + ':00',
+      })
+      .select('id')
+      .single();
+
+    if (lErr || !lesson) continue;
+
+    await supabase.from('lesson_members').insert({
+      lesson_id: lesson.id,
+      member_id: memberId,
+    });
+  }
+}
 
 export default function NewMemberScreen() {
   const router = useRouter();
@@ -26,6 +88,10 @@ export default function NewMemberScreen() {
   const [totalCredits, setTotalCredits] = useState('');
   const [lessonPackages, setLessonPackages] = useState<any[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // 시간 스피너 모달
+  const [timePickerVisible, setTimePickerVisible] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -46,11 +112,9 @@ export default function NewMemberScreen() {
       prev.includes(idx) ? prev.filter(d => d !== idx) : [...prev, idx].sort()
     );
   }
-  const [loading, setLoading] = useState(false);
 
   function handleSelectPackage(pkg: any) {
     if (selectedPackageId === pkg.id) {
-      // 재클릭 시 선택 해제
       setSelectedPackageId(null);
     } else {
       setSelectedPackageId(pkg.id);
@@ -67,7 +131,10 @@ export default function NewMemberScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const { error } = await supabase.from('members').insert({
+    const credits = parseInt(totalCredits) || 0;
+    const duration = parseInt(lessonDuration) || 60;
+
+    const { data: newMember, error } = await supabase.from('members').insert({
       coach_id: user.id,
       name: name.trim(),
       phone: phone.trim(),
@@ -79,18 +146,40 @@ export default function NewMemberScreen() {
       is_active: true,
       fixed_schedule_days: scheduleDays,
       fixed_schedule_time: scheduleTime || null,
-      fixed_lesson_duration: parseInt(lessonDuration) || 60,
-      total_credits: parseInt(totalCredits) || 0,
-      remaining_credits: parseInt(totalCredits) || 0,
+      fixed_lesson_duration: duration,
+      total_credits: credits,
+      remaining_credits: credits,
       lesson_package_id: selectedPackageId || null,
-    });
+    }).select('id').single();
+
+    if (error || !newMember) {
+      setLoading(false);
+      Alert.alert('오류', '회원 등록에 실패했습니다.');
+      return;
+    }
+
+    // 고정 스케줄 기반 레슨 자동 생성
+    if (scheduleDays.length > 0 && scheduleTime && credits > 0) {
+      await generateScheduleLessons({
+        coachId: user.id,
+        memberId: newMember.id,
+        memberName: name.trim(),
+        scheduleDays,
+        scheduleTime,
+        lessonDuration: duration,
+        totalCredits: credits,
+        joinDate,
+      });
+    }
 
     setLoading(false);
-    if (error) {
-      Alert.alert('오류', '회원 등록에 실패했습니다.');
-    } else {
-      Alert.alert('완료', '회원이 등록되었습니다.', [{ text: '확인', onPress: () => router.back() }]);
-    }
+    Alert.alert(
+      '완료',
+      scheduleDays.length > 0 && scheduleTime && credits > 0
+        ? `회원이 등록되고 ${credits}개의 레슨이 스케줄에 추가되었습니다.`
+        : '회원이 등록되었습니다.',
+      [{ text: '확인', onPress: () => router.back() }]
+    );
   }
 
   return (
@@ -144,14 +233,15 @@ export default function NewMemberScreen() {
               </TouchableOpacity>
             ))}
           </View>
+
           <Text style={styles.label}>레슨 시작 시간</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="HH:MM (예: 10:00)"
-            value={scheduleTime}
-            onChangeText={setScheduleTime}
-            keyboardType="numbers-and-punctuation"
-          />
+          <TouchableOpacity style={styles.timeSelector} onPress={() => setTimePickerVisible(true)}>
+            <Ionicons name="time-outline" size={18} color={scheduleTime ? '#1a7a4a' : '#aaa'} />
+            <Text style={[styles.timeSelectorText, !scheduleTime && styles.timePlaceholder]}>
+              {scheduleTime || '시간 선택'}
+            </Text>
+            <Ionicons name="chevron-down" size={16} color="#aaa" />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.section}>
@@ -193,7 +283,6 @@ export default function NewMemberScreen() {
               })}
             </View>
           )}
-          {/* 직접 횟수 입력 */}
           <Text style={[styles.label, { marginTop: 12 }]}>
             {selectedPackageId ? '횟수 조정 (선택사항)' : '총 레슨 횟수 직접 입력'}
           </Text>
@@ -207,7 +296,10 @@ export default function NewMemberScreen() {
           {totalCredits !== '' && (
             <View style={styles.creditPreview}>
               <Ionicons name="layers-outline" size={16} color="#1a7a4a" />
-              <Text style={styles.creditPreviewText}>{totalCredits}회 레슨권 등록됩니다</Text>
+              <Text style={styles.creditPreviewText}>
+                {totalCredits}회 레슨권 등록
+                {scheduleDays.length > 0 && scheduleTime ? ` · 스케줄 자동 생성` : ''}
+              </Text>
             </View>
           )}
         </View>
@@ -229,6 +321,47 @@ export default function NewMemberScreen() {
           {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>회원 등록</Text>}
         </TouchableOpacity>
       </ScrollView>
+
+      {/* 시간 스피너 모달 */}
+      <Modal
+        visible={timePickerVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setTimePickerVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>레슨 시작 시간</Text>
+              <TouchableOpacity onPress={() => setTimePickerVisible(false)}>
+                <Ionicons name="close" size={22} color="#888" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={TIME_OPTIONS}
+              keyExtractor={item => item}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item }) => {
+                const isSelected = item === scheduleTime;
+                return (
+                  <TouchableOpacity
+                    style={[styles.timeOption, isSelected && styles.timeOptionSelected]}
+                    onPress={() => {
+                      setScheduleTime(item);
+                      setTimePickerVisible(false);
+                    }}
+                  >
+                    <Text style={[styles.timeOptionText, isSelected && styles.timeOptionTextSelected]}>
+                      {item}
+                    </Text>
+                    {isSelected && <Ionicons name="checkmark" size={18} color="#1a7a4a" />}
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -266,8 +399,7 @@ const styles = StyleSheet.create({
   packageGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   packageCard: {
     width: '47%', borderRadius: 12, borderWidth: 2, padding: 12,
-    position: 'relative', overflow: 'hidden',
-    backgroundColor: '#fff',
+    position: 'relative', overflow: 'hidden', backgroundColor: '#fff',
   },
   packageCheckmark: {
     position: 'absolute', top: 8, right: 8,
@@ -278,4 +410,32 @@ const styles = StyleSheet.create({
   packageTitle: { fontSize: 14, fontWeight: '700', color: '#1a1a1a', marginBottom: 4 },
   packageMeta: { fontSize: 11, color: '#888', marginBottom: 2 },
   packagePrice: { fontSize: 14, fontWeight: '800', marginTop: 4 },
+  // 시간 선택
+  timeSelector: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#f5f5f5', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12,
+    borderWidth: 1, borderColor: '#eee', marginBottom: 12,
+  },
+  timeSelectorText: { flex: 1, fontSize: 15, color: '#1a1a1a', fontWeight: '600' },
+  timePlaceholder: { color: '#aaa', fontWeight: '400' },
+  // 모달
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modalSheet: {
+    backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    maxHeight: '60%', paddingBottom: 40,
+  },
+  modalHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 16,
+    borderBottomWidth: 1, borderBottomColor: '#eee',
+  },
+  modalTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
+  timeOption: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: '#f5f5f5',
+  },
+  timeOptionSelected: { backgroundColor: '#f0fdf4' },
+  timeOptionText: { fontSize: 16, color: '#444', fontWeight: '500' },
+  timeOptionTextSelected: { color: '#1a7a4a', fontWeight: '700' },
 });

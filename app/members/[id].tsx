@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
   TextInput, ActivityIndicator, KeyboardAvoidingView, Platform,
+  Modal, FlatList,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,7 +14,56 @@ const LEVEL_COLORS: Record<MemberLevel, string> = {
   '입문': '#94a3b8', '초급': '#22c55e', '중급': '#3b82f6', '고급': '#f59e0b', '선수': '#ef4444',
 };
 
+const TIME_OPTIONS: string[] = [];
+for (let h = 6; h <= 22; h++) {
+  TIME_OPTIONS.push(String(h).padStart(2, '0') + ':00');
+  if (h < 22) TIME_OPTIONS.push(String(h).padStart(2, '0') + ':30');
+}
+
+
 type Tab = 'info' | 'attendance' | 'payment' | 'notes';
+
+
+async function generateScheduleLessons(
+  sb: any,
+  coachId: string,
+  memberId: string,
+  memberName: string,
+  scheduleDays: number[],
+  scheduleTime: string,
+  lessonDuration: number,
+  totalCredits: number,
+  startDate: string,
+): Promise<number> {
+  if (scheduleDays.length === 0 || !scheduleTime || totalCredits <= 0) return 0;
+  const parts = scheduleTime.split(':').map(Number);
+  const hh = parts[0]; const mm = parts[1];
+  const endMin = hh * 60 + mm + lessonDuration;
+  const endH = String(Math.floor(endMin / 60)).padStart(2, '0');
+  const endM = String(endMin % 60).padStart(2, '0');
+  const endTime = endH + ':' + endM + ':00';
+  const startSt = scheduleTime.length === 5 ? scheduleTime + ':00' : scheduleTime;
+  const cursor = new Date(startDate + 'T00:00:00');
+  const today = new Date(); today.setHours(0,0,0,0);
+  if (cursor < today) cursor.setTime(today.getTime());
+  const dates: string[] = [];
+  let iter = 0;
+  while (dates.length < totalCredits && iter < totalCredits * 14) {
+    if (scheduleDays.includes(cursor.getDay())) dates.push(cursor.toISOString().split('T')[0]);
+    cursor.setDate(cursor.getDate() + 1);
+    iter++;
+  }
+  let created = 0;
+  for (const date of dates) {
+    const { data: lesson, error: lErr } = await sb.from('lessons').insert({
+      coach_id: coachId, title: memberName + ' 레슨', date, start_time: startSt, end_time: endTime,
+    }).select('id').single();
+    if (lErr || !lesson) continue;
+    await sb.from('lesson_members').insert({ lesson_id: lesson.id, member_id: memberId });
+    created++;
+  }
+  return created;
+}
 
 export default function MemberDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -46,6 +96,7 @@ export default function MemberDetailScreen() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [memberNotes, setMemberNotes] = useState<MemberNote[]>([]);
   const [newNote, setNewNote] = useState('');
+  const [timePickerVisible, setTimePickerVisible] = useState(false);
 
   async function loadMember() {
     const { data } = await supabase.from('members').select('*').eq('id', id).single();
@@ -113,17 +164,42 @@ export default function MemberDetailScreen() {
   }, [tab]);
 
   async function handleSave() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const credits = parseInt(totalCredits) || 0;
+    const duration = parseInt(lessonDuration) || 60;
+    const { data: oldMember } = await supabase.from('members').select('fixed_schedule_days, fixed_schedule_time, join_date').eq('id', id!).single();
+    const oldDays: number[] = (oldMember as any)?.fixed_schedule_days ?? [];
+    const oldTime: string = (oldMember as any)?.fixed_schedule_time?.slice(0, 5) ?? '';
     const { error } = await supabase.from('members').update({
       name, phone, email: email || null, level, notes: notes || null,
       fixed_schedule_days: scheduleDays,
       fixed_schedule_time: scheduleTime || null,
-      fixed_lesson_duration: parseInt(lessonDuration) || 60,
-      total_credits: parseInt(totalCredits) || 0,
+      fixed_lesson_duration: duration,
+      total_credits: credits,
       remaining_credits: parseInt(remainingCredits) || 0,
       lesson_package_id: selectedPackageId || null,
     }).eq('id', id!);
-    if (error) Alert.alert('오류', '저장에 실패했습니다.');
-    else { setEditing(false); loadMember(); }
+    if (error) { Alert.alert('오류', '저장에 실패했습니다.'); return; }
+    const scheduleChanged =
+      JSON.stringify([...scheduleDays].sort()) !== JSON.stringify([...oldDays].sort()) ||
+      scheduleTime !== oldTime;
+    let scheduledCount = 0;
+    if (scheduleDays.length > 0 && scheduleTime && credits > 0) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const { data: futureL } = await supabase.from('lesson_members').select('lesson:lessons(date)').eq('member_id', id!);
+      const futureLessons = (futureL ?? []).filter((r: any) => r.lesson?.date >= todayStr);
+      const needed = credits - futureLessons.length;
+      if (needed > 0 && (scheduleChanged || futureLessons.length === 0)) {
+        const joinDate = (oldMember as any)?.join_date ?? todayStr;
+        scheduledCount = await generateScheduleLessons(
+          supabase, user.id, id!, name, scheduleDays, scheduleTime, duration, needed, joinDate,
+        );
+      }
+    }
+    setEditing(false);
+    loadMember();
+    if (scheduledCount > 0) Alert.alert('저장 완료', scheduledCount + '개 레슨이 스케줄에 추가되었습니다.');
   }
 
   async function handleDeactivate() {
@@ -533,4 +609,18 @@ const styles = StyleSheet.create({
   noteDate: { fontSize: 11, color: '#aaa' },
   emptyCard: { margin: 16, padding: 20, alignItems: 'center' },
   emptyText: { fontSize: 14, color: '#aaa', textAlign: 'center' },
+  packageBanner: { flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: '#f5f7fa', borderRadius: 10, marginTop: 8, gap: 10 },
+  packageDot: { width: 10, height: 10, borderRadius: 5 },
+  packageTitle: { fontSize: 14, fontWeight: '700', color: '#1a1a1a' },
+  packageMeta: { fontSize: 12, color: '#888', marginTop: 2 },
+  editPkgGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  editPkgCard: { width: '47%', borderRadius: 10, borderWidth: 2, borderColor: '#eee', padding: 10, position: 'relative', backgroundColor: '#fff' },
+  editPkgCardNone: { borderColor: '#ddd', alignItems: 'center', justifyContent: 'center', paddingVertical: 14 },
+  editPkgCardNoneSelected: { backgroundColor: '#888', borderColor: '#888' },
+  editPkgCheck: { position: 'absolute', top: 6, right: 6, width: 16, height: 16, borderRadius: 8, backgroundColor: '#888', justifyContent: 'center', alignItems: 'center' },
+  editPkgNoneText: { fontSize: 13, color: '#888', marginTop: 4, fontWeight: '600' },
+  editPkgColorBar: { height: 3, borderRadius: 2, marginBottom: 6 },
+  editPkgTitle: { fontSize: 13, fontWeight: '700', color: '#1a1a1a', marginBottom: 2 },
+  editPkgMeta: { fontSize: 11, color: '#888' },
+  editPkgPrice: { fontSize: 13, fontWeight: '800', marginTop: 4 },
 });
