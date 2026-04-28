@@ -12,6 +12,7 @@
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-picker/picker": "2.11.1",
     "@supabase/supabase-js": "^2.102.1",
     "expo": "~54.0.33",
     "expo-audio": "~1.1.1",
