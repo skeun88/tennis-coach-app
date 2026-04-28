@@ -26,6 +26,9 @@ const HOUR_HEIGHT = 64; // px per hour
 const START_HOUR = 6;
 const END_HOUR = 22;
 const HOURS = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => i + START_HOUR);
+const SPINNER_HOURS = Array.from({ length: 17 }, (_, i) => String(i + 6).padStart(2, '0')); // 06~22
+const SPINNER_MINUTES = ['00', '10', '20', '30', '40', '50'];
+const DURATION_OPTIONS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
 
 function toKSTDateStr(d: Date): string {
   const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
@@ -73,10 +76,16 @@ export default function ScheduleScreen() {
 
   // 새 레슨 등록 모달
   const [newModal, setNewModal] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const [newStartMin, setNewStartMin] = useState(600); // 10:00
+  const [newMemberIds, setNewMemberIds] = useState<string[]>([]);
+  const [newHour, setNewHour] = useState('10');
+  const [newMinute, setNewMinute] = useState('00');
   const [newDuration, setNewDuration] = useState(60);
   const [savingNew, setSavingNew] = useState(false);
+  const [members, setMembers] = useState<{id: string; name: string}[]>([]);
+  const [memberSearch, setMemberSearch] = useState('');
+  const [hourPickerVisible, setHourPickerVisible] = useState(false);
+  const [minutePickerVisible, setMinutePickerVisible] = useState(false);
+  const [durationPickerVisible, setDurationPickerVisible] = useState(false);
 
   // 드래그 상태
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -155,6 +164,13 @@ export default function ScheduleScreen() {
     setSelectedDate(prev => newWeek.includes(prev) ? prev : newToday);
     if (activeTab === '일일') loadDayLessons(newToday);
     else loadWeekLessons(newThisWeek);
+    // 회원 목록 로드
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase.from('members').select('id, name').eq('coach_id', user.id).eq('is_active', true).order('name');
+      setMembers(data ?? []);
+    })();
   }, [activeTab]));
 
   const handleSelectDate = useCallback((date: string) => {
@@ -164,26 +180,51 @@ export default function ScheduleScreen() {
   // ── 시간 그리드 탭 → 새 레슨 등록 ──────────────────────────
   function handleGridTap(y: number) {
     const mins = yToMinutes(y);
-    const clamped = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60 - 30, mins));
-    setNewStartMin(clamped);
+    const clamped = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60 - 10, mins));
+    const h = Math.floor(clamped / 60);
+    const m = Math.round((clamped % 60) / 10) * 10;
+    setNewHour(String(h).padStart(2, '0'));
+    setNewMinute(String(m).padStart(2, '0'));
     setNewDuration(60);
-    setNewTitle('');
+    setNewMemberIds([]);
+    setMemberSearch('');
     setNewModal(true);
   }
 
   async function handleSaveNew() {
-    if (!newTitle.trim()) { Alert.alert('오류', '레슨 제목을 입력해주세요.'); return; }
+    if (newMemberIds.length === 0) { Alert.alert('오류', '회원을 선택해주세요.'); return; }
+    const startMin = parseInt(newHour) * 60 + parseInt(newMinute);
+    const endMin = startMin + newDuration;
+    const startSt = minutesToTime(startMin) + ':00';
+    const endSt = minutesToTime(endMin) + ':00';
     setSavingNew(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSavingNew(false); return; }
-    const startSt = minutesToTime(newStartMin) + ':00';
-    const endSt = minutesToTime(newStartMin + newDuration) + ':00';
-    const { error } = await supabase.from('lessons').insert({
-      coach_id: user.id, title: newTitle.trim(),
-      date: selectedDate, start_time: startSt, end_time: endSt,
+    // 오버랩 체크
+    const { data: existing } = await supabase.from('lessons').select('id, start_time, end_time')
+      .eq('coach_id', user.id).eq('date', selectedDate);
+    const overlap = (existing ?? []).find((l: any) => {
+      const ls = timeToMinutes(l.start_time), le = timeToMinutes(l.end_time);
+      return startMin < le && endMin > ls;
     });
+    if (overlap) {
+      setSavingNew(false);
+      Alert.alert('시간 충돌', minutesToTime(timeToMinutes((overlap as any).start_time)) + '~' + minutesToTime(timeToMinutes((overlap as any).end_time)) + ' 레슨과 시간이 겹칩니다.
+다른 시간을 선택해주세요.');
+      return;
+    }
+    const selectedNames = members.filter(m => newMemberIds.includes(m.id)).map(m => m.name);
+    const title = selectedNames.join(', ');
+    const { data: lesson, error } = await supabase.from('lessons').insert({
+      coach_id: user.id, title,
+      date: selectedDate, start_time: startSt, end_time: endSt,
+    }).select('id').single();
+    if (error || !lesson) { setSavingNew(false); Alert.alert('오류', '등록 실패'); return; }
+    // lesson_members 연결
+    for (const memberId of newMemberIds) {
+      await supabase.from('lesson_members').insert({ lesson_id: lesson.id, member_id: memberId });
+    }
     setSavingNew(false);
-    if (error) { Alert.alert('오류', '등록 실패'); return; }
     setNewModal(false);
     loadDayLessons(selectedDate);
   }
@@ -425,31 +466,88 @@ export default function ScheduleScreen() {
               <Text style={styles.modalTitle}>새 레슨 등록</Text>
               <TouchableOpacity onPress={() => setNewModal(false)}><Ionicons name="close" size={22} color="#888" /></TouchableOpacity>
             </View>
-            <View style={{ padding: 20 }}>
-              <Text style={styles.modalLabel}>제목</Text>
-              <TextInput style={styles.modalInput} placeholder="레슨 제목" value={newTitle} onChangeText={setNewTitle} autoFocus />
+            <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+              {/* 회원 선택 */}
+              <Text style={styles.modalLabel}>회원 선택</Text>
+              <TextInput style={styles.modalInput} placeholder="이름 검색..." value={memberSearch} onChangeText={setMemberSearch} />
+              <ScrollView style={styles.memberList} nestedScrollEnabled>
+                {members.filter(m => m.name.includes(memberSearch)).map(m => {
+                  const selected = newMemberIds.includes(m.id);
+                  return (
+                    <TouchableOpacity key={m.id} style={[styles.memberItem, selected && styles.memberItemSelected]}
+                      onPress={() => setNewMemberIds(prev => selected ? prev.filter(id => id !== m.id) : [...prev, m.id])}>
+                      <Text style={[styles.memberItemText, selected && styles.memberItemTextSelected]}>{m.name}</Text>
+                      {selected && <Ionicons name="checkmark" size={16} color="#1a7a4a" />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+              {newMemberIds.length > 0 && (
+                <Text style={styles.selectedNames}>{members.filter(m => newMemberIds.includes(m.id)).map(m => m.name).join(', ')}</Text>
+              )}
+
+              {/* 시작 시간 - Hour/Minute 스피너 */}
               <Text style={styles.modalLabel}>시작 시간</Text>
               <View style={styles.timeRow}>
-                {[-30, -10, 10, 30].map(delta => (
-                  <TouchableOpacity key={delta} style={styles.timeAdj} onPress={() => setNewStartMin(m => Math.max(START_HOUR * 60, Math.min(END_HOUR * 60 - 10, m + delta)))}>
-                    <Text style={styles.timeAdjText}>{delta > 0 ? '+' : ''}{delta}분</Text>
-                  </TouchableOpacity>
-                ))}
+                <TouchableOpacity style={styles.spinnerBtn} onPress={() => { setHourPickerVisible(true); setMinutePickerVisible(false); setDurationPickerVisible(false); }}>
+                  <Text style={styles.spinnerBtnLabel}>시</Text>
+                  <Text style={styles.spinnerBtnValue}>{newHour}</Text>
+                </TouchableOpacity>
+                <Text style={styles.colonText}>:</Text>
+                <TouchableOpacity style={styles.spinnerBtn} onPress={() => { setMinutePickerVisible(true); setHourPickerVisible(false); setDurationPickerVisible(false); }}>
+                  <Text style={styles.spinnerBtnLabel}>분</Text>
+                  <Text style={styles.spinnerBtnValue}>{newMinute}</Text>
+                </TouchableOpacity>
               </View>
-              <Text style={styles.timeDisplay}>{minutesToTime(newStartMin)}</Text>
+              {hourPickerVisible && (
+                <View style={styles.inlinePickerBox}>
+                  <FlatList horizontal data={SPINNER_HOURS} keyExtractor={i => i} showsHorizontalScrollIndicator={false}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity style={[styles.inlinePickerItem, newHour === item && styles.inlinePickerItemActive]}
+                        onPress={() => { setNewHour(item); setHourPickerVisible(false); }}>
+                        <Text style={[styles.inlinePickerText, newHour === item && styles.inlinePickerTextActive]}>{item}</Text>
+                      </TouchableOpacity>
+                    )}
+                  />
+                </View>
+              )}
+              {minutePickerVisible && (
+                <View style={styles.inlinePickerBox}>
+                  <FlatList horizontal data={SPINNER_MINUTES} keyExtractor={i => i} showsHorizontalScrollIndicator={false}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity style={[styles.inlinePickerItem, newMinute === item && styles.inlinePickerItemActive]}
+                        onPress={() => { setNewMinute(item); setMinutePickerVisible(false); }}>
+                        <Text style={[styles.inlinePickerText, newMinute === item && styles.inlinePickerTextActive]}>{item}</Text>
+                      </TouchableOpacity>
+                    )}
+                  />
+                </View>
+              )}
+
+              {/* 레슨 시간 - 분 스피너 */}
               <Text style={styles.modalLabel}>레슨 시간</Text>
-              <View style={styles.timeRow}>
-                {[20, 40, 60, 90].map(d => (
-                  <TouchableOpacity key={d} style={[styles.durationBtn, newDuration === d && styles.durationBtnActive]} onPress={() => setNewDuration(d)}>
-                    <Text style={[styles.durationBtnText, newDuration === d && styles.durationBtnTextActive]}>{d}분</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <Text style={styles.timeSummary}>{minutesToTime(newStartMin)} ~ {minutesToTime(newStartMin + newDuration)}</Text>
+              <TouchableOpacity style={styles.spinnerBtn} onPress={() => { setDurationPickerVisible(v => !v); setHourPickerVisible(false); setMinutePickerVisible(false); }}>
+                <Text style={styles.spinnerBtnLabel}>분</Text>
+                <Text style={styles.spinnerBtnValue}>{newDuration}분</Text>
+              </TouchableOpacity>
+              {durationPickerVisible && (
+                <View style={styles.inlinePickerBox}>
+                  <FlatList horizontal data={DURATION_OPTIONS} keyExtractor={i => String(i)} showsHorizontalScrollIndicator={false}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity style={[styles.inlinePickerItem, newDuration === item && styles.inlinePickerItemActive]}
+                        onPress={() => { setNewDuration(item); setDurationPickerVisible(false); }}>
+                        <Text style={[styles.inlinePickerText, newDuration === item && styles.inlinePickerTextActive]}>{item}</Text>
+                      </TouchableOpacity>
+                    )}
+                  />
+                </View>
+              )}
+
+              <Text style={styles.timeSummary}>{newHour}:{newMinute} ~ {minutesToTime(parseInt(newHour) * 60 + parseInt(newMinute) + newDuration)}</Text>
               <TouchableOpacity style={styles.saveBtn} onPress={handleSaveNew} disabled={savingNew}>
                 {savingNew ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>등록</Text>}
               </TouchableOpacity>
-            </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -598,4 +696,19 @@ const styles = StyleSheet.create({
   nowLine: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', zIndex: 10 },
   nowDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#ef4444', marginLeft: 42 },
   nowLineBar: { flex: 1, height: 2, backgroundColor: '#ef4444', marginLeft: 2 },
+  memberList: { maxHeight: 160, borderWidth: 1, borderColor: '#eee', borderRadius: 10, marginBottom: 8 },
+  memberItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f5f5f5' },
+  memberItemSelected: { backgroundColor: '#f0fdf4' },
+  memberItemText: { fontSize: 14, color: '#444' },
+  memberItemTextSelected: { color: '#1a7a4a', fontWeight: '700' },
+  selectedNames: { fontSize: 12, color: '#1a7a4a', fontWeight: '600', marginBottom: 4, backgroundColor: '#f0fdf4', padding: 8, borderRadius: 8 },
+  spinnerBtn: { flex: 1, backgroundColor: '#f5f5f5', borderRadius: 10, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#eee' },
+  spinnerBtnLabel: { fontSize: 11, color: '#aaa', fontWeight: '600', marginBottom: 2 },
+  spinnerBtnValue: { fontSize: 20, fontWeight: '800', color: '#1a7a4a' },
+  colonText: { fontSize: 24, fontWeight: '800', color: '#1a1a1a', paddingHorizontal: 8, alignSelf: 'center', marginTop: 12 },
+  inlinePickerBox: { backgroundColor: '#f5f7fa', borderRadius: 10, padding: 8, marginTop: 6, marginBottom: 4 },
+  inlinePickerItem: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, marginHorizontal: 3, alignItems: 'center' },
+  inlinePickerItemActive: { backgroundColor: '#1a7a4a' },
+  inlinePickerText: { fontSize: 16, fontWeight: '600', color: '#555' },
+  inlinePickerTextActive: { color: '#fff', fontWeight: '800' },
 });
