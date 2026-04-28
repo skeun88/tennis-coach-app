@@ -27,14 +27,17 @@ async function checkConflicts(
   const newStart = hh * 60 + mm;
   const newEnd = newStart + lessonDuration;
 
-  // 선택한 요일에 해당하는 날짜만 수집 (향후 60일)
+  // 선택한 요일에 해당하는 날짜만 수집 (향후 60일) - 로컬 타임존 기준
+  const toLocalDateStr = (d: Date) =>
+    d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const checkDates: string[] = [];
-  const checkDatesSet = new Set<number>(); // 요일 빠른 조회용
   const cur = new Date(today);
   for (let i = 0; i < 60; i++) {
     if (scheduleDays.includes(cur.getDay())) {
-      checkDates.push(cur.toISOString().split('T')[0]);
+      checkDates.push(toLocalDateStr(cur));
     }
     cur.setDate(cur.getDate() + 1);
   }

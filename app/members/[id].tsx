@@ -38,11 +38,15 @@ async function checkConflicts(
   const parts = scheduleTime.slice(0, 5).split(':').map(Number);
   const newStart = parts[0] * 60 + parts[1];
   const newEnd = newStart + lessonDuration;
+  const toLocalDateStr2 = (d: Date) =>
+    d.getFullYear() + '-' +
+    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+    String(d.getDate()).padStart(2, '0');
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const checkDates: string[] = [];
   const cur = new Date(today);
   for (let i = 0; i < 60; i++) {
-    if (scheduleDays.includes(cur.getDay())) checkDates.push(cur.toISOString().split('T')[0]);
+    if (scheduleDays.includes(cur.getDay())) checkDates.push(toLocalDateStr2(cur));
     cur.setDate(cur.getDate() + 1);
   }
   if (!checkDates.length) return [];
