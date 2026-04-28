@@ -16,8 +16,10 @@ const LEVEL_COLORS: Record<MemberLevel, string> = {
 
 const TIME_OPTIONS: string[] = [];
 for (let h = 6; h <= 22; h++) {
-  TIME_OPTIONS.push(String(h).padStart(2, '0') + ':00');
-  if (h < 22) TIME_OPTIONS.push(String(h).padStart(2, '0') + ':30');
+  for (let m = 0; m < 60; m += 10) {
+    if (h === 22 && m > 0) break;
+    TIME_OPTIONS.push(String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'));
+  }
 }
 
 

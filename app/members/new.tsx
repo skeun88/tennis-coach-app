@@ -12,11 +12,13 @@ import { MemberLevel } from '../../types';
 const LEVELS: MemberLevel[] = ['입문', '초급', '중급', '고급', '선수'];
 const DAYS_KR = ['일', '월', '화', '수', '목', '금', '토'];
 
-// 시간 옵션: 06:00 ~ 22:00, 30분 단위
+// 시간 옵션: 06:00 ~ 22:00, 10분 단위
 const TIME_OPTIONS: string[] = [];
 for (let h = 6; h <= 22; h++) {
-  TIME_OPTIONS.push(`${String(h).padStart(2, '0')}:00`);
-  if (h < 22) TIME_OPTIONS.push(`${String(h).padStart(2, '0')}:30`);
+  for (let m = 0; m < 60; m += 10) {
+    if (h === 22 && m > 0) break;
+    TIME_OPTIONS.push(String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'));
+  }
 }
 
 /** 회원 등록 후 고정 스케줄에 맞게 향후 레슨 자동 생성 */
