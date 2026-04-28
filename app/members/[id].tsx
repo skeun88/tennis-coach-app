@@ -41,7 +41,7 @@ async function checkConflicts(
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const checkDates: string[] = [];
   const cur = new Date(today);
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 60; i++) {
     if (scheduleDays.includes(cur.getDay())) checkDates.push(cur.toISOString().split('T')[0]);
     cur.setDate(cur.getDate() + 1);
   }
@@ -53,6 +53,12 @@ async function checkConflicts(
     .in('date', checkDates);
   const conflicts: { date: string; memberName: string; startTime: string }[] = [];
   for (const lesson of (existing ?? []) as any[]) {
+    // lesson_members 없는 레슨 무시
+    if (!lesson.lesson_members || lesson.lesson_members.length === 0) continue;
+    // 날짜가 실제로 선택 요일인지 이중 검증
+    const lessonDate = new Date(lesson.date + 'T00:00:00');
+    if (!scheduleDays.includes(lessonDate.getDay())) continue;
+
     const [lh, lm2] = lesson.start_time.slice(0, 5).split(':').map(Number);
     const [eh, em] = lesson.end_time.slice(0, 5).split(':').map(Number);
     const lStart = lh * 60 + lm2;

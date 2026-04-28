@@ -27,11 +27,15 @@ async function checkConflicts(
   const newStart = hh * 60 + mm;
   const newEnd = newStart + lessonDuration;
 
+  // 선택한 요일에 해당하는 날짜만 수집 (향후 60일)
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const checkDates: string[] = [];
+  const checkDatesSet = new Set<number>(); // 요일 빠른 조회용
   const cur = new Date(today);
-  for (let i = 0; i < 30; i++) {
-    if (scheduleDays.includes(cur.getDay())) checkDates.push(cur.toISOString().split('T')[0]);
+  for (let i = 0; i < 60; i++) {
+    if (scheduleDays.includes(cur.getDay())) {
+      checkDates.push(cur.toISOString().split('T')[0]);
+    }
     cur.setDate(cur.getDate() + 1);
   }
   if (!checkDates.length) return [];
@@ -44,6 +48,13 @@ async function checkConflicts(
 
   const conflicts: { date: string; memberName: string; startTime: string }[] = [];
   for (const lesson of (existing ?? []) as any[]) {
+    // lesson_members 없는 레슨은 충돌 무시
+    if (!lesson.lesson_members || lesson.lesson_members.length === 0) continue;
+
+    // 날짜가 실제로 선택 요일인지 이중 검증
+    const lessonDate = new Date(lesson.date + 'T00:00:00');
+    if (!scheduleDays.includes(lessonDate.getDay())) continue;
+
     const [lh, lm] = lesson.start_time.slice(0, 5).split(':').map(Number);
     const [eh, em] = lesson.end_time.slice(0, 5).split(':').map(Number);
     const lStart = lh * 60 + lm;
