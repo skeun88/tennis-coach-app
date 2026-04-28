@@ -302,8 +302,9 @@ export default function ScheduleScreen() {
           item.lessons.map(lesson => (
             <TouchableOpacity key={lesson.id} style={styles.weekLessonCard} onPress={() => router.push('/lessons/' + lesson.id as any)}>
               <Text style={styles.weekLessonTime}>{lesson.start_time.slice(0, 5)}</Text>
-              <Text style={styles.weekLessonTitle} numberOfLines={2}>{lesson.title.replace(/ 레슨$/, '')}</Text>
-              <Text style={styles.weekLessonMembers} numberOfLines={1}>{lesson.memberNames.join(', ')}</Text>
+              <Text style={styles.weekLessonTitle} numberOfLines={2}>
+                {lesson.memberNames.length > 0 ? lesson.memberNames.join(', ') : lesson.title.replace(/ 레슨$/, '')}
+              </Text>
             </TouchableOpacity>
           ))
         )}
@@ -452,12 +453,11 @@ function DraggableLesson({
         activeOpacity={0.85}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={styles.lessonCardTitle} numberOfLines={1}>{lesson.title.replace(/ 레슨$/, '')}</Text>
+          <Text style={styles.lessonCardTitle} numberOfLines={1}>
+            {lesson.memberNames.length > 0 ? lesson.memberNames.join(', ') : lesson.title.replace(/ 레슨$/, '')}
+          </Text>
           <Text style={styles.lessonCardTime}>{lesson.start_time.slice(0, 5)}~{lesson.end_time.slice(0, 5)}</Text>
         </View>
-        {lesson.memberNames.length > 0 && (
-          <Text style={styles.lessonCardMembers} numberOfLines={1}>{lesson.memberNames.join(', ')}</Text>
-        )}
       </TouchableOpacity>
       {isDragging && (
         <View style={styles.dragHandle}>
