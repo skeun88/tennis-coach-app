@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator,
-  Modal, FlatList,
+  Modal,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -381,24 +381,24 @@ export default function LessonDetailScreen() {
                 </TouchableOpacity>
               </View>
               {hourPickerOpen && (
-                <FlatList horizontal data={SPINNER_HOURS} keyExtractor={i => i} showsHorizontalScrollIndicator={false}
-                  style={{ marginTop: 8, backgroundColor: '#f5f7fa', borderRadius: 10, padding: 6 }}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity style={[styles.pickerItem, editHour === item && styles.pickerItemActive]}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8, backgroundColor: '#f5f7fa', borderRadius: 10, padding: 6 }}>
+                  {SPINNER_HOURS.map(item => (
+                    <TouchableOpacity key={item} style={[styles.pickerItem, editHour === item && styles.pickerItemActive]}
                       onPress={() => { setEditHour(item); setHourPickerOpen(false); }}>
                       <Text style={[styles.pickerText, editHour === item && styles.pickerTextActive]}>{item}</Text>
                     </TouchableOpacity>
-                  )} />
+                  ))}
+                </ScrollView>
               )}
               {minutePickerOpen && (
-                <FlatList horizontal data={SPINNER_MINUTES} keyExtractor={i => i} showsHorizontalScrollIndicator={false}
-                  style={{ marginTop: 8, backgroundColor: '#f5f7fa', borderRadius: 10, padding: 6 }}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity style={[styles.pickerItem, editMinute === item && styles.pickerItemActive]}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8, backgroundColor: '#f5f7fa', borderRadius: 10, padding: 6 }}>
+                  {SPINNER_MINUTES.map(item => (
+                    <TouchableOpacity key={item} style={[styles.pickerItem, editMinute === item && styles.pickerItemActive]}
                       onPress={() => { setEditMinute(item); setMinutePickerOpen(false); }}>
                       <Text style={[styles.pickerText, editMinute === item && styles.pickerTextActive]}>{item}</Text>
                     </TouchableOpacity>
-                  )} />
+                  ))}
+                </ScrollView>
               )}
               <Text style={[styles.modalLabel, { marginTop: 16 }]}>레슨 시간</Text>
               <TouchableOpacity style={styles.spinnerBtn} onPress={() => { setDurationPickerOpen(v => !v); setHourPickerOpen(false); setMinutePickerOpen(false); }}>
@@ -406,14 +406,14 @@ export default function LessonDetailScreen() {
                 <Text style={styles.spinnerValue}>{editDuration}분</Text>
               </TouchableOpacity>
               {durationPickerOpen && (
-                <FlatList horizontal data={DURATION_OPTIONS} keyExtractor={i => String(i)} showsHorizontalScrollIndicator={false}
-                  style={{ marginTop: 8, backgroundColor: '#f5f7fa', borderRadius: 10, padding: 6 }}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity style={[styles.pickerItem, editDuration === item && styles.pickerItemActive]}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8, backgroundColor: '#f5f7fa', borderRadius: 10, padding: 6 }}>
+                  {DURATION_OPTIONS.map(item => (
+                    <TouchableOpacity key={item} style={[styles.pickerItem, editDuration === item && styles.pickerItemActive]}
                       onPress={() => { setEditDuration(item); setDurationPickerOpen(false); }}>
                       <Text style={[styles.pickerText, editDuration === item && styles.pickerTextActive]}>{item}</Text>
                     </TouchableOpacity>
-                  )} />
+                  ))}
+                </ScrollView>
               )}
               {editHour && (
                 <Text style={{ textAlign: 'center', color: '#888', fontSize: 13, marginTop: 12 }}>

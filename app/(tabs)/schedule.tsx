@@ -500,26 +500,26 @@ export default function ScheduleScreen() {
               </View>
               {hourPickerVisible && (
                 <View style={styles.inlinePickerBox}>
-                  <FlatList horizontal data={SPINNER_HOURS} keyExtractor={i => i} showsHorizontalScrollIndicator={false}
-                    renderItem={({ item }) => (
-                      <TouchableOpacity style={[styles.inlinePickerItem, newHour === item && styles.inlinePickerItemActive]}
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {SPINNER_HOURS.map(item => (
+                      <TouchableOpacity key={item} style={[styles.inlinePickerItem, newHour === item && styles.inlinePickerItemActive]}
                         onPress={() => { setNewHour(item); setHourPickerVisible(false); }}>
                         <Text style={[styles.inlinePickerText, newHour === item && styles.inlinePickerTextActive]}>{item}</Text>
                       </TouchableOpacity>
-                    )}
-                  />
+                    ))}
+                  </ScrollView>
                 </View>
               )}
               {minutePickerVisible && (
                 <View style={styles.inlinePickerBox}>
-                  <FlatList horizontal data={SPINNER_MINUTES} keyExtractor={i => i} showsHorizontalScrollIndicator={false}
-                    renderItem={({ item }) => (
-                      <TouchableOpacity style={[styles.inlinePickerItem, newMinute === item && styles.inlinePickerItemActive]}
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {SPINNER_MINUTES.map(item => (
+                      <TouchableOpacity key={item} style={[styles.inlinePickerItem, newMinute === item && styles.inlinePickerItemActive]}
                         onPress={() => { setNewMinute(item); setMinutePickerVisible(false); }}>
                         <Text style={[styles.inlinePickerText, newMinute === item && styles.inlinePickerTextActive]}>{item}</Text>
                       </TouchableOpacity>
-                    )}
-                  />
+                    ))}
+                  </ScrollView>
                 </View>
               )}
 
@@ -531,14 +531,14 @@ export default function ScheduleScreen() {
               </TouchableOpacity>
               {durationPickerVisible && (
                 <View style={styles.inlinePickerBox}>
-                  <FlatList horizontal data={DURATION_OPTIONS} keyExtractor={i => String(i)} showsHorizontalScrollIndicator={false}
-                    renderItem={({ item }) => (
-                      <TouchableOpacity style={[styles.inlinePickerItem, newDuration === item && styles.inlinePickerItemActive]}
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {DURATION_OPTIONS.map(item => (
+                      <TouchableOpacity key={item} style={[styles.inlinePickerItem, newDuration === item && styles.inlinePickerItemActive]}
                         onPress={() => { setNewDuration(item); setDurationPickerVisible(false); }}>
                         <Text style={[styles.inlinePickerText, newDuration === item && styles.inlinePickerTextActive]}>{item}</Text>
                       </TouchableOpacity>
-                    )}
-                  />
+                    ))}
+                  </ScrollView>
                 </View>
               )}
 
