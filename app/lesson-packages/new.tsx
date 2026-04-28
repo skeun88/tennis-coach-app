@@ -95,7 +95,6 @@ export default function NewLessonPackageScreen() {
           </View>
           <View style={styles.previewMeta}>
             <Text style={styles.previewMetaText}>⏱ {durationMinutes}분</Text>
-            <Text style={styles.previewMetaText}>🎾 {totalCredits}회</Text>
             <Text style={styles.previewMetaText}>💳 {priceNum.toLocaleString()}원</Text>
           </View>
         </View>
@@ -121,14 +120,6 @@ export default function NewLessonPackageScreen() {
             keyboardType="number-pad"
           />
 
-          <Text style={styles.label}>기본 횟수</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="10"
-            value={totalCredits}
-            onChangeText={setTotalCredits}
-            keyboardType="number-pad"
-          />
 
           <Text style={styles.label}>레슨 시간 (분)</Text>
           <TextInput
