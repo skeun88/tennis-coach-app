@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList,
   RefreshControl, Alert, Modal, TextInput, ActivityIndicator,
   PanResponder, Animated, Dimensions,
 } from 'react-native';
@@ -566,8 +566,10 @@ function DraggableLesson({
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const panResponder = useRef(PanResponder.create({
-    onStartShouldSetPanResponder: () => false,
-    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6 && dragging.current,
+    onStartShouldSetPanResponder: () => dragging.current,
+    onStartShouldSetPanResponderCapture: () => dragging.current,
+    onMoveShouldSetPanResponder: (_, g) => dragging.current && Math.abs(g.dy) > 3,
+    onMoveShouldSetPanResponderCapture: (_, g) => dragging.current && Math.abs(g.dy) > 3,
     onPanResponderGrant: () => {
       pan.setOffset({ x: 0, y: (pan.y as any)._value });
       pan.setValue({ x: 0, y: 0 });
@@ -575,6 +577,7 @@ function DraggableLesson({
     onPanResponderMove: Animated.event([null, { dy: pan.y }], { useNativeDriver: false }),
     onPanResponderRelease: (_, g) => {
       if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+      if (!dragging.current) return;
       dragging.current = false;
       pan.flattenOffset();
       const dy = g.dy;
@@ -587,6 +590,7 @@ function DraggableLesson({
       pan.setValue({ x: 0, y: 0 });
       onDragCancel();
     },
+    onShouldBlockNativeResponder: () => dragging.current,
   })).current;
 
   return (

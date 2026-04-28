@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator,
+  Modal, FlatList,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,6 +29,14 @@ interface AttendanceRow {
   };
 }
 
+const SPINNER_HOURS = Array.from({ length: 17 }, (_, i) => String(i + 6).padStart(2, '0'));
+const SPINNER_MINUTES = ['00', '10', '20', '30', '40', '50'];
+const DURATION_OPTIONS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
+
+function minutesToTime(m: number): string {
+  return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+}
+
 export default function LessonDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -35,6 +44,14 @@ export default function LessonDetailScreen() {
   const [attendance, setAttendance] = useState<AttendanceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [editModal, setEditModal] = useState(false);
+  const [editHour, setEditHour] = useState('');
+  const [editMinute, setEditMinute] = useState('00');
+  const [editDuration, setEditDuration] = useState(60);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [hourPickerOpen, setHourPickerOpen] = useState(false);
+  const [minutePickerOpen, setMinutePickerOpen] = useState(false);
+  const [durationPickerOpen, setDurationPickerOpen] = useState(false);
 
   async function loadLesson() {
     const { data } = await supabase.from('lessons').select('*').eq('id', id).single();
@@ -170,6 +187,47 @@ export default function LessonDetailScreen() {
     ]);
   }
 
+  function openEditModal() {
+    if (!lesson) return;
+    const [h, m] = lesson.start_time.slice(0, 5).split(':');
+    const startMin = parseInt(h) * 60 + parseInt(m);
+    const endMin = parseInt(lesson.end_time.slice(0, 2)) * 60 + parseInt(lesson.end_time.slice(3, 5));
+    setEditHour(h);
+    setEditMinute(m);
+    setEditDuration(endMin - startMin);
+    setHourPickerOpen(false);
+    setMinutePickerOpen(false);
+    setDurationPickerOpen(false);
+    setEditModal(true);
+  }
+
+  async function handleSaveTime() {
+    if (!editHour) { Alert.alert('오류', '시간을 선택해주세요.'); return; }
+    setSavingEdit(true);
+    const startMin = parseInt(editHour) * 60 + parseInt(editMinute);
+    const endMin = startMin + editDuration;
+    const startSt = editHour + ':' + editMinute + ':00';
+    const endSt = minutesToTime(endMin) + ':00';
+    // 오버랩 체크 (자신 제외)
+    const { data: existing } = await supabase.from('lessons').select('id, start_time, end_time')
+      .eq('coach_id', (lesson as any).coach_id).eq('date', lesson!.date).neq('id', lesson!.id);
+    const overlap = (existing ?? []).find((l: any) => {
+      const ls = parseInt(l.start_time.slice(0,2))*60+parseInt(l.start_time.slice(3,5));
+      const le = parseInt(l.end_time.slice(0,2))*60+parseInt(l.end_time.slice(3,5));
+      return startMin < le && endMin > ls;
+    });
+    if (overlap) {
+      setSavingEdit(false);
+      Alert.alert('시간 충돌', '해당 시간대에 다른 레슨이 있습니다. 다른 시간을 선택해주세요.');
+      return;
+    }
+    const { error } = await supabase.from('lessons').update({ start_time: startSt, end_time: endSt }).eq('id', lesson!.id);
+    setSavingEdit(false);
+    if (error) { Alert.alert('오류', '수정 실패'); return; }
+    setEditModal(false);
+    loadLesson();
+  }
+
   if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color="#1a7a4a" /></View>;
   if (!lesson) return <View style={styles.loader}><Text>레슨을 찾을 수 없습니다</Text></View>;
 
@@ -179,6 +237,7 @@ export default function LessonDetailScreen() {
   const checkedCount = attendance.filter(a => a.status !== null).length;
 
   return (
+    <View style={{ flex: 1 }}>
     <ScrollView style={styles.container}>
       {/* Lesson Info */}
       <View style={styles.infoCard}>
@@ -203,10 +262,16 @@ export default function LessonDetailScreen() {
             <Text style={styles.infoText}>{lesson.notes}</Text>
           </View>
         )}
-        <TouchableOpacity style={styles.deleteBtn} onPress={deleteLesson}>
-          <Ionicons name="trash-outline" size={14} color="#ef4444" />
-          <Text style={styles.deleteBtnText}>레슨 삭제</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+          <TouchableOpacity style={styles.editBtn} onPress={openEditModal}>
+            <Ionicons name="create-outline" size={14} color="#1a7a4a" />
+            <Text style={styles.editBtnText}>시간 수정</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.deleteBtn} onPress={deleteLesson}>
+            <Ionicons name="trash-outline" size={14} color="#ef4444" />
+            <Text style={styles.deleteBtnText}>레슨 삭제</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* 수강권 차감 안내 */}
@@ -294,6 +359,75 @@ export default function LessonDetailScreen() {
 
       <View style={{ height: 40 }} />
     </ScrollView>
+      {/* 시간 수정 모달 */}
+      <Modal visible={editModal} transparent animationType="slide" onRequestClose={() => setEditModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>레슨 시간 수정</Text>
+              <TouchableOpacity onPress={() => setEditModal(false)}><Ionicons name="close" size={22} color="#888" /></TouchableOpacity>
+            </View>
+            <View style={{ padding: 20 }}>
+              <Text style={styles.modalLabel}>시작 시간</Text>
+              <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                <TouchableOpacity style={styles.spinnerBtn} onPress={() => { setHourPickerOpen(v => !v); setMinutePickerOpen(false); setDurationPickerOpen(false); }}>
+                  <Text style={styles.spinnerLabel}>시</Text>
+                  <Text style={styles.spinnerValue}>{editHour || '--'}</Text>
+                </TouchableOpacity>
+                <Text style={styles.colonText}>:</Text>
+                <TouchableOpacity style={styles.spinnerBtn} onPress={() => { setMinutePickerOpen(v => !v); setHourPickerOpen(false); setDurationPickerOpen(false); }}>
+                  <Text style={styles.spinnerLabel}>분</Text>
+                  <Text style={styles.spinnerValue}>{editMinute}</Text>
+                </TouchableOpacity>
+              </View>
+              {hourPickerOpen && (
+                <FlatList horizontal data={SPINNER_HOURS} keyExtractor={i => i} showsHorizontalScrollIndicator={false}
+                  style={{ marginTop: 8, backgroundColor: '#f5f7fa', borderRadius: 10, padding: 6 }}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity style={[styles.pickerItem, editHour === item && styles.pickerItemActive]}
+                      onPress={() => { setEditHour(item); setHourPickerOpen(false); }}>
+                      <Text style={[styles.pickerText, editHour === item && styles.pickerTextActive]}>{item}</Text>
+                    </TouchableOpacity>
+                  )} />
+              )}
+              {minutePickerOpen && (
+                <FlatList horizontal data={SPINNER_MINUTES} keyExtractor={i => i} showsHorizontalScrollIndicator={false}
+                  style={{ marginTop: 8, backgroundColor: '#f5f7fa', borderRadius: 10, padding: 6 }}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity style={[styles.pickerItem, editMinute === item && styles.pickerItemActive]}
+                      onPress={() => { setEditMinute(item); setMinutePickerOpen(false); }}>
+                      <Text style={[styles.pickerText, editMinute === item && styles.pickerTextActive]}>{item}</Text>
+                    </TouchableOpacity>
+                  )} />
+              )}
+              <Text style={[styles.modalLabel, { marginTop: 16 }]}>레슨 시간</Text>
+              <TouchableOpacity style={styles.spinnerBtn} onPress={() => { setDurationPickerOpen(v => !v); setHourPickerOpen(false); setMinutePickerOpen(false); }}>
+                <Text style={styles.spinnerLabel}>분</Text>
+                <Text style={styles.spinnerValue}>{editDuration}분</Text>
+              </TouchableOpacity>
+              {durationPickerOpen && (
+                <FlatList horizontal data={DURATION_OPTIONS} keyExtractor={i => String(i)} showsHorizontalScrollIndicator={false}
+                  style={{ marginTop: 8, backgroundColor: '#f5f7fa', borderRadius: 10, padding: 6 }}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity style={[styles.pickerItem, editDuration === item && styles.pickerItemActive]}
+                      onPress={() => { setEditDuration(item); setDurationPickerOpen(false); }}>
+                      <Text style={[styles.pickerText, editDuration === item && styles.pickerTextActive]}>{item}</Text>
+                    </TouchableOpacity>
+                  )} />
+              )}
+              {editHour && (
+                <Text style={{ textAlign: 'center', color: '#888', fontSize: 13, marginTop: 12 }}>
+                  {editHour}:{editMinute} ~ {minutesToTime(parseInt(editHour)*60+parseInt(editMinute)+editDuration)}
+                </Text>
+              )}
+              <TouchableOpacity style={[styles.saveBtn, { marginTop: 16 }]} onPress={handleSaveTime} disabled={savingEdit}>
+                {savingEdit ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>저장</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
@@ -342,4 +476,21 @@ const styles = StyleSheet.create({
   summaryDot: { width: 10, height: 10, borderRadius: 5 },
   summaryLabel: { fontSize: 12, color: '#888' },
   summaryCount: { fontSize: 18, fontWeight: '800', color: '#1a1a1a' },
+  editBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#f0fdf4', borderRadius: 8, borderWidth: 1, borderColor: '#d1fae5' },
+  editBtnText: { fontSize: 13, color: '#1a7a4a', fontWeight: '600' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modalSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#eee' },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: '#1a1a1a' },
+  modalLabel: { fontSize: 13, fontWeight: '600', color: '#555', marginBottom: 8 },
+  spinnerBtn: { flex: 1, backgroundColor: '#f5f5f5', borderRadius: 10, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#eee' },
+  spinnerLabel: { fontSize: 11, color: '#aaa', fontWeight: '600', marginBottom: 2 },
+  spinnerValue: { fontSize: 22, fontWeight: '800', color: '#1a7a4a' },
+  colonText: { fontSize: 24, fontWeight: '800', color: '#1a1a1a', paddingHorizontal: 4 },
+  pickerItem: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8, marginHorizontal: 2, alignItems: 'center' },
+  pickerItemActive: { backgroundColor: '#1a7a4a' },
+  pickerText: { fontSize: 16, fontWeight: '600', color: '#555' },
+  pickerTextActive: { color: '#fff', fontWeight: '800' },
+  saveBtn: { backgroundColor: '#1a7a4a', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });
