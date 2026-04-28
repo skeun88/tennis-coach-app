@@ -216,6 +216,53 @@ export default function ScheduleScreen() {
     );
   }
 
+
+  /** 겹치는 레슨들을 컬럼으로 분배해 좌우 나란히 배치 */
+  function computeColumns(lessonList: LessonWithMembers[]): Map<string, { col: number; totalCols: number }> {
+    const result = new Map<string, { col: number; totalCols: number }>();
+    const sorted = [...lessonList].sort((a, b) => a.start_time.localeCompare(b.start_time));
+
+    // 그룹 단위로 겹치는 레슨 묶기
+    const groups: LessonWithMembers[][] = [];
+    let current: LessonWithMembers[] = [];
+    let groupEnd = 0;
+
+    for (const lesson of sorted) {
+      const start = timeToMinutes(lesson.start_time);
+      const end = timeToMinutes(lesson.end_time);
+      if (current.length === 0 || start < groupEnd) {
+        current.push(lesson);
+        groupEnd = Math.max(groupEnd, end);
+      } else {
+        if (current.length > 0) groups.push(current);
+        current = [lesson];
+        groupEnd = end;
+      }
+    }
+    if (current.length > 0) groups.push(current);
+
+    for (const group of groups) {
+      // 컬럼 배정 (greedy)
+      const cols: number[] = []; // cols[i] = 해당 컬럼의 마지막 end minute
+      for (const lesson of group) {
+        const start = timeToMinutes(lesson.start_time);
+        const end = timeToMinutes(lesson.end_time);
+        let assigned = -1;
+        for (let i = 0; i < cols.length; i++) {
+          if (cols[i] <= start) { assigned = i; cols[i] = end; break; }
+        }
+        if (assigned === -1) { assigned = cols.length; cols.push(end); }
+        result.set(lesson.id, { col: assigned, totalCols: 0 }); // totalCols 나중에 업데이트
+      }
+      const totalCols = cols.length;
+      for (const lesson of group) {
+        const prev = result.get(lesson.id)!;
+        result.set(lesson.id, { col: prev.col, totalCols });
+      }
+    }
+    return result;
+  }
+
   // ── 일일 뷰 그리드 렌더 ──────────────────────────────────────
   function renderDayGrid() {
     const gridHeight = (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT;
@@ -254,32 +301,44 @@ export default function ScheduleScreen() {
             onPress={e => handleGridTap(e.nativeEvent.locationY)}
           />
 
-          {/* 레슨 카드들 */}
-          {lessons.map(lesson => {
-            const startMin = timeToMinutes(lesson.start_time);
-            const endMin = timeToMinutes(lesson.end_time);
-            const top = (startMin - START_HOUR * 60) / 60 * HOUR_HEIGHT;
-            const height = Math.max(28, (endMin - startMin) / 60 * HOUR_HEIGHT - 4);
-            const isDragging = draggingId === lesson.id;
+          {/* 레슨 카드들 - 겹침 없이 컬럼 배치 */}
+          {(() => {
+            const colMap = computeColumns(lessons);
+            const GRID_LEFT = 56;
+            const GRID_RIGHT = 8;
+            const GRID_WIDTH = Dimensions.get('window').width - GRID_LEFT - GRID_RIGHT;
+            return lessons.map(lesson => {
+              const startMin = timeToMinutes(lesson.start_time);
+              const endMin = timeToMinutes(lesson.end_time);
+              const top = (startMin - START_HOUR * 60) / 60 * HOUR_HEIGHT;
+              const height = Math.max(28, (endMin - startMin) / 60 * HOUR_HEIGHT - 4);
+              const isDragging = draggingId === lesson.id;
+              const layout = colMap.get(lesson.id) ?? { col: 0, totalCols: 1 };
+              const colWidth = (GRID_WIDTH - (layout.totalCols - 1) * 3) / layout.totalCols;
+              const left = GRID_LEFT + layout.col * (colWidth + 3);
+              const width = colWidth;
 
-            return (
-              <DraggableLesson
-                key={lesson.id}
-                lesson={lesson}
-                top={top}
-                height={height}
-                isDragging={isDragging}
-                onPress={() => router.push('/lessons/' + lesson.id as any)}
-                onDragEnd={(dy) => {
-                  const deltaMin = Math.round((dy / HOUR_HEIGHT) * 60 / 10) * 10;
-                  const newMin = startMin + deltaMin;
-                  handleDropLesson(lesson.id, newMin);
-                }}
-                onDragStart={() => setDraggingId(lesson.id)}
-                onDragCancel={() => setDraggingId(null)}
-              />
-            );
-          })}
+              return (
+                <DraggableLesson
+                  key={lesson.id}
+                  lesson={lesson}
+                  top={top}
+                  height={height}
+                  left={left}
+                  width={width}
+                  isDragging={isDragging}
+                  onPress={() => router.push('/lessons/' + lesson.id as any)}
+                  onDragEnd={(dy) => {
+                    const deltaMin = Math.round((dy / HOUR_HEIGHT) * 60 / 10) * 10;
+                    const newMin = startMin + deltaMin;
+                    handleDropLesson(lesson.id, newMin);
+                  }}
+                  onDragStart={() => setDraggingId(lesson.id)}
+                  onDragCancel={() => setDraggingId(null)}
+                />
+              );
+            });
+          })()}
         </View>
         <View style={{ height: 80 }} />
       </ScrollView>
@@ -400,9 +459,9 @@ export default function ScheduleScreen() {
 
 // ── 드래그 가능한 레슨 카드 컴포넌트 ──────────────────────────
 function DraggableLesson({
-  lesson, top, height, isDragging, onPress, onDragEnd, onDragStart, onDragCancel,
+  lesson, top, height, left, width, isDragging, onPress, onDragEnd, onDragStart, onDragCancel,
 }: {
-  lesson: LessonWithMembers; top: number; height: number; isDragging: boolean;
+  lesson: LessonWithMembers; top: number; height: number; left: number; width: number; isDragging: boolean;
   onPress: () => void; onDragEnd: (dy: number) => void; onDragStart: () => void; onDragCancel: () => void;
 }) {
   const pan = useRef(new Animated.ValueXY()).current;
@@ -437,7 +496,7 @@ function DraggableLesson({
     <Animated.View
       style={[
         styles.lessonCard,
-        { top, height, transform: [{ translateY: pan.y }], zIndex: isDragging ? 999 : 1 },
+        { top, height, left, width, transform: [{ translateY: pan.y }], zIndex: isDragging ? 999 : 1 },
         isDragging && styles.lessonCardDragging,
       ]}
       {...panResponder.panHandlers}
@@ -490,7 +549,7 @@ const styles = StyleSheet.create({
   gridTapOverlay: { position: 'absolute', left: 48, right: 0, top: 0 },
   // 레슨 카드 (그리드)
   lessonCard: {
-    position: 'absolute', left: 56, right: 8,
+    position: 'absolute',
     backgroundColor: '#1a7a4a', borderRadius: 8, padding: 6,
     borderLeftWidth: 3, borderLeftColor: '#0d5c37',
   },
