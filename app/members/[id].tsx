@@ -22,6 +22,20 @@ for (let h = 6; h <= 22; h++) {
   }
 }
 
+function toKSTDateStr(d: Date): string {
+  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  return kst.toISOString().split('T')[0];
+}
+
+function kstToday(): Date {
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const dateStr = kst.toISOString().split('T')[0];
+  return new Date(dateStr + 'T00:00:00+09:00');
+}
+
+
+
 
 type Tab = 'info' | 'attendance' | 'payment' | 'notes';
 
@@ -38,15 +52,11 @@ async function checkConflicts(
   const parts = scheduleTime.slice(0, 5).split(':').map(Number);
   const newStart = parts[0] * 60 + parts[1];
   const newEnd = newStart + lessonDuration;
-  const toLocalDateStr2 = (d: Date) =>
-    d.getFullYear() + '-' +
-    String(d.getMonth() + 1).padStart(2, '0') + '-' +
-    String(d.getDate()).padStart(2, '0');
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const todayKST = kstToday();
   const checkDates: string[] = [];
-  const cur = new Date(today);
+  const cur = new Date(todayKST);
   for (let i = 0; i < 60; i++) {
-    if (scheduleDays.includes(cur.getDay())) checkDates.push(toLocalDateStr2(cur));
+    if (scheduleDays.includes(cur.getDay())) checkDates.push(toKSTDateStr(cur));
     cur.setDate(cur.getDate() + 1);
   }
   if (!checkDates.length) return [];
@@ -99,13 +109,13 @@ async function generateScheduleLessons(
   const endM = String(endMin % 60).padStart(2, '0');
   const endTime = endH + ':' + endM + ':00';
   const startSt = scheduleTime.length === 5 ? scheduleTime + ':00' : scheduleTime;
-  const cursor = new Date(startDate + 'T00:00:00');
-  const today = new Date(); today.setHours(0,0,0,0);
-  if (cursor < today) cursor.setTime(today.getTime());
+  const cursor = new Date(startDate + 'T00:00:00+09:00');
+  const todayKST2 = kstToday();
+  if (cursor < todayKST2) cursor.setTime(todayKST2.getTime());
   const dates: string[] = [];
   let iter = 0;
   while (dates.length < totalCredits && iter < totalCredits * 14) {
-    if (scheduleDays.includes(cursor.getDay())) dates.push(cursor.toISOString().split('T')[0]);
+    if (scheduleDays.includes(cursor.getDay())) dates.push(toKSTDateStr(cursor));
     cursor.setDate(cursor.getDate() + 1);
     iter++;
   }
@@ -266,7 +276,7 @@ export default function MemberDetailScreen() {
       scheduleTime !== oldTime;
     let scheduledCount = 0;
     if (scheduleDays.length > 0 && scheduleTime && credits > 0) {
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = toKSTDateStr(new Date());
       const { data: futureL } = await supabase.from('lesson_members').select('lesson:lessons(date)').eq('member_id', id!);
       const futureLessons = (futureL ?? []).filter((r: any) => r.lesson?.date >= todayStr);
       const needed = credits - futureLessons.length;

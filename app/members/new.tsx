@@ -14,6 +14,21 @@ const DAYS_KR = ['일', '월', '화', '수', '목', '금', '토'];
 const HOURS = Array.from({ length: 17 }, (_, i) => String(i + 6).padStart(2, '0')); // 06~22
 const MINUTES = ['00', '10', '20', '30', '40', '50'];
 
+/** KST(한국 시간) 기준 날짜 문자열 반환 */
+function toKSTDateStr(d: Date): string {
+  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  return kst.toISOString().split('T')[0];
+}
+
+function kstToday(): Date {
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const dateStr = kst.toISOString().split('T')[0];
+  return new Date(dateStr + 'T00:00:00+09:00');
+}
+
+
+
 /** 충돌 체크: 같은 코치의 같은 시간대에 다른 레슨 있는지 확인 */
 async function checkConflicts(
   coachId: string,
@@ -27,17 +42,13 @@ async function checkConflicts(
   const newStart = hh * 60 + mm;
   const newEnd = newStart + lessonDuration;
 
-  // 선택한 요일에 해당하는 날짜만 수집 (향후 60일) - 로컬 타임존 기준
-  const toLocalDateStr = (d: Date) =>
-    d.getFullYear() + '-' +
-    String(d.getMonth() + 1).padStart(2, '0') + '-' +
-    String(d.getDate()).padStart(2, '0');
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  // KST 기준 날짜 수집 (향후 60일)
+  const todayKST = kstToday();
   const checkDates: string[] = [];
-  const cur = new Date(today);
+  const cur = new Date(todayKST);
   for (let i = 0; i < 60; i++) {
     if (scheduleDays.includes(cur.getDay())) {
-      checkDates.push(toLocalDateStr(cur));
+      checkDates.push(toKSTDateStr(cur));
     }
     cur.setDate(cur.getDate() + 1);
   }
@@ -87,13 +98,13 @@ async function generateScheduleLessons(params: {
   const endMin = hh * 60 + mm + lessonDuration;
   const startSt = scheduleTime + ':00';
   const endSt = String(Math.floor(endMin / 60)).padStart(2, '0') + ':' + String(endMin % 60).padStart(2, '0') + ':00';
-  const cursor = new Date(joinDate + 'T00:00:00');
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  if (cursor < today) cursor.setTime(today.getTime());
+  const cursor = new Date(joinDate + 'T00:00:00+09:00');
+  const todayForGen = kstToday();
+  if (cursor < todayForGen) cursor.setTime(todayForGen.getTime());
   const dates: string[] = [];
   let iter = 0;
   while (dates.length < totalCredits && iter < totalCredits * 14) {
-    if (scheduleDays.includes(cursor.getDay())) dates.push(cursor.toISOString().split('T')[0]);
+    if (scheduleDays.includes(cursor.getDay())) dates.push(toKSTDateStr(cursor));
     cursor.setDate(cursor.getDate() + 1); iter++;
   }
   for (const date of dates) {
@@ -112,7 +123,7 @@ export default function NewMemberScreen() {
   const [email, setEmail] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [level, setLevel] = useState<MemberLevel>('초급');
-  const [joinDate, setJoinDate] = useState(new Date().toISOString().split('T')[0]);
+  const [joinDate, setJoinDate] = useState(toKSTDateStr(new Date()));
   const [notes, setNotes] = useState('');
   const [scheduleDays, setScheduleDays] = useState<number[]>([]);
   const [selectedHour, setSelectedHour] = useState('');
@@ -295,8 +306,6 @@ export default function NewMemberScreen() {
               })}
             </View>
           )}
-          <Text style={[styles.label, { marginTop: 12 }]}>총 레슨 횟수</Text>
-          <TextInput style={styles.input} placeholder="예: 10" value={totalCredits} onChangeText={setTotalCredits} keyboardType="number-pad" />
           {totalCredits !== '' && (
             <View style={styles.creditPreview}>
               <Ionicons name="layers-outline" size={16} color="#1a7a4a" />
