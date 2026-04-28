@@ -209,8 +209,7 @@ export default function ScheduleScreen() {
     });
     if (overlap) {
       setSavingNew(false);
-      Alert.alert('시간 충돌', minutesToTime(timeToMinutes((overlap as any).start_time)) + '~' + minutesToTime(timeToMinutes((overlap as any).end_time)) + ' 레슨과 시간이 겹칩니다.
-다른 시간을 선택해주세요.');
+      Alert.alert('시간 충돌', minutesToTime(timeToMinutes((overlap as any).start_time)) + '~' + minutesToTime(timeToMinutes((overlap as any).end_time)) + ' 레슨과 시간이 겹칩니다.\n다른 시간을 선택해주세요.');
       return;
     }
     const selectedNames = members.filter(m => newMemberIds.includes(m.id)).map(m => m.name);
