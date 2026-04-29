@@ -137,14 +137,20 @@ export default function HomeScreen() {
     const todayDayOfWeek = new Date().getDay();
     const { data: membersWithSchedule } = await supabase
       .from('members')
-      .select('id, name, fixed_schedule_days, fixed_schedule_time')
+      .select('id, name, fixed_schedule_days, fixed_schedule_time, fixed_schedule_times')
       .eq('coach_id', uid)
       .eq('is_active', true)
-      .not('fixed_schedule_time', 'is', null);
+      .not('fixed_schedule_days', 'is', null);
     if (!membersWithSchedule) return;
     const suggestions = membersWithSchedule
       .filter(m => m.fixed_schedule_days && m.fixed_schedule_days.includes(todayDayOfWeek))
-      .map(m => ({ memberId: m.id, name: m.name, time: (m.fixed_schedule_time as string).slice(0, 5) }));
+      .map(m => {
+        const fst = (m as any).fixed_schedule_times;
+        const time = fst?.[String(todayDayOfWeek)] ?? (m.fixed_schedule_time as string | null)?.slice(0, 5) ?? null;
+        if (!time) return null;
+        return { memberId: m.id, name: m.name, time };
+      })
+      .filter(Boolean) as { memberId: string; name: string; time: string }[];
     setAutoGenSuggestion(suggestions);
   }
 
@@ -156,8 +162,11 @@ export default function HomeScreen() {
         .select('fixed_schedule_time, fixed_lesson_duration')
         .eq('id', s.memberId)
         .single();
-      if (!member || !member.fixed_schedule_time) continue;
-      const startTime = (member.fixed_schedule_time as string).slice(0, 5);
+      if (!member) continue;
+      const todayDow2 = new Date().getDay();
+      const fst2 = (member as any).fixed_schedule_times;
+      const startTime = fst2?.[String(todayDow2)] ?? (member.fixed_schedule_time as string | null)?.slice(0, 5);
+      if (!startTime) continue;
       const durationMins = (member.fixed_lesson_duration as number) ?? 60;
       const [h, m] = startTime.split(':').map(Number);
       const endDate = new Date(2000, 0, 1, h, m + durationMins);
