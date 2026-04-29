@@ -130,6 +130,7 @@ export default function NewMemberScreen() {
   const [birthDate, setBirthDate] = useState('');
   const [level, setLevel] = useState<MemberLevel>('초급');
   const [joinDate, setJoinDate] = useState(toKSTDateStr(new Date()));
+  const [lessonStartDate, setLessonStartDate] = useState(toKSTDateStr(new Date()));
   const [notes, setNotes] = useState('');
 
   // 요일 및 요일별 시간
@@ -229,7 +230,7 @@ export default function NewMemberScreen() {
     if (allDaysHaveTimes && credits > 0) {
       await generateScheduleLessons({
         coachId: userId, memberId: newMember.id, memberName: name.trim(),
-        scheduleDays, dayTimes, lessonDuration: duration, totalCredits: credits, joinDate,
+        scheduleDays, dayTimes, lessonDuration: duration, totalCredits: credits, joinDate: lessonStartDate,
       });
     }
     setLoading(false);
@@ -305,6 +306,13 @@ export default function NewMemberScreen() {
         {/* 고정 레슨 스케줄 */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>고정 레슨 스케줄</Text>
+          <Text style={styles.label}>레슨 시작일</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="YYYY-MM-DD"
+            value={lessonStartDate}
+            onChangeText={setLessonStartDate}
+          />
           <Text style={styles.label}>레슨 요일</Text>
           <View style={styles.dayRow}>
             {DAYS_KR.map((d, i) => (
