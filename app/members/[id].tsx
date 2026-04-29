@@ -9,6 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Member, MemberLevel, Attendance, Payment, MemberNote } from '../../types';
 
+type DayTimes = Record<number, string>;
+
 const LEVELS: MemberLevel[] = ['입문', '초급', '중급', '고급', '선수'];
 const LEVEL_COLORS: Record<MemberLevel, string> = {
   '입문': '#94a3b8', '초급': '#22c55e', '중급': '#3b82f6', '고급': '#f59e0b', '선수': '#ef4444',
@@ -150,7 +152,6 @@ export default function MemberDetailScreen() {
   const DAYS_KR = ['일', '월', '화', '수', '목', '금', '토'];
 const HOURS = Array.from({ length: 17 }, (_, i) => String(i + 6).padStart(2, '0'));
 const MINUTES = ['00', '10', '20', '30', '40', '50'];
-type DayTimes = Record<number, string>;
   const [scheduleDays, setScheduleDays] = useState<number[]>([]);
   const [dayTimes, setDayTimes] = useState<DayTimes>({});
   const [lessonDuration, setLessonDuration] = useState('60');
