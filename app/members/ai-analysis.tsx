@@ -54,7 +54,7 @@ export default function AIAnalysisScreen() {
     if (!isRecording) return;
     if (recorderState.mediaServicesDidReset) {
       // 오디오 세션이 리셋됨 (충전 연결 등) → 오디오 모드 재설정 후 재개
-      setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true })
+      setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true, shouldPlayInBackground: true })
         .then(() => audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY))
         .then(() => { audioRecorder.record(); })
         .catch((e: any) => {
@@ -97,7 +97,7 @@ export default function AIAnalysisScreen() {
         Alert.alert('권한 필요', '마이크 권한이 필요합니다.');
         return;
       }
-      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true, shouldPlayInBackground: true });
       await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
       audioRecorder.record();
       setIsRecording(true);

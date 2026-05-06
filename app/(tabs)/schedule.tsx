@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList,
   RefreshControl, Alert, Modal, TextInput, ActivityIndicator,
@@ -309,6 +309,7 @@ export default function ScheduleScreen() {
 
     return (
       <ScrollView ref={dayScrollRef} style={{ flex: 1 }} showsVerticalScrollIndicator={false}
+        scrollEnabled={draggingId === null}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadDayLessons(selectedDate); setRefreshing(false); }} tintColor="#1a7a4a" />}
       >
         <View style={{ height: gridHeight + 20, position: 'relative' }}>
@@ -563,7 +564,18 @@ function DraggableLesson({
 }) {
   const pan = useRef(new Animated.ValueXY()).current;
   const dragging = useRef(false);
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 콜백을 ref로 관리 → PanResponder가 항상 최신 콜백 참조
+  const onDragEndRef = useRef(onDragEnd);
+  const onDragStartRef = useRef(onDragStart);
+  const onDragCancelRef = useRef(onDragCancel);
+  const onPressRef = useRef(onPress);
+  useEffect(() => {
+    onDragEndRef.current = onDragEnd;
+    onDragStartRef.current = onDragStart;
+    onDragCancelRef.current = onDragCancel;
+    onPressRef.current = onPress;
+  }, [onDragEnd, onDragStart, onDragCancel, onPress]);
 
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => dragging.current,
@@ -576,19 +588,18 @@ function DraggableLesson({
     },
     onPanResponderMove: Animated.event([null, { dy: pan.y }], { useNativeDriver: false }),
     onPanResponderRelease: (_, g) => {
-      if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
       if (!dragging.current) return;
       dragging.current = false;
       pan.flattenOffset();
       const dy = g.dy;
       pan.setValue({ x: 0, y: 0 });
-      onDragEnd(dy);
-      onDragCancel();
+      onDragEndRef.current(dy);
+      onDragCancelRef.current();
     },
     onPanResponderTerminate: () => {
       dragging.current = false;
       pan.setValue({ x: 0, y: 0 });
-      onDragCancel();
+      onDragCancelRef.current();
     },
     onShouldBlockNativeResponder: () => dragging.current,
   })).current;
@@ -604,10 +615,10 @@ function DraggableLesson({
     >
       <TouchableOpacity
         style={{ flex: 1 }}
-        onPress={() => { if (!isDragging) onPress(); }}
+        onPress={() => { if (!isDragging) onPressRef.current(); }}
         onLongPress={() => {
           dragging.current = true;
-          onDragStart();
+          onDragStartRef.current();
         }}
         delayLongPress={350}
         activeOpacity={0.85}
