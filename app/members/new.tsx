@@ -27,10 +27,10 @@ function kstToday(): Date {
   return new Date(dateStr + 'T00:00:00+09:00');
 }
 
-// dayTimes: { dayIndex -> "HH:MM" }
-type DayTimes = Record<number, string>;
+// dayTimes: { dayIndex -> ["HH:MM", "HH:MM", ...] }
+type DayTimes = Record<number, string[]>;
 
-/** 충돌 체크: 요일별 다른 시간 지원 */
+/** 충돌 체크: 요일별 다중 시간 지원 */
 async function checkConflicts(
   coachId: string,
   scheduleDays: number[],
@@ -39,43 +39,44 @@ async function checkConflicts(
   excludeMemberId?: string,
 ): Promise<{ date: string; memberName: string; startTime: string }[]> {
   const allConflicts: { date: string; memberName: string; startTime: string }[] = [];
-  // 요일별로 체크
+
   for (const day of scheduleDays) {
-    const time = dayTimes[day];
-    if (!time) continue;
-    const [hh, mm] = time.split(':').map(Number);
-    const newStart = hh * 60 + mm;
-    const newEnd = newStart + lessonDuration;
+    const times = dayTimes[day] ?? [];
+    for (const time of times) {
+      const [hh, mm] = time.split(':').map(Number);
+      const newStart = hh * 60 + mm;
+      const newEnd = newStart + lessonDuration;
 
-    const todayKST = kstToday();
-    const checkDates: string[] = [];
-    const cur = new Date(todayKST);
-    for (let i = 0; i < 60; i++) {
-      if (cur.getDay() === day) checkDates.push(toKSTDateStr(cur));
-      cur.setDate(cur.getDate() + 1);
-    }
-    if (!checkDates.length) continue;
+      const todayKST = kstToday();
+      const checkDates: string[] = [];
+      const cur = new Date(todayKST);
+      for (let i = 0; i < 60; i++) {
+        if (cur.getDay() === day) checkDates.push(toKSTDateStr(cur));
+        cur.setDate(cur.getDate() + 1);
+      }
+      if (!checkDates.length) continue;
 
-    const { data: existing } = await supabase
-      .from('lessons')
-      .select('id, date, start_time, end_time, lesson_members(member_id, member:members(name))')
-      .eq('coach_id', coachId)
-      .in('date', checkDates);
+      const { data: existing } = await supabase
+        .from('lessons')
+        .select('id, date, start_time, end_time, lesson_members(member_id, member:members(name))')
+        .eq('coach_id', coachId)
+        .in('date', checkDates);
 
-    for (const lesson of (existing ?? []) as any[]) {
-      if (!lesson.lesson_members || lesson.lesson_members.length === 0) continue;
-      const lessonDate = new Date(lesson.date + 'T00:00:00');
-      if (lessonDate.getDay() !== day) continue;
-      const [lh, lm] = lesson.start_time.slice(0, 5).split(':').map(Number);
-      const [eh, em] = lesson.end_time.slice(0, 5).split(':').map(Number);
-      const lStart = lh * 60 + lm;
-      const lEnd = eh * 60 + em;
-      if (newStart < lEnd && newEnd > lStart) {
-        for (const lmRow of lesson.lesson_members ?? []) {
-          if (excludeMemberId && lmRow.member_id === excludeMemberId) continue;
-          const mName = lmRow.member?.name ?? '다른 회원';
-          if (!allConflicts.find(cf => cf.date === lesson.date && cf.memberName === mName)) {
-            allConflicts.push({ date: lesson.date, memberName: mName, startTime: lesson.start_time.slice(0, 5) });
+      for (const lesson of (existing ?? []) as any[]) {
+        if (!lesson.lesson_members || lesson.lesson_members.length === 0) continue;
+        const lessonDate = new Date(lesson.date + 'T00:00:00');
+        if (lessonDate.getDay() !== day) continue;
+        const [lh, lm] = lesson.start_time.slice(0, 5).split(':').map(Number);
+        const [eh, em] = lesson.end_time.slice(0, 5).split(':').map(Number);
+        const lStart = lh * 60 + lm;
+        const lEnd = eh * 60 + em;
+        if (newStart < lEnd && newEnd > lStart) {
+          for (const lmRow of lesson.lesson_members ?? []) {
+            if (excludeMemberId && lmRow.member_id === excludeMemberId) continue;
+            const mName = lmRow.member?.name ?? '다른 회원';
+            if (!allConflicts.find(cf => cf.date === lesson.date && cf.memberName === mName && cf.startTime === lesson.start_time.slice(0, 5))) {
+              allConflicts.push({ date: lesson.date, memberName: mName, startTime: lesson.start_time.slice(0, 5) });
+            }
           }
         }
       }
@@ -84,7 +85,7 @@ async function checkConflicts(
   return allConflicts;
 }
 
-/** 고정 스케줄 기반 레슨 자동 생성 (요일별 다른 시간 지원) */
+/** 고정 스케줄 기반 레슨 자동 생성 (요일별 다중 시간 지원) */
 async function generateScheduleLessons(params: {
   coachId: string; memberId: string; memberName: string;
   scheduleDays: number[]; dayTimes: DayTimes; lessonDuration: number;
@@ -99,10 +100,16 @@ async function generateScheduleLessons(params: {
 
   const dates: { date: string; time: string }[] = [];
   let iter = 0;
-  while (dates.length < totalCredits && iter < totalCredits * 14) {
+  const maxIter = totalCredits * 14 * 3 + 100;
+  while (dates.length < totalCredits && iter < maxIter) {
     const dow = cursor.getDay();
-    if (scheduleDays.includes(dow) && dayTimes[dow]) {
-      dates.push({ date: toKSTDateStr(cursor), time: dayTimes[dow] });
+    if (scheduleDays.includes(dow)) {
+      const times = dayTimes[dow] ?? [];
+      for (const time of times) {
+        if (dates.length < totalCredits) {
+          dates.push({ date: toKSTDateStr(cursor), time });
+        }
+      }
     }
     cursor.setDate(cursor.getDate() + 1);
     iter++;
@@ -133,12 +140,13 @@ export default function NewMemberScreen() {
   const [lessonStartDate, setLessonStartDate] = useState(toKSTDateStr(new Date()));
   const [notes, setNotes] = useState('');
 
-  // 요일 및 요일별 시간
+  // 요일 및 요일별 시간 (다중 시간 지원)
   const [scheduleDays, setScheduleDays] = useState<number[]>([]);
-  const [dayTimes, setDayTimes] = useState<DayTimes>({}); // day -> "HH:MM"
+  const [dayTimes, setDayTimes] = useState<DayTimes>({}); // day -> ["HH:MM", ...]
 
   // 시간 피커 모달
   const [editingDay, setEditingDay] = useState<number | null>(null);
+  const [editingTimeIndex, setEditingTimeIndex] = useState<number | null>(null); // null = 새 시간 추가
   const [tempHour, setTempHour] = useState('');
   const [tempMinute, setTempMinute] = useState('00');
   const [timePickerVisible, setTimePickerVisible] = useState(false);
@@ -169,24 +177,47 @@ export default function NewMemberScreen() {
     });
   }
 
-  function openTimePicker(day: number) {
+  function openTimePicker(day: number, timeIndex: number | null = null) {
     setEditingDay(day);
-    const existing = dayTimes[day];
-    if (existing) {
-      setTempHour(existing.split(':')[0]);
-      setTempMinute(existing.split(':')[1] || '00');
+    setEditingTimeIndex(timeIndex);
+    if (timeIndex !== null) {
+      const existing = dayTimes[day]?.[timeIndex];
+      if (existing) {
+        setTempHour(existing.split(':')[0]);
+        setTempMinute(existing.split(':')[1] || '00');
+      } else {
+        setTempHour(''); setTempMinute('00');
+      }
     } else {
-      setTempHour('');
-      setTempMinute('00');
+      setTempHour(''); setTempMinute('00');
     }
     setTimePickerVisible(true);
   }
 
   function confirmTime() {
     if (!tempHour || editingDay === null) return;
-    setDayTimes(prev => ({ ...prev, [editingDay]: `${tempHour}:${tempMinute}` }));
+    const newTime = `${tempHour}:${tempMinute}`;
+    setDayTimes(prev => {
+      const times = [...(prev[editingDay] ?? [])];
+      if (editingTimeIndex !== null) {
+        times[editingTimeIndex] = newTime;
+      } else {
+        times.push(newTime);
+      }
+      times.sort();
+      return { ...prev, [editingDay]: times };
+    });
     setTimePickerVisible(false);
     setEditingDay(null);
+    setEditingTimeIndex(null);
+  }
+
+  function removeTime(day: number, timeIndex: number) {
+    setDayTimes(prev => {
+      const times = [...(prev[day] ?? [])];
+      times.splice(timeIndex, 1);
+      return { ...prev, [day]: times };
+    });
   }
 
   function handleSelectPackage(pkg: any) {
@@ -199,20 +230,20 @@ export default function NewMemberScreen() {
     }
   }
 
-  // dayTimes 유효한 것만 (모든 선택 요일에 시간 설정된 경우)
-  const allDaysHaveTimes = scheduleDays.length > 0 && scheduleDays.every(d => !!dayTimes[d]);
+  // 모든 선택 요일에 최소 1개 이상 시간이 있는 경우
+  const allDaysHaveTimes = scheduleDays.length > 0 && scheduleDays.every(d => (dayTimes[d]?.length ?? 0) > 0);
 
   async function doSave(userId: string) {
     const credits = parseInt(totalCredits) || 0;
     const duration = parseInt(lessonDuration) || 60;
 
-    // fixed_schedule_times: { dayIndex: "HH:MM" }
-    const scheduleTimesJson: Record<string, string> = {};
+    // fixed_schedule_times: { dayIndex: ["HH:MM", ...] }
+    const scheduleTimesJson: Record<string, string[]> = {};
     for (const d of scheduleDays) {
-      if (dayTimes[d]) scheduleTimesJson[String(d)] = dayTimes[d];
+      if (dayTimes[d]?.length) scheduleTimesJson[String(d)] = dayTimes[d];
     }
-    // backward compat: first day's time
-    const firstDayTime = scheduleDays.length > 0 && dayTimes[scheduleDays[0]] ? dayTimes[scheduleDays[0]] : null;
+    // backward compat: first day's first time
+    const firstDayTime = scheduleDays.length > 0 && dayTimes[scheduleDays[0]]?.[0] ? dayTimes[scheduleDays[0]][0] : null;
 
     const { data: newMember, error } = await supabase.from('members').insert({
       coach_id: userId, name: name.trim(), phone: phone.trim(),
@@ -234,9 +265,11 @@ export default function NewMemberScreen() {
       });
     }
     setLoading(false);
+
+    const totalSlots = scheduleDays.reduce((sum, d) => sum + (dayTimes[d]?.length ?? 0), 0);
     Alert.alert('완료',
       allDaysHaveTimes && credits > 0
-        ? (credits + '개 레슨이 스케줄에 추가됐습니다.')
+        ? (`${credits}개 레슨이 스케줄에 추가됐습니다. (요일당 최대 ${totalSlots > scheduleDays.length ? '다중' : '1'}타임)`)
         : '회원이 등록됐습니다.',
       [{ text: '확인', onPress: () => router.back() }]
     );
@@ -322,26 +355,43 @@ export default function NewMemberScreen() {
             ))}
           </View>
 
-          {/* 요일별 시간 설정 */}
+          {/* 요일별 시간 설정 (다중 타임 지원) */}
           {scheduleDays.length > 0 && (
             <View style={styles.dayTimeList}>
-              <Text style={styles.label}>요일별 시작 시간</Text>
+              <Text style={styles.label}>요일별 시작 시간 <Text style={styles.labelHint}>(타임 여러개 추가 가능)</Text></Text>
               {scheduleDays.map(day => {
-                const time = dayTimes[day];
+                const times = dayTimes[day] ?? [];
                 return (
-                  <TouchableOpacity key={day} style={styles.dayTimeRow} onPress={() => openTimePicker(day)}>
-                    <View style={[styles.dayTimeBadge, time ? styles.dayTimeBadgeSet : styles.dayTimeBadgeEmpty]}>
-                      <Text style={[styles.dayTimeBadgeText, time ? styles.dayTimeBadgeTextSet : {}]}>{DAYS_KR[day]}</Text>
+                  <View key={day} style={styles.dayTimeBlock}>
+                    <View style={styles.dayTimeBlockHeader}>
+                      <View style={[styles.dayTimeBadge, times.length > 0 ? styles.dayTimeBadgeSet : styles.dayTimeBadgeEmpty]}>
+                        <Text style={[styles.dayTimeBadgeText, times.length > 0 ? styles.dayTimeBadgeTextSet : {}]}>{DAYS_KR[day]}</Text>
+                      </View>
+                      <TouchableOpacity style={styles.addTimeBtn} onPress={() => openTimePicker(day, null)}>
+                        <Ionicons name="add-circle-outline" size={18} color="#1a7a4a" />
+                        <Text style={styles.addTimeBtnText}>시간 추가</Text>
+                      </TouchableOpacity>
                     </View>
-                    <Text style={[styles.dayTimeValue, !time && styles.dayTimeValueEmpty]}>
-                      {time || '시간 선택'}
-                    </Text>
-                    <Ionicons name={time ? 'time' : 'time-outline'} size={16} color={time ? '#1a7a4a' : '#aaa'} />
-                  </TouchableOpacity>
+                    {times.length === 0 && (
+                      <Text style={styles.dayTimeEmpty}>시간을 추가해주세요</Text>
+                    )}
+                    {times.map((time, idx) => (
+                      <View key={idx} style={styles.dayTimeRow}>
+                        <Ionicons name="time" size={15} color="#1a7a4a" />
+                        <Text style={styles.dayTimeValue}>{time}</Text>
+                        <TouchableOpacity onPress={() => openTimePicker(day, idx)} style={styles.timeAction}>
+                          <Ionicons name="pencil-outline" size={15} color="#888" />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => removeTime(day, idx)} style={styles.timeAction}>
+                          <Ionicons name="close-circle-outline" size={17} color="#ff4444" />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
                 );
               })}
               {!allDaysHaveTimes && (
-                <Text style={styles.dayTimeHint}>⚑ 모든 요일의 시간을 설정해야 스케줄이 자동 생성됩니다</Text>
+                <Text style={styles.dayTimeHint}>⚑ 모든 요일에 최소 1개 시간을 설정해야 스케줄이 자동 생성됩니다</Text>
               )}
             </View>
           )}
@@ -408,7 +458,9 @@ export default function NewMemberScreen() {
           <View style={styles.modalSheet}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {editingDay !== null ? `${DAYS_KR[editingDay]}요일 시작 시간` : '시작 시간'}
+                {editingDay !== null
+                  ? `${DAYS_KR[editingDay]}요일 ${editingTimeIndex !== null ? '시간 수정' : '시간 추가'}`
+                  : '시작 시간'}
               </Text>
               <TouchableOpacity onPress={() => setTimePickerVisible(false)}>
                 <Ionicons name="close" size={22} color="#888" />
@@ -471,6 +523,7 @@ const styles = StyleSheet.create({
   section: { backgroundColor: '#fff', borderRadius: 12, margin: 16, marginBottom: 0, padding: 16 },
   sectionTitle: { fontSize: 14, fontWeight: '700', color: '#888', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
   label: { fontSize: 13, fontWeight: '600', color: '#555', marginBottom: 6 },
+  labelHint: { fontSize: 11, fontWeight: '400', color: '#aaa' },
   input: { backgroundColor: '#f5f5f5', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, color: '#1a1a1a', marginBottom: 12, borderWidth: 1, borderColor: '#eee' },
   textArea: { minHeight: 100, paddingTop: 10 },
   levelRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -484,15 +537,20 @@ const styles = StyleSheet.create({
   dayBtnText: { fontSize: 13, fontWeight: '700', color: '#888' },
   dayBtnTextActive: { color: '#fff' },
   // 요일별 시간 목록
-  dayTimeList: { gap: 8, marginBottom: 4 },
-  dayTimeRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f9f9f9', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: '#eee', gap: 12 },
+  dayTimeList: { gap: 10, marginBottom: 4 },
+  dayTimeBlock: { backgroundColor: '#f9f9f9', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: '#eee', gap: 6 },
+  dayTimeBlockHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   dayTimeBadge: { width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
   dayTimeBadgeEmpty: { backgroundColor: '#eee' },
   dayTimeBadgeSet: { backgroundColor: '#1a7a4a' },
   dayTimeBadgeText: { fontSize: 13, fontWeight: '700', color: '#888' },
   dayTimeBadgeTextSet: { color: '#fff' },
+  addTimeBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: '#f0fdf4', borderRadius: 8, borderWidth: 1, borderColor: '#bbf7d0' },
+  addTimeBtnText: { fontSize: 13, color: '#1a7a4a', fontWeight: '600' },
+  dayTimeEmpty: { fontSize: 13, color: '#aaa', paddingHorizontal: 4, paddingBottom: 2 },
+  dayTimeRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#e5e7eb', gap: 8 },
   dayTimeValue: { flex: 1, fontSize: 15, fontWeight: '600', color: '#1a1a1a' },
-  dayTimeValueEmpty: { color: '#aaa', fontWeight: '400' },
+  timeAction: { padding: 2 },
   dayTimeHint: { fontSize: 12, color: '#f59e0b', marginTop: 4 },
   packageGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   packageCard: { width: '47%', borderRadius: 12, borderWidth: 2, padding: 12, position: 'relative', overflow: 'hidden', backgroundColor: '#fff' },
