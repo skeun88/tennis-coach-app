@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { MemberLevel } from '../../types';
+import { Colors } from '../../lib/theme';
 
 const LEVELS: MemberLevel[] = ['입문', '초급', '중급', '고급', '선수'];
 const DAYS_KR = ['일', '월', '화', '수', '목', '금', '토'];
@@ -368,7 +369,7 @@ export default function NewMemberScreen() {
                         <Text style={[styles.dayTimeBadgeText, times.length > 0 ? styles.dayTimeBadgeTextSet : {}]}>{DAYS_KR[day]}</Text>
                       </View>
                       <TouchableOpacity style={styles.addTimeBtn} onPress={() => openTimePicker(day, null)}>
-                        <Ionicons name="add-circle-outline" size={18} color="#1a7a4a" />
+                        <Ionicons name="add-circle-outline" size={18} color={Colors.primary} />
                         <Text style={styles.addTimeBtnText}>시간 추가</Text>
                       </TouchableOpacity>
                     </View>
@@ -377,10 +378,10 @@ export default function NewMemberScreen() {
                     )}
                     {times.map((time, idx) => (
                       <View key={idx} style={styles.dayTimeRow}>
-                        <Ionicons name="time" size={15} color="#1a7a4a" />
+                        <Ionicons name="time" size={15} color={Colors.primary} />
                         <Text style={styles.dayTimeValue}>{time}</Text>
                         <TouchableOpacity onPress={() => openTimePicker(day, idx)} style={styles.timeAction}>
-                          <Ionicons name="pencil-outline" size={15} color="#888" />
+                          <Ionicons name="pencil-outline" size={15} color={Colors.mutedFg} />
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => removeTime(day, idx)} style={styles.timeAction}>
                           <Ionicons name="close-circle-outline" size={17} color="#ff4444" />
@@ -402,7 +403,7 @@ export default function NewMemberScreen() {
           <Text style={styles.sectionTitle}>레슨권 선택</Text>
           {lessonPackages.length === 0 ? (
             <View style={styles.noPackageBox}>
-              <Ionicons name="receipt-outline" size={24} color="#ccc" />
+              <Ionicons name="receipt-outline" size={24} color={Colors.iconMuted} />
               <Text style={styles.noPackageText}>등록된 레슨권이 없어요</Text>
               <Text style={styles.noPackageSubText}>설정에서 레슨권을 먼저 등록해주세요</Text>
             </View>
@@ -432,7 +433,7 @@ export default function NewMemberScreen() {
           )}
           {totalCredits !== '' && (
             <View style={styles.creditPreview}>
-              <Ionicons name="layers-outline" size={16} color="#1a7a4a" />
+              <Ionicons name="layers-outline" size={16} color={Colors.primary} />
               <Text style={styles.creditPreviewText}>
                 {totalCredits}회 레슨권{allDaysHaveTimes ? ' · 스케줄 자동 생성' : ''}
               </Text>
@@ -463,7 +464,7 @@ export default function NewMemberScreen() {
                   : '시작 시간'}
               </Text>
               <TouchableOpacity onPress={() => setTimePickerVisible(false)}>
-                <Ionicons name="close" size={22} color="#888" />
+                <Ionicons name="close" size={22} color={Colors.mutedFg} />
               </TouchableOpacity>
             </View>
 
@@ -519,67 +520,67 @@ export default function NewMemberScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f7fa' },
+  container: { flex: 1, backgroundColor: Colors.background },
   section: { backgroundColor: '#fff', borderRadius: 12, margin: 16, marginBottom: 0, padding: 16 },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#888', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
-  label: { fontSize: 13, fontWeight: '600', color: '#555', marginBottom: 6 },
-  labelHint: { fontSize: 11, fontWeight: '400', color: '#aaa' },
-  input: { backgroundColor: '#f5f5f5', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, color: '#1a1a1a', marginBottom: 12, borderWidth: 1, borderColor: '#eee' },
+  sectionTitle: { fontSize: 14, fontWeight: '700', color: Colors.mutedFg, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
+  label: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg, marginBottom: 6 },
+  labelHint: { fontSize: 11, fontWeight: '400', color: Colors.placeholder },
+  input: { backgroundColor: Colors.mutedBg, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, color: Colors.foreground, marginBottom: 12, borderWidth: 1, borderColor: Colors.border },
   textArea: { minHeight: 100, paddingTop: 10 },
   levelRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  levelBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#f0f0f0' },
-  levelBtnActive: { backgroundColor: '#1a7a4a' },
-  levelBtnText: { fontSize: 14, color: '#888', fontWeight: '600' },
+  levelBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: Colors.mutedBg },
+  levelBtnActive: { backgroundColor: Colors.primary },
+  levelBtnText: { fontSize: 14, color: Colors.mutedFg, fontWeight: '600' },
   levelBtnTextActive: { color: '#fff' },
   dayRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginBottom: 16 },
-  dayBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },
-  dayBtnActive: { backgroundColor: '#1a7a4a' },
-  dayBtnText: { fontSize: 13, fontWeight: '700', color: '#888' },
+  dayBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.mutedBg, justifyContent: 'center', alignItems: 'center' },
+  dayBtnActive: { backgroundColor: Colors.primary },
+  dayBtnText: { fontSize: 13, fontWeight: '700', color: Colors.mutedFg },
   dayBtnTextActive: { color: '#fff' },
   // 요일별 시간 목록
   dayTimeList: { gap: 10, marginBottom: 4 },
-  dayTimeBlock: { backgroundColor: '#f9f9f9', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: '#eee', gap: 6 },
+  dayTimeBlock: { backgroundColor: Colors.mutedBg, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: Colors.border, gap: 6 },
   dayTimeBlockHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   dayTimeBadge: { width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
-  dayTimeBadgeEmpty: { backgroundColor: '#eee' },
-  dayTimeBadgeSet: { backgroundColor: '#1a7a4a' },
-  dayTimeBadgeText: { fontSize: 13, fontWeight: '700', color: '#888' },
+  dayTimeBadgeEmpty: { backgroundColor: Colors.border },
+  dayTimeBadgeSet: { backgroundColor: Colors.primary },
+  dayTimeBadgeText: { fontSize: 13, fontWeight: '700', color: Colors.mutedFg },
   dayTimeBadgeTextSet: { color: '#fff' },
-  addTimeBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: '#f0fdf4', borderRadius: 8, borderWidth: 1, borderColor: '#bbf7d0' },
-  addTimeBtnText: { fontSize: 13, color: '#1a7a4a', fontWeight: '600' },
-  dayTimeEmpty: { fontSize: 13, color: '#aaa', paddingHorizontal: 4, paddingBottom: 2 },
-  dayTimeRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#e5e7eb', gap: 8 },
-  dayTimeValue: { flex: 1, fontSize: 15, fontWeight: '600', color: '#1a1a1a' },
+  addTimeBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: Colors.primaryLight, borderRadius: 8, borderWidth: 1, borderColor: Colors.successBorder },
+  addTimeBtnText: { fontSize: 13, color: Colors.primary, fontWeight: '600' },
+  dayTimeEmpty: { fontSize: 13, color: Colors.placeholder, paddingHorizontal: 4, paddingBottom: 2 },
+  dayTimeRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: Colors.border, gap: 8 },
+  dayTimeValue: { flex: 1, fontSize: 15, fontWeight: '600', color: Colors.foreground },
   timeAction: { padding: 2 },
-  dayTimeHint: { fontSize: 12, color: '#f59e0b', marginTop: 4 },
+  dayTimeHint: { fontSize: 12, color: Colors.warning, marginTop: 4 },
   packageGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   packageCard: { width: '47%', borderRadius: 12, borderWidth: 2, padding: 12, position: 'relative', overflow: 'hidden', backgroundColor: '#fff' },
   packageCheckmark: { position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   packageColorBar: { height: 3, borderRadius: 2, marginBottom: 8 },
-  packageTitle: { fontSize: 14, fontWeight: '700', color: '#1a1a1a', marginBottom: 4 },
-  packageMeta: { fontSize: 11, color: '#888', marginBottom: 2 },
+  packageTitle: { fontSize: 14, fontWeight: '700', color: Colors.foreground, marginBottom: 4 },
+  packageMeta: { fontSize: 11, color: Colors.mutedFg, marginBottom: 2 },
   packagePrice: { fontSize: 14, fontWeight: '800', marginTop: 4 },
   noPackageBox: { alignItems: 'center', paddingVertical: 20, gap: 6 },
-  noPackageText: { fontSize: 14, fontWeight: '600', color: '#aaa' },
-  noPackageSubText: { fontSize: 12, color: '#ccc' },
-  creditPreview: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#f0fdf4', borderRadius: 8, padding: 10, marginTop: 8 },
-  creditPreviewText: { fontSize: 14, color: '#1a7a4a', fontWeight: '600' },
-  saveBtn: { backgroundColor: '#1a7a4a', margin: 16, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  noPackageText: { fontSize: 14, fontWeight: '600', color: Colors.placeholder },
+  noPackageSubText: { fontSize: 12, color: Colors.iconMuted },
+  creditPreview: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.primaryLight, borderRadius: 8, padding: 10, marginTop: 8 },
+  creditPreviewText: { fontSize: 14, color: Colors.primary, fontWeight: '600' },
+  saveBtn: { backgroundColor: Colors.primary, margin: 16, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#eee' },
-  modalTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  modalTitle: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
   spinnerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20, paddingTop: 12 },
   spinnerCol: { flex: 1, alignItems: 'center' },
-  spinnerLabel: { fontSize: 12, fontWeight: '700', color: '#888', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  spinnerLabel: { fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
   spinnerList: { height: 220 },
   spinnerItem: { paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, marginBottom: 2, alignItems: 'center' },
-  spinnerItemSelected: { backgroundColor: '#1a7a4a' },
-  spinnerItemText: { fontSize: 22, fontWeight: '600', color: '#555' },
+  spinnerItemSelected: { backgroundColor: Colors.primary },
+  spinnerItemText: { fontSize: 22, fontWeight: '600', color: Colors.mutedFg },
   spinnerItemTextSelected: { color: '#fff', fontWeight: '800' },
-  spinnerColon: { fontSize: 28, fontWeight: '800', color: '#1a1a1a', paddingHorizontal: 8, paddingTop: 28 },
-  confirmBtn: { margin: 16, backgroundColor: '#1a7a4a', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-  confirmBtnDisabled: { backgroundColor: '#ccc' },
+  spinnerColon: { fontSize: 28, fontWeight: '800', color: Colors.foreground, paddingHorizontal: 8, paddingTop: 28 },
+  confirmBtn: { margin: 16, backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  confirmBtnDisabled: { backgroundColor: Colors.iconMuted },
   confirmBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

@@ -9,6 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Lesson } from '../../types';
+import { Colors } from '../../lib/theme';
 
 type ViewTab = '일일' | '주간';
 
@@ -310,7 +311,7 @@ export default function ScheduleScreen() {
     return (
       <ScrollView ref={dayScrollRef} style={{ flex: 1 }} showsVerticalScrollIndicator={false}
         scrollEnabled={draggingId === null}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadDayLessons(selectedDate); setRefreshing(false); }} tintColor="#1a7a4a" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadDayLessons(selectedDate); setRefreshing(false); }} tintColor={Colors.primary} />}
       >
         <View style={{ height: gridHeight + 20, position: 'relative' }}>
           {/* 현재 시간 표시선 (오늘만) */}
@@ -441,13 +442,13 @@ export default function ScheduleScreen() {
           </View>
           <Text style={styles.dateHeader}>
             {new Date(selectedDate + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })}
-            <Text style={{ fontSize: 12, color: '#1a7a4a', fontWeight: '500' }}>  시간 탭해서 레슨 등록</Text>
+            <Text style={{ fontSize: 12, color: Colors.primary, fontWeight: '500' }}>  시간 탭해서 레슨 등록</Text>
           </Text>
           {renderDayGrid()}
         </>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.weekScroll} contentContainerStyle={styles.weekScrollContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadWeekLessons(thisWeekDates); setRefreshing(false); }} tintColor="#1a7a4a" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadWeekLessons(thisWeekDates); setRefreshing(false); }} tintColor={Colors.primary} />}
         >
           {weekData.map(item => renderWeekDay(item))}
         </ScrollView>
@@ -464,7 +465,7 @@ export default function ScheduleScreen() {
           <View style={styles.modalSheet}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>새 레슨 등록</Text>
-              <TouchableOpacity onPress={() => setNewModal(false)}><Ionicons name="close" size={22} color="#888" /></TouchableOpacity>
+              <TouchableOpacity onPress={() => setNewModal(false)}><Ionicons name="close" size={22} color={Colors.mutedFg} /></TouchableOpacity>
             </View>
             <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
               {/* 회원 선택 */}
@@ -477,7 +478,7 @@ export default function ScheduleScreen() {
                     <TouchableOpacity key={m.id} style={[styles.memberItem, selected && styles.memberItemSelected]}
                       onPress={() => setNewMemberIds(prev => selected ? prev.filter(id => id !== m.id) : [...prev, m.id])}>
                       <Text style={[styles.memberItemText, selected && styles.memberItemTextSelected]}>{m.name}</Text>
-                      {selected && <Ionicons name="checkmark" size={16} color="#1a7a4a" />}
+                      {selected && <Ionicons name="checkmark" size={16} color={Colors.primary} />}
                     </TouchableOpacity>
                   );
                 })}
@@ -640,29 +641,29 @@ function DraggableLesson({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f7fa' },
-  tabRow: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee', paddingHorizontal: 16, paddingVertical: 8, gap: 8 },
-  tabBtn: { flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center', backgroundColor: '#f0f0f0' },
-  tabBtnActive: { backgroundColor: '#1a7a4a' },
-  tabText: { fontSize: 14, fontWeight: '700', color: '#888' },
+  container: { flex: 1, backgroundColor: Colors.background },
+  tabRow: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: Colors.border, paddingHorizontal: 16, paddingVertical: 8, gap: 8 },
+  tabBtn: { flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center', backgroundColor: Colors.mutedBg },
+  tabBtnActive: { backgroundColor: Colors.primary },
+  tabText: { fontSize: 14, fontWeight: '700', color: Colors.mutedFg },
   tabTextActive: { color: '#fff' },
-  weekStrip: { flexDirection: 'row', backgroundColor: '#fff', paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: '#eee' },
+  weekStrip: { flexDirection: 'row', backgroundColor: '#fff', paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
   dayBtn: { flex: 1, alignItems: 'center', paddingVertical: 6, borderRadius: 10 },
-  daySelected: { backgroundColor: '#1a7a4a' },
-  dayName: { fontSize: 11, color: '#888', marginBottom: 4 },
-  dayNum: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
+  daySelected: { backgroundColor: Colors.primary },
+  dayName: { fontSize: 11, color: Colors.mutedFg, marginBottom: 4 },
+  dayNum: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
   dayTextSelected: { color: '#fff' },
-  dayToday: { color: '#1a7a4a' },
-  dateHeader: { fontSize: 13, color: '#888', paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+  dayToday: { color: Colors.primary },
+  dateHeader: { fontSize: 13, color: Colors.mutedFg, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: Colors.mutedBg },
   // 그리드
   hourRow: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', height: HOUR_HEIGHT },
-  hourLabel: { width: 48, fontSize: 11, color: '#bbb', fontWeight: '600', textAlign: 'right', paddingRight: 8 },
-  hourLine: { flex: 1, height: 1, backgroundColor: '#eee' },
+  hourLabel: { width: 48, fontSize: 11, color: Colors.placeholder, fontWeight: '600', textAlign: 'right', paddingRight: 8 },
+  hourLine: { flex: 1, height: 1, backgroundColor: Colors.border },
   gridTapOverlay: { position: 'absolute', left: 48, right: 0, top: 0 },
   // 레슨 카드 (그리드)
   lessonCard: {
     position: 'absolute',
-    backgroundColor: '#1a7a4a', borderRadius: 8, padding: 6,
+    backgroundColor: Colors.primary, borderRadius: 8, padding: 6,
     borderLeftWidth: 3, borderLeftColor: '#0d5c37',
   },
   lessonCardDragging: { opacity: 0.85, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
@@ -674,55 +675,55 @@ const styles = StyleSheet.create({
   weekScroll: { flex: 1 },
   weekScrollContent: { padding: 12, gap: 8, flexDirection: 'row' },
   weekDayCol: { width: 130, backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 },
-  weekDayColToday: { borderWidth: 2, borderColor: '#1a7a4a' },
-  weekDayHeader: { backgroundColor: '#f5f7fa', paddingVertical: 10, alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#eee' },
-  weekDayHeaderToday: { backgroundColor: '#1a7a4a' },
-  weekDayName: { fontSize: 12, color: '#888', fontWeight: '600' },
+  weekDayColToday: { borderWidth: 2, borderColor: Colors.primary },
+  weekDayHeader: { backgroundColor: Colors.background, paddingVertical: 10, alignItems: 'center', borderBottomWidth: 1, borderBottomColor: Colors.border },
+  weekDayHeaderToday: { backgroundColor: Colors.primary },
+  weekDayName: { fontSize: 12, color: Colors.mutedFg, fontWeight: '600' },
   weekDayNameToday: { color: 'rgba(255,255,255,0.85)' },
-  weekDayNum: { fontSize: 20, fontWeight: '800', color: '#1a1a1a', marginTop: 2 },
+  weekDayNum: { fontSize: 20, fontWeight: '800', color: Colors.foreground, marginTop: 2 },
   weekDayNumToday: { color: '#fff' },
   weekEmptySlot: { padding: 16, alignItems: 'center' },
-  weekEmptyText: { fontSize: 20, color: '#ddd' },
-  weekLessonCard: { margin: 8, backgroundColor: '#f0fdf4', borderRadius: 8, padding: 8, borderLeftWidth: 3, borderLeftColor: '#1a7a4a' },
-  weekLessonTime: { fontSize: 11, color: '#1a7a4a', fontWeight: '700', marginBottom: 2 },
-  weekLessonTitle: { fontSize: 12, color: '#1a1a1a', fontWeight: '600' },
-  weekLessonMembers: { fontSize: 11, color: '#1a7a4a', marginTop: 2 },
+  weekEmptyText: { fontSize: 20, color: Colors.border },
+  weekLessonCard: { margin: 8, backgroundColor: Colors.primaryLight, borderRadius: 8, padding: 8, borderLeftWidth: 3, borderLeftColor: Colors.primary },
+  weekLessonTime: { fontSize: 11, color: Colors.primary, fontWeight: '700', marginBottom: 2 },
+  weekLessonTitle: { fontSize: 12, color: Colors.foreground, fontWeight: '600' },
+  weekLessonMembers: { fontSize: 11, color: Colors.primary, marginTop: 2 },
   // FAB
-  fab: { position: 'absolute', bottom: 24, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: '#1a7a4a', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 6 },
+  fab: { position: 'absolute', bottom: 24, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 6 },
   // 모달
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#eee' },
-  modalTitle: { fontSize: 17, fontWeight: '700', color: '#1a1a1a' },
-  modalLabel: { fontSize: 13, fontWeight: '600', color: '#555', marginBottom: 8, marginTop: 12 },
-  modalInput: { backgroundColor: '#f5f5f5', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, color: '#1a1a1a', borderWidth: 1, borderColor: '#eee' },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: Colors.foreground },
+  modalLabel: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg, marginBottom: 8, marginTop: 12 },
+  modalInput: { backgroundColor: Colors.mutedBg, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, color: Colors.foreground, borderWidth: 1, borderColor: Colors.border },
   timeRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
-  timeAdj: { flex: 1, backgroundColor: '#f0f0f0', borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
-  timeAdjText: { fontSize: 13, fontWeight: '600', color: '#555' },
-  timeDisplay: { fontSize: 32, fontWeight: '800', color: '#1a7a4a', textAlign: 'center', marginBottom: 4 },
-  timeSummary: { fontSize: 13, color: '#888', textAlign: 'center', marginBottom: 16 },
-  durationBtn: { flex: 1, backgroundColor: '#f0f0f0', borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
-  durationBtnActive: { backgroundColor: '#1a7a4a' },
-  durationBtnText: { fontSize: 13, fontWeight: '600', color: '#888' },
+  timeAdj: { flex: 1, backgroundColor: Colors.mutedBg, borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
+  timeAdjText: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg },
+  timeDisplay: { fontSize: 32, fontWeight: '800', color: Colors.primary, textAlign: 'center', marginBottom: 4 },
+  timeSummary: { fontSize: 13, color: Colors.mutedFg, textAlign: 'center', marginBottom: 16 },
+  durationBtn: { flex: 1, backgroundColor: Colors.mutedBg, borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
+  durationBtnActive: { backgroundColor: Colors.primary },
+  durationBtnText: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg },
   durationBtnTextActive: { color: '#fff' },
-  saveBtn: { backgroundColor: '#1a7a4a', borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 8 },
+  saveBtn: { backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 8 },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   nowLine: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', zIndex: 10 },
-  nowDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#ef4444', marginLeft: 42 },
-  nowLineBar: { flex: 1, height: 2, backgroundColor: '#ef4444', marginLeft: 2 },
-  memberList: { maxHeight: 160, borderWidth: 1, borderColor: '#eee', borderRadius: 10, marginBottom: 8 },
-  memberItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f5f5f5' },
-  memberItemSelected: { backgroundColor: '#f0fdf4' },
-  memberItemText: { fontSize: 14, color: '#444' },
-  memberItemTextSelected: { color: '#1a7a4a', fontWeight: '700' },
-  selectedNames: { fontSize: 12, color: '#1a7a4a', fontWeight: '600', marginBottom: 4, backgroundColor: '#f0fdf4', padding: 8, borderRadius: 8 },
-  spinnerBtn: { flex: 1, backgroundColor: '#f5f5f5', borderRadius: 10, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#eee' },
-  spinnerBtnLabel: { fontSize: 11, color: '#aaa', fontWeight: '600', marginBottom: 2 },
-  spinnerBtnValue: { fontSize: 20, fontWeight: '800', color: '#1a7a4a' },
-  colonText: { fontSize: 24, fontWeight: '800', color: '#1a1a1a', paddingHorizontal: 8, alignSelf: 'center', marginTop: 12 },
-  inlinePickerBox: { backgroundColor: '#f5f7fa', borderRadius: 10, padding: 8, marginTop: 6, marginBottom: 4 },
+  nowDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.destructive, marginLeft: 42 },
+  nowLineBar: { flex: 1, height: 2, backgroundColor: Colors.destructive, marginLeft: 2 },
+  memberList: { maxHeight: 160, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, marginBottom: 8 },
+  memberItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.mutedBg },
+  memberItemSelected: { backgroundColor: Colors.primaryLight },
+  memberItemText: { fontSize: 14, color: Colors.foreground },
+  memberItemTextSelected: { color: Colors.primary, fontWeight: '700' },
+  selectedNames: { fontSize: 12, color: Colors.primary, fontWeight: '600', marginBottom: 4, backgroundColor: Colors.primaryLight, padding: 8, borderRadius: 8 },
+  spinnerBtn: { flex: 1, backgroundColor: Colors.mutedBg, borderRadius: 10, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: Colors.border },
+  spinnerBtnLabel: { fontSize: 11, color: Colors.placeholder, fontWeight: '600', marginBottom: 2 },
+  spinnerBtnValue: { fontSize: 20, fontWeight: '800', color: Colors.primary },
+  colonText: { fontSize: 24, fontWeight: '800', color: Colors.foreground, paddingHorizontal: 8, alignSelf: 'center', marginTop: 12 },
+  inlinePickerBox: { backgroundColor: Colors.background, borderRadius: 10, padding: 8, marginTop: 6, marginBottom: 4 },
   inlinePickerItem: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, marginHorizontal: 3, alignItems: 'center' },
-  inlinePickerItemActive: { backgroundColor: '#1a7a4a' },
-  inlinePickerText: { fontSize: 16, fontWeight: '600', color: '#555' },
+  inlinePickerItemActive: { backgroundColor: Colors.primary },
+  inlinePickerText: { fontSize: 16, fontWeight: '600', color: Colors.mutedFg },
   inlinePickerTextActive: { color: '#fff', fontWeight: '800' },
 });

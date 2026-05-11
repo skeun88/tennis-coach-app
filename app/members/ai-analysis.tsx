@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorderState } from 'expo-audio';
 import { supabase } from '../../lib/supabase';
 import { LessonPlan, DrillSuggestion } from '../../types';
+import { Colors } from '../../lib/theme';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -294,7 +295,7 @@ export default function AIAnalysisScreen() {
     const current = ANALYSIS_STEPS.find(s => s.step === analysisStep);
     return (
       <View style={styles.analyzingBox}>
-        <ActivityIndicator size="large" color="#1a7a4a" />
+        <ActivityIndicator size="large" color={Colors.primary} />
         <Text style={styles.analyzingText}>
           {current ? `${current.icon} ${current.label}` : 'AI 분석 중...'}
         </Text>
@@ -372,11 +373,11 @@ export default function AIAnalysisScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>📋 AI 분석 기록</Text>
 
-          {loading && <ActivityIndicator color="#1a7a4a" style={{ marginTop: 20 }} />}
+          {loading && <ActivityIndicator color={Colors.primary} style={{ marginTop: 20 }} />}
 
           {!loading && plans.length === 0 && (
             <View style={styles.emptyBox}>
-              <Ionicons name="analytics-outline" size={40} color="#ccc" />
+              <Ionicons name="analytics-outline" size={40} color={Colors.iconMuted} />
               <Text style={styles.emptyText}>아직 분석 기록이 없어요</Text>
               <Text style={styles.emptySubText}>위에서 레슨을 녹음하고 AI 분석을 받아보세요</Text>
             </View>
@@ -410,7 +411,7 @@ export default function AIAnalysisScreen() {
                 <Ionicons
                   name={expandedPlan === plan.id ? 'chevron-up' : 'chevron-down'}
                   size={20}
-                  color="#888"
+                  color={Colors.mutedFg}
                 />
               </View>
 
@@ -449,9 +450,9 @@ export default function AIAnalysisScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f7fa' },
+  container: { flex: 1, backgroundColor: Colors.background },
   header: {
-    backgroundColor: '#1a7a4a',
+    backgroundColor: Colors.primary,
     paddingTop: Platform.OS === 'ios' ? 56 : 20,
     paddingBottom: 16,
     paddingHorizontal: 16,
@@ -476,42 +477,42 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
-  recordTitle: { fontSize: 17, fontWeight: '800', color: '#1a1a1a', marginBottom: 8 },
-  recordDesc: { fontSize: 13, color: '#666', lineHeight: 20, marginBottom: 20 },
+  recordTitle: { fontSize: 17, fontWeight: '800', color: Colors.foreground, marginBottom: 8 },
+  recordDesc: { fontSize: 13, color: Colors.mutedFg, lineHeight: 20, marginBottom: 20 },
 
   // 분석 진행 상태
   analyzingBox: { alignItems: 'center', paddingVertical: 20, gap: 10 },
-  analyzingText: { fontSize: 16, fontWeight: '700', color: '#1a7a4a' },
-  analyzingSubText: { fontSize: 12, color: '#aaa' },
+  analyzingText: { fontSize: 16, fontWeight: '700', color: Colors.primary },
+  analyzingSubText: { fontSize: 12, color: Colors.placeholder },
   stepDots: { flexDirection: 'row', gap: 8, marginTop: 4 },
   stepDot: {
-    width: 8, height: 8, borderRadius: 4, backgroundColor: '#e0e0e0',
+    width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.border,
   },
   stepDotActive: { backgroundColor: '#a8d5b5' },
-  stepDotCurrent: { backgroundColor: '#1a7a4a', width: 20, borderRadius: 4 },
+  stepDotCurrent: { backgroundColor: Colors.primary, width: 20, borderRadius: 4 },
 
   // 녹음 컨트롤
   recordControls: { alignItems: 'center', gap: 12 },
   durationBox: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#ef4444' },
-  durationText: { fontSize: 24, fontWeight: '800', color: '#1a1a1a', letterSpacing: 2 },
+  recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.destructive },
+  durationText: { fontSize: 24, fontWeight: '800', color: Colors.foreground, letterSpacing: 2 },
   recordBtn: {
     width: 100, height: 100, borderRadius: 50,
-    backgroundColor: '#1a7a4a',
+    backgroundColor: Colors.primary,
     justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#1a7a4a', shadowOpacity: 0.3, shadowRadius: 10,
+    shadowColor: Colors.primary, shadowOpacity: 0.3, shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 }, elevation: 6, gap: 4,
   },
-  recordBtnActive: { backgroundColor: '#ef4444', shadowColor: '#ef4444' },
+  recordBtnActive: { backgroundColor: Colors.destructive, shadowColor: Colors.destructive },
   recordBtnText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  recordHint: { fontSize: 12, color: '#888', textAlign: 'center', maxWidth: 240 },
+  recordHint: { fontSize: 12, color: Colors.mutedFg, textAlign: 'center', maxWidth: 240 },
 
   // 분석 기록
   section: { paddingHorizontal: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: '#1a1a1a', marginBottom: 12 },
+  sectionTitle: { fontSize: 16, fontWeight: '800', color: Colors.foreground, marginBottom: 12 },
   emptyBox: { alignItems: 'center', paddingVertical: 32, gap: 8 },
-  emptyText: { fontSize: 15, color: '#aaa', fontWeight: '600' },
-  emptySubText: { fontSize: 13, color: '#bbb', textAlign: 'center' },
+  emptyText: { fontSize: 15, color: Colors.placeholder, fontWeight: '600' },
+  emptySubText: { fontSize: 13, color: Colors.placeholder, textAlign: 'center' },
 
   // 플랜 카드
   planCard: {
@@ -521,30 +522,30 @@ const styles = StyleSheet.create({
   },
   planHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
   planMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' },
-  planDate: { fontSize: 12, color: '#888' },
-  planDuration: { fontSize: 12, color: '#aaa' },
+  planDate: { fontSize: 12, color: Colors.mutedFg },
+  planDuration: { fontSize: 12, color: Colors.placeholder },
   courtBadge: {
-    backgroundColor: '#e8f5ee', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
+    backgroundColor: Colors.primaryLight, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
   },
-  courtBadgeText: { fontSize: 11, color: '#1a7a4a', fontWeight: '700' },
-  planPreview: { fontSize: 14, color: '#333', lineHeight: 20 },
+  courtBadgeText: { fontSize: 11, color: Colors.primary, fontWeight: '700' },
+  planPreview: { fontSize: 14, color: Colors.foreground, lineHeight: 20 },
   planDetail: { marginTop: 4 },
-  divider: { height: 1, backgroundColor: '#f0f0f0', marginVertical: 12 },
+  divider: { height: 1, backgroundColor: Colors.mutedBg, marginVertical: 12 },
   planSection: { marginBottom: 16 },
-  planSectionTitle: { fontSize: 13, fontWeight: '800', color: '#1a1a1a', marginBottom: 8 },
-  planSectionContent: { fontSize: 14, color: '#444', lineHeight: 22 },
+  planSectionTitle: { fontSize: 13, fontWeight: '800', color: Colors.foreground, marginBottom: 8 },
+  planSectionContent: { fontSize: 14, color: Colors.foreground, lineHeight: 22 },
 
   // Bullet list
   bulletRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 6 },
-  bulletIcon: { fontSize: 14, color: '#1a7a4a', marginTop: 3, width: 14 },
-  bulletText: { fontSize: 14, color: '#444', lineHeight: 22, flex: 1 },
+  bulletIcon: { fontSize: 14, color: Colors.primary, marginTop: 3, width: 14 },
+  bulletText: { fontSize: 14, color: Colors.foreground, lineHeight: 22, flex: 1 },
 
   // 드릴 카드
   drillCard: {
     backgroundColor: '#f8fdf9',
     borderRadius: 10,
     borderLeftWidth: 3,
-    borderLeftColor: '#1a7a4a',
+    borderLeftColor: Colors.primary,
     marginBottom: 10,
     overflow: 'hidden',
   },
@@ -554,21 +555,21 @@ const styles = StyleSheet.create({
   },
   drillIndex: {
     width: 22, height: 22, borderRadius: 11,
-    backgroundColor: '#1a7a4a', justifyContent: 'center', alignItems: 'center',
+    backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center',
   },
   drillIndexText: { fontSize: 11, fontWeight: '800', color: '#fff' },
-  drillName: { fontSize: 14, fontWeight: '800', color: '#1a1a1a', flex: 1 },
+  drillName: { fontSize: 14, fontWeight: '800', color: Colors.foreground, flex: 1 },
   drillBody: { paddingHorizontal: 12, paddingBottom: 12, gap: 4 },
   drillRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   drillLabel: {
-    fontSize: 12, fontWeight: '700', color: '#1a7a4a',
+    fontSize: 12, fontWeight: '700', color: Colors.primary,
     width: 60, marginTop: 2, flexShrink: 0,
   },
-  drillValue: { fontSize: 13, color: '#444', lineHeight: 20, flex: 1 },
+  drillValue: { fontSize: 13, color: Colors.foreground, lineHeight: 20, flex: 1 },
 
   // 상단 키워드 요약
   summaryKeywordBox: {
-    backgroundColor: '#e8f5ee',
+    backgroundColor: Colors.primaryLight,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -577,7 +578,7 @@ const styles = StyleSheet.create({
   summaryKeywordText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#1a7a4a',
+    color: Colors.primary,
     lineHeight: 20,
   },
 });

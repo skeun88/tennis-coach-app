@@ -6,8 +6,9 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import { Colors } from '../../lib/theme';
 
-const PRESET_COLORS = ['#1a7a4a', '#2563eb', '#7c3aed', '#dc2626', '#ea580c', '#0891b2', '#65a30d'];
+const PRESET_COLORS = [Colors.primary, Colors.info, Colors.navy, Colors.destructive, '#ea580c', '#0891b2', '#65a30d'];
 
 export default function NewLessonPackageScreen() {
   const router = useRouter();
@@ -18,7 +19,7 @@ export default function NewLessonPackageScreen() {
   const [price, setPrice] = useState('');
   const [totalCredits, setTotalCredits] = useState('10');
   const [durationMinutes, setDurationMinutes] = useState('60');
-  const [color, setColor] = useState('#1a7a4a');
+  const [color, setColor] = useState(Colors.primary);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingEdit, setLoadingEdit] = useState(isEdit);
@@ -77,7 +78,7 @@ export default function NewLessonPackageScreen() {
   }
 
   if (loadingEdit) {
-    return <View style={styles.center}><ActivityIndicator color="#1a7a4a" /></View>;
+    return <View style={styles.center}><ActivityIndicator color={Colors.primary} /></View>;
   }
 
   // 미리보기 카드
@@ -180,7 +181,7 @@ export default function NewLessonPackageScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f7fa' },
+  container: { flex: 1, backgroundColor: Colors.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   previewCard: {
     backgroundColor: '#fff', margin: 16, borderRadius: 14, padding: 16,
@@ -189,15 +190,15 @@ const styles = StyleSheet.create({
   },
   previewTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   previewDot: { width: 12, height: 12, borderRadius: 6 },
-  previewTitle: { fontSize: 17, fontWeight: '800', color: '#1a1a1a', flex: 1 },
+  previewTitle: { fontSize: 17, fontWeight: '800', color: Colors.foreground, flex: 1 },
   previewMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  previewMetaText: { fontSize: 13, color: '#555' },
+  previewMetaText: { fontSize: 13, color: Colors.mutedFg },
   section: { backgroundColor: '#fff', borderRadius: 12, margin: 16, marginBottom: 0, padding: 16 },
-  sectionTitle: { fontSize: 13, fontWeight: '700', color: '#888', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
-  label: { fontSize: 13, fontWeight: '600', color: '#555', marginBottom: 6 },
+  sectionTitle: { fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
+  label: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg, marginBottom: 6 },
   input: {
-    backgroundColor: '#f5f5f5', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10,
-    fontSize: 15, color: '#1a1a1a', marginBottom: 12, borderWidth: 1, borderColor: '#eee',
+    backgroundColor: Colors.mutedBg, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10,
+    fontSize: 15, color: Colors.foreground, marginBottom: 12, borderWidth: 1, borderColor: Colors.border,
   },
   textArea: { minHeight: 80, paddingTop: 10 },
   colorRow: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },

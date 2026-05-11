@@ -5,6 +5,7 @@ import {
   ActivityIndicator, SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '../../lib/theme';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -137,7 +138,7 @@ export default function ChatScreen() {
                   <Text style={styles.avatarText}>K</Text>
                 </View>
                 <View style={styles.bubbleAssistant}>
-                  <ActivityIndicator size="small" color="#1a7a4a" />
+                  <ActivityIndicator size="small" color={Colors.primary} />
                 </View>
               </View>
             ) : null
@@ -153,7 +154,7 @@ export default function ChatScreen() {
                     onPress={() => sendMessage(q)}
                   >
                     <Text style={styles.quickBtnText}>{q}</Text>
-                    <Ionicons name="chevron-forward" size={14} color="#1a7a4a" />
+                    <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
                   </TouchableOpacity>
                 ))}
               </View>
@@ -167,7 +168,7 @@ export default function ChatScreen() {
             value={input}
             onChangeText={setInput}
             placeholder="궁금한 점을 입력하세요..."
-            placeholderTextColor="#aaa"
+            placeholderTextColor={Colors.placeholder}
             multiline
             maxLength={500}
             returnKeyType="send"
@@ -187,7 +188,7 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f7fa' },
+  container: { flex: 1, backgroundColor: Colors.background },
   flex: { flex: 1 },
   messageList: { padding: 16, paddingBottom: 8 },
 
@@ -198,19 +199,19 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 }, elevation: 2,
   },
-  quickTitle: { fontSize: 13, fontWeight: '700', color: '#888', marginBottom: 10 },
+  quickTitle: { fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 10 },
   quickBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
+    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.mutedBg,
   },
-  quickBtnText: { fontSize: 14, color: '#333', flex: 1 },
+  quickBtnText: { fontSize: 14, color: Colors.foreground, flex: 1 },
 
   // Messages
   messageRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 12, gap: 8 },
   messageRowUser: { flexDirection: 'row-reverse' },
   avatar: {
     width: 32, height: 32, borderRadius: 16,
-    backgroundColor: '#1a7a4a',
+    backgroundColor: Colors.primary,
     justifyContent: 'center', alignItems: 'center',
     flexShrink: 0,
   },
@@ -225,10 +226,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 }, elevation: 1,
   },
   bubbleUser: {
-    backgroundColor: '#1a7a4a',
+    backgroundColor: Colors.primary,
     borderBottomRightRadius: 4,
   },
-  bubbleText: { fontSize: 15, color: '#1a1a1a', lineHeight: 22 },
+  bubbleText: { fontSize: 15, color: Colors.foreground, lineHeight: 22 },
   bubbleTextUser: { color: '#fff' },
 
   // Typing
@@ -238,18 +239,18 @@ const styles = StyleSheet.create({
   inputBar: {
     flexDirection: 'row', alignItems: 'flex-end',
     backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 10,
-    borderTopWidth: 1, borderTopColor: '#eee', gap: 8,
+    borderTopWidth: 1, borderTopColor: Colors.border, gap: 8,
   },
   input: {
-    flex: 1, fontSize: 15, color: '#1a1a1a',
-    backgroundColor: '#f5f7fa', borderRadius: 20,
+    flex: 1, fontSize: 15, color: Colors.foreground,
+    backgroundColor: Colors.background, borderRadius: 20,
     paddingHorizontal: 16, paddingVertical: 10,
     maxHeight: 100, lineHeight: 20,
   },
   sendBtn: {
     width: 44, height: 44, borderRadius: 22,
-    backgroundColor: '#1a7a4a',
+    backgroundColor: Colors.primary,
     justifyContent: 'center', alignItems: 'center',
   },
-  sendBtnDisabled: { backgroundColor: '#ccc' },
+  sendBtnDisabled: { backgroundColor: Colors.iconMuted },
 });

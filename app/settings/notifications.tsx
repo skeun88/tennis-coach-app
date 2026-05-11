@@ -5,6 +5,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Colors } from '../../lib/theme';
 
 const STORAGE_KEY = '@kerri_notification_settings';
 
@@ -34,21 +35,21 @@ const NOTIFICATION_ITEMS: NotificationItem[] = [
     title: 'D-1 알림',
     subtitle: '레슨 전날 오후 6시에 알림을 받습니다',
     icon: 'calendar-outline',
-    iconColor: '#2563eb',
+    iconColor: Colors.info,
   },
   {
     key: 'lessonDayReminder',
     title: '당일 알림',
     subtitle: '레슨 시작 1시간 전에 알림을 받습니다',
     icon: 'time-outline',
-    iconColor: '#1a7a4a',
+    iconColor: Colors.primary,
   },
   {
     key: 'lowCreditsAlert',
     title: '재등록 알림',
     subtitle: '회원 잔여 횟수가 1회일 때 알림을 받습니다',
     icon: 'layers-outline',
-    iconColor: '#dc2626',
+    iconColor: Colors.destructive,
   },
 ];
 
@@ -101,12 +102,12 @@ export default function NotificationsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#1a1a1a" />
+          <Ionicons name="arrow-back" size={24} color={Colors.foreground} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>알림 설정</Text>
         {saved ? (
           <View style={styles.savedBadge}>
-            <Ionicons name="checkmark" size={14} color="#1a7a4a" />
+            <Ionicons name="checkmark" size={14} color={Colors.primary} />
             <Text style={styles.savedText}>저장됨</Text>
           </View>
         ) : (
@@ -117,7 +118,7 @@ export default function NotificationsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         {/* Info banner */}
         <View style={styles.infoBanner}>
-          <Ionicons name="information-circle-outline" size={18} color="#2563eb" />
+          <Ionicons name="information-circle-outline" size={18} color={Colors.info} />
           <Text style={styles.infoText}>
             알림은 앱이 실행 중일 때 로컬 알림으로 전송됩니다. 설정은 기기에 저장됩니다.
           </Text>
@@ -144,9 +145,9 @@ export default function NotificationsScreen() {
                 <Switch
                   value={settings[item.key]}
                   onValueChange={(val) => updateSetting(item.key, val)}
-                  trackColor={{ false: '#e0e0e0', true: '#a7f3d0' }}
-                  thumbColor={settings[item.key] ? '#1a7a4a' : '#f4f3f4'}
-                  ios_backgroundColor="#e0e0e0"
+                  trackColor={{ false: Colors.border, true: Colors.successBorder }}
+                  thumbColor={settings[item.key] ? Colors.primary : '#f4f3f4'}
+                  ios_backgroundColor={Colors.border}
                 />
               </View>
               {index < NOTIFICATION_ITEMS.length - 1 && <View style={styles.divider} />}
@@ -162,7 +163,7 @@ export default function NotificationsScreen() {
               <Ionicons
                 name={settings[item.key] ? 'checkmark-circle' : 'close-circle'}
                 size={16}
-                color={settings[item.key] ? '#1a7a4a' : '#ccc'}
+                color={settings[item.key] ? Colors.primary : Colors.iconMuted}
               />
               <Text style={[styles.summaryText, !settings[item.key] && styles.summaryTextOff]}>
                 {item.title}
@@ -173,7 +174,7 @@ export default function NotificationsScreen() {
 
         {/* Reset button */}
         <TouchableOpacity style={styles.resetBtn} onPress={resetAll}>
-          <Ionicons name="refresh-outline" size={16} color="#888" />
+          <Ionicons name="refresh-outline" size={16} color={Colors.mutedFg} />
           <Text style={styles.resetBtnText}>기본값으로 초기화</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -182,35 +183,35 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f7fa' },
+  container: { flex: 1, backgroundColor: Colors.background },
 
   // Header
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: '#fff', paddingTop: 56, paddingBottom: 14,
     paddingHorizontal: 16,
-    borderBottomWidth: 1, borderBottomColor: '#eee',
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
   backBtn: { padding: 4 },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: '#1a1a1a' },
+  headerTitle: { fontSize: 17, fontWeight: '700', color: Colors.foreground },
   savedBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: '#f0fdf4', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12,
+    backgroundColor: Colors.primaryLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12,
   },
-  savedText: { fontSize: 12, color: '#1a7a4a', fontWeight: '600' },
+  savedText: { fontSize: 12, color: Colors.primary, fontWeight: '600' },
 
   content: { padding: 16, paddingBottom: 48 },
 
   // Info banner
   infoBanner: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    backgroundColor: '#eff6ff', borderRadius: 10, padding: 12, marginBottom: 20,
+    backgroundColor: Colors.primaryLight, borderRadius: 10, padding: 12, marginBottom: 20,
     borderWidth: 1, borderColor: '#bfdbfe',
   },
-  infoText: { flex: 1, fontSize: 13, color: '#3b82f6', lineHeight: 18 },
+  infoText: { flex: 1, fontSize: 13, color: Colors.info, lineHeight: 18 },
 
   sectionLabel: {
-    fontSize: 13, fontWeight: '700', color: '#888',
+    fontSize: 13, fontWeight: '700', color: Colors.mutedFg,
     textTransform: 'uppercase', letterSpacing: 0.5,
     marginBottom: 8, marginTop: 4,
   },
@@ -230,9 +231,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center', marginRight: 12,
   },
   settingTexts: { flex: 1 },
-  settingTitle: { fontSize: 15, fontWeight: '600', color: '#1a1a1a', marginBottom: 2 },
-  settingSubtitle: { fontSize: 12, color: '#888', lineHeight: 16 },
-  divider: { height: 1, backgroundColor: '#f0f0f0', marginLeft: 66 },
+  settingTitle: { fontSize: 15, fontWeight: '600', color: Colors.foreground, marginBottom: 2 },
+  settingSubtitle: { fontSize: 12, color: Colors.mutedFg, lineHeight: 16 },
+  divider: { height: 1, backgroundColor: Colors.mutedBg, marginLeft: 66 },
 
   // Summary
   summaryCard: {
@@ -240,15 +241,15 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
   },
   summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  summaryText: { fontSize: 14, color: '#1a1a1a', fontWeight: '500' },
-  summaryTextOff: { color: '#bbb' },
+  summaryText: { fontSize: 14, color: Colors.foreground, fontWeight: '500' },
+  summaryTextOff: { color: Colors.placeholder },
 
   // Reset
   resetBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     paddingVertical: 12, borderRadius: 10,
     backgroundColor: '#fff',
-    borderWidth: 1, borderColor: '#e0e0e0',
+    borderWidth: 1, borderColor: Colors.border,
   },
-  resetBtnText: { fontSize: 14, color: '#888', fontWeight: '600' },
+  resetBtnText: { fontSize: 14, color: Colors.mutedFg, fontWeight: '600' },
 });

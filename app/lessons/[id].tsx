@@ -7,10 +7,11 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Lesson, AttendanceStatus } from '../../types';
+import { Colors } from '../../lib/theme';
 
 const STATUS_OPTIONS: AttendanceStatus[] = ['출석', '지각', '조퇴', '결석'];
 const STATUS_COLOR: Record<AttendanceStatus, string> = {
-  '출석': '#22c55e', '결석': '#ef4444', '지각': '#f59e0b', '조퇴': '#3b82f6',
+  '출석': Colors.success, '결석': Colors.destructive, '지각': Colors.warning, '조퇴': Colors.info,
 };
 
 // 차감되는 상태 (출석/지각/조퇴/결석 모두 차감)
@@ -228,7 +229,7 @@ export default function LessonDetailScreen() {
     loadLesson();
   }
 
-  if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color="#1a7a4a" /></View>;
+  if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color={Colors.primary} /></View>;
   if (!lesson) return <View style={styles.loader}><Text>레슨을 찾을 수 없습니다</Text></View>;
 
   const presentCount = attendance.filter(a => a.status === '출석').length;
@@ -243,32 +244,32 @@ export default function LessonDetailScreen() {
       <View style={styles.infoCard}>
         <Text style={styles.lessonTitle}>{lesson.title}</Text>
         <View style={styles.infoRow}>
-          <Ionicons name="calendar-outline" size={15} color="#888" />
+          <Ionicons name="calendar-outline" size={15} color={Colors.mutedFg} />
           <Text style={styles.infoText}>{lesson.date}</Text>
         </View>
         <View style={styles.infoRow}>
-          <Ionicons name="time-outline" size={15} color="#888" />
+          <Ionicons name="time-outline" size={15} color={Colors.mutedFg} />
           <Text style={styles.infoText}>{lesson.start_time?.slice(0, 5)} ~ {lesson.end_time?.slice(0, 5)}</Text>
         </View>
         {lesson.location && (
           <View style={styles.infoRow}>
-            <Ionicons name="location-outline" size={15} color="#888" />
+            <Ionicons name="location-outline" size={15} color={Colors.mutedFg} />
             <Text style={styles.infoText}>{lesson.location}</Text>
           </View>
         )}
         {lesson.notes && (
           <View style={styles.infoRow}>
-            <Ionicons name="document-text-outline" size={15} color="#888" />
+            <Ionicons name="document-text-outline" size={15} color={Colors.mutedFg} />
             <Text style={styles.infoText}>{lesson.notes}</Text>
           </View>
         )}
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
           <TouchableOpacity style={styles.editBtn} onPress={openEditModal}>
-            <Ionicons name="create-outline" size={14} color="#1a7a4a" />
+            <Ionicons name="create-outline" size={14} color={Colors.primary} />
             <Text style={styles.editBtnText}>시간 수정</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.deleteBtn} onPress={deleteLesson}>
-            <Ionicons name="trash-outline" size={14} color="#ef4444" />
+            <Ionicons name="trash-outline" size={14} color={Colors.destructive} />
             <Text style={styles.deleteBtnText}>레슨 삭제</Text>
           </TouchableOpacity>
         </View>
@@ -276,7 +277,7 @@ export default function LessonDetailScreen() {
 
       {/* 수강권 차감 안내 */}
       <View style={styles.noticeCard}>
-        <Ionicons name="information-circle-outline" size={16} color="#2563eb" />
+        <Ionicons name="information-circle-outline" size={16} color={Colors.info} />
         <Text style={styles.noticeText}>출석·지각·조퇴·결석 모두 수강권 1회 차감됩니다</Text>
       </View>
 
@@ -298,8 +299,8 @@ export default function LessonDetailScreen() {
           <View key={a.member_id} style={styles.attendanceCard}>
             {/* 회원 정보 */}
             <TouchableOpacity onPress={() => router.push(`/members/${a.member_id}`)}>
-              <View style={[styles.avatar, { backgroundColor: a.status ? STATUS_COLOR[a.status] + '33' : '#f0f0f0' }]}>
-                <Text style={[styles.avatarText, { color: a.status ? STATUS_COLOR[a.status] : '#888' }]}>
+              <View style={[styles.avatar, { backgroundColor: a.status ? STATUS_COLOR[a.status] + '33' : Colors.mutedBg }]}>
+                <Text style={[styles.avatarText, { color: a.status ? STATUS_COLOR[a.status] : Colors.mutedFg }]}>
                   {a.member?.name?.slice(0, 1) ?? '?'}
                 </Text>
               </View>
@@ -309,8 +310,8 @@ export default function LessonDetailScreen() {
                 <Text style={styles.memberName}>{a.member?.name ?? '알 수 없음'}</Text>
               </TouchableOpacity>
               <View style={styles.creditRow}>
-                <Ionicons name="ticket-outline" size={12} color={a.member.remaining_credits <= 2 ? '#ef4444' : '#888'} />
-                <Text style={[styles.creditText, a.member.remaining_credits <= 2 && { color: '#ef4444', fontWeight: '700' }]}>
+                <Ionicons name="ticket-outline" size={12} color={a.member.remaining_credits <= 2 ? Colors.destructive : Colors.mutedFg} />
+                <Text style={[styles.creditText, a.member.remaining_credits <= 2 && { color: Colors.destructive, fontWeight: '700' }]}>
                   잔여 {a.member.remaining_credits}회
                 </Text>
                 {a.deduct_credit && (
@@ -323,7 +324,7 @@ export default function LessonDetailScreen() {
 
             {/* 상태 버튼 */}
             {updating === a.member_id ? (
-              <ActivityIndicator size="small" color="#1a7a4a" />
+              <ActivityIndicator size="small" color={Colors.primary} />
             ) : (
               <View style={styles.statusButtons}>
                 {STATUS_OPTIONS.map(s => (
@@ -365,7 +366,7 @@ export default function LessonDetailScreen() {
           <View style={styles.modalSheet}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>레슨 시간 수정</Text>
-              <TouchableOpacity onPress={() => setEditModal(false)}><Ionicons name="close" size={22} color="#888" /></TouchableOpacity>
+              <TouchableOpacity onPress={() => setEditModal(false)}><Ionicons name="close" size={22} color={Colors.mutedFg} /></TouchableOpacity>
             </View>
             <View style={{ padding: 20 }}>
               <Text style={styles.modalLabel}>시작 시간</Text>
@@ -381,7 +382,7 @@ export default function LessonDetailScreen() {
                 </TouchableOpacity>
               </View>
               {hourPickerOpen && (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8, backgroundColor: '#f5f7fa', borderRadius: 10, padding: 6 }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8, backgroundColor: Colors.background, borderRadius: 10, padding: 6 }}>
                   {SPINNER_HOURS.map(item => (
                     <TouchableOpacity key={item} style={[styles.pickerItem, editHour === item && styles.pickerItemActive]}
                       onPress={() => { setEditHour(item); setHourPickerOpen(false); }}>
@@ -391,7 +392,7 @@ export default function LessonDetailScreen() {
                 </ScrollView>
               )}
               {minutePickerOpen && (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8, backgroundColor: '#f5f7fa', borderRadius: 10, padding: 6 }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8, backgroundColor: Colors.background, borderRadius: 10, padding: 6 }}>
                   {SPINNER_MINUTES.map(item => (
                     <TouchableOpacity key={item} style={[styles.pickerItem, editMinute === item && styles.pickerItemActive]}
                       onPress={() => { setEditMinute(item); setMinutePickerOpen(false); }}>
@@ -406,7 +407,7 @@ export default function LessonDetailScreen() {
                 <Text style={styles.spinnerValue}>{editDuration}분</Text>
               </TouchableOpacity>
               {durationPickerOpen && (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8, backgroundColor: '#f5f7fa', borderRadius: 10, padding: 6 }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8, backgroundColor: Colors.background, borderRadius: 10, padding: 6 }}>
                   {DURATION_OPTIONS.map(item => (
                     <TouchableOpacity key={item} style={[styles.pickerItem, editDuration === item && styles.pickerItemActive]}
                       onPress={() => { setEditDuration(item); setDurationPickerOpen(false); }}>
@@ -416,7 +417,7 @@ export default function LessonDetailScreen() {
                 </ScrollView>
               )}
               {editHour && (
-                <Text style={{ textAlign: 'center', color: '#888', fontSize: 13, marginTop: 12 }}>
+                <Text style={{ textAlign: 'center', color: Colors.mutedFg, fontSize: 13, marginTop: 12 }}>
                   {editHour}:{editMinute} ~ {minutesToTime(parseInt(editHour)*60+parseInt(editMinute)+editDuration)}
                 </Text>
               )}
@@ -433,64 +434,64 @@ export default function LessonDetailScreen() {
 
 const styles = StyleSheet.create({
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  container: { flex: 1, backgroundColor: '#f5f7fa' },
+  container: { flex: 1, backgroundColor: Colors.background },
   infoCard: { backgroundColor: '#fff', margin: 16, borderRadius: 12, padding: 16 },
-  lessonTitle: { fontSize: 20, fontWeight: '800', color: '#1a1a1a', marginBottom: 12 },
+  lessonTitle: { fontSize: 20, fontWeight: '800', color: Colors.foreground, marginBottom: 12 },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  infoText: { fontSize: 14, color: '#555' },
+  infoText: { fontSize: 14, color: Colors.mutedFg },
   deleteBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, alignSelf: 'flex-start' },
-  deleteBtnText: { color: '#ef4444', fontSize: 13, fontWeight: '600' },
+  deleteBtnText: { color: Colors.destructive, fontSize: 13, fontWeight: '600' },
   noticeCard: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: '#eff6ff', marginHorizontal: 16, borderRadius: 10,
+    backgroundColor: Colors.primaryLight, marginHorizontal: 16, borderRadius: 10,
     padding: 10, marginBottom: 8, borderWidth: 1, borderColor: '#bfdbfe',
   },
-  noticeText: { fontSize: 12, color: '#2563eb', flex: 1 },
+  noticeText: { fontSize: 12, color: Colors.info, flex: 1 },
   section: { backgroundColor: '#fff', marginHorizontal: 16, borderRadius: 12, padding: 16, marginBottom: 12 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
   sectionMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  sectionCount: { fontSize: 13, color: '#888', fontWeight: '600' },
-  deductCount: { fontSize: 13, color: '#ef4444', fontWeight: '600' },
-  emptyText: { fontSize: 14, color: '#aaa', textAlign: 'center', paddingVertical: 20 },
+  sectionCount: { fontSize: 13, color: Colors.mutedFg, fontWeight: '600' },
+  deductCount: { fontSize: 13, color: Colors.destructive, fontWeight: '600' },
+  emptyText: { fontSize: 14, color: Colors.placeholder, textAlign: 'center', paddingVertical: 20 },
   attendanceCard: {
     flexDirection: 'row', alignItems: 'center', paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: '#f0f0f0', gap: 8,
+    borderBottomWidth: 1, borderBottomColor: Colors.mutedBg, gap: 8,
   },
   avatar: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
   avatarText: { fontSize: 16, fontWeight: '700' },
   memberInfo: { flex: 1 },
-  memberName: { fontSize: 15, fontWeight: '700', color: '#1a1a1a', marginBottom: 3 },
+  memberName: { fontSize: 15, fontWeight: '700', color: Colors.foreground, marginBottom: 3 },
   creditRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  creditText: { fontSize: 12, color: '#888' },
+  creditText: { fontSize: 12, color: Colors.mutedFg },
   deductBadge: { backgroundColor: '#fee2e2', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 10 },
-  deductBadgeText: { fontSize: 10, color: '#ef4444', fontWeight: '700' },
+  deductBadgeText: { fontSize: 10, color: Colors.destructive, fontWeight: '700' },
   statusButtons: { flexDirection: 'row', gap: 4 },
-  statusBtn: { paddingHorizontal: 7, paddingVertical: 4, borderRadius: 6, backgroundColor: '#f0f0f0' },
-  statusBtnText: { fontSize: 11, fontWeight: '700', color: '#888' },
+  statusBtn: { paddingHorizontal: 7, paddingVertical: 4, borderRadius: 6, backgroundColor: Colors.mutedBg },
+  statusBtnText: { fontSize: 11, fontWeight: '700', color: Colors.mutedFg },
   summaryCard: {
     backgroundColor: '#fff', marginHorizontal: 16, borderRadius: 12, padding: 16,
     flexDirection: 'row', justifyContent: 'space-around', marginBottom: 12,
   },
   summaryItem: { alignItems: 'center', gap: 4 },
   summaryDot: { width: 10, height: 10, borderRadius: 5 },
-  summaryLabel: { fontSize: 12, color: '#888' },
-  summaryCount: { fontSize: 18, fontWeight: '800', color: '#1a1a1a' },
-  editBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#f0fdf4', borderRadius: 8, borderWidth: 1, borderColor: '#d1fae5' },
-  editBtnText: { fontSize: 13, color: '#1a7a4a', fontWeight: '600' },
+  summaryLabel: { fontSize: 12, color: Colors.mutedFg },
+  summaryCount: { fontSize: 18, fontWeight: '800', color: Colors.foreground },
+  editBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: Colors.primaryLight, borderRadius: 8, borderWidth: 1, borderColor: Colors.successLight },
+  editBtnText: { fontSize: 13, color: Colors.primary, fontWeight: '600' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#eee' },
-  modalTitle: { fontSize: 17, fontWeight: '700', color: '#1a1a1a' },
-  modalLabel: { fontSize: 13, fontWeight: '600', color: '#555', marginBottom: 8 },
-  spinnerBtn: { flex: 1, backgroundColor: '#f5f5f5', borderRadius: 10, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#eee' },
-  spinnerLabel: { fontSize: 11, color: '#aaa', fontWeight: '600', marginBottom: 2 },
-  spinnerValue: { fontSize: 22, fontWeight: '800', color: '#1a7a4a' },
-  colonText: { fontSize: 24, fontWeight: '800', color: '#1a1a1a', paddingHorizontal: 4 },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: Colors.foreground },
+  modalLabel: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg, marginBottom: 8 },
+  spinnerBtn: { flex: 1, backgroundColor: Colors.mutedBg, borderRadius: 10, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: Colors.border },
+  spinnerLabel: { fontSize: 11, color: Colors.placeholder, fontWeight: '600', marginBottom: 2 },
+  spinnerValue: { fontSize: 22, fontWeight: '800', color: Colors.primary },
+  colonText: { fontSize: 24, fontWeight: '800', color: Colors.foreground, paddingHorizontal: 4 },
   pickerItem: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8, marginHorizontal: 2, alignItems: 'center' },
-  pickerItemActive: { backgroundColor: '#1a7a4a' },
-  pickerText: { fontSize: 16, fontWeight: '600', color: '#555' },
+  pickerItemActive: { backgroundColor: Colors.primary },
+  pickerText: { fontSize: 16, fontWeight: '600', color: Colors.mutedFg },
   pickerTextActive: { color: '#fff', fontWeight: '800' },
-  saveBtn: { backgroundColor: '#1a7a4a', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  saveBtn: { backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

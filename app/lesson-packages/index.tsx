@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import { Colors } from '../../lib/theme';
 
 const DAYS_KR = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -78,19 +79,19 @@ export default function LessonPackagesScreen() {
 
         <View style={styles.cardMeta}>
           <View style={styles.metaItem}>
-            <Ionicons name="calendar-outline" size={13} color="#888" />
+            <Ionicons name="calendar-outline" size={13} color={Colors.mutedFg} />
             <Text style={styles.metaText}>{daysLabel}</Text>
           </View>
           <View style={styles.metaItem}>
-            <Ionicons name="time-outline" size={13} color="#888" />
+            <Ionicons name="time-outline" size={13} color={Colors.mutedFg} />
             <Text style={styles.metaText}>{item.duration_minutes}분</Text>
           </View>
           <View style={styles.metaItem}>
-            <Ionicons name="layers-outline" size={13} color="#888" />
+            <Ionicons name="layers-outline" size={13} color={Colors.mutedFg} />
             <Text style={styles.metaText}>{item.total_credits}회</Text>
           </View>
           <View style={styles.metaItem}>
-            <Ionicons name="card-outline" size={13} color="#888" />
+            <Ionicons name="card-outline" size={13} color={Colors.mutedFg} />
             <Text style={styles.metaText}>{item.price.toLocaleString()}원</Text>
           </View>
         </View>
@@ -104,11 +105,11 @@ export default function LessonPackagesScreen() {
             style={styles.editBtn}
             onPress={() => router.push({ pathname: '/lesson-packages/new', params: { editId: item.id } })}
           >
-            <Ionicons name="pencil-outline" size={14} color="#1a7a4a" />
+            <Ionicons name="pencil-outline" size={14} color={Colors.primary} />
             <Text style={styles.editBtnText}>수정</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item)}>
-            <Ionicons name="trash-outline" size={14} color="#dc2626" />
+            <Ionicons name="trash-outline" size={14} color={Colors.destructive} />
             <Text style={styles.deleteBtnText}>삭제</Text>
           </TouchableOpacity>
         </View>
@@ -124,14 +125,14 @@ export default function LessonPackagesScreen() {
         renderItem={renderItem}
         contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadPackages(); setRefreshing(false); }} tintColor="#1a7a4a" />
+          <RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadPackages(); setRefreshing(false); }} tintColor={Colors.primary} />
         }
         ListEmptyComponent={
           loading ? (
-            <ActivityIndicator color="#1a7a4a" style={{ marginTop: 40 }} />
+            <ActivityIndicator color={Colors.primary} style={{ marginTop: 40 }} />
           ) : (
             <View style={styles.empty}>
-              <Ionicons name="receipt-outline" size={48} color="#ccc" />
+              <Ionicons name="receipt-outline" size={48} color={Colors.iconMuted} />
               <Text style={styles.emptyTitle}>등록된 레슨권이 없어요</Text>
               <Text style={styles.emptyDesc}>아래 + 버튼으로 레슨권을 등록해보세요</Text>
             </View>
@@ -147,7 +148,7 @@ export default function LessonPackagesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f7fa' },
+  container: { flex: 1, backgroundColor: Colors.background },
   card: {
     backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12,
     borderLeftWidth: 4,
@@ -155,25 +156,25 @@ const styles = StyleSheet.create({
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   colorDot: { width: 10, height: 10, borderRadius: 5 },
-  cardTitle: { fontSize: 16, fontWeight: '800', color: '#1a1a1a', flex: 1 },
-  inactiveBadge: { backgroundColor: '#f0f0f0', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
-  inactiveBadgeText: { fontSize: 11, color: '#888' },
+  cardTitle: { fontSize: 16, fontWeight: '800', color: Colors.foreground, flex: 1 },
+  inactiveBadge: { backgroundColor: Colors.mutedBg, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
+  inactiveBadgeText: { fontSize: 11, color: Colors.mutedFg },
   cardMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 8 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metaText: { fontSize: 13, color: '#555' },
-  cardNotes: { fontSize: 12, color: '#aaa', marginBottom: 8 },
-  cardActions: { flexDirection: 'row', gap: 8, borderTopWidth: 1, borderTopColor: '#f0f0f0', paddingTop: 10, marginTop: 4 },
-  editBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, backgroundColor: '#f0fdf4' },
-  editBtnText: { fontSize: 13, color: '#1a7a4a', fontWeight: '600' },
-  deleteBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, backgroundColor: '#fef2f2' },
-  deleteBtnText: { fontSize: 13, color: '#dc2626', fontWeight: '600' },
+  metaText: { fontSize: 13, color: Colors.mutedFg },
+  cardNotes: { fontSize: 12, color: Colors.placeholder, marginBottom: 8 },
+  cardActions: { flexDirection: 'row', gap: 8, borderTopWidth: 1, borderTopColor: Colors.mutedBg, paddingTop: 10, marginTop: 4 },
+  editBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, backgroundColor: Colors.primaryLight },
+  editBtnText: { fontSize: 13, color: Colors.primary, fontWeight: '600' },
+  deleteBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, backgroundColor: Colors.destructiveLight },
+  deleteBtnText: { fontSize: 13, color: Colors.destructive, fontWeight: '600' },
   empty: { alignItems: 'center', paddingTop: 60, gap: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#888' },
-  emptyDesc: { fontSize: 13, color: '#aaa' },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: Colors.mutedFg },
+  emptyDesc: { fontSize: 13, color: Colors.placeholder },
   fab: {
     position: 'absolute', bottom: 24, right: 20,
     width: 56, height: 56, borderRadius: 28,
-    backgroundColor: '#1a7a4a', justifyContent: 'center', alignItems: 'center',
+    backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center',
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 6,
   },
 });

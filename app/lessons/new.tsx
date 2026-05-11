@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Member } from '../../types';
+import { Colors } from '../../lib/theme';
 
 export default function NewLessonScreen() {
   const router = useRouter();
@@ -119,7 +120,7 @@ export default function NewLessonScreen() {
           <Text style={styles.sectionTitle}>참여 회원 ({selectedMembers.size}명)</Text>
           {/* 검색 */}
           <View style={styles.searchRow}>
-            <Ionicons name="search-outline" size={16} color="#aaa" style={{ marginRight: 6 }} />
+            <Ionicons name="search-outline" size={16} color={Colors.placeholder} style={{ marginRight: 6 }} />
             <TextInput
               style={styles.searchInput}
               placeholder="회원 검색..."
@@ -137,14 +138,14 @@ export default function NewLessonScreen() {
                 const selected = selectedMembers.has(m.id);
                 return (
                   <TouchableOpacity key={m.id} style={[styles.memberRow, selected && styles.memberRowSelected]} onPress={() => toggleMember(m.id)}>
-                    <View style={[styles.memberAvatar, selected && { backgroundColor: '#1a7a4a' }]}>
+                    <View style={[styles.memberAvatar, selected && { backgroundColor: Colors.primary }]}>
                       <Text style={[styles.memberAvatarText, selected && { color: '#fff' }]}>{m.name.slice(0, 1)}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.memberName}>{m.name}</Text>
                       <Text style={styles.memberLevel}>{m.level}</Text>
                     </View>
-                    <Ionicons name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={selected ? '#1a7a4a' : '#ccc'} />
+                    <Ionicons name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={selected ? Colors.primary : Colors.iconMuted} />
                   </TouchableOpacity>
                 );
               })}
@@ -160,41 +161,41 @@ export default function NewLessonScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f7fa' },
+  container: { flex: 1, backgroundColor: Colors.background },
   section: { backgroundColor: '#fff', borderRadius: 12, margin: 16, marginBottom: 0, padding: 16 },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#888', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
-  label: { fontSize: 13, fontWeight: '600', color: '#555', marginBottom: 6 },
+  sectionTitle: { fontSize: 14, fontWeight: '700', color: Colors.mutedFg, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
+  label: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg, marginBottom: 6 },
   input: {
-    backgroundColor: '#f5f5f5', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10,
-    fontSize: 15, color: '#1a1a1a', marginBottom: 12, borderWidth: 1, borderColor: '#eee',
+    backgroundColor: Colors.mutedBg, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10,
+    fontSize: 15, color: Colors.foreground, marginBottom: 12, borderWidth: 1, borderColor: Colors.border,
   },
   textArea: { minHeight: 80, paddingTop: 10 },
   timeRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   timeSep: { paddingTop: 30 },
-  timeSepText: { fontSize: 18, color: '#888' },
-  noMember: { fontSize: 14, color: '#aaa', textAlign: 'center', paddingVertical: 20 },
+  timeSepText: { fontSize: 18, color: Colors.mutedFg },
+  noMember: { fontSize: 14, color: Colors.placeholder, textAlign: 'center', paddingVertical: 20 },
   searchRow: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#f5f5f5', borderRadius: 10, paddingHorizontal: 10,
-    marginBottom: 8, borderWidth: 1, borderColor: '#eee',
+    backgroundColor: Colors.mutedBg, borderRadius: 10, paddingHorizontal: 10,
+    marginBottom: 8, borderWidth: 1, borderColor: Colors.border,
   },
-  searchInput: { flex: 1, paddingVertical: 9, fontSize: 14, color: '#1a1a1a' },
+  searchInput: { flex: 1, paddingVertical: 9, fontSize: 14, color: Colors.foreground },
   memberList: { maxHeight: 220 },  // 높이 고정 (~4명 보임), 넘치면 스크롤
   memberRow: {
     flexDirection: 'row', alignItems: 'center', paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: '#f0f0f0', borderRadius: 8,
+    borderBottomWidth: 1, borderBottomColor: Colors.mutedBg, borderRadius: 8,
     paddingHorizontal: 4,
   },
-  memberRowSelected: { backgroundColor: '#f0fdf4' },
+  memberRowSelected: { backgroundColor: Colors.primaryLight },
   memberAvatar: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: '#e5e7eb',
+    width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.border,
     justifyContent: 'center', alignItems: 'center', marginRight: 12,
   },
-  memberAvatarText: { fontSize: 15, fontWeight: '700', color: '#555' },
-  memberName: { fontSize: 15, fontWeight: '600', color: '#1a1a1a' },
-  memberLevel: { fontSize: 12, color: '#888', marginTop: 2 },
+  memberAvatarText: { fontSize: 15, fontWeight: '700', color: Colors.mutedFg },
+  memberName: { fontSize: 15, fontWeight: '600', color: Colors.foreground },
+  memberLevel: { fontSize: 12, color: Colors.mutedFg, marginTop: 2 },
   saveBtn: {
-    backgroundColor: '#1a7a4a', margin: 16, borderRadius: 12,
+    backgroundColor: Colors.primary, margin: 16, borderRadius: 12,
     paddingVertical: 14, alignItems: 'center',
   },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },

@@ -8,9 +8,10 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Member, MemberLevel } from '../../types';
+import { Colors } from '../../lib/theme';
 
 const LEVEL_COLORS: Record<MemberLevel, string> = {
-  '입문': '#94a3b8', '초급': '#22c55e', '중급': '#3b82f6', '고급': '#f59e0b', '선수': '#ef4444',
+  '입문': Colors.level.입문, '초급': Colors.success, '중급': Colors.info, '고급': Colors.warning, '선수': Colors.destructive,
 };
 
 export default function MembersScreen() {
@@ -56,20 +57,20 @@ export default function MembersScreen() {
     const initials = item.name.slice(0, 1);
     return (
       <TouchableOpacity style={styles.card} onPress={() => router.push(`/members/${item.id}`)}>
-        <View style={[styles.avatar, { backgroundColor: LEVEL_COLORS[item.level as MemberLevel] ?? '#94a3b8' }]}>
+        <View style={[styles.avatar, { backgroundColor: LEVEL_COLORS[item.level as MemberLevel] ?? Colors.level.입문 }]}>
           <Text style={styles.avatarText}>{initials}</Text>
         </View>
         <View style={styles.cardInfo}>
           <View style={styles.cardTop}>
             <Text style={styles.name}>{item.name}</Text>
-            <View style={[styles.levelBadge, { backgroundColor: (LEVEL_COLORS[item.level as MemberLevel] ?? '#94a3b8') + '22' }]}>
-              <Text style={[styles.levelText, { color: LEVEL_COLORS[item.level as MemberLevel] ?? '#94a3b8' }]}>{item.level}</Text>
+            <View style={[styles.levelBadge, { backgroundColor: (LEVEL_COLORS[item.level as MemberLevel] ?? Colors.level.입문) + '22' }]}>
+              <Text style={[styles.levelText, { color: LEVEL_COLORS[item.level as MemberLevel] ?? Colors.level.입문 }]}>{item.level}</Text>
             </View>
           </View>
           <Text style={styles.phone}>{item.phone}</Text>
           {!item.is_active && <Text style={styles.inactive}>비활성</Text>}
         </View>
-        <Ionicons name="chevron-forward" size={16} color="#ccc" />
+        <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
       </TouchableOpacity>
     );
   }
@@ -95,24 +96,24 @@ export default function MembersScreen() {
         </View>
         <View style={styles.packageBannerRight}>
           <Text style={styles.packageBannerAction}>관리하기</Text>
-          <Ionicons name="chevron-forward" size={16} color="#1a7a4a" />
+          <Ionicons name="chevron-forward" size={16} color={Colors.primary} />
         </View>
       </TouchableOpacity>
 
       {/* Search */}
       <View style={styles.searchRow}>
         <View style={styles.searchBox}>
-          <Ionicons name="search" size={16} color="#888" style={{ marginRight: 6 }} />
+          <Ionicons name="search" size={16} color={Colors.mutedFg} style={{ marginRight: 6 }} />
           <TextInput
             style={styles.searchInput}
             placeholder="이름 또는 전화번호 검색"
-            placeholderTextColor="#bbb"
+            placeholderTextColor={Colors.placeholder}
             value={search}
             onChangeText={setSearch}
           />
           {search.length > 0 && (
             <TouchableOpacity onPress={() => setSearch('')}>
-              <Ionicons name="close-circle" size={16} color="#bbb" />
+              <Ionicons name="close-circle" size={16} color={Colors.placeholder} />
             </TouchableOpacity>
           )}
         </View>
@@ -135,12 +136,12 @@ export default function MembersScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={async () => { setRefreshing(true); await loadMembers(); setRefreshing(false); }}
-            tintColor="#1a7a4a"
+            tintColor={Colors.primary}
           />
         }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Ionicons name="people-outline" size={48} color="#ccc" />
+            <Ionicons name="people-outline" size={48} color={Colors.iconMuted} />
             <Text style={styles.emptyText}>회원이 없습니다</Text>
             <Text style={styles.emptySubText}>아래 + 버튼을 눌러 회원을 등록하세요</Text>
           </View>
@@ -156,7 +157,7 @@ export default function MembersScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f7fa' },
+  container: { flex: 1, backgroundColor: Colors.background },
 
   // 레슨권 배너
   packageBanner: {
@@ -164,37 +165,37 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     marginHorizontal: 16, marginTop: 14, marginBottom: 4,
     borderRadius: 14, padding: 14,
-    borderWidth: 1.5, borderColor: '#d1fae5',
-    shadowColor: '#1a7a4a', shadowOpacity: 0.08, shadowRadius: 8,
+    borderWidth: 1.5, borderColor: Colors.successLight,
+    shadowColor: Colors.primary, shadowOpacity: 0.08, shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 }, elevation: 2,
   },
   packageBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
   packageIconBox: {
     width: 42, height: 42, borderRadius: 12,
-    backgroundColor: '#1a7a4a',
+    backgroundColor: Colors.primary,
     justifyContent: 'center', alignItems: 'center',
   },
-  packageBannerTitle: { fontSize: 15, fontWeight: '800', color: '#1a1a1a', marginBottom: 2 },
-  packageBannerSub: { fontSize: 12, color: '#888' },
+  packageBannerTitle: { fontSize: 15, fontWeight: '800', color: Colors.foreground, marginBottom: 2 },
+  packageBannerSub: { fontSize: 12, color: Colors.mutedFg },
   packageBannerRight: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  packageBannerAction: { fontSize: 13, fontWeight: '700', color: '#1a7a4a' },
+  packageBannerAction: { fontSize: 13, fontWeight: '700', color: Colors.primary },
 
   // Search
   searchRow: { flexDirection: 'row', padding: 16, paddingBottom: 8, gap: 8 },
   searchBox: {
     flex: 1, flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8,
-    borderWidth: 1, borderColor: '#eee',
+    borderWidth: 1, borderColor: Colors.border,
   },
-  searchInput: { flex: 1, fontSize: 14, color: '#1a1a1a' },
+  searchInput: { flex: 1, fontSize: 14, color: Colors.foreground },
   filterBtn: {
     backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 14,
-    justifyContent: 'center', borderWidth: 1, borderColor: '#eee',
+    justifyContent: 'center', borderWidth: 1, borderColor: Colors.border,
   },
-  filterActive: { backgroundColor: '#1a7a4a', borderColor: '#1a7a4a' },
-  filterText: { fontSize: 13, color: '#888', fontWeight: '600' },
+  filterActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  filterText: { fontSize: 13, color: Colors.mutedFg, fontWeight: '600' },
   filterTextActive: { color: '#fff' },
-  count: { fontSize: 12, color: '#888', paddingHorizontal: 16, marginBottom: 8 },
+  count: { fontSize: 12, color: Colors.mutedFg, paddingHorizontal: 16, marginBottom: 8 },
 
   // Member card
   card: {
@@ -206,22 +207,22 @@ const styles = StyleSheet.create({
   avatarText: { fontSize: 18, fontWeight: '700', color: '#fff' },
   cardInfo: { flex: 1 },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  name: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
+  name: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
   levelBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 },
   levelText: { fontSize: 11, fontWeight: '700' },
-  phone: { fontSize: 13, color: '#888' },
-  inactive: { fontSize: 11, color: '#dc2626', marginTop: 2 },
+  phone: { fontSize: 13, color: Colors.mutedFg },
+  inactive: { fontSize: 11, color: Colors.destructive, marginTop: 2 },
 
   // Empty
   empty: { alignItems: 'center', padding: 40 },
-  emptyText: { fontSize: 16, color: '#aaa', fontWeight: '600', marginTop: 12 },
-  emptySubText: { fontSize: 13, color: '#ccc', marginTop: 4 },
+  emptyText: { fontSize: 16, color: Colors.placeholder, fontWeight: '600', marginTop: 12 },
+  emptySubText: { fontSize: 13, color: Colors.iconMuted, marginTop: 4 },
 
   // FAB
   fab: {
     position: 'absolute', bottom: 24, right: 20,
     width: 56, height: 56, borderRadius: 28,
-    backgroundColor: '#1a7a4a', justifyContent: 'center', alignItems: 'center',
+    backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center',
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 6,
   },
 });

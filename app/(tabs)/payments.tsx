@@ -7,9 +7,10 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Payment, PaymentStatus } from '../../types';
+import { Colors, Radius, Shadow } from '../../lib/theme';
 
 const STATUS_COLOR: Record<PaymentStatus, string> = {
-  '납부완료': '#22c55e', '미납': '#ef4444', '부분납부': '#f59e0b',
+  '납부완료': Colors.success, '미납': Colors.destructive, '부분납부': Colors.warning,
 };
 
 type Filter = 'all' | '미납' | '부분납부' | '납부완료';
@@ -43,14 +44,14 @@ function getDDay(dueDateStr: string): string {
 }
 
 function getDDayColor(dueDateStr: string, status: PaymentStatus): string {
-  if (status === '납부완료') return '#22c55e';
+  if (status === '납부완료') return Colors.success;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const due = new Date(dueDateStr + 'T00:00:00');
   const diff = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-  if (diff < 0) return '#ef4444';
-  if (diff <= 3) return '#f59e0b';
-  return '#888';
+  if (diff < 0) return Colors.destructive;
+  if (diff <= 3) return Colors.warning;
+  return Colors.mutedFg;
 }
 
 const METHOD_ICONS: Record<PaymentMethod, string> = {
@@ -273,19 +274,19 @@ export default function PaymentsScreen() {
           {item.status !== '납부완료' && (
             <View>
               <Text style={styles.amountLabel}>미납금액</Text>
-              <Text style={[styles.amount, { color: '#ef4444' }]}>{remaining.toLocaleString()}원</Text>
+              <Text style={[styles.amount, { color: Colors.destructive }]}>{remaining.toLocaleString()}원</Text>
             </View>
           )}
           {(item as any).payment_method && (
             <View>
               <Text style={styles.amountLabel}>납부방법</Text>
-              <Text style={[styles.amount, { color: '#22c55e', fontSize: 13 }]}>{(item as any).payment_method}</Text>
+              <Text style={[styles.amount, { color: Colors.success, fontSize: 13 }]}>{(item as any).payment_method}</Text>
             </View>
           )}
         </View>
         <View style={styles.cardFooter}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Ionicons name="calendar-outline" size={12} color="#888" />
+            <Ionicons name="calendar-outline" size={12} color={Colors.mutedFg} />
             <Text style={styles.dueDate}>납부기한: {item.due_date}</Text>
           </View>
           {item.status !== '납부완료' && (
@@ -329,7 +330,7 @@ export default function PaymentsScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing}
             onRefresh={async () => { setRefreshing(true); await loadData(); setRefreshing(false); }}
-            tintColor="#1a7a4a" />
+            tintColor={Colors.primary} />
         }
         ListHeaderComponent={
           <>
@@ -337,7 +338,7 @@ export default function PaymentsScreen() {
             {actionMembers.length > 0 && (
               <View style={styles.alertSection}>
                 <View style={styles.alertHeader}>
-                  <Ionicons name="alert-circle" size={16} color="#dc2626" />
+                  <Ionicons name="alert-circle" size={16} color={Colors.destructive} />
                   <Text style={styles.alertTitle}>납부 필요 회원</Text>
                   <View style={styles.alertCount}>
                     <Text style={styles.alertCountText}>{actionMembers.length}명</Text>
@@ -345,7 +346,7 @@ export default function PaymentsScreen() {
                 </View>
                 {actionMembers.map(m => {
                   const isUnpaid = m.type === 'unpaid';
-                  const dotColor = isUnpaid ? '#ef4444' : '#f59e0b';
+                  const dotColor = isUnpaid ? Colors.destructive : Colors.warning;
                   const amount = isUnpaid ? m.unpaidAmount : m.packagePrice;
                   const subLabel = isUnpaid
                     ? `미납 ${(m.unpaidAmount ?? 0).toLocaleString()}원${m.dueDate ? ` · 기한 ${m.dueDate}` : ''}`
@@ -358,7 +359,7 @@ export default function PaymentsScreen() {
                         <Text style={styles.alertSub}>{subLabel}</Text>
                       </View>
                       <TouchableOpacity
-                        style={[styles.alertPayBtn, (!amount && !isUnpaid) && { backgroundColor: '#aaa' }]}
+                        style={[styles.alertPayBtn, (!amount && !isUnpaid) && { backgroundColor: Colors.placeholder }]}
                         onPress={() => openPayModal(m)}
                       >
                         <Ionicons name="checkmark-circle-outline" size={14} color="#fff" />
@@ -388,7 +389,7 @@ export default function PaymentsScreen() {
         }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Ionicons name="card-outline" size={48} color="#ccc" />
+            <Ionicons name="card-outline" size={48} color={Colors.iconMuted} />
             <Text style={styles.emptyText}>결제 내역이 없습니다</Text>
           </View>
         }
@@ -406,20 +407,20 @@ export default function PaymentsScreen() {
               <>
                 <View style={styles.modalInfoBox}>
                   <View style={styles.modalRow}>
-                    <Ionicons name="person-outline" size={16} color="#888" />
+                    <Ionicons name="person-outline" size={16} color={Colors.mutedFg} />
                     <Text style={styles.modalLabel}>회원</Text>
                     <Text style={styles.modalValue}>{payTarget.name}</Text>
                   </View>
                   <View style={styles.modalRow}>
-                    <Ionicons name="cash-outline" size={16} color="#888" />
+                    <Ionicons name="cash-outline" size={16} color={Colors.mutedFg} />
                     <Text style={styles.modalLabel}>납부금액</Text>
-                    <Text style={[styles.modalValue, { color: '#1a7a4a', fontWeight: '800' }]}>
+                    <Text style={[styles.modalValue, { color: Colors.primary, fontWeight: '800' }]}>
                       {payAmount.toLocaleString()}원
                     </Text>
                   </View>
                   {payTarget.type === 'low_credit' && payTarget.packageTitle && (
                     <View style={styles.modalRow}>
-                      <Ionicons name="layers-outline" size={16} color="#888" />
+                      <Ionicons name="layers-outline" size={16} color={Colors.mutedFg} />
                       <Text style={styles.modalLabel}>레슨권</Text>
                       <Text style={styles.modalValue}>{payTarget.packageTitle}</Text>
                     </View>
@@ -437,7 +438,7 @@ export default function PaymentsScreen() {
                       <Ionicons
                         name={METHOD_ICONS[m] as any}
                         size={22}
-                        color={selectedMethod === m ? '#fff' : '#555'}
+                        color={selectedMethod === m ? '#fff' : Colors.mutedFg}
                       />
                       <Text style={[styles.methodBtnText, selectedMethod === m && styles.methodBtnTextActive]}>
                         {m}
@@ -465,85 +466,85 @@ export default function PaymentsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f7fa' },
+  container: { flex: 1, backgroundColor: Colors.background },
   summaryBanner: {
-    backgroundColor: '#1a7a4a', flexDirection: 'row',
+    backgroundColor: Colors.navy, flexDirection: 'row',
     paddingHorizontal: 20, paddingVertical: 18, alignItems: 'center',
   },
   summaryDivider: { width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.25)', marginHorizontal: 16 },
   summaryLabel: { fontSize: 12, color: 'rgba(255,255,255,0.75)', marginBottom: 4 },
   summaryAmount: { fontSize: 20, fontWeight: '800', color: '#fff' },
-  summaryPaid: { fontSize: 20, fontWeight: '800', color: '#a7f3d0' },
+  summaryPaid: { fontSize: 20, fontWeight: '800', color: Colors.mint },
   // 납부 필요 섹션
   alertSection: {
     backgroundColor: '#fff', borderRadius: 12, padding: 14,
-    marginBottom: 10, borderWidth: 1.5, borderColor: '#fecaca',
+    marginBottom: 10, borderWidth: 1.5, borderColor: Colors.destructiveBorder,
   },
   alertHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
-  alertTitle: { flex: 1, fontSize: 14, fontWeight: '700', color: '#dc2626' },
-  alertCount: { backgroundColor: '#dc2626', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
+  alertTitle: { flex: 1, fontSize: 14, fontWeight: '700', color: Colors.destructive },
+  alertCount: { backgroundColor: Colors.destructive, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
   alertCountText: { fontSize: 12, color: '#fff', fontWeight: '700' },
   alertRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#fef2f2',
+    paddingVertical: 8, borderTopWidth: 1, borderTopColor: Colors.destructiveLight,
   },
   alertDot: { width: 8, height: 8, borderRadius: 4 },
-  alertName: { fontSize: 14, fontWeight: '700', color: '#1a1a1a' },
-  alertSub: { fontSize: 12, color: '#666', marginTop: 2 },
+  alertName: { fontSize: 14, fontWeight: '700', color: Colors.foreground },
+  alertSub: { fontSize: 12, color: Colors.mutedFg, marginTop: 2 },
   alertPayBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: '#1a7a4a', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
+    backgroundColor: Colors.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
   },
   alertPayBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   // Filters
   filterRow: { flexDirection: 'row', gap: 8, marginBottom: 4 },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: '#f0f0f0' },
-  filterChipActive: { backgroundColor: '#1a7a4a' },
-  filterChipText: { fontSize: 13, color: '#888', fontWeight: '600' },
+  filterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: Colors.mutedBg },
+  filterChipActive: { backgroundColor: Colors.primary },
+  filterChipText: { fontSize: 13, color: Colors.mutedFg, fontWeight: '600' },
   filterChipTextActive: { color: '#fff' },
-  count: { fontSize: 12, color: '#888', marginBottom: 8 },
+  count: { fontSize: 12, color: Colors.mutedFg, marginBottom: 8 },
   // Card
   card: {
     backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 10,
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
   },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
-  memberName: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
-  memberPhone: { fontSize: 12, color: '#888', marginTop: 2 },
+  memberName: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
+  memberPhone: { fontSize: 12, color: Colors.mutedFg, marginTop: 2 },
   cardHeaderRight: { alignItems: 'flex-end', gap: 4 },
   ddayBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   ddayText: { fontSize: 11, fontWeight: '800' },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   statusText: { fontSize: 12, fontWeight: '700' },
-  description: { fontSize: 13, color: '#555', marginBottom: 10 },
+  description: { fontSize: 13, color: Colors.mutedFg, marginBottom: 10 },
   amountRow: { flexDirection: 'row', gap: 20, marginBottom: 10 },
-  amountLabel: { fontSize: 11, color: '#888', marginBottom: 2 },
-  amount: { fontSize: 15, fontWeight: '700', color: '#1a1a1a' },
+  amountLabel: { fontSize: 11, color: Colors.mutedFg, marginBottom: 2 },
+  amount: { fontSize: 15, fontWeight: '700', color: Colors.foreground },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  dueDate: { fontSize: 12, color: '#888' },
-  paidBtn: { backgroundColor: '#1a7a4a', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8 },
+  dueDate: { fontSize: 12, color: Colors.mutedFg },
+  paidBtn: { backgroundColor: Colors.primary, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8 },
   paidBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   empty: { alignItems: 'center', padding: 60 },
-  emptyText: { fontSize: 15, color: '#aaa', fontWeight: '500', marginTop: 12 },
+  emptyText: { fontSize: 15, color: Colors.placeholder, fontWeight: '500', marginTop: 12 },
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   modalSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 },
-  modalHandle: { width: 40, height: 4, backgroundColor: '#e0e0e0', borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: '#1a1a1a', textAlign: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#eee' },
-  modalInfoBox: { margin: 16, backgroundColor: '#f5f7fa', borderRadius: 12, padding: 14, gap: 10 },
+  modalHandle: { width: 40, height: 4, backgroundColor: Colors.border, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: Colors.foreground, textAlign: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  modalInfoBox: { margin: 16, backgroundColor: Colors.background, borderRadius: 12, padding: 14, gap: 10 },
   modalRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  modalLabel: { fontSize: 13, color: '#888', width: 60 },
-  modalValue: { flex: 1, fontSize: 15, color: '#1a1a1a', fontWeight: '600' },
-  methodTitle: { fontSize: 13, fontWeight: '700', color: '#555', marginHorizontal: 16, marginBottom: 10 },
+  modalLabel: { fontSize: 13, color: Colors.mutedFg, width: 60 },
+  modalValue: { flex: 1, fontSize: 15, color: Colors.foreground, fontWeight: '600' },
+  methodTitle: { fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginHorizontal: 16, marginBottom: 10 },
   methodRow: { flexDirection: 'row', gap: 10, marginHorizontal: 16, marginBottom: 16 },
   methodBtn: {
     flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 12,
-    backgroundColor: '#f5f5f5', borderWidth: 2, borderColor: '#eee', gap: 6,
+    backgroundColor: Colors.mutedBg, borderWidth: 2, borderColor: Colors.border, gap: 6,
   },
-  methodBtnActive: { backgroundColor: '#1a7a4a', borderColor: '#1a7a4a' },
-  methodBtnText: { fontSize: 13, fontWeight: '700', color: '#555' },
+  methodBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  methodBtnText: { fontSize: 13, fontWeight: '700', color: Colors.mutedFg },
   methodBtnTextActive: { color: '#fff' },
-  confirmBtn: { margin: 16, marginTop: 0, backgroundColor: '#1a7a4a', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-  confirmBtnDisabled: { backgroundColor: '#ccc' },
+  confirmBtn: { margin: 16, marginTop: 0, backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  confirmBtnDisabled: { backgroundColor: Colors.iconMuted },
   confirmBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import { Colors, Radius, Shadow } from '../../lib/theme';
 
 interface Stats {
   totalMembers: number;
@@ -71,7 +72,6 @@ export default function HomeScreen() {
   }
 
   async function loadTodayCards(uid: string) {
-    // Fetch today's lessons
     const { data: lessons } = await supabase
       .from('lessons')
       .select('id, title, start_time')
@@ -86,13 +86,11 @@ export default function HomeScreen() {
 
     const lessonIds = lessons.map(l => l.id);
 
-    // Fetch lesson_members with member info
     const { data: lessonMembers } = await supabase
       .from('lesson_members')
       .select('lesson_id, member_id, member:members(id, name, level, remaining_credits)')
       .in('lesson_id', lessonIds);
 
-    // Fetch existing attendances for today's lessons
     const { data: attendances } = await supabase
       .from('attendance')
       .select('id, lesson_id, member_id, status')
@@ -123,7 +121,6 @@ export default function HomeScreen() {
       });
     }
 
-    // Sort by start_time then member name
     cards.sort((a, b) => {
       if (a.startTime < b.startTime) return -1;
       if (a.startTime > b.startTime) return 1;
@@ -172,7 +169,6 @@ export default function HomeScreen() {
       const endDate = new Date(2000, 0, 1, h, m + durationMins);
       const endTime = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}:00`;
 
-      // 같은 시간대 기존 레슨 있으면 통합, 없으면 새로 생성
       const { data: existingLesson } = await supabase
         .from('lessons')
         .select('id')
@@ -196,7 +192,6 @@ export default function HomeScreen() {
         lessonId = lesson.id;
       }
 
-      // 이미 등록된 회원이면 skip
       const { data: already } = await supabase
         .from('lesson_members')
         .select('id')
@@ -225,12 +220,10 @@ export default function HomeScreen() {
     setLoadingAttendance(key);
     try {
       if (card.attended) {
-        // Toggle off: delete attendance
         if (card.attendanceId) {
           await supabase.from('attendance').delete().eq('id', card.attendanceId);
         }
       } else {
-        // Upsert attendance
         await supabase.from('attendance').upsert({
           lesson_id: card.lessonId,
           member_id: card.memberId,
@@ -246,9 +239,7 @@ export default function HomeScreen() {
     }
   }
 
-  const LEVEL_COLOR: Record<string, string> = {
-    '입문': '#94a3b8', '초급': '#22c55e', '중급': '#2563eb', '고급': '#7c3aed', '선수': '#dc2626',
-  };
+  const LEVEL_COLOR: Record<string, string> = Colors.level;
 
   return (
     <ScrollView
@@ -257,7 +248,7 @@ export default function HomeScreen() {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={async () => { setRefreshing(true); await loadAll(); setRefreshing(false); }}
-          tintColor="#1a7a4a"
+          tintColor={Colors.primary}
         />
       }
     >
@@ -288,23 +279,23 @@ export default function HomeScreen() {
       {/* Stats Grid (2x2) */}
       <View style={styles.statsGrid}>
         <View style={styles.statsRow}>
-          <View style={[styles.statCard, { borderLeftColor: '#1a7a4a' }]}>
+          <View style={[styles.statCard, { borderLeftColor: Colors.primary }]}>
             <Text style={styles.statValue}>{stats.activeMembers}</Text>
             <Text style={styles.statLabel}>활성 회원</Text>
           </View>
-          <View style={[styles.statCard, { borderLeftColor: '#2563eb' }]}>
+          <View style={[styles.statCard, { borderLeftColor: Colors.info }]}>
             <Text style={styles.statValue}>{stats.todayLessons}</Text>
             <Text style={styles.statLabel}>오늘 레슨</Text>
           </View>
         </View>
         <View style={styles.statsRow}>
-          <View style={[styles.statCard, { borderLeftColor: '#dc2626' }]}>
-            <Text style={[styles.statValue, { color: stats.unpaidPayments > 0 ? '#dc2626' : '#1a1a1a' }]}>
+          <View style={[styles.statCard, { borderLeftColor: Colors.destructive }]}>
+            <Text style={[styles.statValue, { color: stats.unpaidPayments > 0 ? Colors.destructive : Colors.foreground }]}>
               {stats.unpaidPayments}
             </Text>
             <Text style={styles.statLabel}>미납 회원</Text>
           </View>
-          <View style={[styles.statCard, { borderLeftColor: '#7c3aed' }]}>
+          <View style={[styles.statCard, { borderLeftColor: Colors.navy }]}>
             <Text style={styles.statValue}>{stats.totalMembers}</Text>
             <Text style={styles.statLabel}>전체 회원</Text>
           </View>
@@ -314,11 +305,11 @@ export default function HomeScreen() {
       {/* Unpaid Alert */}
       {stats.unpaidAmount > 0 && (
         <TouchableOpacity style={styles.alertCard} onPress={() => router.push('/(tabs)/payments')}>
-          <Ionicons name="alert-circle" size={20} color="#dc2626" />
+          <Ionicons name="alert-circle" size={20} color={Colors.destructive} />
           <Text style={styles.alertText}>
             미납 금액 <Text style={styles.alertAmount}>{stats.unpaidAmount.toLocaleString()}원</Text>이 있습니다
           </Text>
-          <Ionicons name="chevron-forward" size={16} color="#dc2626" />
+          <Ionicons name="chevron-forward" size={16} color={Colors.destructive} />
         </TouchableOpacity>
       )}
 
@@ -326,14 +317,14 @@ export default function HomeScreen() {
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>오늘 레슨</Text>
         <TouchableOpacity onPress={() => router.push('/lessons/new')}>
-          <Ionicons name="add-circle-outline" size={22} color="#1a7a4a" />
+          <Ionicons name="add-circle-outline" size={22} color={Colors.primary} />
         </TouchableOpacity>
       </View>
 
       {todayCards.length === 0 && autoGenSuggestion.length > 0 && (
         <View style={styles.autoGenBanner}>
           <View style={styles.autoGenHeader}>
-            <Ionicons name="flash" size={18} color="#1a7a4a" />
+            <Ionicons name="flash" size={18} color={Colors.primary} />
             <Text style={styles.autoGenTitle}>오늘 고정 스케줄 회원이 있어요</Text>
           </View>
           {autoGenSuggestion.map(s => (
@@ -350,7 +341,7 @@ export default function HomeScreen() {
 
       {todayCards.length === 0 ? (
         <View style={styles.emptyCard}>
-          <Ionicons name="calendar-outline" size={40} color="#ccc" />
+          <Ionicons name="calendar-outline" size={40} color={Colors.iconMuted} />
           <Text style={styles.emptyText}>오늘 예정된 레슨이 없습니다</Text>
           <TouchableOpacity style={styles.addLessonBtn} onPress={() => router.push('/lessons/new')}>
             <Text style={styles.addLessonBtnText}>레슨 추가하기</Text>
@@ -368,44 +359,41 @@ export default function HomeScreen() {
                 onPress={() => router.push(`/members/${card.memberId}`)}
                 activeOpacity={0.85}
               >
-                {/* Left: time badge */}
                 <View style={styles.timeBadge}>
                   <Text style={styles.timeText}>{card.startTime.slice(0, 5)}</Text>
                 </View>
 
-                {/* Center: member info */}
                 <View style={styles.memberInfo}>
                   <View style={styles.memberNameRow}>
                     <Text style={styles.memberName}>{card.memberName}</Text>
-                    <View style={[styles.levelBadge, { backgroundColor: (LEVEL_COLOR[card.memberLevel] ?? '#888') + '22' }]}>
-                      <Text style={[styles.levelText, { color: LEVEL_COLOR[card.memberLevel] ?? '#888' }]}>
+                    <View style={[styles.levelBadge, { backgroundColor: (LEVEL_COLOR[card.memberLevel] ?? Colors.mutedFg) + '22' }]}>
+                      <Text style={[styles.levelText, { color: LEVEL_COLOR[card.memberLevel] ?? Colors.mutedFg }]}>
                         {card.memberLevel}
                       </Text>
                     </View>
                   </View>
                   <Text style={styles.lessonSubtitle}>{card.lessonTitle}</Text>
                   <View style={styles.creditsRow}>
-                    <Ionicons name="layers-outline" size={12} color={card.remainingCredits <= 1 ? '#dc2626' : '#888'} />
-                    <Text style={[styles.creditsText, { color: card.remainingCredits <= 1 ? '#dc2626' : '#888' }]}>
+                    <Ionicons name="layers-outline" size={12} color={card.remainingCredits <= 1 ? Colors.destructive : Colors.mutedFg} />
+                    <Text style={[styles.creditsText, { color: card.remainingCredits <= 1 ? Colors.destructive : Colors.mutedFg }]}>
                       잔여 {card.remainingCredits}회
                       {card.remainingCredits <= 1 && ' ⚠️'}
                     </Text>
                   </View>
                 </View>
 
-                {/* Right: attendance button */}
                 <TouchableOpacity
                   style={[styles.attendBtn, card.attended && styles.attendBtnActive]}
                   onPress={() => handleAttendance(card)}
                   disabled={isLoading}
                 >
                   {isLoading ? (
-                    <ActivityIndicator size="small" color={card.attended ? '#fff' : '#1a7a4a'} />
+                    <ActivityIndicator size="small" color={card.attended ? Colors.white : Colors.primary} />
                   ) : (
                     <Ionicons
                       name={card.attended ? 'checkmark-circle' : 'checkmark-circle-outline'}
                       size={32}
-                      color={card.attended ? '#fff' : '#1a7a4a'}
+                      color={card.attended ? Colors.white : Colors.primary}
                     />
                   )}
                 </TouchableOpacity>
@@ -419,10 +407,10 @@ export default function HomeScreen() {
       <Text style={[styles.sectionTitle, { marginHorizontal: 16, marginTop: 8 }]}>빠른 실행</Text>
       <View style={styles.quickGrid}>
         {[
-          { label: '회원 등록', icon: 'person-add', color: '#1a7a4a', onPress: () => router.push('/members/new') },
-          { label: '레슨 추가', icon: 'calendar-outline', color: '#2563eb', onPress: () => router.push('/lessons/new') },
-          { label: '결제 현황', icon: 'card-outline', color: '#dc2626', onPress: () => router.push('/(tabs)/payments') },
-          { label: '회원 목록', icon: 'people-outline', color: '#7c3aed', onPress: () => router.push('/(tabs)/members') },
+          { label: '회원 등록', icon: 'person-add', color: Colors.primary, onPress: () => router.push('/members/new') },
+          { label: '레슨 추가', icon: 'calendar-outline', color: Colors.info, onPress: () => router.push('/lessons/new') },
+          { label: '결제 현황', icon: 'card-outline', color: Colors.destructive, onPress: () => router.push('/(tabs)/payments') },
+          { label: '회원 목록', icon: 'people-outline', color: Colors.navy, onPress: () => router.push('/(tabs)/members') },
         ].map((action, i) => (
           <TouchableOpacity
             key={i}
@@ -439,121 +427,113 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f7fa' },
+  container: { flex: 1, backgroundColor: Colors.background },
 
-  // Header
   headerCard: {
-    backgroundColor: '#1a7a4a', padding: 20, paddingTop: 60,
-    borderBottomLeftRadius: 24, borderBottomRightRadius: 24, marginBottom: 16,
+    backgroundColor: Colors.navy, padding: 20, paddingTop: 60,
+    borderBottomLeftRadius: Radius.xl, borderBottomRightRadius: Radius.xl, marginBottom: 16,
   },
   headerTop: {
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'flex-start', marginBottom: 12,
   },
-  greeting: { fontSize: 22, fontWeight: '700', color: '#fff' },
+  greeting: { fontSize: 22, fontWeight: '700', color: Colors.white },
   email: { fontSize: 13, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
   headerActions: { flexDirection: 'row', gap: 8 },
   headerIconBtn: { padding: 4 },
   dateText: { fontSize: 13, color: 'rgba(255,255,255,0.8)' },
 
-  // Stats
-  statsGrid: {
-    paddingHorizontal: 16, gap: 8, marginBottom: 12,
-  },
-  statsRow: {
-    flexDirection: 'row', gap: 8, marginBottom: 0,
-  },
+  statsGrid: { paddingHorizontal: 16, gap: 8, marginBottom: 12 },
+  statsRow: { flexDirection: 'row', gap: 8, marginBottom: 0 },
   statCard: {
-    flex: 1, backgroundColor: '#fff', borderRadius: 10,
+    flex: 1, backgroundColor: Colors.card, borderRadius: Radius.md,
     paddingVertical: 10, paddingHorizontal: 12, borderLeftWidth: 4,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+    ...Shadow.sm,
   },
-  statValue: { fontSize: 20, fontWeight: '800', color: '#1a1a1a', marginBottom: 1 },
-  statLabel: { fontSize: 11, color: '#888', fontWeight: '500' },
+  statValue: { fontSize: 20, fontWeight: '800', color: Colors.foreground, marginBottom: 1 },
+  statLabel: { fontSize: 11, color: Colors.mutedFg, fontWeight: '500' },
 
-  // Alert
   alertCard: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#fff5f5', borderRadius: 12, marginHorizontal: 16,
+    backgroundColor: Colors.destructiveLight, borderRadius: Radius.lg, marginHorizontal: 16,
     padding: 12, marginBottom: 16,
-    borderWidth: 1, borderColor: '#fecaca',
+    borderWidth: 1, borderColor: Colors.destructiveBorder,
   },
-  alertText: { flex: 1, fontSize: 14, color: '#555', marginLeft: 8 },
-  alertAmount: { fontWeight: '700', color: '#dc2626' },
+  alertText: { flex: 1, fontSize: 14, color: Colors.mutedFg, marginLeft: 8 },
+  alertAmount: { fontWeight: '700', color: Colors.destructive },
 
-  // Section Header
   sectionHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     marginHorizontal: 16, marginBottom: 10,
   },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
 
-  // Today Lessons
   lessonCardsList: { paddingHorizontal: 16, marginBottom: 16 },
   memberCard: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
-    borderRadius: 14, padding: 14, marginBottom: 8,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
-    borderWidth: 1, borderColor: 'transparent',
+    flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card,
+    borderRadius: Radius.lg, padding: 14, marginBottom: 8,
+    ...Shadow.sm,
+    borderWidth: 1, borderColor: Colors.transparent,
   },
   memberCardAttended: {
-    backgroundColor: '#f0fdf4', borderColor: '#bbf7d0',
+    backgroundColor: Colors.successLight, borderColor: Colors.successBorder,
   },
   timeBadge: {
-    backgroundColor: '#f0fdf4', borderRadius: 8,
+    backgroundColor: Colors.primaryLight, borderRadius: Radius.sm,
     paddingHorizontal: 10, paddingVertical: 8,
     alignItems: 'center', marginRight: 12, minWidth: 52,
   },
-  timeText: { fontSize: 14, fontWeight: '700', color: '#1a7a4a' },
+  timeText: { fontSize: 14, fontWeight: '700', color: Colors.primary },
   memberInfo: { flex: 1 },
   memberNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
-  memberName: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
-  levelBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
+  memberName: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
+  levelBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: Radius.full },
   levelText: { fontSize: 11, fontWeight: '700' },
-  lessonSubtitle: { fontSize: 12, color: '#888', marginBottom: 4 },
+  lessonSubtitle: { fontSize: 12, color: Colors.mutedFg, marginBottom: 4 },
   creditsRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   creditsText: { fontSize: 12, fontWeight: '500' },
   attendBtn: {
     width: 52, height: 52, borderRadius: 26,
-    borderWidth: 2, borderColor: '#1a7a4a',
+    borderWidth: 2, borderColor: Colors.primary,
     justifyContent: 'center', alignItems: 'center',
     marginLeft: 8,
   },
   attendBtnActive: {
-    backgroundColor: '#1a7a4a', borderColor: '#1a7a4a',
+    backgroundColor: Colors.primary, borderColor: Colors.primary,
   },
 
-  // Empty
   emptyCard: {
-    alignItems: 'center', backgroundColor: '#fff', borderRadius: 14,
+    alignItems: 'center', backgroundColor: Colors.card, borderRadius: Radius.lg,
     marginHorizontal: 16, padding: 40, marginBottom: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+    ...Shadow.sm,
   },
-  emptyText: { fontSize: 14, color: '#aaa', fontWeight: '500', marginTop: 12, marginBottom: 16 },
+  emptyText: { fontSize: 14, color: Colors.placeholder, fontWeight: '500', marginTop: 12, marginBottom: 16 },
   addLessonBtn: {
-    backgroundColor: '#1a7a4a', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10,
+    backgroundColor: Colors.primary, paddingHorizontal: 20, paddingVertical: 10, borderRadius: Radius.md,
   },
-  addLessonBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  addLessonBtnText: { color: Colors.white, fontWeight: '700', fontSize: 14 },
 
-  // Quick Actions
   quickGrid: {
     flexDirection: 'row', flexWrap: 'wrap',
     paddingHorizontal: 16, gap: 10, paddingBottom: 32,
   },
   quickCard: {
-    flex: 1, minWidth: '45%', backgroundColor: '#fff', borderRadius: 12,
+    flex: 1, minWidth: '45%', backgroundColor: Colors.card, borderRadius: Radius.lg,
     padding: 16, alignItems: 'center', borderTopWidth: 3,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+    ...Shadow.sm,
   },
-  quickLabel: { fontSize: 13, fontWeight: '600', color: '#333', marginTop: 8 },
+  quickLabel: { fontSize: 13, fontWeight: '600', color: Colors.foreground, marginTop: 8 },
 
-  // Auto-gen banner
-  autoGenBanner: { backgroundColor: '#f0fdf4', borderRadius: 12, marginHorizontal: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#bbf7d0' },
+  autoGenBanner: {
+    backgroundColor: Colors.primaryLight, borderRadius: Radius.lg,
+    marginHorizontal: 16, padding: 14, marginBottom: 12,
+    borderWidth: 1, borderColor: Colors.successBorder,
+  },
   autoGenHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  autoGenTitle: { fontSize: 15, fontWeight: '700', color: '#1a7a4a' },
+  autoGenTitle: { fontSize: 15, fontWeight: '700', color: Colors.primary },
   autoGenItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
-  autoGenTime: { fontSize: 14, fontWeight: '700', color: '#1a7a4a', minWidth: 44 },
-  autoGenName: { fontSize: 14, color: '#333', fontWeight: '500' },
-  autoGenBtn: { marginTop: 12, backgroundColor: '#1a7a4a', borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
-  autoGenBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  autoGenTime: { fontSize: 14, fontWeight: '700', color: Colors.primary, minWidth: 44 },
+  autoGenName: { fontSize: 14, color: Colors.foreground, fontWeight: '500' },
+  autoGenBtn: { marginTop: 12, backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 10, alignItems: 'center' },
+  autoGenBtnText: { color: Colors.white, fontWeight: '700', fontSize: 14 },
 });

@@ -8,12 +8,13 @@ import { useLocalSearchParams, useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Member, MemberLevel, Attendance, Payment, MemberNote } from '../../types';
+import { Colors } from '../../lib/theme';
 
 type DayTimes = Record<number, string[]>;
 
 const LEVELS: MemberLevel[] = ['입문', '초급', '중급', '고급', '선수'];
 const LEVEL_COLORS: Record<MemberLevel, string> = {
-  '입문': '#94a3b8', '초급': '#22c55e', '중급': '#3b82f6', '고급': '#f59e0b', '선수': '#ef4444',
+  '입문': Colors.level.입문, '초급': Colors.success, '중급': Colors.info, '고급': Colors.warning, '선수': Colors.destructive,
 };
 
 const TIME_OPTIONS: string[] = [];
@@ -366,7 +367,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     loadNotes();
   }
 
-  if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color="#1a7a4a" /></View>;
+  if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color={Colors.primary} /></View>;
   if (!member) return <View style={styles.loader}><Text>회원을 찾을 수 없습니다</Text></View>;
 
   const TABS: { key: Tab; label: string; icon: string }[] = [
@@ -376,19 +377,19 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     { key: 'notes', label: '메모', icon: 'document-text-outline' },
   ];
 
-  const ATTENDANCE_STATUS_COLOR: Record<string, string> = { '출석': '#22c55e', '결석': '#ef4444', '지각': '#f59e0b', '조퇴': '#3b82f6' };
+  const ATTENDANCE_STATUS_COLOR: Record<string, string> = { '출석': Colors.success, '결석': Colors.destructive, '지각': Colors.warning, '조퇴': Colors.info };
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       {/* Profile Header */}
       <View style={styles.profileHeader}>
-        <View style={[styles.bigAvatar, { backgroundColor: LEVEL_COLORS[member.level as MemberLevel] ?? '#94a3b8' }]}>
+        <View style={[styles.bigAvatar, { backgroundColor: LEVEL_COLORS[member.level as MemberLevel] ?? Colors.level.입문 }]}>
           <Text style={styles.bigAvatarText}>{member.name.slice(0, 1)}</Text>
         </View>
         <Text style={styles.profileName}>{member.name}</Text>
         <View style={styles.profileBadgeRow}>
-          <View style={[styles.levelBadge, { backgroundColor: (LEVEL_COLORS[member.level as MemberLevel] ?? '#94a3b8') + '33' }]}>
-            <Text style={[styles.levelText, { color: LEVEL_COLORS[member.level as MemberLevel] ?? '#94a3b8' }]}>{member.level}</Text>
+          <View style={[styles.levelBadge, { backgroundColor: (LEVEL_COLORS[member.level as MemberLevel] ?? Colors.level.입문) + '33' }]}>
+            <Text style={[styles.levelText, { color: LEVEL_COLORS[member.level as MemberLevel] ?? Colors.level.입문 }]}>{member.level}</Text>
           </View>
           {!member.is_active && <View style={styles.inactiveBadge}><Text style={styles.inactiveText}>비활성</Text></View>}
         </View>
@@ -405,7 +406,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       <View style={styles.tabRow}>
         {TABS.map(t => (
           <TouchableOpacity key={t.key} style={[styles.tabBtn, tab === t.key && styles.tabBtnActive]} onPress={() => setTab(t.key)}>
-            <Ionicons name={t.icon as any} size={16} color={tab === t.key ? '#1a7a4a' : '#888'} />
+            <Ionicons name={t.icon as any} size={16} color={tab === t.key ? Colors.primary : Colors.mutedFg} />
             <Text style={[styles.tabLabel, tab === t.key && styles.tabLabelActive]}>{t.label}</Text>
           </TouchableOpacity>
         ))}
@@ -448,14 +449,14 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                         <Text style={styles.packageTitle}>{lessonPackage.title}</Text>
                         <Text style={styles.packageMeta}>{lessonPackage.total_credits}회 · {lessonPackage.price.toLocaleString()}원</Text>
                       </View>
-                      <Ionicons name="card-outline" size={18} color="#1a7a4a" />
+                      <Ionicons name="card-outline" size={18} color={Colors.primary} />
                     </>
                   ) : (
                     <>
-                      <Ionicons name="card-outline" size={18} color="#ccc" />
-                      <Text style={[styles.packageMeta, { color: '#bbb', marginLeft: 8 }]}>연결된 레슨권 없음</Text>
+                      <Ionicons name="card-outline" size={18} color={Colors.iconMuted} />
+                      <Text style={[styles.packageMeta, { color: Colors.placeholder, marginLeft: 8 }]}>연결된 레슨권 없음</Text>
                       <TouchableOpacity onPress={() => setEditing(true)} style={{ marginLeft: 'auto' }}>
-                        <Text style={{ fontSize: 12, color: '#1a7a4a', fontWeight: '600' }}>설정 →</Text>
+                        <Text style={{ fontSize: 12, color: Colors.primary, fontWeight: '600' }}>설정 →</Text>
                       </TouchableOpacity>
                     </>
                   )}
@@ -463,7 +464,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
 
                 <View style={styles.btnRow}>
                   <TouchableOpacity style={styles.editBtn} onPress={() => setEditing(true)}>
-                    <Ionicons name="create-outline" size={16} color="#1a7a4a" />
+                    <Ionicons name="create-outline" size={16} color={Colors.primary} />
                     <Text style={styles.editBtnText}>수정</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.deactivateBtn} onPress={handleDeactivate}>
@@ -508,7 +509,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                   ))}
                 </View>
                 <Text style={styles.editLabel}>요일별 시작 시간</Text>
-                {scheduleDays.length === 0 && <Text style={{ fontSize: 13, color: '#aaa', marginBottom: 8 }}>요일을 먼저 선택하세요</Text>}
+                {scheduleDays.length === 0 && <Text style={{ fontSize: 13, color: Colors.placeholder, marginBottom: 8 }}>요일을 먼저 선택하세요</Text>}
                 {scheduleDays.map(day => {
                   const times = dayTimes[day] ?? [];
                   return (
@@ -518,11 +519,11 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                         <View style={[styles.dayTimeBadge2, times.length > 0 ? styles.dayTimeBadge2Set : {}]}>
                           <Text style={[styles.dayTimeBadge2Text, times.length > 0 ? { color: '#fff' } : {}]}>{DAYS_KR[day]}</Text>
                         </View>
-                        <Text style={{ flex: 1, fontSize: 13, color: '#888', marginLeft: 8 }}>
+                        <Text style={{ flex: 1, fontSize: 13, color: Colors.mutedFg, marginLeft: 8 }}>
                           {times.length > 0 ? `${times.length}개 시간` : '시간 없음'}
                         </Text>
                         <TouchableOpacity
-                          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#e8f5ee', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 }}
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.primaryLight, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 }}
                           onPress={() => {
                             setEditingDay(day);
                             setTempHour('');
@@ -530,15 +531,15 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                             setTimePickerVisible(true);
                           }}
                         >
-                          <Ionicons name="add" size={14} color="#1a7a4a" />
-                          <Text style={{ fontSize: 12, color: '#1a7a4a', fontWeight: '700' }}>시간 추가</Text>
+                          <Ionicons name="add" size={14} color={Colors.primary} />
+                          <Text style={{ fontSize: 12, color: Colors.primary, fontWeight: '700' }}>시간 추가</Text>
                         </TouchableOpacity>
                       </View>
                       {/* 시간 목록 */}
                       {times.map((t, ti) => (
                         <View key={ti} style={[styles.dayTimeRow2, { marginBottom: 4 }]}>
-                          <Ionicons name="time" size={14} color="#1a7a4a" style={{ marginRight: 6 }} />
-                          <Text style={{ flex: 1, fontSize: 15, fontWeight: '600', color: '#1a1a1a' }}>{t}</Text>
+                          <Ionicons name="time" size={14} color={Colors.primary} style={{ marginRight: 6 }} />
+                          <Text style={{ flex: 1, fontSize: 15, fontWeight: '600', color: Colors.foreground }}>{t}</Text>
                           <TouchableOpacity
                             onPress={() => {
                               setDayTimes(prev => ({
@@ -548,12 +549,12 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                             }}
                             style={{ padding: 4 }}
                           >
-                            <Ionicons name="close-circle" size={18} color="#ef4444" />
+                            <Ionicons name="close-circle" size={18} color={Colors.destructive} />
                           </TouchableOpacity>
                         </View>
                       ))}
                       {times.length === 0 && (
-                        <Text style={{ fontSize: 12, color: '#bbb', marginLeft: 4, marginBottom: 2 }}>시간 추가 버튼을 눌러 시작 시간을 설정하세요</Text>
+                        <Text style={{ fontSize: 12, color: Colors.placeholder, marginLeft: 4, marginBottom: 2 }}>시간 추가 버튼을 눌러 시작 시간을 설정하세요</Text>
                       )}
                     </View>
                   );
@@ -567,7 +568,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
 
                 <Text style={styles.editLabel}>레슨권 변경</Text>
                 {lessonPackages.length === 0 ? (
-                  <Text style={{ fontSize: 13, color: '#aaa', marginBottom: 12 }}>등록된 레슨권이 없어요</Text>
+                  <Text style={{ fontSize: 13, color: Colors.placeholder, marginBottom: 12 }}>등록된 레슨권이 없어요</Text>
                 ) : (
                   <View style={styles.editPkgGrid}>
                     <TouchableOpacity
@@ -575,7 +576,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                       onPress={() => setSelectedPackageId(null)}
                     >
                       {!selectedPackageId && <View style={styles.editPkgCheck}><Ionicons name="checkmark" size={10} color="#fff" /></View>}
-                      <Ionicons name="close-circle-outline" size={20} color={!selectedPackageId ? '#fff' : '#bbb'} />
+                      <Ionicons name="close-circle-outline" size={20} color={!selectedPackageId ? '#fff' : Colors.placeholder} />
                       <Text style={[styles.editPkgNoneText, !selectedPackageId && { color: '#fff' }]}>없음</Text>
                     </TouchableOpacity>
                     {lessonPackages.map(pkg => {
@@ -624,12 +625,12 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
               const lesson = (a as any).lesson;
               return (
                 <View key={a.id} style={styles.attendanceRow}>
-                  <View style={[styles.statusDot, { backgroundColor: ATTENDANCE_STATUS_COLOR[a.status] ?? '#888' }]} />
+                  <View style={[styles.statusDot, { backgroundColor: ATTENDANCE_STATUS_COLOR[a.status] ?? Colors.mutedFg }]} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.attendanceTitle}>{lesson?.title ?? '레슨'}</Text>
                     <Text style={styles.attendanceDate}>{lesson?.date} {lesson?.start_time?.slice(0, 5)}</Text>
                   </View>
-                  <Text style={[styles.attendanceStatus, { color: ATTENDANCE_STATUS_COLOR[a.status] ?? '#888' }]}>{a.status}</Text>
+                  <Text style={[styles.attendanceStatus, { color: ATTENDANCE_STATUS_COLOR[a.status] ?? Colors.mutedFg }]}>{a.status}</Text>
                 </View>
               );
             })}
@@ -649,7 +650,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={styles.paymentAmount}>{p.amount.toLocaleString()}원</Text>
-                  <Text style={[styles.paymentStatus, { color: p.status === '납부완료' ? '#22c55e' : '#ef4444' }]}>{p.status}</Text>
+                  <Text style={[styles.paymentStatus, { color: p.status === '납부완료' ? Colors.success : Colors.destructive }]}>{p.status}</Text>
                 </View>
               </View>
             ))}
@@ -704,7 +705,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                             { text: '삭제', style: 'destructive', onPress: () => deleteNote(n.id) },
                           ])}
                         >
-                          <Ionicons name="trash-outline" size={14} color="#ef4444" />
+                          <Ionicons name="trash-outline" size={14} color={Colors.destructive} />
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -726,7 +727,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                 {editingDay !== null ? `${DAYS_KR[editingDay]}요일 시작 시간` : '시작 시간'}
               </Text>
               <TouchableOpacity onPress={() => setTimePickerVisible(false)}>
-                <Ionicons name="close" size={22} color="#888" />
+                <Ionicons name="close" size={22} color={Colors.mutedFg} />
               </TouchableOpacity>
             </View>
             <View style={styles.spinnerRowTP}>
@@ -791,7 +792,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
 function InfoRow({ icon, label, value }: { icon: string; label: string; value: string }) {
   return (
     <View style={styles.infoRow}>
-      <Ionicons name={icon as any} size={16} color="#888" style={{ marginRight: 10 }} />
+      <Ionicons name={icon as any} size={16} color={Colors.mutedFg} style={{ marginRight: 10 }} />
       <View style={{ flex: 1 }}>
         <Text style={styles.infoLabel}>{label}</Text>
         <Text style={styles.infoValue}>{value}</Text>
@@ -802,7 +803,7 @@ function InfoRow({ icon, label, value }: { icon: string; label: string; value: s
 
 const styles = StyleSheet.create({
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  profileHeader: { backgroundColor: '#1a7a4a', alignItems: 'center', paddingVertical: 24, paddingHorizontal: 16 },
+  profileHeader: { backgroundColor: Colors.primary, alignItems: 'center', paddingVertical: 24, paddingHorizontal: 16 },
   bigAvatar: { width: 72, height: 72, borderRadius: 36, justifyContent: 'center', alignItems: 'center', marginBottom: 10, borderWidth: 3, borderColor: 'rgba(255,255,255,0.4)' },
   bigAvatarText: { fontSize: 30, fontWeight: '800', color: '#fff' },
   profileName: { fontSize: 22, fontWeight: '800', color: '#fff', marginBottom: 8 },
@@ -810,108 +811,108 @@ const styles = StyleSheet.create({
   levelBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 },
   levelText: { fontSize: 13, fontWeight: '700' },
   inactiveBadge: { backgroundColor: 'rgba(239,68,68,0.2)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 },
-  inactiveText: { color: '#ef4444', fontSize: 13, fontWeight: '700' },
+  inactiveText: { color: Colors.destructive, fontSize: 13, fontWeight: '700' },
   aiBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6, marginTop: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   aiBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  tabRow: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee' },
+  tabRow: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: Colors.border },
   tabBtn: { flex: 1, alignItems: 'center', paddingVertical: 10, flexDirection: 'row', justifyContent: 'center', gap: 4 },
-  tabBtnActive: { borderBottomWidth: 2, borderBottomColor: '#1a7a4a' },
-  tabLabel: { fontSize: 12, color: '#888', fontWeight: '600' },
-  tabLabelActive: { color: '#1a7a4a' },
-  content: { flex: 1, backgroundColor: '#f5f7fa' },
+  tabBtnActive: { borderBottomWidth: 2, borderBottomColor: Colors.primary },
+  tabLabel: { fontSize: 12, color: Colors.mutedFg, fontWeight: '600' },
+  tabLabelActive: { color: Colors.primary },
+  content: { flex: 1, backgroundColor: Colors.background },
   card: { backgroundColor: '#fff', margin: 16, borderRadius: 12, padding: 16 },
-  cardTitle: { fontSize: 15, fontWeight: '700', color: '#333', marginBottom: 12 },
-  infoRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-  infoLabel: { fontSize: 11, color: '#888', marginBottom: 2 },
-  infoValue: { fontSize: 15, color: '#1a1a1a', fontWeight: '500' },
+  cardTitle: { fontSize: 15, fontWeight: '700', color: Colors.foreground, marginBottom: 12 },
+  infoRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.mutedBg },
+  infoLabel: { fontSize: 11, color: Colors.mutedFg, marginBottom: 2 },
+  infoValue: { fontSize: 15, color: Colors.foreground, fontWeight: '500' },
   btnRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
-  editBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1.5, borderColor: '#1a7a4a', borderRadius: 10, paddingVertical: 10 },
-  editBtnText: { color: '#1a7a4a', fontWeight: '700', fontSize: 14 },
-  deactivateBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#ef4444', borderRadius: 10, paddingVertical: 10 },
-  deactivateBtnText: { color: '#ef4444', fontWeight: '700', fontSize: 14 },
-  editLabel: { fontSize: 12, color: '#888', fontWeight: '600', marginBottom: 4, marginTop: 8 },
-  editInput: { backgroundColor: '#f5f5f5', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, fontSize: 15, color: '#1a1a1a', marginBottom: 4, borderWidth: 1, borderColor: '#eee' },
+  editBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1.5, borderColor: Colors.primary, borderRadius: 10, paddingVertical: 10 },
+  editBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 14 },
+  deactivateBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: Colors.destructive, borderRadius: 10, paddingVertical: 10 },
+  deactivateBtnText: { color: Colors.destructive, fontWeight: '700', fontSize: 14 },
+  editLabel: { fontSize: 12, color: Colors.mutedFg, fontWeight: '600', marginBottom: 4, marginTop: 8 },
+  editInput: { backgroundColor: Colors.mutedBg, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, fontSize: 15, color: Colors.foreground, marginBottom: 4, borderWidth: 1, borderColor: Colors.border },
   levelRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
-  levelBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: '#f0f0f0' },
-  levelBtnActive: { backgroundColor: '#1a7a4a' },
-  levelBtnText: { fontSize: 13, color: '#888', fontWeight: '600' },
+  levelBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: Colors.mutedBg },
+  levelBtnActive: { backgroundColor: Colors.primary },
+  levelBtnText: { fontSize: 13, color: Colors.mutedFg, fontWeight: '600' },
   levelBtnTextActive: { color: '#fff' },
-  saveBtn: { flex: 1, backgroundColor: '#1a7a4a', borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
+  saveBtn: { flex: 1, backgroundColor: Colors.primary, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  cancelBtn: { flex: 1, backgroundColor: '#f0f0f0', borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
-  cancelBtnText: { color: '#666', fontWeight: '700', fontSize: 14 },
+  cancelBtn: { flex: 1, backgroundColor: Colors.mutedBg, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
+  cancelBtnText: { color: Colors.mutedFg, fontWeight: '700', fontSize: 14 },
   dayRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginBottom: 12 },
-  dayBtn2: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },
-  dayBtn2Active: { backgroundColor: '#1a7a4a' },
-  dayBtn2Text: { fontSize: 13, fontWeight: '700', color: '#888' },
+  dayBtn2: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.mutedBg, justifyContent: 'center', alignItems: 'center' },
+  dayBtn2Active: { backgroundColor: Colors.primary },
+  dayBtn2Text: { fontSize: 13, fontWeight: '700', color: Colors.mutedFg },
   dayBtn2TextActive: { color: '#fff' },
-  attendanceRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0', gap: 10 },
+  attendanceRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.mutedBg, gap: 10 },
   statusDot: { width: 10, height: 10, borderRadius: 5 },
-  attendanceTitle: { fontSize: 14, color: '#1a1a1a', fontWeight: '600' },
-  attendanceDate: { fontSize: 12, color: '#888', marginTop: 2 },
+  attendanceTitle: { fontSize: 14, color: Colors.foreground, fontWeight: '600' },
+  attendanceDate: { fontSize: 12, color: Colors.mutedFg, marginTop: 2 },
   attendanceStatus: { fontSize: 13, fontWeight: '700' },
-  paymentRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-  paymentDesc: { fontSize: 14, color: '#1a1a1a', fontWeight: '600', marginBottom: 2 },
-  paymentDate: { fontSize: 12, color: '#888' },
-  paymentAmount: { fontSize: 15, fontWeight: '700', color: '#1a1a1a' },
+  paymentRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.mutedBg },
+  paymentDesc: { fontSize: 14, color: Colors.foreground, fontWeight: '600', marginBottom: 2 },
+  paymentDate: { fontSize: 12, color: Colors.mutedFg },
+  paymentAmount: { fontSize: 15, fontWeight: '700', color: Colors.foreground },
   paymentStatus: { fontSize: 12, fontWeight: '700', marginTop: 2 },
   noteInputCard: { backgroundColor: '#fff', margin: 16, marginBottom: 0, borderRadius: 12, padding: 12 },
-  noteInput: { backgroundColor: '#f5f5f5', borderRadius: 8, padding: 10, fontSize: 14, color: '#1a1a1a', minHeight: 70, marginBottom: 8 },
-  noteAddBtn: { backgroundColor: '#1a7a4a', borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
+  noteInput: { backgroundColor: Colors.mutedBg, borderRadius: 8, padding: 10, fontSize: 14, color: Colors.foreground, minHeight: 70, marginBottom: 8 },
+  noteAddBtn: { backgroundColor: Colors.primary, borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
   noteAddBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   noteCard: { backgroundColor: '#fff', marginHorizontal: 16, marginTop: 8, borderRadius: 10, padding: 12 },
-  noteContent: { fontSize: 14, color: '#1a1a1a', lineHeight: 20, flex: 1 },
+  noteContent: { fontSize: 14, color: Colors.foreground, lineHeight: 20, flex: 1 },
 
   // Timeline
   timelineContainer: { marginHorizontal: 16, marginTop: 8 },
-  historyLabel: { fontSize: 12, color: '#888', fontWeight: '600', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
+  historyLabel: { fontSize: 12, color: Colors.mutedFg, fontWeight: '600', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
   timelineItem: { flexDirection: 'row', gap: 12, marginBottom: 4 },
   timelineLine: { alignItems: 'center', width: 16 },
-  timelineDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#1a7a4a', marginTop: 18 },
-  timelineBar: { width: 2, flex: 1, backgroundColor: '#d1fae5', marginTop: 2 },
+  timelineDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.primary, marginTop: 18 },
+  timelineBar: { width: 2, flex: 1, backgroundColor: Colors.successLight, marginTop: 2 },
   timelineContent: { flex: 1, paddingBottom: 16 },
-  timelineDate: { fontSize: 11, color: '#888', fontWeight: '600', marginBottom: 6, marginTop: 14 },
-  timelineTime: { color: '#aaa', fontWeight: '400' },
+  timelineDate: { fontSize: 11, color: Colors.mutedFg, fontWeight: '600', marginBottom: 6, marginTop: 14 },
+  timelineTime: { color: Colors.placeholder, fontWeight: '400' },
   timelineCard: { backgroundColor: '#fff', borderRadius: 10, padding: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
   deleteNoteBtn: { padding: 2 },
   noteFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
-  noteDate: { fontSize: 11, color: '#aaa' },
+  noteDate: { fontSize: 11, color: Colors.placeholder },
   emptyCard: { margin: 16, padding: 20, alignItems: 'center' },
-  emptyText: { fontSize: 14, color: '#aaa', textAlign: 'center' },
-  packageBanner: { flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: '#f5f7fa', borderRadius: 10, marginTop: 8, gap: 10 },
+  emptyText: { fontSize: 14, color: Colors.placeholder, textAlign: 'center' },
+  packageBanner: { flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: Colors.background, borderRadius: 10, marginTop: 8, gap: 10 },
   packageDot: { width: 10, height: 10, borderRadius: 5 },
-  packageTitle: { fontSize: 14, fontWeight: '700', color: '#1a1a1a' },
-  packageMeta: { fontSize: 12, color: '#888', marginTop: 2 },
+  packageTitle: { fontSize: 14, fontWeight: '700', color: Colors.foreground },
+  packageMeta: { fontSize: 12, color: Colors.mutedFg, marginTop: 2 },
   editPkgGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  editPkgCard: { width: '47%', borderRadius: 10, borderWidth: 2, borderColor: '#eee', padding: 10, position: 'relative', backgroundColor: '#fff' },
-  editPkgCardNone: { borderColor: '#ddd', alignItems: 'center', justifyContent: 'center', paddingVertical: 14 },
-  editPkgCardNoneSelected: { backgroundColor: '#888', borderColor: '#888' },
-  editPkgCheck: { position: 'absolute', top: 6, right: 6, width: 16, height: 16, borderRadius: 8, backgroundColor: '#888', justifyContent: 'center', alignItems: 'center' },
-  editPkgNoneText: { fontSize: 13, color: '#888', marginTop: 4, fontWeight: '600' },
+  editPkgCard: { width: '47%', borderRadius: 10, borderWidth: 2, borderColor: Colors.border, padding: 10, position: 'relative', backgroundColor: '#fff' },
+  editPkgCardNone: { borderColor: Colors.border, alignItems: 'center', justifyContent: 'center', paddingVertical: 14 },
+  editPkgCardNoneSelected: { backgroundColor: Colors.mutedFg, borderColor: Colors.mutedFg },
+  editPkgCheck: { position: 'absolute', top: 6, right: 6, width: 16, height: 16, borderRadius: 8, backgroundColor: Colors.mutedFg, justifyContent: 'center', alignItems: 'center' },
+  editPkgNoneText: { fontSize: 13, color: Colors.mutedFg, marginTop: 4, fontWeight: '600' },
   editPkgColorBar: { height: 3, borderRadius: 2, marginBottom: 6 },
-  editPkgTitle: { fontSize: 13, fontWeight: '700', color: '#1a1a1a', marginBottom: 2 },
-  editPkgMeta: { fontSize: 11, color: '#888' },
+  editPkgTitle: { fontSize: 13, fontWeight: '700', color: Colors.foreground, marginBottom: 2 },
+  editPkgMeta: { fontSize: 11, color: Colors.mutedFg },
   editPkgPrice: { fontSize: 13, fontWeight: '800', marginTop: 4 },
   // per-day time rows
-  dayTimeRow2: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f9f9f9', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#eee', gap: 10, marginBottom: 6 },
-  dayTimeBadge2: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#eee', justifyContent: 'center', alignItems: 'center' },
-  dayTimeBadge2Set: { backgroundColor: '#1a7a4a' },
-  dayTimeBadge2Text: { fontSize: 12, fontWeight: '700', color: '#888' },
+  dayTimeRow2: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.mutedBg, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: Colors.border, gap: 10, marginBottom: 6 },
+  dayTimeBadge2: { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.border, justifyContent: 'center', alignItems: 'center' },
+  dayTimeBadge2Set: { backgroundColor: Colors.primary },
+  dayTimeBadge2Text: { fontSize: 12, fontWeight: '700', color: Colors.mutedFg },
   // time picker modal styles
   modalOverlayTP: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalSheetTP: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 },
-  modalHeaderTP: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#eee' },
-  modalTitleTP: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
+  modalHeaderTP: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  modalTitleTP: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
   spinnerRowTP: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20, paddingTop: 12 },
   spinnerColTP: { flex: 1, alignItems: 'center' },
-  spinnerLabelTP: { fontSize: 12, fontWeight: '700', color: '#888', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  spinnerLabelTP: { fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
   spinnerListTP: { height: 220 },
   spinnerItemTP: { paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, marginBottom: 2, alignItems: 'center' },
-  spinnerItemTPSel: { backgroundColor: '#1a7a4a' },
-  spinnerItemTPText: { fontSize: 22, fontWeight: '600', color: '#555' },
+  spinnerItemTPSel: { backgroundColor: Colors.primary },
+  spinnerItemTPText: { fontSize: 22, fontWeight: '600', color: Colors.mutedFg },
   spinnerItemTPTextSel: { color: '#fff', fontWeight: '800' },
-  spinnerColonTP: { fontSize: 28, fontWeight: '800', color: '#1a1a1a', paddingHorizontal: 8, paddingTop: 28 },
-  confirmBtnTP: { margin: 16, backgroundColor: '#1a7a4a', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-  confirmBtnTPDis: { backgroundColor: '#ccc' },
+  spinnerColonTP: { fontSize: 28, fontWeight: '800', color: Colors.foreground, paddingHorizontal: 8, paddingTop: 28 },
+  confirmBtnTP: { margin: 16, backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  confirmBtnTPDis: { backgroundColor: Colors.iconMuted },
   confirmBtnTPText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });
