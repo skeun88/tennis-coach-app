@@ -404,25 +404,7 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Quick Actions */}
-      <Text style={[styles.sectionTitle, { marginHorizontal: 16, marginTop: 8 }]}>빠른 실행</Text>
-      <View style={styles.quickGrid}>
-        {[
-          { label: '회원 등록', icon: 'person-add', color: Colors.navy, onPress: () => router.push('/members/new') },
-          { label: '레슨 추가', icon: 'calendar-outline', color: Colors.info, onPress: () => router.push('/lessons/new') },
-          { label: '결제 현황', icon: 'card-outline', color: Colors.destructive, onPress: () => router.push('/(tabs)/payments') },
-          { label: '회원 목록', icon: 'people-outline', color: Colors.navy, onPress: () => router.push('/(tabs)/members') },
-        ].map((action, i) => (
-          <TouchableOpacity
-            key={i}
-            style={[styles.quickCard, { borderTopColor: action.color }]}
-            onPress={action.onPress}
-          >
-            <Ionicons name={action.icon as any} size={28} color={action.color} />
-            <Text style={styles.quickLabel}>{action.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+
     </ScrollView>
     {/* Chatbot FAB */}
     <TouchableOpacity style={styles.chatFab} onPress={() => router.push('/(tabs)/chat')}>
@@ -520,17 +502,13 @@ const styles = StyleSheet.create({
   },
   addLessonBtnText: { color: Colors.white, fontWeight: '700', fontSize: 14 },
 
-  quickGrid: {
     flexDirection: 'row', flexWrap: 'wrap',
     paddingHorizontal: 16, gap: 10, paddingBottom: 32,
   },
-  quickCard: {
     flex: 1, minWidth: '45%', backgroundColor: Colors.card, borderRadius: Radius.lg,
     padding: 16, alignItems: 'center', borderTopWidth: 3,
     ...Shadow.sm,
   },
-  quickLabel: { fontSize: 13, fontWeight: '600', color: Colors.foreground, marginTop: 8 },
-
   autoGenBanner: {
     backgroundColor: Colors.primaryLight, borderRadius: Radius.lg,
     marginHorizontal: 16, padding: 14, marginBottom: 12,
