@@ -501,14 +501,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary, paddingHorizontal: 20, paddingVertical: 10, borderRadius: Radius.md,
   },
   addLessonBtnText: { color: Colors.white, fontWeight: '700', fontSize: 14 },
-
-    flexDirection: 'row', flexWrap: 'wrap',
-    paddingHorizontal: 16, gap: 10, paddingBottom: 32,
-  },
-    flex: 1, minWidth: '45%', backgroundColor: Colors.card, borderRadius: Radius.lg,
-    padding: 16, alignItems: 'center', borderTopWidth: 3,
-    ...Shadow.sm,
-  },
   autoGenBanner: {
     backgroundColor: Colors.primaryLight, borderRadius: Radius.lg,
     marginHorizontal: 16, padding: 14, marginBottom: 12,
