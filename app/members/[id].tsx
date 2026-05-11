@@ -341,17 +341,24 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     if (scheduledCount > 0) Alert.alert('저장 완료', scheduledCount + '개 레슨이 스케줄에 추가되었습니다.');
   }
 
-  async function handleDeactivate() {
-    Alert.alert('비활성화', `${member?.name}님을 비활성화하시겠습니까?`, [
+  async function handleToggleActive() {
+    if (!member) return;
+    const isActive = member.is_active;
+    const action = isActive ? '비활성화' : '활성화';
+    const newStatus = !isActive;
+    Alert.alert(action, `${member.name}님을 ${action}하시겠습니까?`, [
       { text: '취소', style: 'cancel' },
       {
-        text: '비활성화', style: 'destructive', onPress: async () => {
-          await supabase.from('members').update({ is_active: false }).eq('id', id!);
-          router.back();
-        }
-      }
+        text: action,
+        style: isActive ? 'destructive' : 'default',
+        onPress: async () => {
+          await supabase.from('members').update({ is_active: newStatus }).eq('id', id!);
+          loadMember();
+        },
+      },
     ]);
   }
+
 
   async function addNote() {
     if (!newNote.trim()) return;
@@ -467,8 +474,8 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                     <Ionicons name="create-outline" size={16} color={Colors.primary} />
                     <Text style={styles.editBtnText}>수정</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.deactivateBtn} onPress={handleDeactivate}>
-                    <Text style={styles.deactivateBtnText}>비활성화</Text>
+                  <TouchableOpacity style={[styles.deactivateBtn, !member.is_active && { borderColor: Colors.success }]} onPress={handleToggleActive}>
+                    <Text style={[styles.deactivateBtnText, !member.is_active && { color: Colors.success }]}>{member.is_active ? '비활성화' : '활성화'}</Text>
                   </TouchableOpacity>
                 </View>
               </>

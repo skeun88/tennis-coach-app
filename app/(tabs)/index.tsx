@@ -242,6 +242,7 @@ export default function HomeScreen() {
   const LEVEL_COLOR: Record<string, string> = Colors.level;
 
   return (
+    <View style={styles.screenWrapper}>
     <ScrollView
       style={styles.container}
       refreshControl={
@@ -279,11 +280,11 @@ export default function HomeScreen() {
       {/* Stats Grid (2x2) */}
       <View style={styles.statsGrid}>
         <View style={styles.statsRow}>
-          <View style={[styles.statCard, { borderLeftColor: Colors.primary }]}>
+          <View style={[styles.statCard, { borderLeftColor: Colors.mint }]}>
             <Text style={styles.statValue}>{stats.activeMembers}</Text>
             <Text style={styles.statLabel}>활성 회원</Text>
           </View>
-          <View style={[styles.statCard, { borderLeftColor: Colors.info }]}>
+          <View style={[styles.statCard, { borderLeftColor: Colors.mint }]}>
             <Text style={styles.statValue}>{stats.todayLessons}</Text>
             <Text style={styles.statLabel}>오늘 레슨</Text>
           </View>
@@ -295,7 +296,7 @@ export default function HomeScreen() {
             </Text>
             <Text style={styles.statLabel}>미납 회원</Text>
           </View>
-          <View style={[styles.statCard, { borderLeftColor: Colors.navy }]}>
+          <View style={[styles.statCard, { borderLeftColor: Colors.mint }]}>
             <Text style={styles.statValue}>{stats.totalMembers}</Text>
             <Text style={styles.statLabel}>전체 회원</Text>
           </View>
@@ -423,14 +424,20 @@ export default function HomeScreen() {
         ))}
       </View>
     </ScrollView>
+    {/* Chatbot FAB */}
+    <TouchableOpacity style={styles.chatFab} onPress={() => router.push('/(tabs)/chat')}>
+      <Ionicons name="chatbubble-ellipses" size={24} color={Colors.white} />
+    </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screenWrapper: { flex: 1 },
   container: { flex: 1, backgroundColor: Colors.background },
 
   headerCard: {
-    backgroundColor: Colors.navy, padding: 20, paddingTop: 60,
+    backgroundColor: Colors.mint, padding: 16, paddingTop: 50,
     borderBottomLeftRadius: Radius.xl, borderBottomRightRadius: Radius.xl, marginBottom: 16,
   },
   headerTop: {
@@ -536,4 +543,10 @@ const styles = StyleSheet.create({
   autoGenName: { fontSize: 14, color: Colors.foreground, fontWeight: '500' },
   autoGenBtn: { marginTop: 12, backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 10, alignItems: 'center' },
   autoGenBtnText: { color: Colors.white, fontWeight: '700', fontSize: 14 },
+  chatFab: {
+    position: 'absolute', bottom: 24, right: 20,
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: Colors.navy, justifyContent: 'center', alignItems: 'center',
+    ...Shadow.md,
+  },
 });

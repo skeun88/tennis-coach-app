@@ -56,12 +56,23 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="profile"
+        options={{
+          title: '내 프로필',
+          tabBarLabel: '프로필',
+          tabBarIcon: ({ color, size }) => <Ionicons name="person-circle" size={size} color={color} />,
+          headerShown: false,
+        }}
+      />
+      {/* chat은 탭 바에서 숨김 - 홈 FAB으로 접근 */}
+      <Tabs.Screen
         name="chat"
         options={{
-          title: '도움말',
-          tabBarLabel: '도움말',
-          tabBarIcon: ({ color, size }) => <Ionicons name="chatbubble-ellipses" size={size} color={color} />,
+          href: null,
           headerTitle: 'KERRI 도우미',
+          headerShown: true,
+          headerStyle: { backgroundColor: Colors.navy },
+          headerTintColor: Colors.white,
         }}
       />
     </Tabs>
