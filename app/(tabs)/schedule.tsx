@@ -423,7 +423,7 @@ export default function ScheduleScreen() {
 
   // ── 주간 뷰 (타임그리드) ─────────────────────────────────────
   function renderWeekGrid() {
-    const { width: SCREEN_W } = require('react-native').Dimensions.get('window');
+    const { width: SCREEN_W } = Dimensions.get('window');
     const TIME_COL = 44;
     const COL_W = Math.floor((SCREEN_W - TIME_COL) / 7);
     const displayDates = getOffsetWeekDates(weekOffset);
