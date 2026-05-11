@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
 
   headerCard: {
-    backgroundColor: Colors.mint, padding: 16, paddingTop: 50,
+    backgroundColor: Colors.primary, padding: 16, paddingTop: 50,
     borderBottomLeftRadius: Radius.xl, borderBottomRightRadius: Radius.xl, marginBottom: 16,
   },
   headerTop: {
