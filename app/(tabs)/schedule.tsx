@@ -11,7 +11,7 @@ import { supabase } from '../../lib/supabase';
 import { Lesson } from '../../types';
 import { Colors } from '../../lib/theme';
 
-type ViewTab = '일일' | '주간';
+type ViewTab = '일일' | '주간' | '월간';
 
 interface LessonWithMembers extends Lesson {
   memberNames: string[];
@@ -69,6 +69,8 @@ export default function ScheduleScreen() {
   const [activeTab, setActiveTab] = useState<ViewTab>('일일');
   const [lessons, setLessons] = useState<LessonWithMembers[]>([]);
   const [weekData, setWeekData] = useState<WeekLesson[]>([]);
+  const [monthLessons, setMonthLessons] = useState<Map<string, LessonWithMembers[]>>(new Map());
+  const [monthYear, setMonthYear] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
   const [refreshing, setRefreshing] = useState(false);
   const [today, setToday] = useState(getTodayKST);
   const [selectedDate, setSelectedDate] = useState(getTodayKST);
@@ -157,6 +159,24 @@ export default function ScheduleScreen() {
     setWeekData(wDates.map(d => ({ date: d, lessons: map.get(d) ?? [] })));
   }
 
+
+  async function loadMonthLessons(year: number, month: number) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const firstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month + 1, 0);
+    const lastDayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`;
+    const { data } = await supabase.from('lessons').select('*')
+      .eq('coach_id', user.id).gte('date', firstDay).lte('date', lastDayStr).order('start_time');
+    const withNames = await attachMemberNames(data ?? []);
+    const map = new Map<string, LessonWithMembers[]>();
+    for (const l of withNames) {
+      if (!map.has(l.date)) map.set(l.date, []);
+      map.get(l.date)!.push(l);
+    }
+    setMonthLessons(map);
+  }
+
   useFocusEffect(useCallback(() => {
     const newToday = getTodayKST();
     const newWeek = getWeekDates();
@@ -164,7 +184,8 @@ export default function ScheduleScreen() {
     setToday(newToday); setWeekDates(newWeek); setThisWeekDates(newThisWeek);
     setSelectedDate(prev => newWeek.includes(prev) ? prev : newToday);
     if (activeTab === '일일') loadDayLessons(newToday);
-    else loadWeekLessons(newThisWeek);
+    else if (activeTab === '주간') loadWeekLessons(newThisWeek);
+    else { const d = new Date(); loadMonthLessons(d.getFullYear(), d.getMonth()); }
     // 회원 목록 로드
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -413,11 +434,112 @@ export default function ScheduleScreen() {
     );
   }
 
+
+  // ── 월간 뷰 ───────────────────────────────────────────────────
+  function renderMonthView() {
+    const { year, month } = monthYear;
+    const firstDayOfMonth = new Date(year, month, 1).getDay(); // 0=일
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const monthLabel = new Date(year, month, 1).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long' });
+
+    const cells: (number | null)[] = [
+      ...Array(firstDayOfMonth).fill(null),
+      ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+    ];
+    // pad to complete last row
+    while (cells.length % 7 !== 0) cells.push(null);
+
+    return (
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadMonthLessons(year, month); setRefreshing(false); }} tintColor={Colors.navy} />}
+      >
+        {/* 월 헤더 */}
+        <View style={styles.monthHeader}>
+          <TouchableOpacity style={styles.monthNavBtn} onPress={() => {
+            const d = month === 0 ? { year: year - 1, month: 11 } : { year, month: month - 1 };
+            setMonthYear(d); loadMonthLessons(d.year, d.month);
+          }}>
+            <Ionicons name="chevron-back" size={20} color={Colors.navy} />
+          </TouchableOpacity>
+          <Text style={styles.monthTitle}>{monthLabel}</Text>
+          <TouchableOpacity style={styles.monthNavBtn} onPress={() => {
+            const d = month === 11 ? { year: year + 1, month: 0 } : { year, month: month + 1 };
+            setMonthYear(d); loadMonthLessons(d.year, d.month);
+          }}>
+            <Ionicons name="chevron-forward" size={20} color={Colors.navy} />
+          </TouchableOpacity>
+        </View>
+
+        {/* 요일 헤더 */}
+        <View style={styles.monthDayHeaders}>
+          {['일', '월', '화', '수', '목', '금', '토'].map((d, i) => (
+            <Text key={d} style={[styles.monthDayName, i === 0 && { color: Colors.destructive }, i === 6 && { color: Colors.info }]}>{d}</Text>
+          ))}
+        </View>
+
+        {/* 날짜 그리드 */}
+        <View style={styles.monthGrid}>
+          {cells.map((day, idx) => {
+            if (!day) return <View key={`empty-${idx}`} style={styles.monthCell} />;
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const dayLessons = monthLessons.get(dateStr) ?? [];
+            const isToday = dateStr === today;
+            const isSun = idx % 7 === 0;
+            const isSat = idx % 7 === 6;
+            return (
+              <TouchableOpacity
+                key={dateStr}
+                style={[styles.monthCell, isToday && styles.monthCellToday]}
+                onPress={() => { setSelectedDate(dateStr); setActiveTab('일일'); loadDayLessons(dateStr); }}
+              >
+                <Text style={[
+                  styles.monthCellDay,
+                  isToday && styles.monthCellDayToday,
+                  isSun && !isToday && { color: Colors.destructive },
+                  isSat && !isToday && { color: Colors.info },
+                ]}>{day}</Text>
+                {dayLessons.length > 0 && (
+                  <View style={styles.monthLessonDots}>
+                    {dayLessons.slice(0, 3).map((l, i) => (
+                      <View key={i} style={styles.monthDot} />
+                    ))}
+                    {dayLessons.length > 0 && (
+                      <Text style={styles.monthLessonCount}>{dayLessons.length}</Text>
+                    )}
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* 이번 달 레슨 요약 */}
+        <View style={styles.monthSummary}>
+          <View style={styles.monthSummaryItem}>
+            <Text style={styles.monthSummaryNum}>{Array.from(monthLessons.values()).reduce((s, ls) => s + ls.length, 0)}</Text>
+            <Text style={styles.monthSummaryLabel}>총 레슨</Text>
+          </View>
+          <View style={styles.monthSummaryDivider} />
+          <View style={styles.monthSummaryItem}>
+            <Text style={styles.monthSummaryNum}>{monthLessons.size}</Text>
+            <Text style={styles.monthSummaryLabel}>레슨일</Text>
+          </View>
+          <View style={styles.monthSummaryDivider} />
+          <View style={styles.monthSummaryItem}>
+            <Text style={styles.monthSummaryNum}>{new Set(Array.from(monthLessons.values()).flat().flatMap(l => l.memberIds)).size}</Text>
+            <Text style={styles.monthSummaryLabel}>참여 회원</Text>
+          </View>
+        </View>
+        <View style={{ height: 100 }} />
+      </ScrollView>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* 탭 */}
       <View style={styles.tabRow}>
-        {(['일일', '주간'] as ViewTab[]).map(tab => (
+        {(['일일', '주간', '월간'] as ViewTab[]).map(tab => (
           <TouchableOpacity key={tab} style={[styles.tabBtn, activeTab === tab && styles.tabBtnActive]} onPress={() => setActiveTab(tab)}>
             <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
           </TouchableOpacity>
@@ -446,13 +568,13 @@ export default function ScheduleScreen() {
           </Text>
           {renderDayGrid()}
         </>
-      ) : (
+      ) : activeTab === '주간' ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.weekScroll} contentContainerStyle={styles.weekScrollContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadWeekLessons(thisWeekDates); setRefreshing(false); }} tintColor={Colors.navy} />}
         >
           {weekData.map(item => renderWeekDay(item))}
         </ScrollView>
-      )}
+      ) : renderMonthView()}
 
       {/* FAB */}
       <TouchableOpacity style={styles.fab} onPress={() => router.push('/lessons/new')}>
@@ -726,4 +848,24 @@ const styles = StyleSheet.create({
   inlinePickerItemActive: { backgroundColor: Colors.primary },
   inlinePickerText: { fontSize: 16, fontWeight: '600', color: Colors.mutedFg },
   inlinePickerTextActive: { color: '#fff', fontWeight: '800' },
+
+  // 월간 뷰
+  monthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  monthNavBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.mutedBg, justifyContent: 'center', alignItems: 'center' },
+  monthTitle: { fontSize: 17, fontWeight: '800', color: Colors.navy },
+  monthDayHeaders: { flexDirection: 'row', backgroundColor: Colors.white, paddingVertical: 8, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  monthDayName: { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '700', color: Colors.mutedFg },
+  monthGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 4, paddingTop: 4 },
+  monthCell: { width: '14.28%', minHeight: 64, padding: 4, alignItems: 'center', borderRadius: 8 },
+  monthCellToday: { backgroundColor: Colors.primary + '18' },
+  monthCellDay: { fontSize: 15, fontWeight: '600', color: Colors.foreground, marginBottom: 3 },
+  monthCellDayToday: { color: Colors.primary, fontWeight: '800' },
+  monthLessonDots: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  monthDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.primary },
+  monthLessonCount: { fontSize: 10, fontWeight: '700', color: Colors.primary, marginLeft: 1 },
+  monthSummary: { flexDirection: 'row', marginHorizontal: 16, marginTop: 16, backgroundColor: Colors.white, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border },
+  monthSummaryItem: { flex: 1, alignItems: 'center' },
+  monthSummaryDivider: { width: 1, backgroundColor: Colors.border },
+  monthSummaryNum: { fontSize: 22, fontWeight: '800', color: Colors.navy },
+  monthSummaryLabel: { fontSize: 11, color: Colors.mutedFg, marginTop: 2 },
 });
