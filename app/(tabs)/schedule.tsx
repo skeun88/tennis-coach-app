@@ -51,6 +51,18 @@ function getThisWeekDates(): string[] {
     return toKSTDateStr(d);
   });
 }
+
+function getOffsetWeekDates(offset: number): string[] {
+  const now = new Date();
+  const day = now.getDay(); // 0=일
+  const mon = new Date(now);
+  mon.setDate(now.getDate() - ((day + 6) % 7) + offset * 7); // 월요일 시작
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(mon); d.setDate(mon.getDate() + i);
+    return toKSTDateStr(d);
+  });
+}
+
 function timeToMinutes(t: string): number {
   const [h, m] = t.slice(0, 5).split(':').map(Number);
   return h * 60 + m;
@@ -76,6 +88,7 @@ export default function ScheduleScreen() {
   const [selectedDate, setSelectedDate] = useState(getTodayKST);
   const [weekDates, setWeekDates] = useState(getWeekDates);
   const [thisWeekDates, setThisWeekDates] = useState(getThisWeekDates);
+  const [weekOffset, setWeekOffset] = useState(0); // 주간 뷰 주 이동 오프셋
 
   // 새 레슨 등록 모달
   const [newModal, setNewModal] = useState(false);
@@ -408,34 +421,151 @@ export default function ScheduleScreen() {
     );
   }
 
-  // ── 주간 뷰 ───────────────────────────────────────────────────
-  function renderWeekDay(item: WeekLesson) {
-    const d = new Date(item.date + 'T00:00:00');
-    const isToday = item.date === today;
+  // ── 주간 뷰 (타임그리드) ─────────────────────────────────────
+  function renderWeekGrid() {
+    const { width: SCREEN_W } = require('react-native').Dimensions.get('window');
+    const TIME_COL = 44;
+    const COL_W = Math.floor((SCREEN_W - TIME_COL) / 7);
+    const displayDates = getOffsetWeekDates(weekOffset);
+    const gridHeight = (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT;
+    const DAYS_KO = ['월', '화', '수', '목', '금', '토', '일'];
+    const monthLabel = (() => {
+      const d = new Date(displayDates[0] + 'T00:00:00');
+      return d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long' });
+    })();
+
+    // 레슨을 날짜별로 그룹핑
+    const lessonsByDate = new Map<string, LessonWithMembers[]>();
+    for (const dd of displayDates) lessonsByDate.set(dd, []);
+    for (const d of weekData) { if (lessonsByDate.has(d.date)) lessonsByDate.set(d.date, d.lessons); }
+
+    // 현재 시간선
+    const nowKST = new Date(new Date().getTime() + 9 * 3600000);
+    const nowMin = nowKST.getUTCHours() * 60 + nowKST.getUTCMinutes();
+    const nowLineY = nowMin >= START_HOUR * 60 && nowMin <= END_HOUR * 60
+      ? ((nowMin - START_HOUR * 60) / 60) * HOUR_HEIGHT : null;
+    const todayInView = displayDates.findIndex(d => d === today);
+
     return (
-      <View key={item.date} style={[styles.weekDayCol, isToday && styles.weekDayColToday]}>
-        <View style={[styles.weekDayHeader, isToday && styles.weekDayHeaderToday]}>
-          <Text style={[styles.weekDayName, isToday && styles.weekDayNameToday]}>{DAYS[d.getDay()]}</Text>
-          <Text style={[styles.weekDayNum, isToday && styles.weekDayNumToday]}>{d.getDate()}</Text>
-        </View>
-        {item.lessons.length === 0 ? (
-          <View style={styles.weekEmptySlot}><Text style={styles.weekEmptyText}>-</Text></View>
-        ) : (
-          item.lessons.map(lesson => (
-            <TouchableOpacity key={lesson.id} style={styles.weekLessonCard} onPress={() => router.push('/lessons/' + lesson.id as any)}>
-              <Text style={styles.weekLessonTime}>{lesson.start_time.slice(0, 5)}</Text>
-              <Text style={styles.weekLessonTitle} numberOfLines={2}>
-                {lesson.memberNames.length > 0 ? lesson.memberNames.join(', ') : lesson.title.replace(/ 레슨$/, '')}
-              </Text>
+      <View style={{ flex: 1, backgroundColor: Colors.background }}>
+        {/* 주 네비게이션 헤더 */}
+        <View style={styles.weekNavBar}>
+          <TouchableOpacity style={styles.weekNavBtn} onPress={() => {
+            const newOffset = weekOffset - 1;
+            setWeekOffset(newOffset);
+            loadWeekLessons(getOffsetWeekDates(newOffset));
+          }}>
+            <Ionicons name="chevron-back" size={18} color={Colors.navy} />
+          </TouchableOpacity>
+          <Text style={styles.weekNavTitle}>{monthLabel}</Text>
+          <TouchableOpacity style={styles.weekNavBtn} onPress={() => {
+            const newOffset = weekOffset + 1;
+            setWeekOffset(newOffset);
+            loadWeekLessons(getOffsetWeekDates(newOffset));
+          }}>
+            <Ionicons name="chevron-forward" size={18} color={Colors.navy} />
+          </TouchableOpacity>
+          {weekOffset !== 0 && (
+            <TouchableOpacity style={styles.weekTodayBtn} onPress={() => {
+              setWeekOffset(0);
+              loadWeekLessons(getOffsetWeekDates(0));
+            }}>
+              <Text style={styles.weekTodayBtnText}>오늘</Text>
             </TouchableOpacity>
-          ))
-        )}
+          )}
+        </View>
+
+        {/* 요일 헤더 */}
+        <View style={[styles.weekDayHeaderRow, { paddingLeft: TIME_COL }]}>
+          {displayDates.map((date, i) => {
+            const d = new Date(date + 'T00:00:00');
+            const isToday = date === today;
+            return (
+              <View key={date} style={[styles.weekColHeader, { width: COL_W }, isToday && styles.weekColHeaderToday]}>
+                <Text style={[styles.weekColDayName, isToday && styles.weekColDayNameToday]}>{DAYS_KO[i]}</Text>
+                <Text style={[styles.weekColDayNum, isToday && styles.weekColDayNumToday]}>{d.getDate()}</Text>
+              </View>
+            );
+          })}
+        </View>
+
+        {/* 타임 그리드 */}
+        <ScrollView
+          ref={dayScrollRef}
+          style={{ flex: 1 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing}
+            onRefresh={async () => { setRefreshing(true); await loadWeekLessons(displayDates); setRefreshing(false); }}
+            tintColor={Colors.navy} />}
+        >
+          <View style={{ height: gridHeight + 20, position: 'relative', flexDirection: 'row' }}>
+            {/* 시간 라벨 컬럼 */}
+            <View style={{ width: TIME_COL }}>
+              {HOURS.map(h => (
+                <View key={h} style={[styles.weekHourLabel, { top: (h - START_HOUR) * HOUR_HEIGHT }]}>
+                  <Text style={styles.hourLabel}>{String(h).padStart(2, '0')}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* 7개 day 컬럼 */}
+            {displayDates.map((date, colIdx) => {
+              const isToday = date === today;
+              const colLessons = lessonsByDate.get(date) ?? [];
+              const colMap = computeColumns(colLessons);
+              return (
+                <View key={date} style={[styles.weekDayColGrid, { width: COL_W, height: gridHeight },
+                  isToday && { backgroundColor: Colors.primary + '10' }]}>
+                  {/* 시간 구분선 */}
+                  {HOURS.map(h => (
+                    <View key={h} style={[styles.weekHourLine, { top: (h - START_HOUR) * HOUR_HEIGHT }]} />
+                  ))}
+                  {/* 현재 시간선 */}
+                  {isToday && nowLineY !== null && (
+                    <View style={[styles.weekNowLine, { top: nowLineY }]}>
+                      <View style={styles.nowDot} />
+                      <View style={styles.nowLineBar} />
+                    </View>
+                  )}
+                  {/* 레슨 블록 */}
+                  {colLessons.map(lesson => {
+                    const startMin = timeToMinutes(lesson.start_time);
+                    const endMin = timeToMinutes(lesson.end_time);
+                    const top = (startMin - START_HOUR * 60) / 60 * HOUR_HEIGHT;
+                    const height = Math.max(30, (endMin - startMin) / 60 * HOUR_HEIGHT - 2);
+                    const layout = colMap.get(lesson.id) ?? { col: 0, totalCols: 1 };
+                    const bWidth = (COL_W - 4 - (layout.totalCols - 1) * 2) / layout.totalCols;
+                    const left = 2 + layout.col * (bWidth + 2);
+                    const isPast = endMin < nowMin && date <= today;
+                    return (
+                      <TouchableOpacity
+                        key={lesson.id}
+                        style={[styles.weekLessonBlock, {
+                          top, height, left, width: bWidth,
+                          backgroundColor: isPast ? Colors.mutedBg : Colors.primary,
+                          borderLeftColor: isPast ? Colors.placeholder : Colors.navy,
+                        }]}
+                        onPress={() => router.push('/lessons/' + lesson.id as any)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[styles.weekBlockName, isPast && { color: Colors.mutedFg }]}
+                          numberOfLines={2}>
+                          {lesson.memberNames.length > 0 ? lesson.memberNames.join(',') : lesson.title.replace(/ 레슨$/, '')}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              );
+            })}
+          </View>
+          <View style={{ height: 80 }} />
+        </ScrollView>
       </View>
     );
   }
 
-
-  // ── 월간 뷰 ───────────────────────────────────────────────────
+    // ── 월간 뷰 ───────────────────────────────────────────────────
   function renderMonthView() {
     const { year, month } = monthYear;
     const firstDayOfMonth = new Date(year, month, 1).getDay(); // 0=일
@@ -569,11 +699,7 @@ export default function ScheduleScreen() {
           {renderDayGrid()}
         </>
       ) : activeTab === '주간' ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.weekScroll} contentContainerStyle={styles.weekScrollContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadWeekLessons(thisWeekDates); setRefreshing(false); }} tintColor={Colors.navy} />}
-        >
-          {weekData.map(item => renderWeekDay(item))}
-        </ScrollView>
+        renderWeekGrid()
       ) : renderMonthView()}
 
       {/* FAB */}
@@ -795,7 +921,6 @@ const styles = StyleSheet.create({
   dragHandle: { position: 'absolute', bottom: 3, right: 6 },
   // 주간 뷰
   weekScroll: { flex: 1 },
-  weekScrollContent: { padding: 12, gap: 8, flexDirection: 'row' },
   weekDayCol: { width: 130, backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 },
   weekDayColToday: { borderWidth: 2, borderColor: Colors.primary },
   weekDayHeader: { backgroundColor: Colors.background, paddingVertical: 10, alignItems: 'center', borderBottomWidth: 1, borderBottomColor: Colors.border },
@@ -849,6 +974,26 @@ const styles = StyleSheet.create({
   inlinePickerText: { fontSize: 16, fontWeight: '600', color: Colors.mutedFg },
   inlinePickerTextActive: { color: '#fff', fontWeight: '800' },
 
+
+  // 주간 타임그리드 스타일
+  weekNavBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border, gap: 8 },
+  weekNavBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: Colors.mutedBg, justifyContent: 'center', alignItems: 'center' },
+  weekNavTitle: { flex: 1, textAlign: 'center', fontSize: 16, fontWeight: '800', color: Colors.navy },
+  weekTodayBtn: { backgroundColor: Colors.primary, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8 },
+  weekTodayBtnText: { color: Colors.white, fontSize: 12, fontWeight: '700' },
+  weekDayHeaderRow: { flexDirection: 'row', backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  weekColHeader: { alignItems: 'center', paddingVertical: 8, borderLeftWidth: 1, borderLeftColor: Colors.border },
+  weekColHeaderToday: { backgroundColor: Colors.primary },
+  weekColDayName: { fontSize: 11, fontWeight: '700', color: Colors.mutedFg },
+  weekColDayNameToday: { color: 'rgba(255,255,255,0.8)' },
+  weekColDayNum: { fontSize: 17, fontWeight: '800', color: Colors.foreground, marginTop: 1 },
+  weekColDayNumToday: { color: Colors.white },
+  weekHourLabel: { position: 'absolute', left: 0, right: 0, justifyContent: 'flex-start', alignItems: 'flex-end', paddingRight: 6, height: HOUR_HEIGHT },
+  weekDayColGrid: { position: 'relative', borderLeftWidth: 1, borderLeftColor: Colors.border },
+  weekHourLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: Colors.border },
+  weekNowLine: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', zIndex: 10 },
+  weekLessonBlock: { position: 'absolute', borderRadius: 4, borderLeftWidth: 2, paddingHorizontal: 3, paddingVertical: 2, overflow: 'hidden' },
+  weekBlockName: { fontSize: 10, fontWeight: '700', color: Colors.white, lineHeight: 13 },
   // 월간 뷰
   monthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border },
   monthNavBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.mutedBg, justifyContent: 'center', alignItems: 'center' },
