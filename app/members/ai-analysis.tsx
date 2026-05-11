@@ -544,8 +544,6 @@ const styles = StyleSheet.create({
   drillCard: {
     backgroundColor: '#f8fdf9',
     borderRadius: 10,
-    borderLeftWidth: 3,
-    borderLeftColor: Colors.primary,
     marginBottom: 10,
     overflow: 'hidden',
   },

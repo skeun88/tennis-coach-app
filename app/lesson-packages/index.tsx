@@ -66,7 +66,7 @@ export default function LessonPackagesScreen() {
       : '요일 미지정';
 
     return (
-      <View style={[styles.card, { borderLeftColor: item.color }]}>
+      <View style={styles.card}>
         <View style={styles.cardTop}>
           <View style={[styles.colorDot, { backgroundColor: item.color }]} />
           <Text style={styles.cardTitle}>{item.title}</Text>
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   card: {
     backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12,
-    borderLeftWidth: 4,
+    
     shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2,
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },

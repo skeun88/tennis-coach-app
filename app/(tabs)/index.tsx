@@ -280,23 +280,23 @@ export default function HomeScreen() {
       {/* Stats Grid (2x2) */}
       <View style={styles.statsGrid}>
         <View style={styles.statsRow}>
-          <View style={[styles.statCard, { borderLeftColor: Colors.mint }]}>
+          <View style={styles.statCard}>
             <Text style={styles.statValue}>{stats.activeMembers}</Text>
             <Text style={styles.statLabel}>활성 회원</Text>
           </View>
-          <View style={[styles.statCard, { borderLeftColor: Colors.mint }]}>
+          <View style={styles.statCard}>
             <Text style={styles.statValue}>{stats.todayLessons}</Text>
             <Text style={styles.statLabel}>오늘 레슨</Text>
           </View>
         </View>
         <View style={styles.statsRow}>
-          <View style={[styles.statCard, { borderLeftColor: Colors.destructive }]}>
+          <View style={styles.statCard}>
             <Text style={[styles.statValue, { color: stats.unpaidPayments > 0 ? Colors.destructive : Colors.foreground }]}>
               {stats.unpaidPayments}
             </Text>
             <Text style={styles.statLabel}>미납 회원</Text>
           </View>
-          <View style={[styles.statCard, { borderLeftColor: Colors.mint }]}>
+          <View style={styles.statCard}>
             <Text style={styles.statValue}>{stats.totalMembers}</Text>
             <Text style={styles.statLabel}>전체 회원</Text>
           </View>
@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
   statsRow: { flexDirection: 'row', gap: 8, marginBottom: 0 },
   statCard: {
     flex: 1, backgroundColor: Colors.card, borderRadius: Radius.md,
-    paddingVertical: 10, paddingHorizontal: 12, borderLeftWidth: 4,
+    paddingVertical: 10, paddingHorizontal: 12,
     ...Shadow.sm,
   },
   statValue: { fontSize: 20, fontWeight: '800', color: Colors.foreground, marginBottom: 1 },

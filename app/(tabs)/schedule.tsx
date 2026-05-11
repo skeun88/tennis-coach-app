@@ -543,7 +543,6 @@ export default function ScheduleScreen() {
                         style={[styles.weekLessonBlock, {
                           top, height, left, width: bWidth,
                           backgroundColor: isPast ? Colors.mutedBg : Colors.primary,
-                          borderLeftColor: isPast ? Colors.placeholder : Colors.navy,
                         }]}
                         onPress={() => router.push('/lessons/' + lesson.id as any)}
                         activeOpacity={0.8}
@@ -912,8 +911,7 @@ const styles = StyleSheet.create({
   lessonCard: {
     position: 'absolute',
     backgroundColor: Colors.primary, borderRadius: 8, padding: 6, paddingHorizontal: 8,
-    borderLeftWidth: 3, borderLeftColor: Colors.navy,
-  },
+    },
   lessonCardDragging: { opacity: 0.85, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
   lessonCardTime: { fontSize: 12, color: 'rgba(255,255,255,0.75)', fontWeight: '600', flexShrink: 0 },
   lessonCardTitle: { fontSize: 14, color: '#fff', fontWeight: '800', flexShrink: 1 },
@@ -931,7 +929,7 @@ const styles = StyleSheet.create({
   weekDayNumToday: { color: '#fff' },
   weekEmptySlot: { padding: 16, alignItems: 'center' },
   weekEmptyText: { fontSize: 20, color: Colors.border },
-  weekLessonCard: { margin: 8, backgroundColor: Colors.primaryLight, borderRadius: 8, padding: 8, borderLeftWidth: 3, borderLeftColor: Colors.primary },
+  weekLessonCard: { margin: 8, backgroundColor: Colors.primaryLight, borderRadius: 8, padding: 8 },
   weekLessonTime: { fontSize: 13, color: Colors.navy, fontWeight: '700', marginBottom: 2 },
   weekLessonTitle: { fontSize: 14, color: Colors.foreground, fontWeight: '600' },
   weekLessonMembers: { fontSize: 11, color: Colors.navy, marginTop: 2 },
@@ -992,7 +990,7 @@ const styles = StyleSheet.create({
   weekDayColGrid: { position: 'relative', borderLeftWidth: 1, borderLeftColor: Colors.border },
   weekHourLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: Colors.border },
   weekNowLine: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', zIndex: 10 },
-  weekLessonBlock: { position: 'absolute', borderRadius: 4, borderLeftWidth: 2, paddingHorizontal: 3, paddingVertical: 2, overflow: 'hidden' },
+  weekLessonBlock: { position: 'absolute', borderRadius: 4, paddingHorizontal: 3, paddingVertical: 2, overflow: 'hidden' },
   weekBlockName: { fontSize: 10, fontWeight: '700', color: Colors.white, lineHeight: 13 },
   // 월간 뷰
   monthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border },

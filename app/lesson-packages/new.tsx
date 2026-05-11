@@ -89,7 +89,7 @@ export default function NewLessonPackageScreen() {
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
 
         {/* 미리보기 카드 */}
-        <View style={[styles.previewCard, { borderLeftColor: color }]}>
+        <View style={styles.previewCard}>
           <View style={styles.previewTop}>
             <View style={[styles.previewDot, { backgroundColor: color }]} />
             <Text style={styles.previewTitle}>{title || '레슨권 제목'}</Text>
@@ -184,9 +184,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   previewCard: {
-    backgroundColor: '#fff', margin: 16, borderRadius: 14, padding: 16,
-    borderLeftWidth: 5,
-    shadowColor: '#000', shadowOpacity: 0.07, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3,
+    backgroundColor: '#fff', margin: 16, borderRadius: 14, padding: 16,shadowColor: '#000', shadowOpacity: 0.07, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3,
   },
   previewTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   previewDot: { width: 12, height: 12, borderRadius: 6 },
