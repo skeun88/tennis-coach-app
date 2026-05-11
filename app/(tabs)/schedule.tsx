@@ -23,7 +23,7 @@ interface WeekLesson {
 }
 
 const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
-const HOUR_HEIGHT = 64; // px per hour
+const HOUR_HEIGHT = 100; // px per hour
 const START_HOUR = 6;
 const END_HOUR = 22;
 const HOURS = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => i + START_HOUR);
@@ -353,7 +353,7 @@ export default function ScheduleScreen() {
               const startMin = timeToMinutes(lesson.start_time);
               const endMin = timeToMinutes(lesson.end_time);
               const top = (startMin - START_HOUR * 60) / 60 * HOUR_HEIGHT;
-              const height = Math.max(28, (endMin - startMin) / 60 * HOUR_HEIGHT - 4);
+              const height = Math.max(52, (endMin - startMin) / 60 * HOUR_HEIGHT - 4);
               const isDragging = draggingId === lesson.id;
               const layout = colMap.get(lesson.id) ?? { col: 0, totalCols: 1 };
               const colWidth = (GRID_WIDTH - (layout.totalCols - 1) * 3) / layout.totalCols;
@@ -624,11 +624,11 @@ function DraggableLesson({
         delayLongPress={350}
         activeOpacity={0.85}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={styles.lessonCardTitle} numberOfLines={1}>
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <Text style={styles.lessonCardTitle} numberOfLines={2}>
             {lesson.memberNames.length > 0 ? lesson.memberNames.join(', ') : lesson.title.replace(/ 레슨$/, '')}
           </Text>
-          <Text style={styles.lessonCardTime}>{lesson.start_time.slice(0, 5)}~{lesson.end_time.slice(0, 5)}</Text>
+          <Text style={styles.lessonCardTime} numberOfLines={1}>{lesson.start_time.slice(0, 5)}~{lesson.end_time.slice(0, 5)}</Text>
         </View>
       </TouchableOpacity>
       {isDragging && (
@@ -663,12 +663,12 @@ const styles = StyleSheet.create({
   // 레슨 카드 (그리드)
   lessonCard: {
     position: 'absolute',
-    backgroundColor: Colors.primary, borderRadius: 8, padding: 8,
-    borderLeftWidth: 3, borderLeftColor: '#0d5c37',
+    backgroundColor: Colors.primary, borderRadius: 8, padding: 6, paddingHorizontal: 8,
+    borderLeftWidth: 3, borderLeftColor: Colors.navy,
   },
   lessonCardDragging: { opacity: 0.85, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
   lessonCardTime: { fontSize: 12, color: 'rgba(255,255,255,0.75)', fontWeight: '600', flexShrink: 0 },
-  lessonCardTitle: { fontSize: 15, color: '#fff', fontWeight: '800' },
+  lessonCardTitle: { fontSize: 14, color: '#fff', fontWeight: '800', flexShrink: 1 },
   lessonCardMembers: { fontSize: 10, color: 'rgba(255,255,255,0.75)', marginTop: 1 },
   dragHandle: { position: 'absolute', bottom: 3, right: 6 },
   // 주간 뷰
