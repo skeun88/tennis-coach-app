@@ -330,7 +330,7 @@ export default function PaymentsScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing}
             onRefresh={async () => { setRefreshing(true); await loadData(); setRefreshing(false); }}
-            tintColor={Colors.primary} />
+            tintColor={Colors.navy} />
         }
         ListHeaderComponent={
           <>
@@ -414,7 +414,7 @@ export default function PaymentsScreen() {
                   <View style={styles.modalRow}>
                     <Ionicons name="cash-outline" size={16} color={Colors.mutedFg} />
                     <Text style={styles.modalLabel}>납부금액</Text>
-                    <Text style={[styles.modalValue, { color: Colors.primary, fontWeight: '800' }]}>
+                    <Text style={[styles.modalValue, { color: Colors.navy, fontWeight: '800' }]}>
                       {payAmount.toLocaleString()}원
                     </Text>
                   </View>
@@ -468,13 +468,13 @@ export default function PaymentsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   summaryBanner: {
-    backgroundColor: Colors.navy, flexDirection: 'row',
+    backgroundColor: Colors.primary, flexDirection: 'row',
     paddingHorizontal: 20, paddingVertical: 18, alignItems: 'center',
   },
   summaryDivider: { width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.25)', marginHorizontal: 16 },
   summaryLabel: { fontSize: 12, color: 'rgba(255,255,255,0.75)', marginBottom: 4 },
   summaryAmount: { fontSize: 20, fontWeight: '800', color: '#fff' },
-  summaryPaid: { fontSize: 20, fontWeight: '800', color: Colors.mint },
+  summaryPaid: { fontSize: 20, fontWeight: '800', color: Colors.white },
   // 납부 필요 섹션
   alertSection: {
     backgroundColor: '#fff', borderRadius: 12, padding: 14,

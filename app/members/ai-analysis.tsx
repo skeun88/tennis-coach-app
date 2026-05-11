@@ -482,7 +482,7 @@ const styles = StyleSheet.create({
 
   // 분석 진행 상태
   analyzingBox: { alignItems: 'center', paddingVertical: 20, gap: 10 },
-  analyzingText: { fontSize: 16, fontWeight: '700', color: Colors.primary },
+  analyzingText: { fontSize: 16, fontWeight: '700', color: Colors.navy },
   analyzingSubText: { fontSize: 12, color: Colors.placeholder },
   stepDots: { flexDirection: 'row', gap: 8, marginTop: 4 },
   stepDot: {
@@ -527,7 +527,7 @@ const styles = StyleSheet.create({
   courtBadge: {
     backgroundColor: Colors.primaryLight, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
   },
-  courtBadgeText: { fontSize: 11, color: Colors.primary, fontWeight: '700' },
+  courtBadgeText: { fontSize: 11, color: Colors.navy, fontWeight: '700' },
   planPreview: { fontSize: 14, color: Colors.foreground, lineHeight: 20 },
   planDetail: { marginTop: 4 },
   divider: { height: 1, backgroundColor: Colors.mutedBg, marginVertical: 12 },
@@ -537,7 +537,7 @@ const styles = StyleSheet.create({
 
   // Bullet list
   bulletRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 6 },
-  bulletIcon: { fontSize: 14, color: Colors.primary, marginTop: 3, width: 14 },
+  bulletIcon: { fontSize: 14, color: Colors.navy, marginTop: 3, width: 14 },
   bulletText: { fontSize: 14, color: Colors.foreground, lineHeight: 22, flex: 1 },
 
   // 드릴 카드
@@ -562,7 +562,7 @@ const styles = StyleSheet.create({
   drillBody: { paddingHorizontal: 12, paddingBottom: 12, gap: 4 },
   drillRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   drillLabel: {
-    fontSize: 12, fontWeight: '700', color: Colors.primary,
+    fontSize: 12, fontWeight: '700', color: Colors.navy,
     width: 60, marginTop: 2, flexShrink: 0,
   },
   drillValue: { fontSize: 13, color: Colors.foreground, lineHeight: 20, flex: 1 },
@@ -578,7 +578,7 @@ const styles = StyleSheet.create({
   summaryKeywordText: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.primary,
+    color: Colors.navy,
     lineHeight: 20,
   },
 });

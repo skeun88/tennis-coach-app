@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: Colors.primaryLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12,
   },
-  savedText: { fontSize: 12, color: Colors.primary, fontWeight: '600' },
+  savedText: { fontSize: 12, color: Colors.navy, fontWeight: '600' },
 
   content: { padding: 16, paddingBottom: 48 },
 

@@ -463,7 +463,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                       <Ionicons name="card-outline" size={18} color={Colors.iconMuted} />
                       <Text style={[styles.packageMeta, { color: Colors.placeholder, marginLeft: 8 }]}>연결된 레슨권 없음</Text>
                       <TouchableOpacity onPress={() => setEditing(true)} style={{ marginLeft: 'auto' }}>
-                        <Text style={{ fontSize: 12, color: Colors.primary, fontWeight: '600' }}>설정 →</Text>
+                        <Text style={{ fontSize: 12, color: Colors.navy, fontWeight: '600' }}>설정 →</Text>
                       </TouchableOpacity>
                     </>
                   )}
@@ -539,7 +539,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                           }}
                         >
                           <Ionicons name="add" size={14} color={Colors.primary} />
-                          <Text style={{ fontSize: 12, color: Colors.primary, fontWeight: '700' }}>시간 추가</Text>
+                          <Text style={{ fontSize: 12, color: Colors.navy, fontWeight: '700' }}>시간 추가</Text>
                         </TouchableOpacity>
                       </View>
                       {/* 시간 목록 */}
@@ -825,7 +825,7 @@ const styles = StyleSheet.create({
   tabBtn: { flex: 1, alignItems: 'center', paddingVertical: 10, flexDirection: 'row', justifyContent: 'center', gap: 4 },
   tabBtnActive: { borderBottomWidth: 2, borderBottomColor: Colors.primary },
   tabLabel: { fontSize: 12, color: Colors.mutedFg, fontWeight: '600' },
-  tabLabelActive: { color: Colors.primary },
+  tabLabelActive: { color: Colors.navy },
   content: { flex: 1, backgroundColor: Colors.background },
   card: { backgroundColor: '#fff', margin: 16, borderRadius: 12, padding: 16 },
   cardTitle: { fontSize: 15, fontWeight: '700', color: Colors.foreground, marginBottom: 12 },
@@ -834,7 +834,7 @@ const styles = StyleSheet.create({
   infoValue: { fontSize: 15, color: Colors.foreground, fontWeight: '500' },
   btnRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
   editBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1.5, borderColor: Colors.primary, borderRadius: 10, paddingVertical: 10 },
-  editBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 14 },
+  editBtnText: { color: Colors.navy, fontWeight: '700', fontSize: 14 },
   deactivateBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: Colors.destructive, borderRadius: 10, paddingVertical: 10 },
   deactivateBtnText: { color: Colors.destructive, fontWeight: '700', fontSize: 14 },
   editLabel: { fontSize: 12, color: Colors.mutedFg, fontWeight: '600', marginBottom: 4, marginTop: 8 },

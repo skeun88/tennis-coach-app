@@ -136,7 +136,7 @@ export default function MembersScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={async () => { setRefreshing(true); await loadMembers(); setRefreshing(false); }}
-            tintColor={Colors.primary}
+            tintColor={Colors.navy}
           />
         }
         ListEmptyComponent={
@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
   packageBannerTitle: { fontSize: 15, fontWeight: '800', color: Colors.foreground, marginBottom: 2 },
   packageBannerSub: { fontSize: 12, color: Colors.mutedFg },
   packageBannerRight: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  packageBannerAction: { fontSize: 13, fontWeight: '700', color: Colors.primary },
+  packageBannerAction: { fontSize: 13, fontWeight: '700', color: Colors.navy },
 
   // Search
   searchRow: { flexDirection: 'row', padding: 16, paddingBottom: 8, gap: 8 },

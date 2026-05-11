@@ -136,5 +136,5 @@ const styles = StyleSheet.create({
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   switchBtn: { marginTop: 16, alignItems: 'center' },
   switchText: { fontSize: 14, color: Colors.mutedFg },
-  switchLink: { color: Colors.primary, fontWeight: '700' },
+  switchLink: { color: Colors.navy, fontWeight: '700' },
 });

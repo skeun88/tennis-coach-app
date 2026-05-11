@@ -6,7 +6,7 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors.primary,
+        tabBarActiveTintColor: Colors.navy,
         tabBarInactiveTintColor: Colors.mutedFg,
         tabBarStyle: {
           borderTopWidth: 1,
@@ -14,7 +14,7 @@ export default function TabsLayout() {
           paddingBottom: 4,
           backgroundColor: Colors.white,
         },
-        headerStyle: { backgroundColor: Colors.navy },
+        headerStyle: { backgroundColor: Colors.primary },
         headerTintColor: Colors.white,
         headerTitleStyle: { fontWeight: '700' },
       }}
@@ -71,7 +71,7 @@ export default function TabsLayout() {
           href: null,
           headerTitle: 'KERRI 도우미',
           headerShown: true,
-          headerStyle: { backgroundColor: Colors.navy },
+          headerStyle: { backgroundColor: Colors.primary },
           headerTintColor: Colors.white,
         }}
       />

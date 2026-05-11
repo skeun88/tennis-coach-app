@@ -143,7 +143,7 @@ export default function ProfileScreen() {
               </View>
               <View style={[styles.badge, styles.badgeKerri]}>
                 <Ionicons name="shield-checkmark" size={11} color={Colors.mint} />
-                <Text style={[styles.badgeText, { color: Colors.mint }]}>KERRI 인증</Text>
+                <Text style={[styles.badgeText, { color: Colors.white }]}>KERRI 인증</Text>
               </View>
             </View>
           </View>
@@ -171,7 +171,7 @@ export default function ProfileScreen() {
           {/* KERRI 인증 코칭 데이터 */}
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
-              <Ionicons name="shield-checkmark" size={16} color={Colors.mint} />
+              <Ionicons name="shield-checkmark" size={16} color={Colors.navy} />
               <Text style={styles.sectionTitle}>KERRI 인증 코칭 데이터</Text>
             </View>
             <Text style={styles.sectionSub}>레슨 데이터 기반 자동 산출 · 조작 불가</Text>
@@ -179,7 +179,7 @@ export default function ProfileScreen() {
               {certifiedData.map((item, i) => (
                 <View key={i} style={[styles.dataRow, i < certifiedData.length - 1 && styles.dataRowBorder]}>
                   <View style={styles.dataIcon}>
-                    <Ionicons name={item.icon as any} size={16} color={Colors.mint} />
+                    <Ionicons name={item.icon as any} size={16} color={Colors.navy} />
                   </View>
                   <View style={styles.dataLabel}>
                     <Text style={styles.dataLabelText}>{item.label}</Text>
@@ -200,7 +200,7 @@ export default function ProfileScreen() {
               {marketEarnings.map((m, i) => (
                 <View key={i} style={[styles.dataRow, styles.dataRowBorder]}>
                   <View style={styles.dataIcon}>
-                    <Ionicons name={m.icon as any} size={16} color={Colors.mint} />
+                    <Ionicons name={m.icon as any} size={16} color={Colors.navy} />
                   </View>
                   <View style={styles.dataLabel}>
                     <Text style={styles.dataLabelText}>{m.label}</Text>
@@ -237,8 +237,8 @@ export default function ProfileScreen() {
                 포핸드 손목 고정 교정 완료. 이번 주부터 슬라이스 서브 1단계 드릴 시작. 임팩트 직전 라켓 각도 의식적으로 확인 필요.
               </Text>
               <View style={styles.reportTags}>
-                <View style={[styles.reportTag, { backgroundColor: Colors.mint + '22' }]}>
-                  <Text style={[styles.reportTagText, { color: Colors.mint }]}>포핸드 완료</Text>
+                <View style={[styles.reportTag, { backgroundColor: Colors.navy + '10' }]}>
+                  <Text style={[styles.reportTagText, { color: Colors.white }]}>포핸드 완료</Text>
                 </View>
                 <View style={[styles.reportTag, { backgroundColor: '#FEF3C7' }]}>
                   <Text style={[styles.reportTagText, { color: '#92400E' }]}>슬라이스 진입</Text>
@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
 
   // Hero
-  hero: { backgroundColor: Colors.navy, paddingBottom: 24 },
+  hero: { backgroundColor: Colors.primary, paddingBottom: 24 },
   heroTop: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 20, paddingTop: 56, paddingBottom: 8,
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
   },
   avatar: {
     width: 76, height: 76, borderRadius: 38,
-    backgroundColor: Colors.mint, justifyContent: 'center', alignItems: 'center',
+    backgroundColor: Colors.white, justifyContent: 'center', alignItems: 'center',
   },
   avatarText: { fontSize: 30, fontWeight: '800', color: Colors.navy },
   heroName: { fontSize: 20, fontWeight: '800', color: Colors.white, marginBottom: 4 },
@@ -359,7 +359,7 @@ const styles = StyleSheet.create({
   },
   badgeGold: { backgroundColor: 'rgba(245,158,11,0.15)', borderColor: 'rgba(245,158,11,0.4)' },
   badgeSport: { backgroundColor: 'rgba(255,255,255,0.1)', borderColor: 'rgba(255,255,255,0.2)' },
-  badgeKerri: { backgroundColor: Colors.mint + '22', borderColor: Colors.mint + '44' },
+  badgeKerri: { backgroundColor: 'rgba(255,255,255,0.15)', borderColor: 'rgba(255,255,255,0.3)' },
   badgeText: { fontSize: 11, fontWeight: '700' },
 
   statsStrip: {
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
   },
   statItem: { flex: 1, alignItems: 'center' },
   statDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.15)' },
-  statNum: { fontSize: 18, fontWeight: '800', color: Colors.mint },
+  statNum: { fontSize: 18, fontWeight: '800', color: Colors.white },
   statLbl: { fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 },
 
   // Body
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
   dataRowBorder: { borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
   dataIcon: {
     width: 36, height: 36, borderRadius: 10,
-    backgroundColor: Colors.mint + '18',
+    backgroundColor: Colors.navy + '12',
     justifyContent: 'center', alignItems: 'center', marginRight: 12,
   },
   dataLabel: { flex: 1 },
@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
   dataValueText: { fontSize: 14, fontWeight: '700', color: Colors.navy },
   totalRow: { backgroundColor: Colors.navy + '05' },
   totalLabel: { flex: 1, fontSize: 14, fontWeight: '800', color: Colors.navy, marginLeft: 48 },
-  totalValue: { fontSize: 16, fontWeight: '800', color: Colors.mint },
+  totalValue: { fontSize: 16, fontWeight: '800', color: Colors.navy },
 
   // Report
   reportCard: {
@@ -434,9 +434,9 @@ const styles = StyleSheet.create({
   earningsBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     height: 48, paddingHorizontal: 18, borderRadius: Radius.lg,
-    borderWidth: 1.5, borderColor: Colors.mint,
+    borderWidth: 1.5, borderColor: Colors.navy,
   },
-  earningsBtnText: { fontSize: 14, fontWeight: '700', color: Colors.mint },
+  earningsBtnText: { fontSize: 14, fontWeight: '700', color: Colors.navy },
   previewBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     height: 48, borderRadius: Radius.lg, backgroundColor: Colors.navy,

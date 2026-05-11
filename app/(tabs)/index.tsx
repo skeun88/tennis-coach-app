@@ -249,7 +249,7 @@ export default function HomeScreen() {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={async () => { setRefreshing(true); await loadAll(); setRefreshing(false); }}
-          tintColor={Colors.primary}
+          tintColor={Colors.navy}
         />
       }
     >
@@ -408,7 +408,7 @@ export default function HomeScreen() {
       <Text style={[styles.sectionTitle, { marginHorizontal: 16, marginTop: 8 }]}>빠른 실행</Text>
       <View style={styles.quickGrid}>
         {[
-          { label: '회원 등록', icon: 'person-add', color: Colors.primary, onPress: () => router.push('/members/new') },
+          { label: '회원 등록', icon: 'person-add', color: Colors.navy, onPress: () => router.push('/members/new') },
           { label: '레슨 추가', icon: 'calendar-outline', color: Colors.info, onPress: () => router.push('/lessons/new') },
           { label: '결제 현황', icon: 'card-outline', color: Colors.destructive, onPress: () => router.push('/(tabs)/payments') },
           { label: '회원 목록', icon: 'people-outline', color: Colors.navy, onPress: () => router.push('/(tabs)/members') },
@@ -490,7 +490,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 8,
     alignItems: 'center', marginRight: 12, minWidth: 52,
   },
-  timeText: { fontSize: 14, fontWeight: '700', color: Colors.primary },
+  timeText: { fontSize: 14, fontWeight: '700', color: Colors.navy },
   memberInfo: { flex: 1 },
   memberNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
   memberName: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
@@ -537,9 +537,9 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.successBorder,
   },
   autoGenHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  autoGenTitle: { fontSize: 15, fontWeight: '700', color: Colors.primary },
+  autoGenTitle: { fontSize: 15, fontWeight: '700', color: Colors.navy },
   autoGenItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
-  autoGenTime: { fontSize: 14, fontWeight: '700', color: Colors.primary, minWidth: 44 },
+  autoGenTime: { fontSize: 14, fontWeight: '700', color: Colors.navy, minWidth: 44 },
   autoGenName: { fontSize: 14, color: Colors.foreground, fontWeight: '500' },
   autoGenBtn: { marginTop: 12, backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 10, alignItems: 'center' },
   autoGenBtnText: { color: Colors.white, fontWeight: '700', fontSize: 14 },

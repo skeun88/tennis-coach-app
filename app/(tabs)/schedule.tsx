@@ -311,7 +311,7 @@ export default function ScheduleScreen() {
     return (
       <ScrollView ref={dayScrollRef} style={{ flex: 1 }} showsVerticalScrollIndicator={false}
         scrollEnabled={draggingId === null}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadDayLessons(selectedDate); setRefreshing(false); }} tintColor={Colors.primary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadDayLessons(selectedDate); setRefreshing(false); }} tintColor={Colors.navy} />}
       >
         <View style={{ height: gridHeight + 20, position: 'relative' }}>
           {/* 현재 시간 표시선 (오늘만) */}
@@ -442,13 +442,13 @@ export default function ScheduleScreen() {
           </View>
           <Text style={styles.dateHeader}>
             {new Date(selectedDate + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })}
-            <Text style={{ fontSize: 12, color: Colors.primary, fontWeight: '500' }}>  시간 탭해서 레슨 등록</Text>
+            <Text style={{ fontSize: 12, color: Colors.navy, fontWeight: '500' }}>  시간 탭해서 레슨 등록</Text>
           </Text>
           {renderDayGrid()}
         </>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.weekScroll} contentContainerStyle={styles.weekScrollContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadWeekLessons(thisWeekDates); setRefreshing(false); }} tintColor={Colors.primary} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadWeekLessons(thisWeekDates); setRefreshing(false); }} tintColor={Colors.navy} />}
         >
           {weekData.map(item => renderWeekDay(item))}
         </ScrollView>
@@ -653,7 +653,7 @@ const styles = StyleSheet.create({
   dayName: { fontSize: 11, color: Colors.mutedFg, marginBottom: 4 },
   dayNum: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
   dayTextSelected: { color: '#fff' },
-  dayToday: { color: Colors.primary },
+  dayToday: { color: Colors.navy },
   dateHeader: { fontSize: 14, color: Colors.mutedFg, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: Colors.mutedBg },
   // 그리드
   hourRow: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', height: HOUR_HEIGHT },
@@ -685,9 +685,9 @@ const styles = StyleSheet.create({
   weekEmptySlot: { padding: 16, alignItems: 'center' },
   weekEmptyText: { fontSize: 20, color: Colors.border },
   weekLessonCard: { margin: 8, backgroundColor: Colors.primaryLight, borderRadius: 8, padding: 8, borderLeftWidth: 3, borderLeftColor: Colors.primary },
-  weekLessonTime: { fontSize: 13, color: Colors.primary, fontWeight: '700', marginBottom: 2 },
+  weekLessonTime: { fontSize: 13, color: Colors.navy, fontWeight: '700', marginBottom: 2 },
   weekLessonTitle: { fontSize: 14, color: Colors.foreground, fontWeight: '600' },
-  weekLessonMembers: { fontSize: 11, color: Colors.primary, marginTop: 2 },
+  weekLessonMembers: { fontSize: 11, color: Colors.navy, marginTop: 2 },
   // FAB
   fab: { position: 'absolute', bottom: 24, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 6 },
   // 모달
@@ -700,7 +700,7 @@ const styles = StyleSheet.create({
   timeRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   timeAdj: { flex: 1, backgroundColor: Colors.mutedBg, borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
   timeAdjText: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg },
-  timeDisplay: { fontSize: 32, fontWeight: '800', color: Colors.primary, textAlign: 'center', marginBottom: 4 },
+  timeDisplay: { fontSize: 32, fontWeight: '800', color: Colors.navy, textAlign: 'center', marginBottom: 4 },
   timeSummary: { fontSize: 13, color: Colors.mutedFg, textAlign: 'center', marginBottom: 16 },
   durationBtn: { flex: 1, backgroundColor: Colors.mutedBg, borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
   durationBtnActive: { backgroundColor: Colors.primary },
@@ -715,11 +715,11 @@ const styles = StyleSheet.create({
   memberItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.mutedBg },
   memberItemSelected: { backgroundColor: Colors.primaryLight },
   memberItemText: { fontSize: 14, color: Colors.foreground },
-  memberItemTextSelected: { color: Colors.primary, fontWeight: '700' },
-  selectedNames: { fontSize: 12, color: Colors.primary, fontWeight: '600', marginBottom: 4, backgroundColor: Colors.primaryLight, padding: 8, borderRadius: 8 },
+  memberItemTextSelected: { color: Colors.navy, fontWeight: '700' },
+  selectedNames: { fontSize: 12, color: Colors.navy, fontWeight: '600', marginBottom: 4, backgroundColor: Colors.primaryLight, padding: 8, borderRadius: 8 },
   spinnerBtn: { flex: 1, backgroundColor: Colors.mutedBg, borderRadius: 10, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: Colors.border },
   spinnerBtnLabel: { fontSize: 11, color: Colors.placeholder, fontWeight: '600', marginBottom: 2 },
-  spinnerBtnValue: { fontSize: 20, fontWeight: '800', color: Colors.primary },
+  spinnerBtnValue: { fontSize: 20, fontWeight: '800', color: Colors.navy },
   colonText: { fontSize: 24, fontWeight: '800', color: Colors.foreground, paddingHorizontal: 8, alignSelf: 'center', marginTop: 12 },
   inlinePickerBox: { backgroundColor: Colors.background, borderRadius: 10, padding: 8, marginTop: 6, marginBottom: 4 },
   inlinePickerItem: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, marginHorizontal: 3, alignItems: 'center' },

@@ -125,7 +125,7 @@ export default function LessonPackagesScreen() {
         renderItem={renderItem}
         contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadPackages(); setRefreshing(false); }} tintColor={Colors.primary} />
+          <RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadPackages(); setRefreshing(false); }} tintColor={Colors.navy} />
         }
         ListEmptyComponent={
           loading ? (
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
   cardNotes: { fontSize: 12, color: Colors.placeholder, marginBottom: 8 },
   cardActions: { flexDirection: 'row', gap: 8, borderTopWidth: 1, borderTopColor: Colors.mutedBg, paddingTop: 10, marginTop: 4 },
   editBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, backgroundColor: Colors.primaryLight },
-  editBtnText: { fontSize: 13, color: Colors.primary, fontWeight: '600' },
+  editBtnText: { fontSize: 13, color: Colors.navy, fontWeight: '600' },
   deleteBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, backgroundColor: Colors.destructiveLight },
   deleteBtnText: { fontSize: 13, color: Colors.destructive, fontWeight: '600' },
   empty: { alignItems: 'center', paddingTop: 60, gap: 8 },
