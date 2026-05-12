@@ -324,7 +324,7 @@ export default function NewMemberScreen() {
     }).select('id').single();
     if (error || !newMember) { setLoading(false); Alert.alert('오류', '회원 등록에 실패했습니다.'); return; }
 
-    let genResult: { successCount: number; errors: string[] } | null = null;
+    let genResult: { successCount: number; errors: string[] } | null | undefined = null;
     if (allDaysHaveTimes && credits > 0) {
       genResult = await generateScheduleLessons({
         coachId: userId, memberId: newMember.id, memberName: name.trim(),

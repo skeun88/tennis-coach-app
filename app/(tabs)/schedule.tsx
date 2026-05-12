@@ -103,6 +103,11 @@ export default function ScheduleScreen() {
   const [minutePickerVisible, setMinutePickerVisible] = useState(false);
   const [durationPickerVisible, setDurationPickerVisible] = useState(false);
 
+  // 예약 요청
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [requestModal, setRequestModal] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState<any>(null);
+
   // 드래그 상태
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragTargetMin, setDragTargetMin] = useState(0);
@@ -126,6 +131,55 @@ export default function ScheduleScreen() {
       idMap.get(row.lesson_id)!.push(row.member_id);
     }
     return lessonList.map(l => ({ ...l, memberNames: nameMap.get(l.id) ?? [], memberIds: idMap.get(l.id) ?? [] }));
+  }
+
+  async function loadPendingRequests() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase.from('lesson_requests')
+      .select('*, member:members(name)')
+      .eq('coach_id', user.id)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+    setPendingRequests(data ?? []);
+  }
+
+  async function handleAcceptRequest(req: any) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    // 레슨 생성
+    const memberName = req.member?.name ?? '회원';
+    const { data: lesson, error: le } = await supabase.from('lessons').insert({
+      coach_id: user.id, title: memberName,
+      date: req.requested_date, start_time: req.start_time, end_time: req.end_time,
+    }).select('id').single();
+    if (le || !lesson) { Alert.alert('오류', '레슨 생성 실패'); return; }
+    await supabase.from('lesson_members').insert({ lesson_id: lesson.id, member_id: req.member_id });
+    // 요청 상태 업데이트
+    await supabase.from('lesson_requests').update({ status: 'accepted', responded_at: new Date().toISOString() }).eq('id', req.id);
+    // 회원에게 메시지 알림
+    await supabase.from('messages').insert({
+      coach_id: user.id, member_id: req.member_id, sender_type: 'coach',
+      content: `✅ ${req.requested_date} ${req.start_time.slice(0,5)} 레슨 예약이 수락됐습니다! 🎾`,
+    });
+    setRequestModal(false);
+    loadPendingRequests();
+    loadDayLessons(selectedDate);
+    Alert.alert('수락 완료', `${memberName}님 레슨이 스케줄에 등록됐어요.`);
+  }
+
+  async function handleRejectRequest(req: any) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('lesson_requests').update({ status: 'rejected', responded_at: new Date().toISOString() }).eq('id', req.id);
+    // 회원에게 거절 알림 (메시지)
+    await supabase.from('messages').insert({
+      coach_id: user.id, member_id: req.member_id, sender_type: 'coach',
+      content: `❌ ${req.requested_date} ${req.start_time.slice(0,5)} 레슨 예약 요청이 거절됐습니다. 다른 시간을 선택해주세요.`,
+    });
+    setRequestModal(false);
+    loadPendingRequests();
+    Alert.alert('거절 완료', '회원에게 알림을 보냈습니다.');
   }
 
   function scrollToCurrentTime() {
@@ -199,6 +253,7 @@ export default function ScheduleScreen() {
     if (activeTab === '일일') loadDayLessons(newToday);
     else if (activeTab === '주간') loadWeekLessons(newThisWeek);
     else { const d = new Date(); loadMonthLessons(d.getFullYear(), d.getMonth()); }
+    loadPendingRequests();
     // 회원 목록 로드
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -336,6 +391,27 @@ export default function ScheduleScreen() {
       }
     }
     return result;
+  }
+
+  // ── 예약 요청 배너 렌더 ──────────────────────────
+  function renderRequestBanner() {
+    if (pendingRequests.length === 0) return null;
+    return (
+      <TouchableOpacity
+        style={styles.requestBanner}
+        onPress={() => { setSelectedRequest(pendingRequests[0]); setRequestModal(true); }}
+      >
+        <View style={styles.requestBannerLeft}>
+          <Ionicons name="calendar" size={18} color="#fff" />
+          <Text style={styles.requestBannerText}>
+            레슨 예약 요청 {pendingRequests.length}건 대기 중
+          </Text>
+        </View>
+        <View style={styles.requestBannerBadge}>
+          <Text style={styles.requestBannerBadgeText}>{pendingRequests.length}</Text>
+        </View>
+      </TouchableOpacity>
+    );
   }
 
   // ── 일일 뷰 그리드 렌더 ──────────────────────────────────────
@@ -799,6 +875,51 @@ export default function ScheduleScreen() {
           </View>
         </View>
       </Modal>
+
+
+      {/* 예약 요청 모달 */}
+      <Modal visible={requestModal} transparent animationType="slide" onRequestClose={() => setRequestModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>레슨 예약 요청</Text>
+            {selectedRequest && (
+              <>
+                <View style={styles.requestInfoCard}>
+                  <Text style={styles.requestMemberName}>{selectedRequest.member?.name ?? '회원'}</Text>
+                  <Text style={styles.requestDateTime}>
+                    {selectedRequest.requested_date}{'  '}
+                    {selectedRequest.start_time?.slice(0,5)} ~ {selectedRequest.end_time?.slice(0,5)}
+                  </Text>
+                  {selectedRequest.message ? (
+                    <View style={styles.requestMsgBox}>
+                      <Text style={styles.requestMsgLabel}>전달 메시지</Text>
+                      <Text style={styles.requestMsgText}>{selectedRequest.message}</Text>
+                    </View>
+                  ) : null}
+                </View>
+                {pendingRequests.length > 1 && (
+                  <Text style={styles.requestMore}>외 {pendingRequests.length - 1}건 더 있음</Text>
+                )}
+                <View style={styles.requestBtnRow}>
+                  <TouchableOpacity style={[styles.requestBtn, styles.requestBtnReject]}
+                    onPress={() => handleRejectRequest(selectedRequest)}>
+                    <Ionicons name="close-circle-outline" size={18} color={Colors.destructive} />
+                    <Text style={[styles.requestBtnText, { color: Colors.destructive }]}>거절</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.requestBtn, styles.requestBtnAccept]}
+                    onPress={() => handleAcceptRequest(selectedRequest)}>
+                    <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                    <Text style={[styles.requestBtnText, { color: '#fff' }]}>수락</Text>
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity style={{ alignItems: 'center', padding: 12 }} onPress={() => setRequestModal(false)}>
+                  <Text style={{ color: Colors.mutedFg, fontSize: 14 }}>나중에</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1011,4 +1132,31 @@ const styles = StyleSheet.create({
   monthSummaryDivider: { width: 1, backgroundColor: Colors.border },
   monthSummaryNum: { fontSize: 22, fontWeight: '800', color: Colors.navy },
   monthSummaryLabel: { fontSize: 11, color: Colors.mutedFg, marginTop: 2 },
+
+  requestBanner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: Colors.destructive, marginHorizontal: 12, marginTop: 8,
+    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10,
+    shadowColor: Colors.destructive, shadowOpacity: 0.4, shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 }, elevation: 4,
+  },
+  requestBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  requestBannerText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  requestBannerBadge: {
+    backgroundColor: '#fff', borderRadius: 12, minWidth: 24, height: 24,
+    justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6,
+  },
+  requestBannerBadgeText: { color: Colors.destructive, fontWeight: '900', fontSize: 13 },
+  requestInfoCard: { backgroundColor: Colors.background, borderRadius: 12, padding: 16, marginBottom: 16 },
+  requestMemberName: { fontSize: 18, fontWeight: '900', color: Colors.navy, marginBottom: 4 },
+  requestDateTime: { fontSize: 14, color: Colors.primary, fontWeight: '700', marginBottom: 8 },
+  requestMsgBox: { backgroundColor: '#fff', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: Colors.border },
+  requestMsgLabel: { fontSize: 11, fontWeight: '700', color: Colors.mutedFg, marginBottom: 4 },
+  requestMsgText: { fontSize: 14, color: Colors.foreground },
+  requestMore: { fontSize: 12, color: Colors.mutedFg, textAlign: 'center', marginBottom: 12 },
+  requestBtnRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
+  requestBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, paddingVertical: 14 },
+  requestBtnReject: { backgroundColor: Colors.destructive + '12', borderWidth: 1.5, borderColor: Colors.destructive },
+  requestBtnAccept: { backgroundColor: Colors.primary },
+  requestBtnText: { fontSize: 16, fontWeight: '800' },
 });

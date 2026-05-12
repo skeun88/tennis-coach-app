@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
   TextInput, ActivityIndicator, KeyboardAvoidingView, Platform,
@@ -40,7 +40,7 @@ function kstToday(): Date {
 
 
 
-type Tab = 'info' | 'attendance' | 'payment' | 'notes';
+type Tab = 'info' | 'attendance' | 'payment' | 'notes' | 'messages';
 
 
 async function checkConflicts(
@@ -144,6 +144,12 @@ export default function MemberDetailScreen() {
   const [member, setMember] = useState<Member | null>(null);
   const [tab, setTab] = useState<Tab>('info');
   const [loading, setLoading] = useState(true);
+
+  // 메시지 탭
+  const [messages, setMessages] = useState<{id:string;sender_type:'coach'|'member';content:string;created_at:string}[]>([]);
+  const [msgInput, setMsgInput] = useState('');
+  const [sendingMsg, setSendingMsg] = useState(false);
+  const msgListRef = React.useRef<any>(null);
   const [editing, setEditing] = useState(false);
 
   // Edit state
@@ -256,6 +262,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     if (tab === 'attendance') loadAttendance();
     if (tab === 'payment') loadPayments();
     if (tab === 'notes') loadNotes();
+    if (tab === 'messages') loadMessages();
   }, [tab]);
 
   async function handleSave() {
@@ -377,11 +384,40 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color={Colors.primary} /></View>;
   if (!member) return <View style={styles.loader}><Text>회원을 찾을 수 없습니다</Text></View>;
 
+  async function loadMessages() {
+    const { data } = await supabase.from('messages').select('*')
+      .eq('member_id', id).order('created_at', { ascending: true });
+    setMessages(data ?? []);
+    // 회원 메시지 읽음 처리
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('messages').update({ read_at: new Date().toISOString() })
+        .eq('member_id', id).eq('coach_id', user.id).eq('sender_type', 'member').is('read_at', null);
+    }
+    setTimeout(() => msgListRef.current?.scrollToEnd({ animated: false }), 200);
+  }
+
+  async function sendMessage() {
+    if (!msgInput.trim() || sendingMsg) return;
+    const text = msgInput.trim();
+    setMsgInput('');
+    setSendingMsg(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('messages').insert({
+        coach_id: user.id, member_id: id, sender_type: 'coach', content: text,
+      });
+      loadMessages();
+    }
+    setSendingMsg(false);
+  }
+
   const TABS: { key: Tab; label: string; icon: string }[] = [
     { key: 'info', label: '정보', icon: 'person-outline' },
     { key: 'attendance', label: '출석', icon: 'checkbox-outline' },
     { key: 'payment', label: '결제', icon: 'card-outline' },
     { key: 'notes', label: '메모', icon: 'document-text-outline' },
+    { key: 'messages', label: '메시지', icon: 'chatbubble-outline' },
   ];
 
   const ATTENDANCE_STATUS_COLOR: Record<string, string> = { '출석': Colors.success, '결석': Colors.destructive, '지각': Colors.warning, '조퇴': Colors.info };
@@ -720,6 +756,74 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                 ))}
               </View>
             )}
+          </View>
+        )}
+
+        {tab === 'messages' && (
+          <View style={{ flex: 1 }}>
+            {messages.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Ionicons name="chatbubbles-outline" size={36} color={Colors.iconMuted} />
+                <Text style={styles.emptyText}>아직 메시지가 없어요</Text>
+                <Text style={[styles.emptyText, { fontSize: 12, marginTop: 4 }]}>회원에게 첫 메시지를 보내보세요</Text>
+              </View>
+            ) : (
+              <FlatList
+                ref={msgListRef}
+                data={messages}
+                keyExtractor={item => item.id}
+                contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
+                onContentSizeChange={() => msgListRef.current?.scrollToEnd({ animated: false })}
+                renderItem={({ item, index }) => {
+                  const isMe = item.sender_type === 'coach';
+                  const prev = index > 0 ? messages[index - 1] : null;
+                  const d = new Date(item.created_at);
+                  const dateStr = d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
+                  const prevDateStr = prev ? new Date(prev.created_at).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }) : null;
+                  const showDate = dateStr !== prevDateStr;
+                  return (
+                    <>
+                      {showDate && (
+                        <View style={{ alignItems: 'center', marginVertical: 10 }}>
+                          <Text style={{ fontSize: 12, color: Colors.mutedFg, backgroundColor: Colors.border, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 }}>{dateStr}</Text>
+                        </View>
+                      )}
+                      <View style={{ flexDirection: isMe ? 'row-reverse' : 'row', alignItems: 'flex-end', marginBottom: 8, gap: 8 }}>
+                        {!isMe && (
+                          <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.primary + '30', justifyContent: 'center', alignItems: 'center' }}>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: Colors.primary }}>{member?.name?.slice(0,1)}</Text>
+                          </View>
+                        )}
+                        <View style={{ maxWidth: '75%', borderRadius: 14, padding: 10, backgroundColor: isMe ? Colors.primary : '#fff', borderBottomRightRadius: isMe ? 4 : 14, borderBottomLeftRadius: isMe ? 14 : 4 }}>
+                          <Text style={{ fontSize: 14, color: isMe ? '#fff' : Colors.foreground, lineHeight: 20 }}>{item.content}</Text>
+                          <Text style={{ fontSize: 10, color: isMe ? 'rgba(255,255,255,0.6)' : Colors.mutedFg, marginTop: 3, textAlign: 'right' }}>
+                            {d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                          </Text>
+                        </View>
+                      </View>
+                    </>
+                  );
+                }}
+              />
+            )}
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', backgroundColor: '#fff', padding: 10, borderTopWidth: 1, borderTopColor: Colors.border, gap: 8 }}>
+              <TextInput
+                style={{ flex: 1, fontSize: 14, color: Colors.foreground, backgroundColor: Colors.mutedBg, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10, maxHeight: 80 }}
+                value={msgInput}
+                onChangeText={setMsgInput}
+                placeholder="메시지 입력..."
+                placeholderTextColor={Colors.placeholder}
+                multiline
+                maxLength={500}
+              />
+              <TouchableOpacity
+                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: (!msgInput.trim() || sendingMsg) ? Colors.iconMuted : Colors.primary, justifyContent: 'center', alignItems: 'center' }}
+                onPress={sendMessage}
+                disabled={!msgInput.trim() || sendingMsg}
+              >
+                {sendingMsg ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="send" size={18} color="#fff" />}
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 

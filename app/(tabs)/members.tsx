@@ -10,14 +10,19 @@ import { supabase } from '../../lib/supabase';
 import { Member, MemberLevel } from '../../types';
 import { Colors } from '../../lib/theme';
 
+interface MemberWithUnread extends Member {
+  unread_count?: number;
+  last_message_at?: string;
+}
+
 const LEVEL_COLORS: Record<MemberLevel, string> = {
   '입문': Colors.level.입문, '초급': Colors.success, '중급': Colors.info, '고급': Colors.warning, '선수': Colors.destructive,
 };
 
 export default function MembersScreen() {
   const router = useRouter();
-  const [members, setMembers] = useState<Member[]>([]);
-  const [filtered, setFiltered] = useState<Member[]>([]);
+  const [members, setMembers] = useState<MemberWithUnread[]>([]);
+  const [filtered, setFiltered] = useState<MemberWithUnread[]>([]);
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [activeOnly, setActiveOnly] = useState(true);
@@ -28,8 +33,50 @@ export default function MembersScreen() {
     if (!user) return;
     let query = supabase.from('members').select('*').eq('coach_id', user.id).order('name');
     if (activeOnly) query = query.eq('is_active', true);
-    const { data } = await query;
-    setMembers(data ?? []);
+    const { data: rawMembers } = await query;
+    if (!rawMembers) { setMembers([]); return; }
+
+    // 안 읽은 메시지 수 + 마지막 메시지 시각 조회
+    const { data: unreadData } = await supabase
+      .from('messages')
+      .select('member_id, created_at')
+      .eq('coach_id', user.id)
+      .eq('sender_type', 'member')
+      .is('read_at', null);
+
+    const { data: lastMsgData } = await supabase
+      .from('messages')
+      .select('member_id, created_at')
+      .eq('coach_id', user.id)
+      .order('created_at', { ascending: false });
+
+    const unreadMap: Record<string, number> = {};
+    for (const row of (unreadData ?? [])) {
+      unreadMap[row.member_id] = (unreadMap[row.member_id] ?? 0) + 1;
+    }
+    const lastMsgMap: Record<string, string> = {};
+    for (const row of (lastMsgData ?? [])) {
+      if (!lastMsgMap[row.member_id]) lastMsgMap[row.member_id] = row.created_at;
+    }
+
+    const enriched: MemberWithUnread[] = rawMembers.map(m => ({
+      ...m,
+      unread_count: unreadMap[m.id] ?? 0,
+      last_message_at: lastMsgMap[m.id] ?? null,
+    }));
+
+    // 정렬: 안읽은 메시지 있는 회원 먼저 → 마지막 메시지 시각 → 이름
+    enriched.sort((a, b) => {
+      const aUnread = (a.unread_count ?? 0) > 0;
+      const bUnread = (b.unread_count ?? 0) > 0;
+      if (aUnread !== bUnread) return aUnread ? -1 : 1;
+      if (a.last_message_at && b.last_message_at) return b.last_message_at.localeCompare(a.last_message_at);
+      if (a.last_message_at) return -1;
+      if (b.last_message_at) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    setMembers(enriched);
   }
 
   async function loadPackageCount() {
@@ -53,12 +100,20 @@ export default function MembersScreen() {
     setFiltered(q ? members.filter(m => m.name.toLowerCase().includes(q) || m.phone.includes(q)) : members);
   }, [search, members]);
 
-  function renderMember({ item }: { item: Member }) {
+  function renderMember({ item }: { item: MemberWithUnread }) {
     const initials = item.name.slice(0, 1);
+    const hasUnread = (item.unread_count ?? 0) > 0;
     return (
-      <TouchableOpacity style={styles.card} onPress={() => router.push(`/members/${item.id}`)}>
-        <View style={[styles.avatar, { backgroundColor: LEVEL_COLORS[item.level as MemberLevel] ?? Colors.level.입문 }]}>
-          <Text style={styles.avatarText}>{initials}</Text>
+      <TouchableOpacity style={[styles.card, hasUnread && styles.cardUnread]} onPress={() => router.push(`/members/${item.id}`)}>
+        <View style={{ position: 'relative' }}>
+          <View style={[styles.avatar, { backgroundColor: LEVEL_COLORS[item.level as MemberLevel] ?? Colors.level.입문 }]}>
+            <Text style={styles.avatarText}>{initials}</Text>
+          </View>
+          {hasUnread && (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadBadgeText}>{item.unread_count}</Text>
+            </View>
+          )}
         </View>
         <View style={styles.cardInfo}>
           <View style={styles.cardTop}>
@@ -66,6 +121,12 @@ export default function MembersScreen() {
             <View style={[styles.levelBadge, { backgroundColor: (LEVEL_COLORS[item.level as MemberLevel] ?? Colors.level.입문) + '22' }]}>
               <Text style={[styles.levelText, { color: LEVEL_COLORS[item.level as MemberLevel] ?? Colors.level.입문 }]}>{item.level}</Text>
             </View>
+            {hasUnread && (
+              <View style={styles.newMsgBadge}>
+                <Ionicons name="chatbubble" size={10} color="#fff" />
+                <Text style={styles.newMsgText}>새 메시지</Text>
+              </View>
+            )}
           </View>
           <Text style={styles.phone}>{item.phone}</Text>
           {!item.is_active && <Text style={styles.inactive}>비활성</Text>}
@@ -198,6 +259,16 @@ const styles = StyleSheet.create({
   count: { fontSize: 12, color: Colors.mutedFg, paddingHorizontal: 16, marginBottom: 8 },
 
   // Member card
+  cardUnread: { borderWidth: 1.5, borderColor: Colors.primary },
+  unreadBadge: {
+    position: 'absolute', top: -4, right: -4,
+    backgroundColor: Colors.destructive, borderRadius: 10,
+    minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  unreadBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+  newMsgBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: Colors.primary, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
+  newMsgText: { color: '#fff', fontSize: 10, fontWeight: '700' },
   card: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
     borderRadius: 12, padding: 14, marginBottom: 8,
