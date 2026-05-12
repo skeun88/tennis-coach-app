@@ -208,7 +208,14 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
           setDayTimes(loaded);
         }
       }
-      setLessonDuration(String((data as any).fixed_lesson_duration ?? 60));
+      // 레슨 duration은 항상 레슨권에서 읽기
+      if ((data as any).lesson_package_id) {
+        const { data: pkgData } = await supabase.from('lesson_packages')
+          .select('duration_minutes').eq('id', (data as any).lesson_package_id).maybeSingle();
+        setLessonDuration(String(pkgData?.duration_minutes ?? (data as any).fixed_lesson_duration ?? 60));
+      } else {
+        setLessonDuration(String((data as any).fixed_lesson_duration ?? 60));
+      }
       setTotalCredits(String((data as any).total_credits ?? 0));
       setRemainingCredits(String((data as any).remaining_credits ?? 0));
       // 레슨권 정보 로드
@@ -760,7 +767,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         )}
 
         {tab === 'messages' && (
-          <View style={{ flex: 1 }}>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={120}>
             {messages.length === 0 ? (
               <View style={styles.emptyCard}>
                 <Ionicons name="chatbubbles-outline" size={36} color={Colors.iconMuted} />
@@ -824,7 +831,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                 {sendingMsg ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="send" size={18} color="#fff" />}
               </TouchableOpacity>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         )}
 
         <View style={{ height: 40 }} />

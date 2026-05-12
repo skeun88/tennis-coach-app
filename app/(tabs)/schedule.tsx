@@ -98,7 +98,7 @@ export default function ScheduleScreen() {
   const [newMinute, setNewMinute] = useState('00');
   const [newDuration, setNewDuration] = useState(60);
   const [savingNew, setSavingNew] = useState(false);
-  const [members, setMembers] = useState<{id: string; name: string; fixed_lesson_duration?: number}[]>([]);
+  const [members, setMembers] = useState<{id: string; name: string; pkg_duration?: number}[]>([]);
   const [memberSearch, setMemberSearch] = useState('');
   const [hourPickerVisible, setHourPickerVisible] = useState(false);
   const [minutePickerVisible, setMinutePickerVisible] = useState(false);
@@ -315,7 +315,13 @@ export default function ScheduleScreen() {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data } = await supabase.from('members').select('id, name, fixed_lesson_duration').eq('coach_id', user.id).eq('is_active', true).order('name');
+      const { data: rawMembers } = await supabase.from('members')
+        .select('id, name, lesson_package_id, lesson_packages(duration_minutes)')
+        .eq('coach_id', user.id).eq('is_active', true).order('name');
+      const data = (rawMembers ?? []).map((m: any) => ({
+        id: m.id, name: m.name,
+        pkg_duration: m.lesson_packages?.duration_minutes ?? null,
+      }));
       setMembers(data ?? []);
     })();
   }, [activeTab]));
