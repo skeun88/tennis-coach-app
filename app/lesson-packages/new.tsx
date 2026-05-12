@@ -57,6 +57,7 @@ export default function NewLessonPackageScreen() {
       duration_minutes: parseInt(durationMinutes) || 60,
       color,
       notes: notes.trim() || null,
+      is_active: true,
     };
 
     let error;

@@ -15,6 +15,11 @@ const DAYS_KR = ['일', '월', '화', '수', '목', '금', '토'];
 const HOURS = Array.from({ length: 17 }, (_, i) => String(i + 6).padStart(2, '0')); // 06~22
 const MINUTES = ['00', '10', '20', '30', '40', '50'];
 
+function timeToMinutes(t: string): number {
+  const [h, m] = t.slice(0, 5).split(':').map(Number);
+  return h * 60 + m;
+}
+
 /** KST(한국 시간) 기준 날짜 문자열 반환 */
 function toKSTDateStr(d: Date): string {
   const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
@@ -116,6 +121,8 @@ async function generateScheduleLessons(params: {
     iter++;
   }
 
+  let successCount = 0;
+  const errors: string[] = [];
   for (const { date, time } of dates) {
     const [hh, mm] = time.split(':').map(Number);
     const endMin = hh * 60 + mm + lessonDuration;
@@ -125,9 +132,11 @@ async function generateScheduleLessons(params: {
     const { data: lesson, error: lErr } = await supabase.from('lessons')
       .insert({ coach_id: coachId, title: memberName, date, start_time: startSt, end_time: endSt })
       .select('id').single();
-    if (lErr || !lesson) continue;
-    await supabase.from('lesson_members').insert({ lesson_id: lesson.id, member_id: memberId });
+    if (lErr || !lesson) { errors.push(lErr?.message ?? 'unknown'); continue; }
+    const { error: lmErr } = await supabase.from('lesson_members').insert({ lesson_id: lesson.id, member_id: memberId });
+    if (!lmErr) successCount++;
   }
+  return { successCount, errors };
 }
 
 export default function NewMemberScreen() {
@@ -158,15 +167,65 @@ export default function NewMemberScreen() {
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // 빈 시간대 모달
+  const [slotsModalVisible, setSlotsModalVisible] = useState(false);
+  const [slotsModalDay, setSlotsModalDay] = useState<number | null>(null);
+  const [slotsData, setSlotsData] = useState<{ time: string; available: boolean }[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [slotsDateStr, setSlotsDateStr] = useState('');
+
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const { data } = await supabase.from('lesson_packages').select('*')
-        .eq('coach_id', user.id).eq('is_active', true).order('created_at', { ascending: false });
+        .eq('coach_id', user.id).order('created_at', { ascending: false });
       setLessonPackages(data ?? []);
     })();
   }, []);
+
+  async function fetchAvailableSlots(day: number) {
+    const today = new Date();
+    const todayDow = today.getDay();
+    const diff = (day - todayDow + 7) % 7;
+    const target = new Date(today);
+    target.setDate(today.getDate() + (diff === 0 ? 7 : diff)); // 이번주 같은 요일이면 다음주로
+    const dateStr = toKSTDateStr(target);
+    setSlotsDateStr(dateStr);
+    setSlotsModalDay(day);
+    setLoadingSlots(true);
+    setSlotsModalVisible(true);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setLoadingSlots(false); return; }
+
+    const { data: existingLessons } = await supabase
+      .from('lessons')
+      .select('start_time, end_time')
+      .eq('coach_id', user.id)
+      .eq('date', dateStr);
+
+    const selectedPkg = lessonPackages.find(p => p.id === selectedPackageId);
+    const dur = selectedPkg?.duration_minutes ?? (parseInt(lessonDuration) || 60);
+
+    const slots: { time: string; available: boolean }[] = [];
+    for (let h = 6; h < 22; h++) {
+      for (const m of [0, 30]) {
+        const startMin = h * 60 + m;
+        const endMin = startMin + dur;
+        if (endMin > 22 * 60) continue;
+        const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        const hasConflict = (existingLessons ?? []).some((l: any) => {
+          const ls = timeToMinutes(l.start_time);
+          const le = timeToMinutes(l.end_time);
+          return startMin < le && endMin > ls;
+        });
+        slots.push({ time: timeStr, available: !hasConflict });
+      }
+    }
+    setSlotsData(slots);
+    setLoadingSlots(false);
+  }
 
   function toggleDay(idx: number) {
     setScheduleDays(prev => {
@@ -174,7 +233,10 @@ export default function NewMemberScreen() {
         setDayTimes(dt => { const n = { ...dt }; delete n[idx]; return n; });
         return prev.filter(d => d !== idx);
       }
-      return [...prev, idx].sort();
+      const newDays = [...prev, idx].sort();
+      // 요일 선택 시 빈 시간대 모달 표시
+      setTimeout(() => fetchAvailableSlots(idx), 0);
+      return newDays;
     });
   }
 
@@ -224,10 +286,12 @@ export default function NewMemberScreen() {
   function handleSelectPackage(pkg: any) {
     if (selectedPackageId === pkg.id) {
       setSelectedPackageId(null);
+      setTotalCredits('');
+      setLessonDuration('60');
     } else {
       setSelectedPackageId(pkg.id);
-      setTotalCredits(String(pkg.total_credits));
-      setLessonDuration(String(pkg.duration_minutes));
+      setTotalCredits(String(pkg.total_credits ?? 10));
+      setLessonDuration(String(pkg.duration_minutes ?? 60));
     }
   }
 
@@ -236,7 +300,8 @@ export default function NewMemberScreen() {
 
   async function doSave(userId: string) {
     const credits = parseInt(totalCredits) || 0;
-    const duration = parseInt(lessonDuration) || 60;
+    const selectedPkg = lessonPackages.find(p => p.id === selectedPackageId);
+    const duration = selectedPkg?.duration_minutes ?? (parseInt(lessonDuration) || 60);
 
     // fixed_schedule_times: { dayIndex: ["HH:MM", ...] }
     const scheduleTimesJson: Record<string, string[]> = {};
@@ -259,21 +324,26 @@ export default function NewMemberScreen() {
     }).select('id').single();
     if (error || !newMember) { setLoading(false); Alert.alert('오류', '회원 등록에 실패했습니다.'); return; }
 
+    let genResult: { successCount: number; errors: string[] } | null = null;
     if (allDaysHaveTimes && credits > 0) {
-      await generateScheduleLessons({
+      genResult = await generateScheduleLessons({
         coachId: userId, memberId: newMember.id, memberName: name.trim(),
         scheduleDays, dayTimes, lessonDuration: duration, totalCredits: credits, joinDate: lessonStartDate,
       });
     }
     setLoading(false);
 
-    const totalSlots = scheduleDays.reduce((sum, d) => sum + (dayTimes[d]?.length ?? 0), 0);
-    Alert.alert('완료',
-      allDaysHaveTimes && credits > 0
-        ? (`${credits}개 레슨이 스케줄에 추가됐습니다. (요일당 최대 ${totalSlots > scheduleDays.length ? '다중' : '1'}타임)`)
-        : '회원이 등록됐습니다.',
-      [{ text: '확인', onPress: () => router.back() }]
-    );
+    const genCount = genResult?.successCount ?? 0;
+    const genErrors = genResult?.errors ?? [];
+    let msg = '회원이 등록됐습니다.';
+    if (allDaysHaveTimes && credits > 0) {
+      if (genCount > 0) {
+        msg = `${genCount}개 레슨이 스케줄에 추가됐습니다. (${duration}분 레슨)`;
+      } else {
+        msg = `회원 등록 완료. 레슨 스케줄 생성 실패${genErrors.length ? ': ' + genErrors[0] : ''}`;
+      }
+    }
+    Alert.alert('완료', msg, [{ text: '확인', onPress: () => router.back() }]);
   }
 
   async function handleSave() {
@@ -284,7 +354,8 @@ export default function NewMemberScreen() {
     if (!user) { setLoading(false); return; }
 
     if (allDaysHaveTimes) {
-      const duration = parseInt(lessonDuration) || 60;
+      const selectedPkg2 = lessonPackages.find(p => p.id === selectedPackageId);
+      const duration = selectedPkg2?.duration_minutes ?? (parseInt(lessonDuration) || 60);
       const conflicts = await checkConflicts(user.id, scheduleDays, dayTimes, duration);
       if (conflicts.length > 0) {
         setLoading(false);
@@ -453,6 +524,72 @@ export default function NewMemberScreen() {
         </TouchableOpacity>
       </ScrollView>
 
+      {/* 빈 시간대 모달 */}
+      <Modal visible={slotsModalVisible} transparent animationType="slide" onRequestClose={() => setSlotsModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>
+                  {slotsModalDay !== null ? DAYS_KR[slotsModalDay] : ''}요일 빈 시간대
+                </Text>
+                {slotsDateStr ? <Text style={{ fontSize: 12, color: Colors.mutedFg, marginTop: 2 }}>{slotsDateStr} 기준</Text> : null}
+              </View>
+              <TouchableOpacity onPress={() => setSlotsModalVisible(false)}>
+                <Ionicons name="close" size={22} color={Colors.mutedFg} />
+              </TouchableOpacity>
+            </View>
+            {loadingSlots ? (
+              <ActivityIndicator color={Colors.primary} style={{ padding: 30 }} />
+            ) : (
+              <ScrollView style={{ maxHeight: 380 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 16 }}>
+                  {slotsData.map(slot => (
+                    <TouchableOpacity
+                      key={slot.time}
+                      disabled={!slot.available}
+                      style={[
+                        styles.slotBtn,
+                        slot.available ? styles.slotBtnFree : styles.slotBtnBusy,
+                      ]}
+                      onPress={() => {
+                        if (slotsModalDay !== null) {
+                          setDayTimes(prev => {
+                            const times = [...(prev[slotsModalDay] ?? [])];
+                            if (!times.includes(slot.time)) {
+                              times.push(slot.time);
+                              times.sort();
+                            }
+                            return { ...prev, [slotsModalDay]: times };
+                          });
+                          setSlotsModalVisible(false);
+                        }
+                      }}
+                    >
+                      <Text style={[styles.slotBtnText, !slot.available && styles.slotBtnTextBusy]}>
+                        {slot.time}
+                      </Text>
+                      {!slot.available && (
+                        <Text style={styles.slotBusyLabel}>레슨중</Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={{ fontSize: 12, color: Colors.mutedFg, paddingHorizontal: 16, paddingBottom: 8 }}>
+                  * 빈 시간 탭하면 바로 추가됩니다
+                </Text>
+              </ScrollView>
+            )}
+            <TouchableOpacity
+              style={[styles.loginBtn, { margin: 16, marginTop: 4 }]}
+              onPress={() => setSlotsModalVisible(false)}
+            >
+              <Text style={styles.loginBtnText}>닫기</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* 시간 스피너 모달 */}
       <Modal visible={timePickerVisible} transparent animationType="slide" onRequestClose={() => setTimePickerVisible(false)}>
         <View style={styles.modalOverlay}>
@@ -583,4 +720,16 @@ const styles = StyleSheet.create({
   confirmBtn: { margin: 16, backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   confirmBtnDisabled: { backgroundColor: Colors.iconMuted },
   confirmBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+  slotBtn: {
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8,
+    borderWidth: 1, borderColor: Colors.border, alignItems: 'center', minWidth: 74,
+  },
+  slotBtnFree: { backgroundColor: Colors.primary + '18', borderColor: Colors.primary },
+  slotBtnBusy: { backgroundColor: Colors.mutedBg, borderColor: Colors.border, opacity: 0.45 },
+  slotBtnText: { fontSize: 14, fontWeight: '600', color: Colors.primary },
+  slotBtnTextBusy: { color: Colors.mutedFg },
+  slotBusyLabel: { fontSize: 10, color: Colors.mutedFg, marginTop: 2 },
+  loginBtn: { backgroundColor: Colors.primary, borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
+  loginBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });
