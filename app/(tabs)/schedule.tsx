@@ -1148,7 +1148,7 @@ const styles = StyleSheet.create({
   dayToday: { color: Colors.navy },
   dateHeader: { fontSize: 14, color: Colors.mutedFg, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: Colors.mutedBg },
   // 그리드
-  hourRow: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', height: HOUR_HEIGHT },
+  hourRow: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center' },
   hourLabel: { width: 48, fontSize: 12, color: Colors.placeholder, fontWeight: '600', textAlign: 'right', paddingRight: 8 },
   hourLine: { flex: 1, height: 1, backgroundColor: Colors.border },
   gridTapOverlay: { position: 'absolute', left: 48, right: 0, top: 0 },
