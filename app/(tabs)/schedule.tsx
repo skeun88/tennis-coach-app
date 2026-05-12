@@ -326,6 +326,31 @@ export default function ScheduleScreen() {
     })();
   }, [activeTab]));
 
+  // lesson_requests Realtime 구독 - 새 예약 요청 즉시 감지
+  useEffect(() => {
+    let coachId: string | null = null;
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      coachId = user.id;
+      const ch = supabase.channel('lesson_requests_coach')
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'lesson_requests',
+          filter: `coach_id=eq.${user.id}`,
+        }, async (payload) => {
+          // 새 요청 오면 member name 붙여서 즉시 추가
+          const req = payload.new as any;
+          const { data: mem } = await supabase.from('members').select('name').eq('id', req.member_id).maybeSingle();
+          setPendingRequests(prev => [{ ...req, member: { name: mem?.name ?? '회원' } }, ...prev]);
+          setSelectedRequest({ ...req, member: { name: mem?.name ?? '회원' } });
+          setRequestModal(true);
+        })
+        .subscribe();
+      return () => { supabase.removeChannel(ch); };
+    });
+  }, []);
+
   const handleSelectDate = useCallback((date: string) => {
     setSelectedDate(date); loadDayLessons(date);
   }, []);
