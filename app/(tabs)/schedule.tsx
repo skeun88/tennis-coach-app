@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import * as Notifications from 'expo-notifications';
 import { Lesson } from '../../types';
 import { Colors } from '../../lib/theme';
 
@@ -97,7 +98,7 @@ export default function ScheduleScreen() {
   const [newMinute, setNewMinute] = useState('00');
   const [newDuration, setNewDuration] = useState(60);
   const [savingNew, setSavingNew] = useState(false);
-  const [members, setMembers] = useState<{id: string; name: string}[]>([]);
+  const [members, setMembers] = useState<{id: string; name: string; fixed_lesson_duration?: number}[]>([]);
   const [memberSearch, setMemberSearch] = useState('');
   const [hourPickerVisible, setHourPickerVisible] = useState(false);
   const [minutePickerVisible, setMinutePickerVisible] = useState(false);
@@ -244,6 +245,62 @@ export default function ScheduleScreen() {
     setMonthLessons(map);
   }
 
+  // 알림 응답 리스너 (출석 체크 확인 팝업)
+  useEffect(() => {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false, shouldShowBanner: true, shouldShowList: true,
+      }),
+    });
+
+    const sub = Notifications.addNotificationResponseReceivedListener(async response => {
+      const data = response.notification.request.content.data as any;
+      if (data?.type !== 'attendance_check') return;
+      const date = data.date as string;
+
+      // 미체크 레슨 조회
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: dayLessons } = await supabase
+        .from('lessons').select('id, title, lesson_members(member_id, member:members(name))')
+        .eq('coach_id', user.id).eq('date', date);
+      if (!dayLessons?.length) return;
+
+      const lessonIds = dayLessons.map((l: any) => l.id);
+      const { data: checkedAtt } = await supabase.from('attendance')
+        .select('lesson_id, member_id').in('lesson_id', lessonIds);
+
+      const checkedSet = new Set((checkedAtt ?? []).map((a: any) => `${a.lesson_id}_${a.member_id}`));
+      const unchecked: string[] = [];
+      for (const lesson of (dayLessons as any[])) {
+        for (const lm of (lesson.lesson_members ?? [])) {
+          if (!checkedSet.has(`${lesson.id}_${lm.member_id}`)) {
+            unchecked.push(lm.member?.name ?? '회원');
+          }
+        }
+      }
+
+      if (unchecked.length === 0) return;
+
+      Alert.alert(
+        '📋 미체크 레슨 확인',
+        `${unchecked.join(', ')}님 출석 체크가 안 됐어요.
+이 레슨은 크레딧 차감 없이 처리할까요?`,
+        [
+          { text: '체크하러 가기', onPress: () => setSelectedDate(date) },
+          {
+            text: '차감 없이 OK',
+            style: 'destructive',
+            onPress: () => {
+              // 출석 미기록 그대로 → 차감 없음 (deduct_credit: false 로 attendance 추가)
+            },
+          },
+        ]
+      );
+    });
+    return () => sub.remove();
+  }, []);
+
   useFocusEffect(useCallback(() => {
     const newToday = getTodayKST();
     const newWeek = getWeekDates();
@@ -258,7 +315,7 @@ export default function ScheduleScreen() {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data } = await supabase.from('members').select('id, name').eq('coach_id', user.id).eq('is_active', true).order('name');
+      const { data } = await supabase.from('members').select('id, name, fixed_lesson_duration').eq('coach_id', user.id).eq('is_active', true).order('name');
       setMembers(data ?? []);
     })();
   }, [activeTab]));
@@ -316,6 +373,42 @@ export default function ScheduleScreen() {
     setSavingNew(false);
     setNewModal(false);
     loadDayLessons(selectedDate);
+    // 당일 마지막 레슨 체크 알림 스케줄
+    scheduleEndOfDayNotification(selectedDate);
+  }
+
+  async function scheduleEndOfDayNotification(date: string) {
+    try {
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== 'granted') return;
+
+      // 해당 날짜의 모든 레슨 조회 → 가장 마지막 레슨 end_time 기준
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: dayLessons } = await supabase.from('lessons').select('end_time')
+        .eq('coach_id', user.id).eq('date', date).order('end_time', { ascending: false });
+      if (!dayLessons || dayLessons.length === 0) return;
+
+      const lastEnd = dayLessons[0].end_time.slice(0, 5); // "HH:MM"
+      const [hh, mm] = lastEnd.split(':').map(Number);
+
+      const trigger = new Date(date + 'T00:00:00');
+      trigger.setHours(hh, mm + 5, 0, 0); // 마지막 레슨 끝 5분 후
+      if (trigger <= new Date()) return; // 이미 지난 시간이면 스킵
+
+      // 기존 같은 날 알림 취소 후 재스케줄
+      await Notifications.cancelAllScheduledNotificationsAsync();
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '📋 오늘 레슨 출석 체크',
+          body: '오늘 레슨 출석 체크가 완료됐나요? 미확인 회원이 있으면 앱을 열어 확인해주세요.',
+          data: { type: 'attendance_check', date },
+        },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: trigger },
+      });
+    } catch (e) {
+      // 알림 스케줄 실패는 조용히 무시
+    }
   }
 
   // ── 드래그 앤 드랍 ────────────────────────────────────────────

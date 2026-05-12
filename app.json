@@ -20,7 +20,8 @@
         "UIBackgroundModes": [
           "audio"
         ],
-        "NSMicrophoneUsageDescription": "레슨 피드백 녹음을 위해 마이크 접근이 필요합니다."
+        "NSMicrophoneUsageDescription": "레슨 피드백 녹음을 위해 마이크 접근이 필요합니다.",
+        "NSUserNotificationUsageDescription": "레슨 출석 체크 알림을 위해 알림 권한이 필요합니다."
       }
     },
     "android": {
@@ -42,6 +43,15 @@
         {
           "microphonePermission": "레슨 피드백 녹음을 위해 마이크 접근이 필요합니다.",
           "enableBackgroundRecording": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#1B4332",
+          "sounds": [],
+          "mode": "production"
         }
       ]
     ],
