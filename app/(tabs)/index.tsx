@@ -508,9 +508,9 @@ export default function HomeScreen() {
                         <Ionicons
                           name={card.attended ? 'checkmark-circle' : 'checkmark-circle-outline'}
                           size={28}
-                          color={card.attended ? Colors.white : Colors.success}
+                          color={card.attended ? Colors.white : Colors.primary}
                         />
-                        <Text style={[styles.attendBtnLabel, card.attended && { color: Colors.white }]}>출석</Text>
+                        <Text style={[styles.attendBtnLabel, card.attended && { color: '#fff' }]}>출석</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.absentBtn, card.isAbsent && styles.absentBtnActive]}
@@ -521,7 +521,7 @@ export default function HomeScreen() {
                           size={28}
                           color={card.isAbsent ? Colors.white : Colors.destructive}
                         />
-                        <Text style={[styles.absentBtnLabel, card.isAbsent && { color: Colors.white }]}>결석</Text>
+                        <Text style={[styles.absentBtnLabel, card.isAbsent && { color: '#fff' }]}>결석</Text>
                       </TouchableOpacity>
                     </View>
                   )}
@@ -682,21 +682,23 @@ const styles = StyleSheet.create({
   deductionBadge: { backgroundColor: '#fee2e2', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8 },
   deductionBadgeText: { fontSize: 10, color: Colors.destructive, fontWeight: '700' },
 
-  attendBtns: { flexDirection: 'column', gap: 6, marginLeft: 8 },
+  attendBtns: { flexDirection: 'row', gap: 6, marginLeft: 10 },
   attendBtn: {
-    width: 52, height: 40, borderRadius: Radius.md,
-    borderWidth: 1.5, borderColor: Colors.success,
-    justifyContent: 'center', alignItems: 'center', gap: 1,
+    width: 58, paddingVertical: 7, borderRadius: 10,
+    borderWidth: 1.5, borderColor: Colors.primary,
+    justifyContent: 'center', alignItems: 'center', gap: 2,
+    backgroundColor: 'transparent',
   },
-  attendBtnActive: { backgroundColor: Colors.success, borderColor: Colors.success },
-  attendBtnLabel: { fontSize: 9, fontWeight: '700', color: Colors.success },
+  attendBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  attendBtnLabel: { fontSize: 10, fontWeight: '700', color: Colors.primary },
   absentBtn: {
-    width: 52, height: 40, borderRadius: Radius.md,
+    width: 58, paddingVertical: 7, borderRadius: 10,
     borderWidth: 1.5, borderColor: Colors.destructive,
-    justifyContent: 'center', alignItems: 'center', gap: 1,
+    justifyContent: 'center', alignItems: 'center', gap: 2,
+    backgroundColor: 'transparent',
   },
   absentBtnActive: { backgroundColor: Colors.destructive, borderColor: Colors.destructive },
-  absentBtnLabel: { fontSize: 9, fontWeight: '700', color: Colors.destructive },
+  absentBtnLabel: { fontSize: 10, fontWeight: '700', color: Colors.destructive },
 
   emptyCard: {
     alignItems: 'center', backgroundColor: Colors.card, borderRadius: Radius.lg,
