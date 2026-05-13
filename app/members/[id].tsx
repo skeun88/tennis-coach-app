@@ -759,167 +759,36 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
           </View>
         )}
 
-        {/* ATTENDANCE TAB */}
+        {/* ATTENDANCE TAB — 결과 조회만 (체크는 홈화면에서) */}
         {tab === 'attendance' && (
           <View style={styles.card}>
-            {/* 헤더: 타이틀 + 요약 카운트 */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <Text style={styles.cardTitle}>출석 기록 ({attendance.length}건)</Text>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                {[
-                  { label: '출석', color: Colors.success, count: attendance.filter(a => a.status === '출석').length },
-                  { label: '결석', color: Colors.destructive, count: attendance.filter(a => a.status === '결석' && (a as any).deduction_type !== '보강예정').length },
-                  { label: '보강', color: Colors.info, count: attendance.filter(a => (a as any).deduction_type === '보강예정').length },
-                ].map(item => (
-                  <View key={item.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                    <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: item.color }} />
-                    <Text style={{ fontSize: 11, color: Colors.mutedFg, fontWeight: '600' }}>{item.count}{item.label}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-
+            <Text style={styles.cardTitle}>출석 기록 ({attendance.length}건)</Text>
             {attendance.length === 0 && <Text style={styles.emptyText}>출석 기록이 없습니다</Text>}
-
             {attendance.map(a => {
               const lesson = (a as any).lesson;
               const isAbsent = a.status === '결석';
-              const isEditing = editingAttId === a.id;
               const deductType = (a as any).deduction_type as string | null;
               const absReason = (a as any).absence_reason as string | null;
               const isMakeup = deductType === '보강예정';
               const displayStatus = isAbsent
-                ? (isMakeup ? '보강예정' : deductType === '미차감' ? '차감없음' : deductType ?? '결석')
+                ? (isMakeup ? '보강예정' : deductType === '미차감' ? '차감없음' : '결석')
                 : '출석';
               const statusColor = isAbsent ? (isMakeup ? Colors.info : Colors.destructive) : Colors.success;
               const dateLabel = formatAttendanceDate(lesson?.date, lesson?.start_time, lesson?.end_time);
-
               return (
-                <View key={a.id} style={[styles.attendanceRow,
-                  isEditing && { flexDirection: 'column', alignItems: 'stretch', backgroundColor: Colors.mutedBg, borderRadius: 12, padding: 12, marginVertical: 4 }
-                ]}>
-                  {/* 기본 뷰 (수정 모드 아닐 때) */}
-                  {!isEditing && (
-                    <>
-                      <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-                      <View style={{ flex: 1 }}>
-                        {/* 요일/날짜/시간 */}
-                        <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.foreground, marginBottom: 1 }}>
-                          {dateLabel}
-                        </Text>
-                        {/* 레슨명 */}
-                        {lesson?.title && (
-                          <Text style={{ fontSize: 11, color: Colors.mutedFg }}>{lesson.title}</Text>
-                        )}
-                        {/* 결석 사유 */}
-                        {isAbsent && absReason && (
-                          <Text style={{ fontSize: 11, color: Colors.mutedFg, marginTop: 1 }}>사유: {absReason}</Text>
-                        )}
-                      </View>
-                      {/* 상태 배지 + 수정 버튼 */}
-                      <View style={{ alignItems: 'flex-end', gap: 5 }}>
-                        <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: statusColor + '20' }}>
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: statusColor }}>{displayStatus}</Text>
-                        </View>
-                        <TouchableOpacity
-                          style={{ flexDirection: 'row', alignItems: 'center', gap: 3,
-                            backgroundColor: Colors.primaryLight, borderRadius: 6,
-                            paddingHorizontal: 8, paddingVertical: 4 }}
-                          onPress={() => {
-                            setEditingAttId(a.id);
-                            setEditStatus(isAbsent ? '결석' : '출석');
-                            setEditReason(absReason ?? '');
-                            setEditDeduction(deductType ?? '');
-                          }}
-                        >
-                          <Ionicons name="create-outline" size={12} color={Colors.primary} />
-                          <Text style={{ fontSize: 11, color: Colors.primary, fontWeight: '700' }}>수정</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </>
-                  )}
-
-                  {/* 수정 패널 */}
-                  {isEditing && (
-                    <>
-                      {/* 날짜/시간 헤더 */}
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.foreground, marginBottom: 10 }}>
-                        {dateLabel}
-                      </Text>
-
-                      {/* 상태 토글: 출석 / 결석 */}
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6 }}>상태</Text>
-                      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
-                        {(['출석', '결석'] as const).map(s => (
-                          <TouchableOpacity
-                            key={s}
-                            style={{ flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: 'center',
-                              backgroundColor: editStatus === s ? (s === '출석' ? Colors.primary : Colors.destructive) : Colors.card,
-                              borderWidth: 1.5,
-                              borderColor: editStatus === s ? (s === '출석' ? Colors.primary : Colors.destructive) : Colors.border }}
-                            onPress={() => setEditStatus(s)}
-                          >
-                            <Text style={{ fontSize: 13, fontWeight: '700', color: editStatus === s ? '#fff' : Colors.mutedFg }}>{s}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-
-                      {/* 결석일 때만 사유/처리방식 */}
-                      {editStatus === '결석' && (
-                        <>
-                          <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6 }}>결석 사유</Text>
-                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
-                            {ABSENCE_REASONS.map(r => (
-                              <TouchableOpacity
-                                key={r}
-                                style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
-                                  backgroundColor: editReason === r ? Colors.navy : Colors.card,
-                                  borderWidth: 1.5, borderColor: editReason === r ? Colors.navy : Colors.border }}
-                                onPress={() => setEditReason(r)}
-                              >
-                                <Text style={{ fontSize: 12, fontWeight: '600', color: editReason === r ? '#fff' : Colors.mutedFg }}>{r}</Text>
-                              </TouchableOpacity>
-                            ))}
-                          </View>
-                          <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6 }}>처리 방식</Text>
-                          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
-                            {DEDUCTION_TYPES.map(d => {
-                              const col = d === '정상차감' ? Colors.destructive : d === '보강예정' ? Colors.info : Colors.success;
-                              return (
-                                <TouchableOpacity
-                                  key={d}
-                                  style={{ flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: 'center',
-                                    backgroundColor: editDeduction === d ? col : Colors.card,
-                                    borderWidth: 1.5, borderColor: editDeduction === d ? col : Colors.border }}
-                                  onPress={() => setEditDeduction(d)}
-                                >
-                                  <Text style={{ fontSize: 12, fontWeight: '700', color: editDeduction === d ? '#fff' : Colors.mutedFg }}>{d}</Text>
-                                </TouchableOpacity>
-                              );
-                            })}
-                          </View>
-                        </>
-                      )}
-
-                      {/* 저장 / 취소 */}
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <TouchableOpacity
-                          style={{ flex: 1, backgroundColor: Colors.primary, borderRadius: 10, paddingVertical: 10, alignItems: 'center',
-                            opacity: (editStatus === '결석' && (!editReason || !editDeduction)) || savingAtt ? 0.45 : 1 }}
-                          onPress={() => handleAttendanceSave(a.id, a.member_id, a.deduct_credit, member?.remaining_credits ?? 0)}
-                          disabled={(editStatus === '결석' && (!editReason || !editDeduction)) || savingAtt}
-                        >
-                          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>{savingAtt ? '저장중...' : '저장'}</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={{ flex: 1, backgroundColor: Colors.card, borderRadius: 10, paddingVertical: 10, alignItems: 'center', borderWidth: 1, borderColor: Colors.border }}
-                          onPress={() => setEditingAttId(null)}
-                        >
-                          <Text style={{ color: Colors.mutedFg, fontWeight: '700', fontSize: 14 }}>취소</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </>
-                  )}
+                <View key={a.id} style={styles.attendanceRow}>
+                  <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.foreground, marginBottom: 1 }}>
+                      {dateLabel}
+                    </Text>
+                    {isAbsent && absReason && (
+                      <Text style={{ fontSize: 11, color: Colors.mutedFg }}>사유: {absReason}</Text>
+                    )}
+                  </View>
+                  <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: statusColor + '20' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: statusColor }}>{displayStatus}</Text>
+                  </View>
                 </View>
               );
             })}
