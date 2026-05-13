@@ -4,7 +4,7 @@ import {
   RefreshControl, Alert, Modal, TextInput, ActivityIndicator,
   PanResponder, Animated, Dimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
@@ -108,6 +108,32 @@ export default function ScheduleScreen() {
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [requestModal, setRequestModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
+
+  // 토스트에서 "확인하기" 눌러서 왔을 때 파라미터 처리
+  const params = useLocalSearchParams<{
+    highlightDate?: string; highlightTime?: string;
+    highlightEnd?: string; highlightMember?: string; requestId?: string;
+  }>();
+  useEffect(() => {
+    if (!params.highlightDate || !params.highlightTime) return;
+    setActiveTab('일일');
+    setSelectedDate(params.highlightDate);
+    loadDayLessons(params.highlightDate);
+    // 해당 시간으로 스크롤
+    const [h, m] = params.highlightTime.slice(0, 5).split(':').map(Number);
+    const scrollMin = Math.max(6 * 60, h * 60 + m - 30);
+    const y = ((scrollMin - 6 * 60) / 60) * 100;
+    setTimeout(() => dayScrollRef.current?.scrollTo({ y: Math.max(0, y), animated: true }), 500);
+    // pending 요청 로드 후 해당 요청 모달 오픈
+    setTimeout(async () => {
+      await loadPendingRequests();
+      if (params.requestId) {
+        const { data } = await supabase.from('lesson_requests')
+          .select('*, member:members(name)').eq('id', params.requestId).maybeSingle();
+        if (data) { setSelectedRequest(data); setRequestModal(true); }
+      }
+    }, 700);
+  }, [params.requestId]);
 
   // 드래그 상태
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -632,6 +658,42 @@ export default function ScheduleScreen() {
               );
             });
           })()}
+
+          {/* 예약 요청 대기 카드들 (반투명 — 수락 전 모든 pending 요청) */}
+          {pendingRequests
+            .filter(req => req.requested_date === selectedDate)
+            .map(req => {
+              const startMin = timeToMinutes(req.start_time);
+              const endMin = timeToMinutes(req.end_time ?? req.start_time);
+              const top = (startMin - START_HOUR * 60) / 60 * HOUR_HEIGHT;
+              const height = Math.max(56, (endMin - startMin) / 60 * HOUR_HEIGHT - 4);
+              const GRID_LEFT = 56;
+              const GRID_WIDTH = Dimensions.get('window').width - GRID_LEFT - 8;
+              return (
+                <TouchableOpacity
+                  key={'pending-' + req.id}
+                  activeOpacity={0.85}
+                  style={{
+                    position: 'absolute', top, left: GRID_LEFT, width: GRID_WIDTH, height,
+                    backgroundColor: Colors.warning + '38',
+                    borderRadius: 10, borderWidth: 2, borderColor: Colors.warning,
+                    borderStyle: 'dashed',
+                    justifyContent: 'center', alignItems: 'center', gap: 3,
+                  }}
+                  onPress={() => { setSelectedRequest(req); setRequestModal(true); }}
+                >
+                  <Ionicons name="time-outline" size={15} color={Colors.warning} />
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: Colors.warning }}>예약 요청 대기중</Text>
+                  <Text style={{ fontSize: 11, color: Colors.warning }}>
+                    {req.start_time?.slice(0,5)} ~ {req.end_time?.slice(0,5)}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: Colors.warning }}>
+                    {req.member?.name ?? '회원'} · 탭하여 수락/거절
+                  </Text>
+                </TouchableOpacity>
+              );
+            })
+          }
         </View>
         <View style={{ height: 80 }} />
       </ScrollView>
