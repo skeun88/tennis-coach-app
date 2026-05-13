@@ -41,3 +41,6 @@ CREATE POLICY "member_requests" ON lesson_requests
 
 -- Realtime 활성화
 ALTER PUBLICATION supabase_realtime ADD TABLE lesson_requests;
+
+-- 거절 메시지 컬럼 추가
+ALTER TABLE lesson_requests ADD COLUMN IF NOT EXISTS reject_message text;

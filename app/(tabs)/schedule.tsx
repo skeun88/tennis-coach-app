@@ -199,7 +199,7 @@ export default function ScheduleScreen() {
   async function handleRejectRequest(req: any) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from('lesson_requests').update({ status: 'rejected', responded_at: new Date().toISOString() }).eq('id', req.id);
+    await supabase.from('lesson_requests').update({ status: 'rejected', responded_at: new Date().toISOString(), reject_message: rejectMsg.trim() || null }).eq('id', req.id);
     // 회원에게 거절 알림 (메시지)
     const rejMsg = rejectMsg.trim()
       ? `❌ 레슨 예약 요청이 거절됐습니다.
