@@ -451,27 +451,52 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
 
   async function handleSendInvite() {
     if (!member) return;
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
 
-    // 초대 코드 생성 or 기존 코드 사용
+    // ── Branch.io 딥링크 생성 ──────────────────────────────────
+    // ⚠️  아래 두 값을 Branch 대시보드에서 발급받은 키로 교체하세요
+    const BRANCH_KEY = 'BRANCH_LIVE_KEY_HERE';           // key_live_xxxxxxxx
+    const TESTFLIGHT_URL = 'https://testflight.apple.com/join/TESTFLIGHT_CODE_HERE';
+
+    let inviteLink = TESTFLIGHT_URL; // Branch 키 미설정 시 폴백
+
+    if (!BRANCH_KEY.includes('HERE')) {
+      try {
+        const res = await fetch('https://api2.branch.io/v1/url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            branch_key: BRANCH_KEY,
+            data: {
+              member_id: member.id,
+              coach_id: (member as any).coach_id,
+              // 앱 미설치 시 TestFlight로 이동
+              '$fallback_url': TESTFLIGHT_URL,
+              '$ios_url': TESTFLIGHT_URL,
+            },
+          }),
+        });
+        const json = await res.json();
+        if (json.url) inviteLink = json.url;
+      } catch (e) {
+        console.warn('Branch link 생성 실패, 폴백 사용');
+      }
+    }
+
+    // 초대 코드도 함께 생성 (폴백용)
     let code = (member as any).invite_code as string | null;
     if (!code) {
-      // 랜덤 6자리 코드 생성
       code = Math.random().toString(36).slice(2, 8).toUpperCase();
       await supabase.from('members').update({ invite_code: code }).eq('id', member.id);
     }
 
-    const appLink = 'https://testflight.apple.com/join/kerri-member'; // TestFlight 링크로 교체
-    const msg = `[KERRI 테니스] 안녕하세요 ${member.name}님! 코치가 레슨 관리앱에 초대했습니다.\n\n📱 앱 설치: ${appLink}\n\n설치 후 초대 코드를 입력해주세요:\n🔑 초대 코드: ${code}\n\n코드를 입력하면 코치와 자동으로 연결됩니다.`;
+    const msg = `[KERRI 테니스] 안녕하세요 ${member.name}님!\n\n담당 코치가 레슨 관리앱에 초대했습니다.\n\n📱 앱 설치 & 자동 연결:\n${inviteLink}\n\n링크가 안 열릴 경우 앱 설치 후 초대 코드를 입력해주세요\n🔑 초대 코드: ${code}`;
     const phone = member.phone.replace(/[^0-9]/g, '');
     const smsUrl = `sms:${phone}${Platform.OS === 'ios' ? '&' : '?'}body=${encodeURIComponent(msg)}`;
-
     const canOpen = await Linking.canOpenURL(smsUrl);
     if (canOpen) {
       await Linking.openURL(smsUrl);
     } else {
-      Alert.alert('초대 코드', `${member.name}님의 초대 코드:\n\n${code}\n\n직접 전달해주세요.`);
+      Alert.alert('초대 링크', inviteLink);
     }
   }
 
