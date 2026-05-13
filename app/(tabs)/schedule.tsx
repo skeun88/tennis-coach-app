@@ -328,27 +328,39 @@ export default function ScheduleScreen() {
 
   // lesson_requests Realtime 구독 - 새 예약 요청 즉시 감지
   useEffect(() => {
-    let coachId: string | null = null;
+    let myCoachId: string | null = null;
+    let ch: any = null;
+
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
-      coachId = user.id;
-      const ch = supabase.channel('lesson_requests_coach')
+      myCoachId = user.id;
+
+      ch = supabase.channel('lesson_requests_coach_' + user.id)
         .on('postgres_changes', {
           event: 'INSERT',
           schema: 'public',
           table: 'lesson_requests',
-          filter: `coach_id=eq.${user.id}`,
         }, async (payload) => {
-          // 새 요청 오면 member name 붙여서 즉시 추가
           const req = payload.new as any;
+          // 내 coach_id 요청만 처리
+          if (req.coach_id !== myCoachId) return;
           const { data: mem } = await supabase.from('members').select('name').eq('id', req.member_id).maybeSingle();
-          setPendingRequests(prev => [{ ...req, member: { name: mem?.name ?? '회원' } }, ...prev]);
-          setSelectedRequest({ ...req, member: { name: mem?.name ?? '회원' } });
+          const newReq = { ...req, member: { name: mem?.name ?? '회원' } };
+          setPendingRequests(prev => [newReq, ...prev]);
+          setSelectedRequest(newReq);
           setRequestModal(true);
         })
-        .subscribe();
-      return () => { supabase.removeChannel(ch); };
+        .subscribe((status: string) => {
+          if (status === 'SUBSCRIBED') {
+            // 구독 성공 후 혹시 놓친 pending 요청 다시 로드
+            loadPendingRequests();
+          }
+        });
     });
+
+    return () => {
+      if (ch) supabase.removeChannel(ch);
+    };
   }, []);
 
   const handleSelectDate = useCallback((date: string) => {
