@@ -109,11 +109,7 @@ export default function MembersScreen() {
           <View style={[styles.avatar, { backgroundColor: LEVEL_COLORS[item.level as MemberLevel] ?? Colors.level.입문 }]}>
             <Text style={styles.avatarText}>{initials}</Text>
           </View>
-          {hasUnread && (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadBadgeText}>{item.unread_count}</Text>
-            </View>
-          )}
+
         </View>
         <View style={styles.cardInfo}>
           <View style={styles.cardTop}>
