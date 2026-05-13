@@ -412,31 +412,7 @@ export default function LessonDetailScreen() {
         ))}
       </View>
 
-      {/* Summary — 출석 / 결석 / 보강예정 */}
-      {attendance.length > 0 && (
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryItem}>
-            <View style={[styles.summaryDot, { backgroundColor: Colors.success }]} />
-            <Text style={styles.summaryLabel}>출석</Text>
-            <Text style={styles.summaryCount}>{presentCount}명</Text>
-          </View>
-          <View style={styles.summaryItem}>
-            <View style={[styles.summaryDot, { backgroundColor: Colors.destructive }]} />
-            <Text style={styles.summaryLabel}>결석</Text>
-            <Text style={styles.summaryCount}>{absentCount}명</Text>
-          </View>
-          <View style={styles.summaryItem}>
-            <View style={[styles.summaryDot, { backgroundColor: Colors.info }]} />
-            <Text style={styles.summaryLabel}>보강예정</Text>
-            <Text style={styles.summaryCount}>{makeupCount}명</Text>
-          </View>
-          <View style={styles.summaryItem}>
-            <View style={[styles.summaryDot, { backgroundColor: Colors.mutedFg }]} />
-            <Text style={styles.summaryLabel}>미체크</Text>
-            <Text style={styles.summaryCount}>{totalCount - checkedCount}명</Text>
-          </View>
-        </View>
-      )}
+
 
       <View style={{ height: 40 }} />
     </ScrollView>
