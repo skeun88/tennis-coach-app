@@ -1,6 +1,8 @@
 export type MemberLevel = '입문' | '초급' | '중급' | '고급' | '선수';
 export type PaymentStatus = '납부완료' | '미납' | '부분납부';
 export type AttendanceStatus = '출석' | '결석' | '지각' | '조퇴';
+export type AbsenceReason = '개인사정' | '부상' | '일정충돌' | '무단결석' | '기타';
+export type DeductionType = '정상차감' | '미차감' | '보강예정';
 
 export interface Member {
   id: string;
@@ -47,6 +49,8 @@ export interface Attendance {
   status: AttendanceStatus;
   notes?: string;
   deduct_credit: boolean;
+  absence_reason?: AbsenceReason | null;
+  deduction_type?: DeductionType | null;
   created_at: string;
   lesson?: Lesson;
   member?: Member;

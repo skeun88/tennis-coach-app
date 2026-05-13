@@ -9,7 +9,9 @@ import { supabase } from '../../lib/supabase';
 import { Lesson, AttendanceStatus } from '../../types';
 import { Colors } from '../../lib/theme';
 
-const STATUS_OPTIONS: AttendanceStatus[] = ['출석', '지각', '조퇴', '결석'];
+const STATUS_OPTIONS: AttendanceStatus[] = ['출석', '결석'];
+const ABSENCE_REASONS = ['개인사정', '부상', '일정충돌', '무단결석', '기타'] as const;
+const DEDUCTION_TYPES = ['정상차감', '미차감', '보강예정'] as const;
 const STATUS_COLOR: Record<AttendanceStatus, string> = {
   '출석': Colors.success, '결석': Colors.destructive, '지각': Colors.warning, '조퇴': Colors.info,
 };
@@ -22,6 +24,8 @@ interface AttendanceRow {
   member_id: string;
   status: AttendanceStatus;
   deduct_credit: boolean;
+  absence_reason?: string | null;
+  deduction_type?: string | null;
   member: {
     id: string;
     name: string;
@@ -54,6 +58,13 @@ export default function LessonDetailScreen() {
   const [minutePickerOpen, setMinutePickerOpen] = useState(false);
   const [durationPickerOpen, setDurationPickerOpen] = useState(false);
 
+  // 결석 처리 모달
+  const [absenceModal, setAbsenceModal] = useState(false);
+  const [absenceRow, setAbsenceRow] = useState<AttendanceRow | null>(null);
+  const [selectedReason, setSelectedReason] = useState('');
+  const [selectedDeduction, setSelectedDeduction] = useState('');
+  const [savingAbsence, setSavingAbsence] = useState(false);
+
   async function loadLesson() {
     const { data } = await supabase.from('lessons').select('*').eq('id', id).single();
     setLesson(data);
@@ -69,7 +80,7 @@ export default function LessonDetailScreen() {
     // 기존 출석 기록 가져오기 (회원 정보 포함)
     const { data: attData } = await supabase
       .from('attendance')
-      .select('id, member_id, status, deduct_credit, member:members(id, name, level, remaining_credits)')
+      .select('id, member_id, status, deduct_credit, absence_reason, deduction_type, member:members(id, name, level, remaining_credits)')
       .eq('lesson_id', id);
 
     const attMap = new Map((attData ?? []).map(a => [a.member_id, a]));
@@ -86,6 +97,8 @@ export default function LessonDetailScreen() {
           member_id: lm.member_id,
           status: (att?.status ?? null) as any,
           deduct_credit: att?.deduct_credit ?? false,
+          absence_reason: (att as any)?.absence_reason ?? null,
+          deduction_type: (att as any)?.deduction_type ?? null,
           member,
         };
       });
@@ -96,6 +109,8 @@ export default function LessonDetailScreen() {
         member_id: a.member_id,
         status: a.status as AttendanceStatus,
         deduct_credit: a.deduct_credit,
+        absence_reason: (a as any).absence_reason ?? null,
+        deduction_type: (a as any).deduction_type ?? null,
         member: (a as any).member,
       }));
     }
@@ -111,59 +126,105 @@ export default function LessonDetailScreen() {
 
   async function updateStatus(row: AttendanceRow, newStatus: AttendanceStatus) {
     if (updating) return;
-    setUpdating(row.id);
 
-    const oldStatus = row.status;
+    if (newStatus === '결석') {
+      if (row.status === '결석') {
+        // 결석 되돌리기
+        setUpdating(row.member_id);
+        if (row.id) {
+          await supabase.from('attendance').delete().eq('id', row.id);
+          if (row.deduct_credit) {
+            await supabase.from('members').update({
+              remaining_credits: row.member.remaining_credits + 1,
+            }).eq('id', row.member_id);
+          }
+        }
+        setUpdating(null);
+        await loadAttendance();
+        return;
+      }
+      // 결석 모달 오픈
+      setAbsenceRow(row);
+      setSelectedReason(row.absence_reason ?? '');
+      setSelectedDeduction(row.deduction_type ?? '');
+      setAbsenceModal(true);
+      return;
+    }
+
+    // 출석 처리
+    setUpdating(row.member_id);
     const wasDeducted = row.deduct_credit;
-    const willDeduct = DEDUCT_STATUSES.includes(newStatus);
+    const creditDelta = wasDeducted ? 0 : -1; // 이미 차감됐으면 추가 차감 없음
 
-    // 크레딧 변화 계산
-    // 이전에 차감됐고 이제 차감 안 되면 +1 복구
-    // 이전에 차감 안 됐고 이제 차감되면 -1
-    let creditDelta = 0;
-    if (wasDeducted && !willDeduct) creditDelta = 1;
-    if (!wasDeducted && willDeduct) creditDelta = -1;
-
-    // 잔여 횟수 부족할 때 경고
     if (creditDelta < 0 && row.member.remaining_credits <= 0) {
       Alert.alert(
         '수강권 부족',
         `${row.member.name}님의 잔여 수강권이 없습니다. (0회)\n그래도 차감하시겠습니까?`,
         [
           { text: '취소', style: 'cancel', onPress: () => setUpdating(null) },
-          { text: '차감', style: 'destructive', onPress: () => doUpdate(row, newStatus, willDeduct, creditDelta) },
+          { text: '차감', style: 'destructive', onPress: () => doUpdate(row, newStatus, true, creditDelta) },
         ]
       );
       return;
     }
-
-    await doUpdate(row, newStatus, willDeduct, creditDelta);
+    await doUpdate(row, newStatus, true, creditDelta);
   }
 
-  async function doUpdate(row: AttendanceRow, newStatus: AttendanceStatus, willDeduct: boolean, creditDelta: number) {
-    // 출석 기록 없으면 insert, 있으면 update
+  async function handleAbsenceSave() {
+    if (!absenceRow || !selectedReason || !selectedDeduction) return;
+    const row = absenceRow;
+    setSavingAbsence(true);
+    setUpdating(row.member_id);
+    const willDeduct = selectedDeduction === '정상차감';
+    const wasDeducted = row.deduct_credit;
+    let creditDelta = 0;
+    if (willDeduct && !wasDeducted) creditDelta = -1;
+    else if (!willDeduct && wasDeducted) creditDelta = 1;
+
+    if (creditDelta < 0 && row.member.remaining_credits <= 0) {
+      setSavingAbsence(false);
+      setUpdating(null);
+      Alert.alert('수강권 부족', `${row.member.name}님의 잔여 수강권이 없습니다.`);
+      return;
+    }
+
+    await doUpdate(row, '결석', willDeduct, creditDelta, selectedReason, selectedDeduction);
+    setSavingAbsence(false);
+    setAbsenceModal(false);
+    setAbsenceRow(null);
+  }
+
+  async function doUpdate(
+    row: AttendanceRow,
+    newStatus: AttendanceStatus,
+    willDeduct: boolean,
+    creditDelta: number,
+    absenceReason?: string,
+    deductionType?: string,
+  ) {
+    const payload: any = {
+      lesson_id: id,
+      member_id: row.member_id,
+      status: newStatus,
+      deduct_credit: willDeduct,
+      absence_reason: absenceReason ?? null,
+      deduction_type: deductionType ?? null,
+    };
     if (!row.id) {
-      await supabase.from('attendance').insert({
-        lesson_id: id,
-        member_id: row.member_id,
-        status: newStatus,
-        deduct_credit: willDeduct,
-      });
+      await supabase.from('attendance').insert(payload);
     } else {
       await supabase.from('attendance').update({
         status: newStatus,
         deduct_credit: willDeduct,
+        absence_reason: absenceReason ?? null,
+        deduction_type: deductionType ?? null,
       }).eq('id', row.id);
     }
-
-    // 크레딧 변화 있으면 member 업데이트
     if (creditDelta !== 0) {
       await supabase.from('members').update({
         remaining_credits: Math.max(0, row.member.remaining_credits + creditDelta),
       }).eq('id', row.member_id);
     }
-
-    // 로컬 상태 업데이트 후 리로드
     setUpdating(null);
     await loadAttendance();
   }
@@ -233,6 +294,8 @@ export default function LessonDetailScreen() {
   if (!lesson) return <View style={styles.loader}><Text>레슨을 찾을 수 없습니다</Text></View>;
 
   const presentCount = attendance.filter(a => a.status === '출석').length;
+  const absentCount = attendance.filter(a => a.status === '결석').length;
+  const makeupCount = attendance.filter(a => (a as any).deduction_type === '보강예정').length;
   const totalCount = attendance.length;
   const deductedCount = attendance.filter(a => a.deduct_credit).length;
   const checkedCount = attendance.filter(a => a.status !== null).length;
@@ -275,10 +338,10 @@ export default function LessonDetailScreen() {
         </View>
       </View>
 
-      {/* 수강권 차감 안내 */}
+      {/* 출석 처리 안내 */}
       <View style={styles.noticeCard}>
         <Ionicons name="information-circle-outline" size={16} color={Colors.info} />
-        <Text style={styles.noticeText}>출석·지각·조퇴·결석 모두 수강권 1회 차감됩니다</Text>
+        <Text style={styles.noticeText}>출석 → 1회 차감 · 결석 → 처리방식 선택</Text>
       </View>
 
       {/* Attendance */}
@@ -322,44 +385,128 @@ export default function LessonDetailScreen() {
               </View>
             </View>
 
-            {/* 상태 버튼 */}
+            {/* 출석 / 결석 버튼 */}
             {updating === a.member_id ? (
               <ActivityIndicator size="small" color={Colors.primary} />
             ) : (
               <View style={styles.statusButtons}>
-                {STATUS_OPTIONS.map(s => (
-                  <TouchableOpacity
-                    key={s}
-                    style={[styles.statusBtn, a.status === s && { backgroundColor: STATUS_COLOR[s] }]}
-                    onPress={() => updateStatus(a, s)}
-                  >
-                    <Text style={[styles.statusBtnText, a.status === s && { color: '#fff' }]}>{s}</Text>
-                  </TouchableOpacity>
-                ))}
+                <TouchableOpacity
+                  style={[styles.statusBtn, a.status === '출석' && { backgroundColor: Colors.success, borderColor: Colors.success }]}
+                  onPress={() => updateStatus(a, '출석')}
+                >
+                  <Ionicons name={a.status === '출석' ? 'checkmark-circle' : 'checkmark-circle-outline'} size={14} color={a.status === '출석' ? '#fff' : Colors.success} />
+                  <Text style={[styles.statusBtnText, a.status === '출석' && { color: '#fff' }]}>출석</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.statusBtn, a.status === '결석' && { backgroundColor: (a as any).deduction_type === '보강예정' ? Colors.info : Colors.destructive, borderColor: (a as any).deduction_type === '보강예정' ? Colors.info : Colors.destructive }]}
+                  onPress={() => updateStatus(a, '결석')}
+                >
+                  <Ionicons name={a.status === '결석' ? 'close-circle' : 'close-circle-outline'} size={14} color={a.status === '결석' ? '#fff' : Colors.destructive} />
+                  <Text style={[styles.statusBtnText, a.status === '결석' && { color: '#fff' }]}>
+                    {a.status === '결석' && (a as any).deduction_type ? (a as any).deduction_type : '결석'}
+                  </Text>
+                </TouchableOpacity>
               </View>
             )}
           </View>
         ))}
       </View>
 
-      {/* Summary */}
+      {/* Summary — 출석 / 결석 / 보강예정 */}
       {attendance.length > 0 && (
         <View style={styles.summaryCard}>
-          {STATUS_OPTIONS.map(s => {
-            const count = attendance.filter(a => a.status === s).length;
-            return (
-              <View key={s} style={styles.summaryItem}>
-                <View style={[styles.summaryDot, { backgroundColor: STATUS_COLOR[s] }]} />
-                <Text style={styles.summaryLabel}>{s}</Text>
-                <Text style={styles.summaryCount}>{count}명</Text>
-              </View>
-            );
-          })}
+          <View style={styles.summaryItem}>
+            <View style={[styles.summaryDot, { backgroundColor: Colors.success }]} />
+            <Text style={styles.summaryLabel}>출석</Text>
+            <Text style={styles.summaryCount}>{presentCount}명</Text>
+          </View>
+          <View style={styles.summaryItem}>
+            <View style={[styles.summaryDot, { backgroundColor: Colors.destructive }]} />
+            <Text style={styles.summaryLabel}>결석</Text>
+            <Text style={styles.summaryCount}>{absentCount}명</Text>
+          </View>
+          <View style={styles.summaryItem}>
+            <View style={[styles.summaryDot, { backgroundColor: Colors.info }]} />
+            <Text style={styles.summaryLabel}>보강예정</Text>
+            <Text style={styles.summaryCount}>{makeupCount}명</Text>
+          </View>
+          <View style={styles.summaryItem}>
+            <View style={[styles.summaryDot, { backgroundColor: Colors.mutedFg }]} />
+            <Text style={styles.summaryLabel}>미체크</Text>
+            <Text style={styles.summaryCount}>{totalCount - checkedCount}명</Text>
+          </View>
         </View>
       )}
 
       <View style={{ height: 40 }} />
     </ScrollView>
+      {/* 결석 처리 바텀시트 */}
+      <Modal
+        visible={absenceModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAbsenceModal(false)}
+      >
+        <View style={styles.absModalOverlay}>
+          <View style={styles.absModalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>결석 처리</Text>
+              <TouchableOpacity onPress={() => setAbsenceModal(false)}>
+                <Ionicons name="close" size={22} color={Colors.mutedFg} />
+              </TouchableOpacity>
+            </View>
+            {absenceRow && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingVertical: 12, backgroundColor: Colors.background, marginHorizontal: 16, borderRadius: 10, marginTop: 12 }}>
+                <Ionicons name="person-circle-outline" size={20} color={Colors.primary} />
+                <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.foreground }}>{absenceRow.member?.name}</Text>
+                <Text style={{ fontSize: 12, color: Colors.mutedFg }}>잔여 {absenceRow.member.remaining_credits}회</Text>
+              </View>
+            )}
+            <Text style={styles.absLabel}>결석 사유</Text>
+            <View style={styles.absOptionGrid}>
+              {ABSENCE_REASONS.map(r => (
+                <TouchableOpacity
+                  key={r}
+                  style={[styles.absChip, selectedReason === r && styles.absChipActive]}
+                  onPress={() => setSelectedReason(r)}
+                >
+                  <Text style={[styles.absChipText, selectedReason === r && styles.absChipTextActive]}>{r}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.absLabel}>처리 방식</Text>
+            <View style={styles.absDeductRow}>
+              {DEDUCTION_TYPES.map(d => {
+                const color = d === '정상차감' ? Colors.destructive : d === '보강예정' ? Colors.info : Colors.success;
+                return (
+                  <TouchableOpacity
+                    key={d}
+                    style={[styles.absDeductChip, selectedDeduction === d && { backgroundColor: color, borderColor: color }]}
+                    onPress={() => setSelectedDeduction(d)}
+                  >
+                    <Text style={[styles.absDeductText, selectedDeduction === d && { color: '#fff' }]}>{d}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {selectedDeduction === '정상차감' && (
+              <Text style={{ fontSize: 12, color: Colors.destructive, marginHorizontal: 20, marginTop: 6, fontWeight: '500' }}>잔여 횟수 1회 차감됩니다</Text>
+            )}
+            {(selectedDeduction === '미차감' || selectedDeduction === '보강예정') && (
+              <Text style={{ fontSize: 12, color: Colors.info, marginHorizontal: 20, marginTop: 6, fontWeight: '500' }}>잔여 횟수 차감 없이 결석 처리됩니다</Text>
+            )}
+            <TouchableOpacity
+              style={[styles.absSaveBtn, (!selectedReason || !selectedDeduction || savingAbsence) && { opacity: 0.5 }]}
+              onPress={handleAbsenceSave}
+              disabled={!selectedReason || !selectedDeduction || savingAbsence}
+            >
+              {savingAbsence
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.absSaveBtnText}>저장</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
       {/* 시간 수정 모달 */}
       <Modal visible={editModal} transparent animationType="slide" onRequestClose={() => setEditModal(false)}>
         <View style={styles.modalOverlay}>
@@ -467,7 +614,7 @@ const styles = StyleSheet.create({
   deductBadge: { backgroundColor: '#fee2e2', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 10 },
   deductBadgeText: { fontSize: 10, color: Colors.destructive, fontWeight: '700' },
   statusButtons: { flexDirection: 'row', gap: 4 },
-  statusBtn: { paddingHorizontal: 7, paddingVertical: 4, borderRadius: 6, backgroundColor: Colors.mutedBg },
+  statusBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 4, borderRadius: 6, backgroundColor: Colors.mutedBg, borderWidth: 1, borderColor: Colors.border },
   statusBtnText: { fontSize: 11, fontWeight: '700', color: Colors.mutedFg },
   summaryCard: {
     backgroundColor: '#fff', marginHorizontal: 16, borderRadius: 12, padding: 16,
@@ -494,4 +641,18 @@ const styles = StyleSheet.create({
   pickerTextActive: { color: '#fff', fontWeight: '800' },
   saveBtn: { backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  absModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  absModalSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 },
+  absLabel: { fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginTop: 16, marginBottom: 8, marginHorizontal: 20 },
+  absOptionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginHorizontal: 20 },
+  absChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: Colors.mutedBg, borderWidth: 1.5, borderColor: Colors.border },
+  absChipActive: { backgroundColor: Colors.navy, borderColor: Colors.navy },
+  absChipText: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg },
+  absChipTextActive: { color: '#fff' },
+  absDeductRow: { flexDirection: 'row', gap: 8, marginHorizontal: 20 },
+  absDeductChip: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center', backgroundColor: Colors.mutedBg, borderWidth: 1.5, borderColor: Colors.border },
+  absDeductText: { fontSize: 13, fontWeight: '700', color: Colors.mutedFg },
+  absSaveBtn: { margin: 16, marginTop: 20, backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  absSaveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
 });

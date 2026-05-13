@@ -40,6 +40,9 @@ function kstToday(): Date {
 
 
 
+
+const ABSENCE_REASONS = ['개인사정', '부상', '일정충돌', '무단결석', '기타'] as const;
+const DEDUCTION_TYPES = ['정상차감', '미차감', '보강예정'] as const;
 type Tab = 'info' | 'attendance' | 'payment' | 'notes' | 'messages';
 
 
@@ -182,6 +185,34 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   const [tempHour, setTempHour] = useState('');
   const [tempMinute, setTempMinute] = useState('00');
 
+
+  // 출석 수정 상태
+  const [editingAttId, setEditingAttId] = useState<string | null>(null);
+  const [editReason, setEditReason] = useState('');
+  const [editDeduction, setEditDeduction] = useState('');
+  const [savingAtt, setSavingAtt] = useState(false);
+
+  async function handleAttendanceSave(attId: string, memberId2: string, currentDeductCredit: boolean, currentRemaining: number) {
+    if (!editReason || !editDeduction) return;
+    setSavingAtt(true);
+    const willDeduct = editDeduction === '정상차감';
+    await supabase.from('attendance').update({
+      absence_reason: editReason,
+      deduction_type: editDeduction,
+      deduct_credit: willDeduct,
+    }).eq('id', attId);
+    // 크레딧 조정
+    if (willDeduct && !currentDeductCredit) {
+      await supabase.from('members').update({ remaining_credits: Math.max(0, currentRemaining - 1) }).eq('id', memberId2);
+    } else if (!willDeduct && currentDeductCredit) {
+      await supabase.from('members').update({ remaining_credits: currentRemaining + 1 }).eq('id', memberId2);
+    }
+    setSavingAtt(false);
+    setEditingAttId(null);
+    loadAttendance();
+    if (willDeduct !== currentDeductCredit) loadMember();
+  }
+
   async function loadMember() {
     const { data } = await supabase.from('members').select('*').eq('id', id).single();
     if (data) {
@@ -239,10 +270,10 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   async function loadAttendance() {
     const { data } = await supabase
       .from('attendance')
-      .select('*, lesson:lessons(title, date, start_time)')
+      .select('*, lesson:lessons(title, date, start_time, end_time)')
       .eq('member_id', id)
       .order('created_at', { ascending: false })
-      .limit(20);
+      .limit(50);
     setAttendance(data ?? []);
   }
 
@@ -427,7 +458,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     { key: 'messages', label: '메시지', icon: 'chatbubble-outline' },
   ];
 
-  const ATTENDANCE_STATUS_COLOR: Record<string, string> = { '출석': Colors.success, '결석': Colors.destructive, '지각': Colors.warning, '조퇴': Colors.info };
+  const ATTENDANCE_STATUS_COLOR: Record<string, string> = { '출석': Colors.success, '결석': Colors.destructive, '지각': Colors.warning, '조퇴': Colors.info, '보강예정': Colors.info };
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -669,18 +700,96 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         {/* ATTENDANCE TAB */}
         {tab === 'attendance' && (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>최근 출석 기록 ({attendance.length}건)</Text>
+            <Text style={styles.cardTitle}>출석 기록 ({attendance.length}건)</Text>
             {attendance.length === 0 && <Text style={styles.emptyText}>출석 기록이 없습니다</Text>}
             {attendance.map(a => {
               const lesson = (a as any).lesson;
+              const isAbsent = a.status === '결석';
+              const isEditing = editingAttId === a.id;
+              const deductType = (a as any).deduction_type as string | null;
+              const absReason = (a as any).absence_reason as string | null;
+              const displayStatus = isAbsent && deductType ? deductType : a.status;
+              const statusColor = isAbsent && deductType === '보강예정'
+                ? Colors.info
+                : ATTENDANCE_STATUS_COLOR[a.status] ?? Colors.mutedFg;
               return (
                 <View key={a.id} style={styles.attendanceRow}>
-                  <View style={[styles.statusDot, { backgroundColor: ATTENDANCE_STATUS_COLOR[a.status] ?? Colors.mutedFg }]} />
+                  <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.attendanceTitle}>{lesson?.title ?? '레슨'}</Text>
-                    <Text style={styles.attendanceDate}>{lesson?.date} {lesson?.start_time?.slice(0, 5)}</Text>
+                    <Text style={styles.attendanceDate}>
+                      {lesson?.date} {lesson?.start_time?.slice(0, 5)}
+                      {lesson?.end_time ? ' ~ ' + lesson.end_time.slice(0, 5) : ''}
+                    </Text>
+                    {isAbsent && absReason && (
+                      <Text style={{ fontSize: 11, color: Colors.mutedFg, marginTop: 2 }}>
+                        사유: {absReason}
+                      </Text>
+                    )}
+                    {/* 수정 패널 */}
+                    {isEditing && (
+                      <View style={{ marginTop: 10, backgroundColor: Colors.background, borderRadius: 10, padding: 10 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6 }}>결석 사유</Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                          {ABSENCE_REASONS.map(r => (
+                            <TouchableOpacity
+                              key={r}
+                              style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, backgroundColor: editReason === r ? Colors.navy : Colors.mutedBg, borderWidth: 1, borderColor: editReason === r ? Colors.navy : Colors.border }}
+                              onPress={() => setEditReason(r)}
+                            >
+                              <Text style={{ fontSize: 12, color: editReason === r ? '#fff' : Colors.mutedFg, fontWeight: '600' }}>{r}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6 }}>처리 방식</Text>
+                        <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
+                          {DEDUCTION_TYPES.map(d => {
+                            const col = d === '정상차감' ? Colors.destructive : d === '보강예정' ? Colors.info : Colors.success;
+                            return (
+                              <TouchableOpacity
+                                key={d}
+                                style={{ flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center', backgroundColor: editDeduction === d ? col : Colors.mutedBg, borderWidth: 1, borderColor: editDeduction === d ? col : Colors.border }}
+                                onPress={() => setEditDeduction(d)}
+                              >
+                                <Text style={{ fontSize: 12, fontWeight: '700', color: editDeduction === d ? '#fff' : Colors.mutedFg }}>{d}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <TouchableOpacity
+                            style={{ flex: 1, backgroundColor: Colors.primary, borderRadius: 8, paddingVertical: 8, alignItems: 'center', opacity: (!editReason || !editDeduction || savingAtt) ? 0.5 : 1 }}
+                            onPress={() => handleAttendanceSave(a.id, a.member_id, a.deduct_credit, member?.remaining_credits ?? 0)}
+                            disabled={!editReason || !editDeduction || savingAtt}
+                          >
+                            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{savingAtt ? '저장중...' : '저장'}</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={{ flex: 1, backgroundColor: Colors.mutedBg, borderRadius: 8, paddingVertical: 8, alignItems: 'center' }}
+                            onPress={() => setEditingAttId(null)}
+                          >
+                            <Text style={{ color: Colors.mutedFg, fontWeight: '700', fontSize: 13 }}>취소</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
                   </View>
-                  <Text style={[styles.attendanceStatus, { color: ATTENDANCE_STATUS_COLOR[a.status] ?? Colors.mutedFg }]}>{a.status}</Text>
+                  <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                    <Text style={[styles.attendanceStatus, { color: statusColor }]}>{displayStatus}</Text>
+                    {isAbsent && !isEditing && (
+                      <TouchableOpacity
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: Colors.primaryLight, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}
+                        onPress={() => {
+                          setEditingAttId(a.id);
+                          setEditReason((absReason as any) ?? '');
+                          setEditDeduction((deductType as any) ?? '');
+                        }}
+                      >
+                        <Ionicons name="create-outline" size={12} color={Colors.navy} />
+                        <Text style={{ fontSize: 11, color: Colors.navy, fontWeight: '700' }}>수정</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
               );
             })}
