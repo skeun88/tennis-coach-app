@@ -324,6 +324,11 @@ export default function ScheduleScreen() {
       }));
       setMembers(data ?? []);
     })();
+    // Realtime 불안정 대비: 15초 폴링으로 pending 요청 확인
+    const pollInterval = setInterval(() => {
+      loadPendingRequests();
+    }, 15000);
+    return () => clearInterval(pollInterval);
   }, [activeTab]));
 
   // lesson_requests Realtime 구독 - 새 예약 요청 즉시 감지
