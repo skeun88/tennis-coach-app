@@ -125,6 +125,9 @@ export default function MembersScreen() {
               <View style={styles.newMsgBadge}>
                 <Ionicons name="chatbubble" size={10} color="#fff" />
                 <Text style={styles.newMsgText}>새 메시지</Text>
+                <View style={styles.newMsgCount}>
+                  <Text style={styles.newMsgCountText}>{item.unread_count}</Text>
+                </View>
               </View>
             )}
           </View>
@@ -269,6 +272,8 @@ const styles = StyleSheet.create({
   unreadBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
   newMsgBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: Colors.primary, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
   newMsgText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  newMsgCount: { backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1, marginLeft: 2 },
+  newMsgCountText: { color: '#fff', fontSize: 10, fontWeight: '800' },
   card: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
     borderRadius: 12, padding: 14, marginBottom: 8,
