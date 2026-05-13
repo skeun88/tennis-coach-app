@@ -108,6 +108,7 @@ export default function ScheduleScreen() {
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [requestModal, setRequestModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
+  const [rejectMsg, setRejectMsg] = useState('');
 
   // 토스트에서 "확인하기" 눌러서 왔을 때 파라미터 처리
   const params = useLocalSearchParams<{
@@ -200,13 +201,18 @@ export default function ScheduleScreen() {
     if (!user) return;
     await supabase.from('lesson_requests').update({ status: 'rejected', responded_at: new Date().toISOString() }).eq('id', req.id);
     // 회원에게 거절 알림 (메시지)
+    const rejMsg = rejectMsg.trim()
+      ? `❌ 레슨 예약 요청이 거절됐습니다.
+${rejectMsg.trim()}`
+      : `❌ ${req.requested_date} ${req.start_time.slice(0,5)} 레슨 예약 요청이 거절됐습니다. 다른 시간을 선택해주세요.`;
     await supabase.from('messages').insert({
       coach_id: user.id, member_id: req.member_id, sender_type: 'coach',
-      content: `❌ ${req.requested_date} ${req.start_time.slice(0,5)} 레슨 예약 요청이 거절됐습니다. 다른 시간을 선택해주세요.`,
+      content: rejMsg,
     });
+    setRejectMsg('');
     setRequestModal(false);
     loadPendingRequests();
-    Alert.alert('거절 완료', '회원에게 알림을 보냈습니다.');
+    Alert.alert('거절 완료', '회원에게 메시지가 전송됐습니다.');
   }
 
   function scrollToCurrentTime() {
@@ -1087,22 +1093,50 @@ export default function ScheduleScreen() {
             <Text style={styles.modalTitle}>레슨 예약 요청</Text>
             {selectedRequest && (
               <>
+                {/* 회원 정보 카드 */}
                 <View style={styles.requestInfoCard}>
-                  <Text style={styles.requestMemberName}>{selectedRequest.member?.name ?? '회원'}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={styles.requestMemberName}>{selectedRequest.member?.name ?? '회원'}</Text>
+                    {pendingRequests.length > 1 && (
+                      <View style={{ backgroundColor: Colors.warning + '22', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                        <Text style={{ fontSize: 11, color: Colors.warning, fontWeight: '700' }}>외 {pendingRequests.length - 1}건 대기중</Text>
+                      </View>
+                    )}
+                  </View>
                   <Text style={styles.requestDateTime}>
                     {selectedRequest.requested_date}{'  '}
                     {selectedRequest.start_time?.slice(0,5)} ~ {selectedRequest.end_time?.slice(0,5)}
                   </Text>
                   {selectedRequest.message ? (
                     <View style={styles.requestMsgBox}>
-                      <Text style={styles.requestMsgLabel}>전달 메시지</Text>
+                      <Text style={styles.requestMsgLabel}>회원 메시지</Text>
                       <Text style={styles.requestMsgText}>{selectedRequest.message}</Text>
                     </View>
                   ) : null}
                 </View>
-                {pendingRequests.length > 1 && (
-                  <Text style={styles.requestMore}>외 {pendingRequests.length - 1}건 더 있음</Text>
-                )}
+
+                {/* 거절 시 메시지 입력 */}
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6 }}>
+                    거절 메시지 (선택)
+                  </Text>
+                  <TextInput
+                    style={{
+                      backgroundColor: Colors.mutedBg, borderRadius: 10,
+                      padding: 12, fontSize: 14, color: Colors.foreground,
+                      minHeight: 60, textAlignVertical: 'top',
+                      borderWidth: 1, borderColor: Colors.border,
+                    }}
+                    placeholder="회원에게 전달할 메시지를 입력하세요"
+                    placeholderTextColor={Colors.placeholder}
+                    value={rejectMsg}
+                    onChangeText={setRejectMsg}
+                    multiline
+                    maxLength={200}
+                  />
+                </View>
+
+                {/* 수락 / 거절 버튼 */}
                 <View style={styles.requestBtnRow}>
                   <TouchableOpacity style={[styles.requestBtn, styles.requestBtnReject]}
                     onPress={() => handleRejectRequest(selectedRequest)}>
@@ -1115,8 +1149,13 @@ export default function ScheduleScreen() {
                     <Text style={[styles.requestBtnText, { color: '#fff' }]}>수락</Text>
                   </TouchableOpacity>
                 </View>
-                <TouchableOpacity style={{ alignItems: 'center', padding: 12 }} onPress={() => setRequestModal(false)}>
-                  <Text style={{ color: Colors.mutedFg, fontSize: 14 }}>나중에</Text>
+
+                {/* 나중에 — 하단 중앙 */}
+                <TouchableOpacity
+                  style={{ alignItems: 'center', paddingVertical: 14 }}
+                  onPress={() => { setRequestModal(false); setRejectMsg(''); }}
+                >
+                  <Text style={{ color: Colors.mutedFg, fontSize: 14, fontWeight: '500' }}>나중에 처리하기</Text>
                 </TouchableOpacity>
               </>
             )}
