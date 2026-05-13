@@ -405,6 +405,44 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   }
 
 
+
+  async function handlePermanentDelete() {
+    Alert.alert(
+      '⚠️ 영구 삭제',
+      `${member?.name}님의 모든 데이터(레슨, 출석, 결제, 메모 등)가 완전히 삭제됩니다.\n\n이 작업은 되돌릴 수 없습니다. 정말 삭제하시겠습니까?`,
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '영구 삭제',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              '최종 확인',
+              '삭제 후 복구가 불가능합니다. 정말 삭제하시겠습니까?',
+              [
+                { text: '취소', style: 'cancel' },
+                {
+                  text: '네, 삭제합니다',
+                  style: 'destructive',
+                  onPress: async () => {
+                    if (!id) return;
+                    await supabase.from('member_notes').delete().eq('member_id', id);
+                    await supabase.from('attendance').delete().eq('member_id', id);
+                    await supabase.from('payments').delete().eq('member_id', id);
+                    await supabase.from('lesson_members').delete().eq('member_id', id);
+                    await supabase.from('messages').delete().eq('member_id', id);
+                    await supabase.from('members').delete().eq('id', id);
+                    router.replace('/(tabs)/members');
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  }
+
   async function addNote() {
     if (!newNote.trim()) return;
     const { data: { user } } = await supabase.auth.getUser();
@@ -550,6 +588,10 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.deactivateBtn, !member.is_active && { borderColor: Colors.success }]} onPress={handleToggleActive}>
                     <Text style={[styles.deactivateBtnText, !member.is_active && { color: Colors.success }]}>{member.is_active ? '비활성화' : '활성화'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.deletePermBtn} onPress={handlePermanentDelete}>
+                    <Ionicons name="trash-outline" size={15} color={Colors.white} />
+                    <Text style={styles.deletePermBtnText}>영구삭제</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -1057,6 +1099,8 @@ const styles = StyleSheet.create({
   editBtnText: { color: Colors.navy, fontWeight: '700', fontSize: 14 },
   deactivateBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: Colors.destructive, borderRadius: 10, paddingVertical: 10 },
   deactivateBtnText: { color: Colors.destructive, fontWeight: '700', fontSize: 14 },
+  deletePermBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: Colors.destructive, borderRadius: 10, paddingVertical: 10 },
+  deletePermBtnText: { color: Colors.white, fontWeight: '700', fontSize: 14 },
   editLabel: { fontSize: 12, color: Colors.mutedFg, fontWeight: '600', marginBottom: 4, marginTop: 8 },
   editInput: { backgroundColor: Colors.mutedBg, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, fontSize: 15, color: Colors.foreground, marginBottom: 4, borderWidth: 1, borderColor: Colors.border },
   levelRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
