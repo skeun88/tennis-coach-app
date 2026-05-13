@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
   TextInput, ActivityIndicator, KeyboardAvoidingView, Platform,
-  Modal, FlatList,
+  Modal, FlatList, Linking,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -448,6 +448,33 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
 
 
 
+
+  async function handleSendInvite() {
+    if (!member) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // 초대 코드 생성 or 기존 코드 사용
+    let code = (member as any).invite_code as string | null;
+    if (!code) {
+      // 랜덤 6자리 코드 생성
+      code = Math.random().toString(36).slice(2, 8).toUpperCase();
+      await supabase.from('members').update({ invite_code: code }).eq('id', member.id);
+    }
+
+    const appLink = 'https://testflight.apple.com/join/kerri-member'; // TestFlight 링크로 교체
+    const msg = `[KERRI 테니스] 안녕하세요 ${member.name}님! 코치가 레슨 관리앱에 초대했습니다.\n\n📱 앱 설치: ${appLink}\n\n설치 후 초대 코드를 입력해주세요:\n🔑 초대 코드: ${code}\n\n코드를 입력하면 코치와 자동으로 연결됩니다.`;
+    const phone = member.phone.replace(/[^0-9]/g, '');
+    const smsUrl = `sms:${phone}${Platform.OS === 'ios' ? '&' : '?'}body=${encodeURIComponent(msg)}`;
+
+    const canOpen = await Linking.canOpenURL(smsUrl);
+    if (canOpen) {
+      await Linking.openURL(smsUrl);
+    } else {
+      Alert.alert('초대 코드', `${member.name}님의 초대 코드:\n\n${code}\n\n직접 전달해주세요.`);
+    }
+  }
+
   async function handlePermanentDelete() {
     Alert.alert(
       '⚠️ 영구 삭제',
@@ -622,6 +649,12 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                     </>
                   )}
                 </View>
+
+                {/* 앱 초대 문자 버튼 */}
+                <TouchableOpacity style={styles.inviteBtn} onPress={handleSendInvite}>
+                  <Ionicons name="paper-plane-outline" size={16} color={Colors.primary} />
+                  <Text style={styles.inviteBtnText}>회원앱 초대 문자 발송</Text>
+                </TouchableOpacity>
 
                 <View style={styles.btnRow}>
                   <TouchableOpacity style={styles.editBtn} onPress={() => setEditing(true)}>
@@ -1142,6 +1175,8 @@ const styles = StyleSheet.create({
   deactivateBtnText: { color: Colors.destructive, fontWeight: '700', fontSize: 14 },
   deletePermBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: Colors.destructive, borderRadius: 10, paddingVertical: 10 },
   deletePermBtnText: { color: Colors.white, fontWeight: '700', fontSize: 14 },
+  inviteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderColor: Colors.primary, borderRadius: 10, paddingVertical: 11, marginBottom: 10 },
+  inviteBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 14 },
   editLabel: { fontSize: 12, color: Colors.mutedFg, fontWeight: '600', marginBottom: 4, marginTop: 8 },
   editInput: { backgroundColor: Colors.mutedBg, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, fontSize: 15, color: Colors.foreground, marginBottom: 4, borderWidth: 1, borderColor: Colors.border },
   levelRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },

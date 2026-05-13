@@ -5,3 +5,6 @@ ALTER TABLE attendance
 
 -- absence_reason: 개인사정 / 부상 / 일정충돌 / 무단결석 / 기타
 -- deduction_type: 정상차감 / 미차감 / 보강예정
+
+-- 회원 초대 코드
+ALTER TABLE members ADD COLUMN IF NOT EXISTS invite_code text UNIQUE;
