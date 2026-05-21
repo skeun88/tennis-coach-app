@@ -83,6 +83,7 @@ export default function ScheduleScreen() {
   const [lessons, setLessons] = useState<LessonWithMembers[]>([]);
   const [weekData, setWeekData] = useState<WeekLesson[]>([]);
   const [monthLessons, setMonthLessons] = useState<Map<string, LessonWithMembers[]>>(new Map());
+  const [activeMemberIds, setActiveMemberIds] = useState<Set<string>>(new Set());
   const [monthYear, setMonthYear] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
   const [refreshing, setRefreshing] = useState(false);
   const [today, setToday] = useState(getTodayKST);
@@ -276,6 +277,11 @@ ${rejectMsg.trim()}`
       map.get(l.date)!.push(l);
     }
     setMonthLessons(map);
+
+    // 활성 회원 ID 목록 (비활성/삭제된 회원 제외)
+    const { data: activeMembers } = await supabase
+      .from('members').select('id').eq('coach_id', user.id).eq('is_active', true);
+    setActiveMemberIds(new Set((activeMembers ?? []).map((m: any) => m.id)));
   }
 
   // 알림 응답 리스너 (출석 체크 확인 팝업)
@@ -941,7 +947,7 @@ ${rejectMsg.trim()}`
           </View>
           <View style={styles.monthSummaryDivider} />
           <View style={styles.monthSummaryItem}>
-            <Text style={styles.monthSummaryNum}>{new Set(Array.from(monthLessons.values()).flat().flatMap(l => l.memberIds)).size}</Text>
+            <Text style={styles.monthSummaryNum}>{new Set(Array.from(monthLessons.values()).flat().flatMap(l => l.memberIds).filter(id => activeMemberIds.has(id))).size}</Text>
             <Text style={styles.monthSummaryLabel}>회원수</Text>
           </View>
         </View>

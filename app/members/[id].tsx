@@ -520,11 +520,29 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                   style: 'destructive',
                   onPress: async () => {
                     if (!id) return;
+                    // 이 회원이 속한 레슨 ID 먼저 수집
+                    const { data: memberLessonRows } = await supabase
+                      .from('lesson_members').select('lesson_id').eq('member_id', id);
+                    const lessonIds = (memberLessonRows ?? []).map((r: any) => r.lesson_id);
+
                     await supabase.from('member_notes').delete().eq('member_id', id);
                     await supabase.from('attendance').delete().eq('member_id', id);
                     await supabase.from('payments').delete().eq('member_id', id);
                     await supabase.from('lesson_members').delete().eq('member_id', id);
                     await supabase.from('messages').delete().eq('member_id', id);
+
+                    // 멤버 제거 후 비어버린 레슨 슬롯 삭제 (다른 회원 없는 경우만)
+                    if (lessonIds.length > 0) {
+                      const { data: remaining } = await supabase
+                        .from('lesson_members').select('lesson_id').in('lesson_id', lessonIds);
+                      const stillUsed = new Set((remaining ?? []).map((r: any) => r.lesson_id));
+                      const emptyIds = lessonIds.filter((lid: string) => !stillUsed.has(lid));
+                      if (emptyIds.length > 0) {
+                        await supabase.from('attendance').delete().in('lesson_id', emptyIds);
+                        await supabase.from('lessons').delete().in('id', emptyIds);
+                      }
+                    }
+
                     await supabase.from('members').delete().eq('id', id);
                     router.replace('/(tabs)/members');
                   },
