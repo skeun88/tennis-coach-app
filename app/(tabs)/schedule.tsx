@@ -931,7 +931,7 @@ ${rejectMsg.trim()}`
         {/* 이번 달 레슨 요약 */}
         <View style={styles.monthSummary}>
           <View style={styles.monthSummaryItem}>
-            <Text style={styles.monthSummaryNum}>{Array.from(monthLessons.values()).flat().reduce((s, l) => s + (l.memberIds.length > 0 ? l.memberIds.length : 1), 0)}</Text>
+            <Text style={styles.monthSummaryNum}>{Array.from(monthLessons.values()).reduce((s, ls) => s + ls.length, 0)}</Text>
             <Text style={styles.monthSummaryLabel}>총 레슨</Text>
           </View>
           <View style={styles.monthSummaryDivider} />
