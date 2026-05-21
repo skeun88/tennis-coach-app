@@ -151,12 +151,13 @@ export default function ScheduleScreen() {
     const nameMap = new Map<string, string[]>();
     const idMap = new Map<string, string[]>();
     for (const row of lm ?? []) {
+      // member_id는 name 유무와 무관하게 항상 기록
+      if (!idMap.has(row.lesson_id)) idMap.set(row.lesson_id, []);
+      idMap.get(row.lesson_id)!.push(row.member_id);
       const n = (row.member as any)?.name;
       if (!n) continue;
       if (!nameMap.has(row.lesson_id)) nameMap.set(row.lesson_id, []);
-      if (!idMap.has(row.lesson_id)) idMap.set(row.lesson_id, []);
       nameMap.get(row.lesson_id)!.push(n);
-      idMap.get(row.lesson_id)!.push(row.member_id);
     }
     return lessonList.map(l => ({ ...l, memberNames: nameMap.get(l.id) ?? [], memberIds: idMap.get(l.id) ?? [] }));
   }
@@ -930,7 +931,7 @@ ${rejectMsg.trim()}`
         {/* 이번 달 레슨 요약 */}
         <View style={styles.monthSummary}>
           <View style={styles.monthSummaryItem}>
-            <Text style={styles.monthSummaryNum}>{Array.from(monthLessons.values()).reduce((s, ls) => s + ls.length, 0)}</Text>
+            <Text style={styles.monthSummaryNum}>{Array.from(monthLessons.values()).flat().reduce((s, l) => s + (l.memberIds.length > 0 ? l.memberIds.length : 1), 0)}</Text>
             <Text style={styles.monthSummaryLabel}>총 레슨</Text>
           </View>
           <View style={styles.monthSummaryDivider} />
@@ -941,7 +942,7 @@ ${rejectMsg.trim()}`
           <View style={styles.monthSummaryDivider} />
           <View style={styles.monthSummaryItem}>
             <Text style={styles.monthSummaryNum}>{new Set(Array.from(monthLessons.values()).flat().flatMap(l => l.memberIds)).size}</Text>
-            <Text style={styles.monthSummaryLabel}>참여 회원</Text>
+            <Text style={styles.monthSummaryLabel}>회원수</Text>
           </View>
         </View>
         <View style={{ height: 100 }} />
