@@ -64,6 +64,18 @@ function getOffsetWeekDates(offset: number): string[] {
   });
 }
 
+// 특정 날짜가 포함된 주(월~일) 반환
+function getWeekDatesForDate(dateStr: string): string[] {
+  const d = new Date(dateStr + 'T12:00:00+09:00');
+  const dow = d.getDay();
+  const mon = new Date(d);
+  mon.setDate(d.getDate() - ((dow + 6) % 7));
+  return Array.from({ length: 7 }, (_, i) => {
+    const dd = new Date(mon); dd.setDate(mon.getDate() + i);
+    return toKSTDateStr(dd);
+  });
+}
+
 function timeToMinutes(t: string): number {
   const [h, m] = t.slice(0, 5).split(':').map(Number);
   return h * 60 + m;
@@ -345,8 +357,17 @@ ${rejectMsg.trim()}`
     const newWeek = getWeekDates();
     const newThisWeek = getThisWeekDates();
     setToday(newToday); setWeekDates(newWeek); setThisWeekDates(newThisWeek);
-    setSelectedDate(prev => newWeek.includes(prev) ? prev : newToday);
-    if (activeTab === '일일') loadDayLessons(newToday);
+    setSelectedDate(prev => {
+      if (newWeek.includes(prev)) return prev;
+      setWeekDates(newWeek);
+      return newToday;
+    });
+    if (activeTab === '일일') {
+      // selectedDate가 현재 주에 없으면 오늘로, 있으면 유지
+      const curSelected = selectedDate;
+      const target = newWeek.includes(curSelected) ? curSelected : newToday;
+      loadDayLessons(target);
+    }
     else if (activeTab === '주간') loadWeekLessons(newThisWeek);
     else { const d = new Date(); loadMonthLessons(d.getFullYear(), d.getMonth()); }
     loadPendingRequests();
@@ -911,7 +932,13 @@ ${rejectMsg.trim()}`
               <TouchableOpacity
                 key={dateStr}
                 style={[styles.monthCell, isToday && styles.monthCellToday]}
-                onPress={() => { setSelectedDate(dateStr); setActiveTab('일일'); loadDayLessons(dateStr); }}
+                onPress={() => {
+                  const weekForDate = getWeekDatesForDate(dateStr);
+                  setWeekDates(weekForDate);
+                  setSelectedDate(dateStr);
+                  setActiveTab('일일');
+                  loadDayLessons(dateStr);
+                }}
               >
                 <Text style={[
                   styles.monthCellDay,
@@ -961,7 +988,12 @@ ${rejectMsg.trim()}`
       {/* 탭 */}
       <View style={styles.tabRow}>
         {(['일일', '주간', '월간'] as ViewTab[]).map(tab => (
-          <TouchableOpacity key={tab} style={[styles.tabBtn, activeTab === tab && styles.tabBtnActive]} onPress={() => setActiveTab(tab)}>
+          <TouchableOpacity key={tab} style={[styles.tabBtn, activeTab === tab && styles.tabBtnActive]} onPress={() => {
+            setActiveTab(tab);
+            if (tab === '일일') loadDayLessons(selectedDate);
+            else if (tab === '주간') loadWeekLessons(weekDates);
+            else loadMonthLessons(monthYear.year, monthYear.month);
+          }}>
             <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
           </TouchableOpacity>
         ))}
