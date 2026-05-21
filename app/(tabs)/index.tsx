@@ -229,6 +229,41 @@ export default function HomeScreen() {
 
   useFocusEffect(useCallback(() => { loadAll(); }, []));
 
+  // Realtime: lessons/members 변경 시 홈 즉시 갱신 (새 회원 등록 등)
+  useEffect(() => {
+    let channel: any = null;
+    let coachId: string | null = null;
+
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      coachId = user.id;
+
+      channel = supabase
+        .channel('home_realtime_' + user.id)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'lessons' }, (payload) => {
+          const row = payload.new as any;
+          if (row.coach_id !== coachId) return;
+          loadAll();
+        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'members' }, (payload) => {
+          const row = payload.new as any;
+          if (row.coach_id !== coachId) return;
+          loadAll();
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'members' }, (payload) => {
+          const row = payload.new as any;
+          if (row.coach_id !== coachId) return;
+          loadAll();
+        })
+        .subscribe();
+    });
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, []);
+
+
   async function handleSignOut() {
     Alert.alert('로그아웃', '로그아웃 하시겠습니까?', [
       { text: '취소', style: 'cancel' },
