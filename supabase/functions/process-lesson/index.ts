@@ -327,6 +327,14 @@ ${knowledgeContext || '(없음)'}
       .update({ lesson_count: (member?.lesson_count || 0) + 1 })
       .eq('id', memberId)
 
+    // ── Step 6: 회원용 리포트 생성 (비동기, 코치 응답 블로킹 안 함) ──
+    generateMemberReport({
+      supabase, fetchClaude,
+      coachId, memberId,
+      plan, parsed, member, effectiveCourtType,
+      durationSeconds: durationSeconds ?? null,
+    }).catch(e => console.error('member_report_error:', e))
+
     return new Response(JSON.stringify({ success: true, plan, transcript, court_type: effectiveCourtType }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
@@ -338,3 +346,88 @@ ${knowledgeContext || '(없음)'}
     })
   }
 })
+
+// ── 회원용 레슨 리포트 생성 ──
+async function generateMemberReport({
+  supabase, fetchClaude,
+  coachId, memberId,
+  plan, parsed, member, effectiveCourtType,
+  durationSeconds,
+}: {
+  supabase: any; fetchClaude: (body: object, retries?: number) => Promise<Response>;
+  coachId: string; memberId: string;
+  plan: any; parsed: any; member: any; effectiveCourtType: string;
+  durationSeconds: number | null;
+}) {
+  const MEMBER_SYSTEM_PROMPT = `당신은 테니스 회원에게 오늘 레슨 결과를 친절하게 전달하는 KERRI AI입니다.
+전문 용어는 쉽게 풀어쓰고, 회원이 집에서 혼자 연습할 수 있도록 구체적이고 실용적인 안내를 제공합니다.
+칭찬과 격려를 적절히 섞어 동기부여가 되도록 작성하세요.
+
+반드시 아래 JSON 형식으로만 응답하세요 (한국어):
+{
+  "summary": "오늘 레슨 전체 흐름을 회원 시각에서 2-3문장으로 요약 (코치 전문용어 최소화)",
+  "achievements": [
+    "오늘 잘한 것 / 발전한 것 1 (구체적으로, 긍정적 톤)",
+    "성과 2",
+    "성과 3"
+  ],
+  "improvement_points": [
+    "개선할 점 1 (왜 중요한지 + 어떻게 고치면 되는지 쉽게 설명)",
+    "보완 포인트 2"
+  ],
+  "practice_plan": [
+    {
+      "title": "연습 이름",
+      "description": "집/코트에서 혼자 할 수 있는 구체적인 연습 방법",
+      "duration": "1회 소요 시간 (예: 10분)",
+      "frequency": "권장 빈도 (예: 주 3회)",
+      "tip": "이 연습을 효과적으로 하는 핵심 팁 1가지"
+    }
+  ]
+}
+practice_plan은 2-3개 작성. JSON 외 텍스트 절대 포함 금지.`
+
+  const userPrompt = `## 회원 정보
+이름: ${member?.name || '회원'} | 레벨: ${member?.level || '초급'} | 목표: ${member?.goal || '취미'}
+코트: ${effectiveCourtType}
+
+## 코치 분석 결과 (이를 바탕으로 회원용 리포트 작성)
+오늘 레슨 요약: ${parsed.summary || ''}
+개선 포인트: ${(parsed.improvement_points || []).join(' / ')}
+다음 목표: ${(parsed.next_goals || []).join(' / ')}
+추천 드릴: ${JSON.stringify(parsed.drill_suggestions || [])}
+
+위 코치 분석을 회원이 이해하기 쉽게 변환해주세요. JSON만 출력하세요.`
+
+  const res = await fetchClaude({
+    model: 'claude-haiku-4-5',
+    max_tokens: 2000,
+    system: [{ type: 'text', text: MEMBER_SYSTEM_PROMPT }],
+    messages: [{ role: 'user', content: userPrompt }],
+  })
+
+  const data = await res.json()
+  const rawText = data.content?.[0]?.text || ''
+
+  let memberParsed: any = {}
+  const cleaned = rawText.replace(/\`\`\`json\s*/g, '').replace(/\`\`\`\s*/g, '').trim()
+  try {
+    memberParsed = JSON.parse(cleaned)
+  } catch {
+    const m = cleaned.match(/\{[\s\S]*\}/)
+    if (m) { try { memberParsed = JSON.parse(m[0]) } catch { /* 무시 */ } }
+  }
+
+  if (!memberParsed.summary) return // 파싱 실패 시 스킵
+
+  await supabase.from('member_lesson_reports').insert({
+    coach_id: coachId,
+    member_id: memberId,
+    lesson_plan_id: plan?.id || null,
+    lesson_date: new Date().toISOString().split('T')[0],
+    summary: memberParsed.summary || '',
+    achievements: Array.isArray(memberParsed.achievements) ? memberParsed.achievements : [],
+    improvement_points: Array.isArray(memberParsed.improvement_points) ? memberParsed.improvement_points : [],
+    practice_plan: Array.isArray(memberParsed.practice_plan) ? memberParsed.practice_plan : [],
+  })
+}
