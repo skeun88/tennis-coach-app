@@ -64,16 +64,28 @@ export default function ProfileScreen() {
     if (!user) return;
     setEmail(user.email ?? '');
 
-    const [membersRes, lessonsRes, plansRes, paymentsRes, profileRes] = await Promise.all([
+    const [membersRes, lessonIdsRes, plansRes, paymentsRes, profileRes] = await Promise.all([
       supabase.from('members').select('*', { count: 'exact', head: true }).eq('coach_id', user.id),
-      supabase.from('lessons').select('*', { count: 'exact', head: true }).eq('coach_id', user.id),
+      supabase.from('lessons').select('id').eq('coach_id', user.id),
       supabase.from('lesson_plans').select('*', { count: 'exact', head: true }).eq('coach_id', user.id),
       supabase.from('payments').select('paid_amount, paid_date').eq('coach_id', user.id).eq('status', '납부완료'),
       supabase.from('coach_profiles').select('*').eq('id', user.id).maybeSingle(),
     ]);
 
     const totalMembers = membersRes.count ?? 0;
-    const totalLessons = lessonsRes.count ?? 0;
+
+    // 누적 레슨: 출석 체크된(status='출석') 레슨 수 (lesson 기준 distinct)
+    const myLessonIds = (lessonIdsRes.data ?? []).map((l: any) => l.id);
+    let totalLessons = 0;
+    if (myLessonIds.length > 0) {
+      const { data: attendedRows } = await supabase
+        .from('attendance')
+        .select('lesson_id')
+        .in('lesson_id', myLessonIds)
+        .eq('status', '출석');
+      totalLessons = new Set((attendedRows ?? []).map((r: any) => r.lesson_id)).size;
+    }
+
     const totalPlans = plansRes.count ?? 0;
     const reportRate = totalLessons > 0 ? Math.round((totalPlans / totalLessons) * 100) : 0;
 
@@ -167,7 +179,7 @@ export default function ProfileScreen() {
   const hasSettlement = !!settlement.settlement_account;
 
   const certifiedData = [
-    { icon: 'flash', label: '누적 레슨', value: `${stats.totalLessons}회`, desc: '전체 레슨 기록' },
+    { icon: 'flash', label: '누적 레슨', value: `${stats.totalLessons}회`, desc: '출석 체크된 레슨 기준' },
     { icon: 'people', label: '누적 회원', value: `${stats.totalMembers}명`, desc: '전체 등록 회원' },
     { icon: 'checkmark-circle', label: '리포트 발송률', value: `${stats.reportRate}%`, desc: `${stats.totalLessons}회 레슨 중 ${Math.round(stats.totalLessons * stats.reportRate / 100)}개 발송` },
     { icon: 'wallet', label: '누적 수익', value: `${stats.totalEarnings.toLocaleString()}원`, desc: '납부완료 전체 합산' },
