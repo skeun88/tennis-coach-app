@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, RefreshControl, Modal, TextInput, ActivityIndicator,
@@ -14,6 +14,7 @@ interface CoachStats {
   reportRate: number;
   thisMonthEarnings: number;
   lastMonthEarnings: number;
+  totalEarnings: number;
 }
 
 interface MarketEarning {
@@ -39,7 +40,7 @@ export default function ProfileScreen() {
   const [email, setEmail] = useState('');
   const [stats, setStats] = useState<CoachStats>({
     totalMembers: 0, totalLessons: 0, reportRate: 0,
-    thisMonthEarnings: 0, lastMonthEarnings: 0,
+    thisMonthEarnings: 0, lastMonthEarnings: 0, totalEarnings: 0,
   });
   const [refreshing, setRefreshing] = useState(false);
   const [editModal, setEditModal] = useState(false);
@@ -63,28 +64,29 @@ export default function ProfileScreen() {
     if (!user) return;
     setEmail(user.email ?? '');
 
-    const [membersRes, lessonsRes, paymentsRes, profileRes] = await Promise.all([
-      supabase.from('members').select('id, is_active').eq('coach_id', user.id),
-      supabase.from('lessons').select('id').eq('coach_id', user.id),
-      supabase.from('payments').select('paid_amount, paid_date, status').eq('coach_id', user.id).eq('status', '납부완료'),
+    const [membersRes, lessonsRes, plansRes, paymentsRes, profileRes] = await Promise.all([
+      supabase.from('members').select('*', { count: 'exact', head: true }).eq('coach_id', user.id),
+      supabase.from('lessons').select('*', { count: 'exact', head: true }).eq('coach_id', user.id),
+      supabase.from('lesson_plans').select('*', { count: 'exact', head: true }).eq('coach_id', user.id),
+      supabase.from('payments').select('paid_amount, paid_date').eq('coach_id', user.id).eq('status', '납부완료'),
       supabase.from('coach_profiles').select('*').eq('id', user.id).maybeSingle(),
     ]);
+
+    const totalMembers = membersRes.count ?? 0;
+    const totalLessons = lessonsRes.count ?? 0;
+    const totalPlans = plansRes.count ?? 0;
+    const reportRate = totalLessons > 0 ? Math.round((totalPlans / totalLessons) * 100) : 0;
 
     const thisMonth = new Date().toISOString().slice(0, 7);
     const lastMonthDate = new Date(); lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
     const lastMonth = lastMonthDate.toISOString().slice(0, 7);
 
     const payments = paymentsRes.data ?? [];
+    const totalEarnings = payments.reduce((s, p) => s + (p.paid_amount ?? 0), 0);
     const thisMonthEarnings = payments.filter(p => p.paid_date?.startsWith(thisMonth)).reduce((s, p) => s + (p.paid_amount ?? 0), 0);
     const lastMonthEarnings = payments.filter(p => p.paid_date?.startsWith(lastMonth)).reduce((s, p) => s + (p.paid_amount ?? 0), 0);
 
-    setStats({
-      totalMembers: (membersRes.data ?? []).length,
-      totalLessons: (lessonsRes.data ?? []).length,
-      reportRate: 97,
-      thisMonthEarnings,
-      lastMonthEarnings,
-    });
+    setStats({ totalMembers, totalLessons, reportRate, thisMonthEarnings, lastMonthEarnings, totalEarnings });
 
     const name = profileRes.data?.name ?? user.email?.split('@')[0] ?? '코치';
     setDisplayName(name);
@@ -100,6 +102,21 @@ export default function ProfileScreen() {
   }
 
   useFocusEffect(useCallback(() => { loadProfile(); }, []));
+
+  // payments 변경(납부완료) 시 수익 자동 업데이트
+  useEffect(() => {
+    let ch: any = null;
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      ch = supabase.channel('profile-payments')
+        .on('postgres_changes', {
+          event: '*', schema: 'public', table: 'payments',
+          filter: `coach_id=eq.${user.id}`,
+        }, () => loadProfile())
+        .subscribe();
+    });
+    return () => { if (ch) supabase.removeChannel(ch); };
+  }, []);
 
   const initial = displayName.slice(0, 1).toUpperCase();
 
@@ -151,8 +168,9 @@ export default function ProfileScreen() {
 
   const certifiedData = [
     { icon: 'flash', label: '누적 레슨', value: `${stats.totalLessons}회`, desc: '전체 레슨 기록' },
-    { icon: 'people', label: '누적 회원', value: `${stats.totalMembers}명`, desc: '등록된 전체 회원' },
-    { icon: 'checkmark-circle', label: '리포트 발송률', value: `${stats.reportRate}%`, desc: '레슨 후 리포트 전송률' },
+    { icon: 'people', label: '누적 회원', value: `${stats.totalMembers}명`, desc: '전체 등록 회원' },
+    { icon: 'checkmark-circle', label: '리포트 발송률', value: `${stats.reportRate}%`, desc: `${stats.totalLessons}회 레슨 중 ${Math.round(stats.totalLessons * stats.reportRate / 100)}개 발송` },
+    { icon: 'wallet', label: '누적 수익', value: `${stats.totalEarnings.toLocaleString()}원`, desc: '납부완료 전체 합산' },
     { icon: 'trending-up', label: '이번 달 수익', value: `${stats.thisMonthEarnings.toLocaleString()}원`, desc: '납부완료 기준' },
     { icon: 'calendar', label: '지난 달 수익', value: `${stats.lastMonthEarnings.toLocaleString()}원`, desc: '납부완료 기준' },
   ];
