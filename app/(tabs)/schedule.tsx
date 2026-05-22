@@ -100,6 +100,7 @@ export default function ScheduleScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [today, setToday] = useState(getTodayKST);
   const [selectedDate, setSelectedDate] = useState(getTodayKST);
+  const selectedDateRef = useRef(getTodayKST());
   const [weekDates, setWeekDates] = useState(getWeekDates);
   const [thisWeekDates, setThisWeekDates] = useState(getThisWeekDates);
   const [weekOffset, setWeekOffset] = useState(0); // 주간 뷰 주 이동 오프셋
@@ -352,21 +353,19 @@ ${rejectMsg.trim()}`
     return () => sub.remove();
   }, []);
 
+  // selectedDate 최신값을 ref로 추적 (useFocusEffect stale closure 방지)
+  selectedDateRef.current = selectedDate;
+
   useFocusEffect(useCallback(() => {
     const newToday = getTodayKST();
-    const newWeek = getWeekDates();
     const newThisWeek = getThisWeekDates();
-    setToday(newToday); setWeekDates(newWeek); setThisWeekDates(newThisWeek);
-    setSelectedDate(prev => {
-      if (newWeek.includes(prev)) return prev;
-      setWeekDates(newWeek);
-      return newToday;
-    });
+    setToday(newToday); setThisWeekDates(newThisWeek);
     if (activeTab === '일일') {
-      // selectedDate가 현재 주에 없으면 오늘로, 있으면 유지
-      const curSelected = selectedDate;
-      const target = newWeek.includes(curSelected) ? curSelected : newToday;
-      loadDayLessons(target);
+      // 선택된 날짜 기준으로 주간 스트립 업데이트 (강제 리셋 없음)
+      const curDate = selectedDateRef.current;
+      const weekForCurDate = getWeekDatesForDate(curDate);
+      setWeekDates(weekForCurDate);
+      loadDayLessons(curDate);
     }
     else if (activeTab === '주간') loadWeekLessons(newThisWeek);
     else { const d = new Date(); loadMonthLessons(d.getFullYear(), d.getMonth()); }
