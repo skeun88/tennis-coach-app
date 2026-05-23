@@ -327,13 +327,18 @@ ${knowledgeContext || '(없음)'}
       .update({ lesson_count: (member?.lesson_count || 0) + 1 })
       .eq('id', memberId)
 
-    // ── Step 6: 회원용 리포트 생성 (비동기, 코치 응답 블로킹 안 함) ──
-    generateMemberReport({
-      supabase, fetchClaude,
-      coachId, memberId,
-      plan, parsed, member, effectiveCourtType,
-      durationSeconds: durationSeconds ?? null,
-    }).catch(e => console.error('member_report_error:', e))
+    // ── Step 6: 회원용 리포트 생성 (await - Edge Function은 Response 반환 후 런타임 종료됨) ──
+    try {
+      await generateMemberReport({
+        supabase, fetchClaude,
+        coachId, memberId,
+        plan, parsed, member, effectiveCourtType,
+        durationSeconds: durationSeconds ?? null,
+      })
+    } catch (e) {
+      // 회원 리포트 실패해도 코치 응답은 정상 반환
+      console.error('member_report_error:', e)
+    }
 
     return new Response(JSON.stringify({ success: true, plan, transcript, court_type: effectiveCourtType }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
