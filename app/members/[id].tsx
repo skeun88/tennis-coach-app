@@ -197,6 +197,12 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   const [tempHour, setTempHour] = useState('');
   const [tempMinute, setTempMinute] = useState('00');
 
+  // 스케줄 적용 시작일 캘린더 모달
+  const [startDateModal, setStartDateModal] = useState(false);
+  const [scheduleStartDate, setScheduleStartDate] = useState(toKSTDateStr(new Date()));
+  const [startCalMonth, setStartCalMonth] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() });
+  const [pendingSaveCtx, setPendingSaveCtx] = useState<{ userId: string; credits: number; duration: number } | null>(null);
+
   // 빈 시간대 모달 상태 (요일 선택 시)
   const [slotsModalVisible, setSlotsModalVisible] = useState(false);
   const [slotsModalDay, setSlotsModalDay] = useState<number | null>(null);
@@ -410,10 +416,45 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     const credits = parseInt(totalCredits) || 0;
     const duration = parseInt(lessonDuration) || 60;
 
-    // 충돌 체크
+    // 스케줄 변경 여부 확인: 변경 시 적용 시작일 캘린더 먼저 표시
+    const allDaysHaveTimes2 = scheduleDays.length > 0 && scheduleDays.every(d => dayTimes[d] && dayTimes[d].length > 0);
+    const { data: oldMemberCheck } = await supabase.from('members')
+      .select('fixed_schedule_days, fixed_schedule_times, fixed_schedule_time')
+      .eq('id', id!).single();
+    const oldDaysCheck: number[] = (oldMemberCheck as any)?.fixed_schedule_days ?? [];
+    const oldTimesCheck = (() => {
+      const fst = (oldMemberCheck as any)?.fixed_schedule_times;
+      if (fst && typeof fst === 'object') {
+        const r: DayTimes = {};
+        for (const [k, v] of Object.entries(fst)) r[Number(k)] = Array.isArray(v) ? (v as string[]) : [String(v)];
+        return r;
+      }
+      const lt = (oldMemberCheck as any)?.fixed_schedule_time?.slice(0, 5);
+      if (lt) { const r: DayTimes = {}; oldDaysCheck.forEach((d: number) => { r[d] = [lt]; }); return r; }
+      return {} as DayTimes;
+    })();
+    const scheduleTimesJsonCheck: Record<string, string[]> = {};
+    for (const d of scheduleDays) { if (dayTimes[d]?.length) scheduleTimesJsonCheck[String(d)] = dayTimes[d]; }
+    const willScheduleChange =
+      JSON.stringify([...scheduleDays].sort()) !== JSON.stringify([...oldDaysCheck].sort()) ||
+      JSON.stringify(scheduleTimesJsonCheck) !== JSON.stringify(Object.fromEntries(Object.entries(oldTimesCheck).map(([k, v]) => [k, v])));
+
+    if (willScheduleChange && allDaysHaveTimes2 && credits > 0) {
+      // 적용 시작일 선택 캘린더 모달 표시
+      setScheduleStartDate(toKSTDateStr(new Date()));
+      setStartCalMonth({ year: new Date().getFullYear(), month: new Date().getMonth() });
+      setPendingSaveCtx({ userId: user.id, credits, duration });
+      setStartDateModal(true);
+      return;
+    }
+    // 스케줄 변경 없으면 바로 저장
+    await proceedWithSave(user.id, credits, duration, toKSTDateStr(new Date()));
+  }
+
+  async function proceedWithSave(userId: string, credits: number, duration: number, startDate: string) {
     const allDaysHaveTimes2 = scheduleDays.length > 0 && scheduleDays.every(d => dayTimes[d] && dayTimes[d].length > 0);
     if (allDaysHaveTimes2) {
-      const conflicts = await checkConflicts(supabase, user.id, scheduleDays, dayTimes, duration, id as string);
+      const conflicts = await checkConflicts(supabase, userId, scheduleDays, dayTimes, duration, id as string);
       if (conflicts.length > 0) {
         const conflictMsg = conflicts.slice(0, 3).map((cf: any) => {
           const d = new Date(cf.date + 'T00:00:00');
@@ -424,16 +465,16 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
           '선택한 시간대에 이미 레슨이 있습니다:\n\n' + conflictMsg + '\n\n그래도 저장하시겠어요?',
           [
             { text: '시간 변경', style: 'cancel' },
-            { text: '그대로 저장', style: 'destructive', onPress: () => doActualSave(user.id, credits, duration) },
+            { text: '그대로 저장', style: 'destructive', onPress: () => doActualSave(userId, credits, duration, startDate) },
           ]
         );
         return;
       }
     }
-    await doActualSave(user.id, credits, duration);
+    await doActualSave(userId, credits, duration, startDate);
   }
 
-  async function doActualSave(userId: string, credits: number, duration: number) {
+  async function doActualSave(userId: string, credits: number, duration: number, startDate: string = toKSTDateStr(new Date())) {
     const { data: oldMember } = await supabase.from('members').select('fixed_schedule_days, fixed_schedule_time, fixed_schedule_times, join_date').eq('id', id!).single();
     const oldDays: number[] = (oldMember as any)?.fixed_schedule_days ?? [];
     const oldTimes: DayTimes = (() => {
@@ -471,15 +512,14 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       JSON.stringify(scheduleTimesJson) !== JSON.stringify(Object.fromEntries(Object.entries(oldTimes).map(([k,v]) => [k, v])));
     let scheduledCount = 0;
     if (allDaysHaveTimes3 && credits > 0) {
-      const todayStr = toKSTDateStr(new Date());
       if (scheduleChanged) {
-        // 스케줄 변경 시: 기존 미래 레슨 삭제 후 전체 재생성
+        // 스케줄 변경 시: startDate 이후 레슨 삭제 후 재생성
         const { data: futureLMrows } = await supabase
           .from('lesson_members')
           .select('lesson_id, lesson:lessons(id, date, coach_id)')
           .eq('member_id', id!);
         const futureLessonIds = (futureLMrows ?? [])
-          .filter((r: any) => r.lesson?.date >= todayStr && r.lesson?.coach_id === userId)
+          .filter((r: any) => r.lesson?.date >= startDate && r.lesson?.coach_id === userId)
           .map((r: any) => r.lesson_id as string);
         if (futureLessonIds.length > 0) {
           // 다른 회원이 함께 있는 레슨 확인
@@ -503,17 +543,18 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
             await supabase.from('lessons').delete().in('id', soloIds);
           }
         }
-        // 새 스케줄로 전체 재생성
+        // 새 스케줄로 재생성 (startDate부터)
         scheduledCount = await generateScheduleLessons(
-          supabase, userId, id!, name, scheduleDays, dayTimes, duration, credits, todayStr,
+          supabase, userId, id!, name, scheduleDays, dayTimes, duration, credits, startDate,
         );
       } else {
         // 스케줄 미변경: 부족한 레슨만 추가
+        const todayForElse = toKSTDateStr(new Date());
         const { data: futureL } = await supabase.from('lesson_members').select('lesson:lessons(date)').eq('member_id', id!);
-        const futureLessons = (futureL ?? []).filter((r: any) => r.lesson?.date >= todayStr);
+        const futureLessons = (futureL ?? []).filter((r: any) => r.lesson?.date >= todayForElse);
         const needed = credits - futureLessons.length;
         if (needed > 0 && futureLessons.length === 0) {
-          const joinDate = (oldMember as any)?.join_date ?? todayStr;
+          const joinDate = (oldMember as any)?.join_date ?? todayForElse;
           scheduledCount = await generateScheduleLessons(
             supabase, userId, id!, name, scheduleDays, dayTimes, duration, needed, joinDate,
           );
@@ -1214,6 +1255,145 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
           </View>
         </KeyboardAvoidingView>
       )}
+      {/* ─── 스케줄 적용 시작일 캘린더 모달 ─── */}
+      <Modal visible={startDateModal} transparent animationType="slide" onRequestClose={() => setStartDateModal(false)}>
+        <View style={styles.modalOverlayTP}>
+          <View style={[styles.modalSheetTP, { maxHeight: '85%' }]}>
+            <View style={styles.modalHeaderTP}>
+              <View>
+                <Text style={styles.modalTitleTP}>언제부터 반영할까요?</Text>
+                <Text style={{ fontSize: 12, color: Colors.mutedFg, marginTop: 2 }}>선택한 날짜 이후 레슨이 새 스케줄로 교체됩니다</Text>
+              </View>
+              <TouchableOpacity onPress={() => setStartDateModal(false)}>
+                <Ionicons name="close" size={22} color={Colors.mutedFg} />
+              </TouchableOpacity>
+            </View>
+
+            {/* 선택된 날짜 표시 */}
+            <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: Colors.primary + '12', borderRadius: 10, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="calendar" size={18} color={Colors.primary} />
+              <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.primary }}>
+                {scheduleStartDate ? (() => {
+                  const d = new Date(scheduleStartDate + 'T00:00:00');
+                  return d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+                })() : '날짜를 선택하세요'}
+              </Text>
+              {scheduleStartDate === toKSTDateStr(new Date()) && (
+                <View style={{ marginLeft: 'auto', backgroundColor: Colors.primary, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}>
+                  <Text style={{ fontSize: 11, color: '#fff', fontWeight: '700' }}>오늘</Text>
+                </View>
+              )}
+            </View>
+
+            {/* 인라인 캘린더 */}
+            <ScrollView style={{ maxHeight: 360 }}>
+              {(() => {
+                const { year, month } = startCalMonth;
+                const todayStr = toKSTDateStr(new Date());
+                const firstDow = new Date(year, month, 1).getDay();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const cells: (number | null)[] = [];
+                for (let i = 0; i < firstDow; i++) cells.push(null);
+                for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+                while (cells.length % 7 !== 0) cells.push(null);
+                const MONTHS_KR = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+                const DAYS_LABEL = ['일','월','화','수','목','금','토'];
+                return (
+                  <View style={{ paddingHorizontal: 12, paddingBottom: 8 }}>
+                    {/* 월 네비게이션 */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <TouchableOpacity
+                        style={{ padding: 8 }}
+                        onPress={() => setStartCalMonth(p => {
+                          const m = p.month - 1;
+                          return m < 0 ? { year: p.year - 1, month: 11 } : { year: p.year, month: m };
+                        })}
+                      >
+                        <Ionicons name="chevron-back" size={20} color={Colors.navy} />
+                      </TouchableOpacity>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.navy }}>{year}년 {MONTHS_KR[month]}</Text>
+                      <TouchableOpacity
+                        style={{ padding: 8 }}
+                        onPress={() => setStartCalMonth(p => {
+                          const m = p.month + 1;
+                          return m > 11 ? { year: p.year + 1, month: 0 } : { year: p.year, month: m };
+                        })}
+                      >
+                        <Ionicons name="chevron-forward" size={20} color={Colors.navy} />
+                      </TouchableOpacity>
+                    </View>
+                    {/* 요일 헤더 */}
+                    <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+                      {DAYS_LABEL.map((dl, di) => (
+                        <Text key={di} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '700',
+                          color: di === 0 ? Colors.destructive : di === 6 ? Colors.info : Colors.mutedFg,
+                          paddingVertical: 4 }}>{dl}</Text>
+                      ))}
+                    </View>
+                    {/* 날짜 그리드 */}
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                      {cells.map((day, ci) => {
+                        if (!day) return <View key={ci} style={{ width: '14.28%', paddingVertical: 3 }} />;
+                        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                        const isPast = dateStr < todayStr;
+                        const isSelected = dateStr === scheduleStartDate;
+                        const isToday = dateStr === todayStr;
+                        const dow = ci % 7;
+                        return (
+                          <TouchableOpacity
+                            key={ci}
+                            disabled={isPast}
+                            style={{ width: '14.28%', alignItems: 'center', paddingVertical: 3 }}
+                            onPress={() => setScheduleStartDate(dateStr)}
+                          >
+                            <View style={{
+                              width: 34, height: 34, borderRadius: 17,
+                              justifyContent: 'center', alignItems: 'center',
+                              backgroundColor: isSelected ? Colors.primary : isToday ? Colors.primary + '18' : 'transparent',
+                            }}>
+                              <Text style={{
+                                fontSize: 14, fontWeight: isSelected || isToday ? '800' : '400',
+                                color: isSelected ? '#fff'
+                                  : isPast ? Colors.border
+                                  : dow === 0 ? Colors.destructive
+                                  : dow === 6 ? Colors.info
+                                  : Colors.foreground,
+                              }}>{day}</Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                );
+              })()}
+            </ScrollView>
+
+            {/* 버튼 */}
+            <View style={{ flexDirection: 'row', gap: 8, margin: 16, marginTop: 8 }}>
+              <TouchableOpacity
+                style={{ flex: 1, borderRadius: 10, paddingVertical: 13, alignItems: 'center', backgroundColor: Colors.mutedBg }}
+                onPress={() => setStartDateModal(false)}
+              >
+                <Text style={{ fontWeight: '700', fontSize: 14, color: Colors.navy }}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 2, borderRadius: 10, paddingVertical: 13, alignItems: 'center', backgroundColor: Colors.primary }}
+                onPress={() => {
+                  setStartDateModal(false);
+                  if (pendingSaveCtx) {
+                    proceedWithSave(pendingSaveCtx.userId, pendingSaveCtx.credits, pendingSaveCtx.duration, scheduleStartDate);
+                    setPendingSaveCtx(null);
+                  }
+                }}
+              >
+                <Text style={{ fontWeight: '700', fontSize: 14, color: '#fff' }}>이 날부터 적용</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* 빈 시간대 모달 (요일 선택 시 자동 표시) */}
       <Modal visible={slotsModalVisible} transparent animationType="slide" onRequestClose={() => setSlotsModalVisible(false)}>
         <View style={styles.modalOverlayTP}>
