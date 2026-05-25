@@ -197,6 +197,13 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   const [tempHour, setTempHour] = useState('');
   const [tempMinute, setTempMinute] = useState('00');
 
+  // 빈 시간대 모달 상태 (요일 선택 시)
+  const [slotsModalVisible, setSlotsModalVisible] = useState(false);
+  const [slotsModalDay, setSlotsModalDay] = useState<number | null>(null);
+  const [slotsData, setSlotsData] = useState<{ time: string; available: boolean }[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [slotsDateStr, setSlotsDateStr] = useState('');
+
 
   // 출석 수정 상태
   const [editingAttId, setEditingAttId] = useState<string | null>(null);
@@ -344,6 +351,58 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     if (tab === 'notes') loadNotes();
     if (tab === 'messages') loadMessages();
   }, [tab]);
+
+  async function fetchAvailableSlots(day: number) {
+    const today = new Date();
+    const todayDow = today.getDay();
+    const diff = (day - todayDow + 7) % 7;
+    const target = new Date(today);
+    target.setDate(today.getDate() + (diff === 0 ? 7 : diff));
+    const dateStr = toKSTDateStr(target);
+    setSlotsDateStr(dateStr);
+    setSlotsModalDay(day);
+    setLoadingSlots(true);
+    setSlotsModalVisible(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setLoadingSlots(false); return; }
+    const { data: existingLessons } = await supabase
+      .from('lessons')
+      .select('start_time, end_time')
+      .eq('coach_id', user.id)
+      .eq('date', dateStr);
+    const dur = parseInt(lessonDuration) || 60;
+    const slots: { time: string; available: boolean }[] = [];
+    for (let h = 6; h < 22; h++) {
+      for (const m of [0, 30]) {
+        const startMin = h * 60 + m;
+        const endMin = startMin + dur;
+        if (endMin > 22 * 60) continue;
+        const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        const hasConflict = (existingLessons ?? []).some((l: any) => {
+          const [lh, lm] = l.start_time.slice(0,5).split(':').map(Number);
+          const [eh, em] = l.end_time.slice(0,5).split(':').map(Number);
+          const ls = lh * 60 + lm; const le = eh * 60 + em;
+          return startMin < le && endMin > ls;
+        });
+        slots.push({ time: timeStr, available: !hasConflict });
+      }
+    }
+    setSlotsData(slots);
+    setLoadingSlots(false);
+  }
+
+  function handleSelectPackage(pkg: any) {
+    if (selectedPackageId === pkg.id) {
+      // 같은 패키지 재클릭 → 선택 해제
+      setSelectedPackageId(null);
+    } else {
+      // 다른 패키지 선택
+      setSelectedPackageId(pkg.id);
+      // 총 레슨권 수도 패키지 기준으로 자동 설정
+      if (pkg.total_credits) setTotalCredits(String(pkg.total_credits));
+      if (pkg.duration_minutes) setLessonDuration(String(pkg.duration_minutes));
+    }
+  }
 
   async function handleSave() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -785,13 +844,15 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                       key={i}
                       style={[styles.dayBtn2, scheduleDays.includes(i) && styles.dayBtn2Active]}
                       onPress={() => {
-                        setScheduleDays(prev => {
-                          if (prev.includes(i)) {
-                            setDayTimes(dt => { const n = { ...dt }; delete n[i]; return n; });
-                            return prev.filter(x => x !== i);
-                          }
-                          return [...prev, i].sort();
-                        });
+                        if (scheduleDays.includes(i)) {
+                          // 요일 제거: 해당 요일 시간도 함께 삭제
+                          setScheduleDays(prev => prev.filter(x => x !== i));
+                          setDayTimes(prev => { const n = { ...prev }; delete n[i]; return n; });
+                        } else {
+                          // 요일 추가: 빈 시간대 모달 표시
+                          setScheduleDays(prev => [...prev, i].sort());
+                          fetchAvailableSlots(i);
+                        }
                       }}
                     >
                       <Text style={[styles.dayBtn2Text, scheduleDays.includes(i) && styles.dayBtn2TextActive]}>{d}</Text>
@@ -875,7 +936,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                         <TouchableOpacity
                           key={pkg.id}
                           style={[styles.editPkgCard, { borderColor: pkg.color }, isSelected && { backgroundColor: pkg.color + '18' }]}
-                          onPress={() => setSelectedPackageId(pkg.id)}
+                          onPress={() => handleSelectPackage(pkg)}
                           activeOpacity={0.8}
                         >
                           {isSelected && (
@@ -1153,6 +1214,68 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
           </View>
         </KeyboardAvoidingView>
       )}
+      {/* 빈 시간대 모달 (요일 선택 시 자동 표시) */}
+      <Modal visible={slotsModalVisible} transparent animationType="slide" onRequestClose={() => setSlotsModalVisible(false)}>
+        <View style={styles.modalOverlayTP}>
+          <View style={styles.modalSheetTP}>
+            <View style={styles.modalHeaderTP}>
+              <View>
+                <Text style={styles.modalTitleTP}>
+                  {slotsModalDay !== null ? DAYS_KR[slotsModalDay] : ''}요일 빈 시간대
+                </Text>
+                {slotsDateStr ? <Text style={{ fontSize: 12, color: Colors.mutedFg, marginTop: 2 }}>{slotsDateStr} 기준</Text> : null}
+              </View>
+              <TouchableOpacity onPress={() => setSlotsModalVisible(false)}>
+                <Ionicons name="close" size={22} color={Colors.mutedFg} />
+              </TouchableOpacity>
+            </View>
+            {loadingSlots ? (
+              <ActivityIndicator color={Colors.primary} style={{ padding: 30 }} />
+            ) : (
+              <ScrollView style={{ maxHeight: 380 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 16 }}>
+                  {slotsData.map(slot => (
+                    <TouchableOpacity
+                      key={slot.time}
+                      disabled={!slot.available}
+                      style={{
+                        paddingHorizontal: 16, paddingVertical: 12, borderRadius: 10,
+                        backgroundColor: slot.available ? Colors.success + '15' : Colors.mutedBg,
+                        borderWidth: 1.5,
+                        borderColor: slot.available ? Colors.success : Colors.border,
+                        alignItems: 'center', minWidth: 72,
+                      }}
+                      onPress={() => {
+                        if (slotsModalDay !== null) {
+                          setDayTimes(prev => {
+                            const times = [...(prev[slotsModalDay] ?? [])];
+                            if (!times.includes(slot.time)) { times.push(slot.time); times.sort(); }
+                            return { ...prev, [slotsModalDay]: times };
+                          });
+                          setSlotsModalVisible(false);
+                        }
+                      }}
+                    >
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: slot.available ? Colors.success : Colors.placeholder }}>{slot.time}</Text>
+                      {!slot.available && <Text style={{ fontSize: 10, color: Colors.placeholder, marginTop: 2 }}>레슨중</Text>}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={{ fontSize: 12, color: Colors.mutedFg, paddingHorizontal: 16, paddingBottom: 8 }}>
+                  빈 시간 탭하면 바로 추가됩니다. 닫으면 직접 입력 가능해요.
+                </Text>
+              </ScrollView>
+            )}
+            <TouchableOpacity
+              style={{ margin: 16, marginTop: 4, backgroundColor: Colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: 'center' }}
+              onPress={() => setSlotsModalVisible(false)}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>닫기</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* 시간 피커 모달 */}
       <Modal visible={timePickerVisible} transparent animationType="slide" onRequestClose={() => setTimePickerVisible(false)}>
         <View style={styles.modalOverlayTP}>
