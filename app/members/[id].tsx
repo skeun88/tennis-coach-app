@@ -358,6 +358,11 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     if (tab === 'messages') loadMessages();
   }, [tab]);
 
+  // 시간이 없는 요일은 자동으로 scheduleDays에서 제거
+  useEffect(() => {
+    setScheduleDays(prev => prev.filter(d => dayTimes[d] && dayTimes[d].length > 0));
+  }, [dayTimes]);
+
   async function fetchAvailableSlots(day: number) {
     const today = new Date();
     const todayDow = today.getDay();
