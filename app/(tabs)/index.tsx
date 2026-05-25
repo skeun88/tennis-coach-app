@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity,
   Alert, RefreshControl, ActivityIndicator, Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -55,6 +55,12 @@ export default function HomeScreen() {
   const [savingAbsence, setSavingAbsence] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
+
+  // 미납/만료 모달 상태
+  const [unpaidModal, setUnpaidModal] = useState(false);
+  const [expiringModal, setExpiringModal] = useState(false);
+  const [unpaidMemberList, setUnpaidMemberList] = useState<{id:string;name:string;level:string;remaining_credits:number}[]>([]);
+  const [expiringMemberList, setExpiringMemberList] = useState<{id:string;name:string;level:string;remaining_credits:number}[]>([]);
 
   async function loadAll() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -225,6 +231,31 @@ export default function HomeScreen() {
       }
     }
     await loadAll();
+  }
+
+  async function loadUnpaidMembers() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase.from('members')
+      .select('id, name, level, remaining_credits')
+      .eq('coach_id', user.id)
+      .eq('is_active', true)
+      .eq('remaining_credits', 0)
+      .order('name');
+    setUnpaidMemberList(data ?? []);
+  }
+
+  async function loadExpiringMembers() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase.from('members')
+      .select('id, name, level, remaining_credits')
+      .eq('coach_id', user.id)
+      .eq('is_active', true)
+      .gt('remaining_credits', 0)
+      .lte('remaining_credits', 2)
+      .order('remaining_credits');
+    setExpiringMemberList(data ?? []);
   }
 
   useFocusEffect(useCallback(() => { loadAll(); }, []));
@@ -433,20 +464,20 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
           <View style={styles.statsRow}>
-            <View style={styles.statCard}>
+            <TouchableOpacity style={styles.statCard} activeOpacity={0.85} onPress={() => { loadUnpaidMembers(); setUnpaidModal(true); }}>
               <Text style={[styles.statValue, { color: stats.unpaidMembers > 0 ? Colors.destructive : Colors.foreground }]}>
                 {stats.unpaidMembers}
               </Text>
               <Text style={styles.statLabel}>미납 회원</Text>
               <Text style={styles.statHint}>잔여 0회</Text>
-            </View>
-            <View style={styles.statCard}>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.statCard} activeOpacity={0.85} onPress={() => { loadExpiringMembers(); setExpiringModal(true); }}>
               <Text style={[styles.statValue, { color: stats.expiringMembers > 0 ? Colors.warning : Colors.foreground }]}>
                 {stats.expiringMembers}
               </Text>
               <Text style={styles.statLabel}>만료 예정</Text>
               <Text style={styles.statHint}>잔여 1~2회</Text>
-            </View>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -571,6 +602,100 @@ export default function HomeScreen() {
       <TouchableOpacity style={styles.chatFab} onPress={() => router.push('/(tabs)/chat')}>
         <Ionicons name="chatbubble-ellipses" size={24} color={Colors.white} />
       </TouchableOpacity>
+
+      {/* 미납 회원 모달 */}
+      <Modal visible={unpaidModal} transparent animationType="slide" onRequestClose={() => setUnpaidModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>미납 회원</Text>
+                <Text style={{ fontSize: 12, color: Colors.mutedFg, marginTop: 2 }}>잔여 0회 회원</Text>
+              </View>
+              <TouchableOpacity onPress={() => setUnpaidModal(false)}>
+                <Ionicons name="close" size={22} color={Colors.mutedFg} />
+              </TouchableOpacity>
+            </View>
+            {unpaidMemberList.length === 0 ? (
+              <View style={{ padding: 40, alignItems: 'center' }}>
+                <Ionicons name="checkmark-circle-outline" size={40} color={Colors.success} />
+                <Text style={{ fontSize: 14, color: Colors.placeholder, marginTop: 12 }}>미납 회원이 없어요 🎉</Text>
+              </View>
+            ) : (
+              <ScrollView style={{ maxHeight: 400 }}>
+                {unpaidMemberList.map(m => (
+                  <TouchableOpacity
+                    key={m.id}
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.mutedBg, gap: 12 }}
+                    onPress={() => { setUnpaidModal(false); router.push(`/members/${m.id}`); }}
+                  >
+                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.destructive + '22', justifyContent: 'center', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.destructive }}>{m.name.slice(0,1)}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.foreground }}>{m.name}</Text>
+                      <Text style={{ fontSize: 12, color: Colors.mutedFg, marginTop: 2 }}>{m.level} · 잔여 {m.remaining_credits}회</Text>
+                    </View>
+                    <View style={{ backgroundColor: Colors.destructive + '18', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.destructive }}>0회</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+            <TouchableOpacity style={{ margin: 16, backgroundColor: Colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: 'center' }} onPress={() => setUnpaidModal(false)}>
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>닫기</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 만료 예정 회원 모달 */}
+      <Modal visible={expiringModal} transparent animationType="slide" onRequestClose={() => setExpiringModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>만료 예정 회원</Text>
+                <Text style={{ fontSize: 12, color: Colors.mutedFg, marginTop: 2 }}>잔여 1~2회 회원</Text>
+              </View>
+              <TouchableOpacity onPress={() => setExpiringModal(false)}>
+                <Ionicons name="close" size={22} color={Colors.mutedFg} />
+              </TouchableOpacity>
+            </View>
+            {expiringMemberList.length === 0 ? (
+              <View style={{ padding: 40, alignItems: 'center' }}>
+                <Ionicons name="checkmark-circle-outline" size={40} color={Colors.success} />
+                <Text style={{ fontSize: 14, color: Colors.placeholder, marginTop: 12 }}>만료 예정 회원이 없어요 🎉</Text>
+              </View>
+            ) : (
+              <ScrollView style={{ maxHeight: 400 }}>
+                {expiringMemberList.map(m => (
+                  <TouchableOpacity
+                    key={m.id}
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.mutedBg, gap: 12 }}
+                    onPress={() => { setExpiringModal(false); router.push(`/members/${m.id}`); }}
+                  >
+                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.warning + '22', justifyContent: 'center', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.warning }}>{m.name.slice(0,1)}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.foreground }}>{m.name}</Text>
+                      <Text style={{ fontSize: 12, color: Colors.mutedFg, marginTop: 2 }}>{m.level}</Text>
+                    </View>
+                    <View style={{ backgroundColor: Colors.warning + '25', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.warning }}>잔여 {m.remaining_credits}회</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+            <TouchableOpacity style={{ margin: 16, backgroundColor: Colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: 'center' }} onPress={() => setExpiringModal(false)}>
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>닫기</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* 결석 처리 바텀시트 */}
       <Modal

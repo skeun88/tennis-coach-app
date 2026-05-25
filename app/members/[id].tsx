@@ -4,7 +4,7 @@ import {
   TextInput, ActivityIndicator, KeyboardAvoidingView, Platform,
   Modal, FlatList, Linking,
 } from 'react-native';
-import { useLocalSearchParams, useRouter, Link } from 'expo-router';
+import { useLocalSearchParams, useRouter, Link, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Member, MemberLevel, Attendance, Payment, MemberNote } from '../../types';
@@ -413,14 +413,52 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     let scheduledCount = 0;
     if (allDaysHaveTimes3 && credits > 0) {
       const todayStr = toKSTDateStr(new Date());
-      const { data: futureL } = await supabase.from('lesson_members').select('lesson:lessons(date)').eq('member_id', id!);
-      const futureLessons = (futureL ?? []).filter((r: any) => r.lesson?.date >= todayStr);
-      const needed = credits - futureLessons.length;
-      if (needed > 0 && (scheduleChanged || futureLessons.length === 0)) {
-        const joinDate = (oldMember as any)?.join_date ?? todayStr;
+      if (scheduleChanged) {
+        // 스케줄 변경 시: 기존 미래 레슨 삭제 후 전체 재생성
+        const { data: futureLMrows } = await supabase
+          .from('lesson_members')
+          .select('lesson_id, lesson:lessons(id, date, coach_id)')
+          .eq('member_id', id!);
+        const futureLessonIds = (futureLMrows ?? [])
+          .filter((r: any) => r.lesson?.date >= todayStr && r.lesson?.coach_id === userId)
+          .map((r: any) => r.lesson_id as string);
+        if (futureLessonIds.length > 0) {
+          // 다른 회원이 함께 있는 레슨 확인
+          const { data: otherMemberRows } = await supabase
+            .from('lesson_members')
+            .select('lesson_id')
+            .in('lesson_id', futureLessonIds)
+            .neq('member_id', id!);
+          const sharedSet = new Set((otherMemberRows ?? []).map((r: any) => r.lesson_id as string));
+          const soloIds = futureLessonIds.filter(lid => !sharedSet.has(lid));
+          const sharedIds = futureLessonIds.filter(lid => sharedSet.has(lid));
+          // 공유 레슨에서 이 회원만 제거
+          if (sharedIds.length > 0) {
+            await supabase.from('lesson_members').delete().in('lesson_id', sharedIds).eq('member_id', id!);
+            await supabase.from('attendance').delete().in('lesson_id', sharedIds).eq('member_id', id!);
+          }
+          // 단독 레슨은 완전 삭제
+          if (soloIds.length > 0) {
+            await supabase.from('attendance').delete().in('lesson_id', soloIds);
+            await supabase.from('lesson_members').delete().in('lesson_id', soloIds);
+            await supabase.from('lessons').delete().in('id', soloIds);
+          }
+        }
+        // 새 스케줄로 전체 재생성
         scheduledCount = await generateScheduleLessons(
-          supabase, userId, id!, name, scheduleDays, dayTimes, duration, needed, joinDate,
+          supabase, userId, id!, name, scheduleDays, dayTimes, duration, credits, todayStr,
         );
+      } else {
+        // 스케줄 미변경: 부족한 레슨만 추가
+        const { data: futureL } = await supabase.from('lesson_members').select('lesson:lessons(date)').eq('member_id', id!);
+        const futureLessons = (futureL ?? []).filter((r: any) => r.lesson?.date >= todayStr);
+        const needed = credits - futureLessons.length;
+        if (needed > 0 && futureLessons.length === 0) {
+          const joinDate = (oldMember as any)?.join_date ?? todayStr;
+          scheduledCount = await generateScheduleLessons(
+            supabase, userId, id!, name, scheduleDays, dayTimes, duration, needed, joinDate,
+          );
+        }
       }
     }
     setEditing(false);
@@ -612,6 +650,17 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Stack.Screen options={{
+        title: '회원 상세',
+        headerLeft: () => (
+          <TouchableOpacity
+            onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/members')}
+            style={{ paddingLeft: 4, paddingRight: 8 }}
+          >
+            <Ionicons name="chevron-back" size={26} color={Colors.navy} />
+          </TouchableOpacity>
+        ),
+      }} />
       {/* Profile Header */}
       <View style={styles.profileHeader}>
         <View style={[styles.bigAvatar, { backgroundColor: LEVEL_COLORS[member.level as MemberLevel] ?? Colors.level.입문 }]}>

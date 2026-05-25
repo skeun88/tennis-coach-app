@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator,
   Modal,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Lesson, AttendanceStatus } from '../../types';
@@ -302,6 +302,17 @@ export default function LessonDetailScreen() {
 
   return (
     <View style={{ flex: 1 }}>
+      <Stack.Screen options={{
+        title: '레슨 상세',
+        headerLeft: () => (
+          <TouchableOpacity
+            onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/schedule')}
+            style={{ paddingLeft: 4, paddingRight: 8 }}
+          >
+            <Ionicons name="chevron-back" size={26} color={Colors.navy} />
+          </TouchableOpacity>
+        ),
+      }} />
     <ScrollView style={styles.container}>
       {/* Lesson Info */}
       <View style={styles.infoCard}>
