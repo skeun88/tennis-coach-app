@@ -174,7 +174,7 @@ export default function ProfileScreen() {
       supabase.from('members').select('*', { count: 'exact', head: true }).eq('coach_id', user.id),
       supabase.from('lessons').select('id, date').eq('coach_id', user.id),
       supabase.from('lesson_plans').select('*', { count: 'exact', head: true }).eq('coach_id', user.id),
-      supabase.from('coach_profiles').select('*').eq('id', user.id).maybeSingle(),
+      supabase.from('coach_profiles').select('*').eq('coach_id', user.id).maybeSingle(),
     ]);
 
     const totalMembers = membersRes.count ?? 0;
@@ -234,7 +234,7 @@ export default function ProfileScreen() {
 
     const p = profileRes.data;
     setProfile({
-      name: p?.name ?? user.email?.split('@')[0] ?? '코치',
+      name: p?.display_name ?? user.email?.split('@')[0] ?? '코치',
       avatar_url: p?.avatar_url ?? '',
       sport: p?.sport ?? '테니스',
       region_city: p?.region_city ?? '',
@@ -291,14 +291,14 @@ export default function ProfileScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSavingProfile(false); return; }
     const { error } = await supabase.from('coach_profiles').upsert({
-      id: user.id, name: editProfile.name.trim(), avatar_url: editProfile.avatar_url || null,
+      coach_id: user.id, display_name: editProfile.name.trim(), avatar_url: editProfile.avatar_url || null,
       sport: editProfile.sport, region_city: editProfile.region_city.trim() || null,
       region_district: editProfile.region_district.trim() || null,
       center_name: editProfile.center_name.trim() || null,
       bio: editProfile.bio.trim() || null, updated_at: new Date().toISOString(),
-    }, { onConflict: 'id' });
+    }, { onConflict: 'coach_id' });
     setSavingProfile(false);
-    if (error) { Alert.alert('저장 실패', `${error.message}\n\ncode: ${error.code}`); return; }
+    if (error) { Alert.alert('오류', '저장에 실패했습니다.'); return; }
     setProfile({ ...editProfile }); setProfileModal(false);
   }
 
@@ -307,16 +307,16 @@ export default function ProfileScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSavingCareer(false); return; }
     const { error } = await supabase.from('coach_profiles').upsert({
-      id: user.id,
+      coach_id: user.id,
       coaching_years: editCareer.coaching_years ? parseInt(editCareer.coaching_years, 10) : null,
       has_player_career: editCareer.has_player_career,
       career_details: editCareer.career_details.trim() || null,
       certifications: editCareer.certifications.trim() || null,
       awards: editCareer.awards.trim() || null,
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'id' });
+    }, { onConflict: 'coach_id' });
     setSavingCareer(false);
-    if (error) { Alert.alert('저장 실패', `${error.message}\n\ncode: ${error.code}`); return; }
+    if (error) { Alert.alert('오류', '저장에 실패했습니다.'); return; }
     setCareer({ ...editCareer }); setCareerModal(false);
   }
 
