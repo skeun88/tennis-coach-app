@@ -298,7 +298,7 @@ export default function ProfileScreen() {
       bio: editProfile.bio.trim() || null, updated_at: new Date().toISOString(),
     }, { onConflict: 'id' });
     setSavingProfile(false);
-    if (error) { Alert.alert('오류', '저장에 실패했습니다.'); return; }
+    if (error) { Alert.alert('저장 실패', `${error.message}\n\ncode: ${error.code}`); return; }
     setProfile({ ...editProfile }); setProfileModal(false);
   }
 
@@ -316,7 +316,7 @@ export default function ProfileScreen() {
       updated_at: new Date().toISOString(),
     }, { onConflict: 'id' });
     setSavingCareer(false);
-    if (error) { Alert.alert('오류', '저장에 실패했습니다.'); return; }
+    if (error) { Alert.alert('저장 실패', `${error.message}\n\ncode: ${error.code}`); return; }
     setCareer({ ...editCareer }); setCareerModal(false);
   }
 
