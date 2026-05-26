@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Alert, RefreshControl, Modal, TextInput, ActivityIndicator, Image,
+  Alert, RefreshControl, Modal, TextInput, ActivityIndicator,
+  Image, Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -9,30 +10,15 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../lib/supabase';
 import { Colors, Radius, Shadow } from '../../lib/theme';
 
+const SPORTS = ['테니스', '배드민턴', '스쿼시', '탁구', '골프', '기타'];
+
 interface CoachStats {
   totalMembers: number;
   totalLessons: number;
   reportRate: number;
-  thisMonthEarnings: number;
-  lastMonthEarnings: number;
-  totalEarnings: number;
 }
 
-interface MarketEarning {
-  label: string;
-  icon: string;
-  count: string;
-  amount: number;
-}
-
-interface SettlementProfile {
-  settlement_bank: string;
-  settlement_account: string;
-  settlement_holder: string;
-  settlement_verified: boolean;
-}
-
-interface CoachProfileInfo {
+interface ProfileInfo {
   name: string;
   avatar_url: string;
   sport: string;
@@ -42,88 +28,108 @@ interface CoachProfileInfo {
   bio: string;
 }
 
-const BANKS = [
-  '신한', '국민', '우리', '하나', '농협', '기업', '카카오뱅크',
-  '토스뱅크', '케이뱅크', '씨티', 'SC제일', '부산', '대구', '경남', '광주', '전북',
-];
+interface CareerInfo {
+  coaching_years: string;
+  has_player_career: boolean;
+  career_details: string;
+  certifications: string;
+  awards: string;
+}
 
-const SPORTS = ['테니스', '배드민턴', '스쿼시', '탁구', '골프', '기타'];
+// ─── 서브 컴포넌트 ───────────────────────
+function SectionCard({ icon, title, onEdit, children }: { icon: string; title: string; onEdit: () => void; children: React.ReactNode }) {
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionHeaderRow}>
+        <Ionicons name={icon as any} size={15} color={Colors.navy} />
+        <Text style={styles.sectionTitle}>{title}</Text>
+        <TouchableOpacity style={styles.editBtn} onPress={onEdit}>
+          <Ionicons name="pencil-outline" size={12} color={Colors.navy} />
+          <Text style={styles.editBtnText}>수정</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.card}>{children}</View>
+    </View>
+  );
+}
 
+function InfoRow({ icon, label, value, multiline, last }: { icon: string; label: string; value?: string; multiline?: boolean; last?: boolean }) {
+  return (
+    <View style={[styles.infoRow, !last && styles.infoRowBorder]}>
+      <View style={styles.infoIcon}><Ionicons name={icon as any} size={15} color={Colors.mutedFg} /></View>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={[styles.infoValue, multiline && { flex: 1, textAlign: 'right' }]} numberOfLines={multiline ? 2 : 1}>
+        {value || '-'}
+      </Text>
+    </View>
+  );
+}
+
+function ModalLabel({ children }: { children: string }) {
+  return <Text style={styles.modalLabel}>{children}</Text>;
+}
+
+function SaveBtn({ onPress, loading }: { onPress: () => void; loading: boolean }) {
+  return (
+    <TouchableOpacity style={styles.saveBtn} onPress={onPress} disabled={loading}>
+      {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnTxt}>저장하기</Text>}
+    </TouchableOpacity>
+  );
+}
+
+function CancelBtn({ onPress }: { onPress: () => void }) {
+  return (
+    <TouchableOpacity style={styles.cancelBtn} onPress={onPress}>
+      <Text style={styles.cancelBtnTxt}>취소</Text>
+    </TouchableOpacity>
+  );
+}
+
+// ─── 메인 스크린 ─────────────────────────
 export default function ProfileScreen() {
   const [email, setEmail] = useState('');
-  const [stats, setStats] = useState<CoachStats>({
-    totalMembers: 0, totalLessons: 0, reportRate: 0,
-    thisMonthEarnings: 0, lastMonthEarnings: 0, totalEarnings: 0,
-  });
+  const [stats, setStats] = useState<CoachStats>({ totalMembers: 0, totalLessons: 0, reportRate: 0 });
   const [refreshing, setRefreshing] = useState(false);
-
-  // 프로필 정보
-  const [profileInfo, setProfileInfo] = useState<CoachProfileInfo>({
-    name: '', avatar_url: '', sport: '테니스',
-    region_city: '', region_district: '', center_name: '', bio: '',
-  });
-  const [profileModal, setProfileModal] = useState(false);
-  const [editProfile, setEditProfile] = useState<CoachProfileInfo>({
-    name: '', avatar_url: '', sport: '테니스',
-    region_city: '', region_district: '', center_name: '', bio: '',
-  });
-  const [savingProfile, setSavingProfile] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [sportPickerVisible, setSportPickerVisible] = useState(false);
 
-  // 정산 계좌
-  const [settlement, setSettlement] = useState<SettlementProfile>({
-    settlement_bank: '', settlement_account: '', settlement_holder: '', settlement_verified: false,
-  });
-  const [settlementModal, setSettlementModal] = useState(false);
-  const [editSettlement, setEditSettlement] = useState<SettlementProfile>({
-    settlement_bank: '', settlement_account: '', settlement_holder: '', settlement_verified: false,
-  });
-  const [bankPickerVisible, setBankPickerVisible] = useState(false);
-  const [savingSettlement, setSavingSettlement] = useState(false);
+  // 섹션 1
+  const [profile, setProfile] = useState<ProfileInfo>({ name: '', avatar_url: '', sport: '테니스', region_city: '', region_district: '', center_name: '', bio: '' });
+  const [profileModal, setProfileModal] = useState(false);
+  const [editProfile, setEditProfile] = useState<ProfileInfo>({ name: '', avatar_url: '', sport: '테니스', region_city: '', region_district: '', center_name: '', bio: '' });
+  const [sportPickerOpen, setSportPickerOpen] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  // 섹션 4
+  const [career, setCareer] = useState<CareerInfo>({ coaching_years: '', has_player_career: false, career_details: '', certifications: '', awards: '' });
+  const [careerModal, setCareerModal] = useState(false);
+  const [editCareer, setEditCareer] = useState<CareerInfo>({ coaching_years: '', has_player_career: false, career_details: '', certifications: '', awards: '' });
+  const [savingCareer, setSavingCareer] = useState(false);
 
   async function loadProfile() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setEmail(user.email ?? '');
 
-    const [membersRes, lessonIdsRes, plansRes, paymentsRes, profileRes] = await Promise.all([
+    const [membersRes, lessonIdsRes, plansRes, profileRes] = await Promise.all([
       supabase.from('members').select('*', { count: 'exact', head: true }).eq('coach_id', user.id),
       supabase.from('lessons').select('id').eq('coach_id', user.id),
       supabase.from('lesson_plans').select('*', { count: 'exact', head: true }).eq('coach_id', user.id),
-      supabase.from('payments').select('paid_amount, paid_date').eq('coach_id', user.id).eq('status', '납부완료'),
       supabase.from('coach_profiles').select('*').eq('id', user.id).maybeSingle(),
     ]);
 
     const totalMembers = membersRes.count ?? 0;
-
     const myLessonIds = (lessonIdsRes.data ?? []).map((l: any) => l.id);
     let totalLessons = 0;
     if (myLessonIds.length > 0) {
-      const { data: attendedRows } = await supabase
-        .from('attendance')
-        .select('lesson_id')
-        .in('lesson_id', myLessonIds)
-        .eq('status', '출석');
-      totalLessons = new Set((attendedRows ?? []).map((r: any) => r.lesson_id)).size;
+      const { data: attended } = await supabase.from('attendance').select('lesson_id').in('lesson_id', myLessonIds).eq('status', '출석');
+      totalLessons = new Set((attended ?? []).map((r: any) => r.lesson_id)).size;
     }
-
     const totalPlans = plansRes.count ?? 0;
     const reportRate = totalLessons > 0 ? Math.round((totalPlans / totalLessons) * 100) : 0;
-
-    const thisMonth = new Date().toISOString().slice(0, 7);
-    const lastMonthDate = new Date(); lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
-    const lastMonth = lastMonthDate.toISOString().slice(0, 7);
-
-    const payments = paymentsRes.data ?? [];
-    const totalEarnings = payments.reduce((s, p) => s + (p.paid_amount ?? 0), 0);
-    const thisMonthEarnings = payments.filter(p => p.paid_date?.startsWith(thisMonth)).reduce((s, p) => s + (p.paid_amount ?? 0), 0);
-    const lastMonthEarnings = payments.filter(p => p.paid_date?.startsWith(lastMonth)).reduce((s, p) => s + (p.paid_amount ?? 0), 0);
-
-    setStats({ totalMembers, totalLessons, reportRate, thisMonthEarnings, lastMonthEarnings, totalEarnings });
+    setStats({ totalMembers, totalLessons, reportRate });
 
     const p = profileRes.data;
-    const info: CoachProfileInfo = {
+    setProfile({
       name: p?.name ?? user.email?.split('@')[0] ?? '코치',
       avatar_url: p?.avatar_url ?? '',
       sport: p?.sport ?? '테니스',
@@ -131,134 +137,85 @@ export default function ProfileScreen() {
       region_district: p?.region_district ?? '',
       center_name: p?.center_name ?? '',
       bio: p?.bio ?? '',
-    };
-    setProfileInfo(info);
-
-    if (p) {
-      setSettlement({
-        settlement_bank: p.settlement_bank ?? '',
-        settlement_account: p.settlement_account ?? '',
-        settlement_holder: p.settlement_holder ?? '',
-        settlement_verified: p.settlement_verified ?? false,
-      });
-    }
+    });
+    setCareer({
+      coaching_years: p?.coaching_years != null ? String(p.coaching_years) : '',
+      has_player_career: p?.has_player_career ?? false,
+      career_details: p?.career_details ?? '',
+      certifications: p?.certifications ?? '',
+      awards: p?.awards ?? '',
+    });
   }
 
   useFocusEffect(useCallback(() => { loadProfile(); }, []));
 
-  useEffect(() => {
-    let ch: any = null;
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-      ch = supabase.channel('profile-payments')
-        .on('postgres_changes', {
-          event: '*', schema: 'public', table: 'payments',
-          filter: `coach_id=eq.${user.id}`,
-        }, () => loadProfile())
-        .subscribe();
-    });
-    return () => { if (ch) supabase.removeChannel(ch); };
-  }, []);
+  const initial = (profile.name || '코').slice(0, 1).toUpperCase();
+  const regionLabel = [profile.region_city, profile.region_district].filter(Boolean).join(' ');
 
-  const initial = (profileInfo.name || '코').slice(0, 1).toUpperCase();
-  const regionLabel = [profileInfo.region_city, profileInfo.region_district].filter(Boolean).join(' ');
-
-  // 프로필 사진 선택
   async function handlePickAvatar() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('권한 필요', '사진 라이브러리 접근 권한이 필요합니다.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.6,
-    });
+    if (status !== 'granted') { Alert.alert('권한 필요', '사진 라이브러리 접근 권한이 필요합니다.'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.6 });
     if (result.canceled || !result.assets[0]) return;
-
     const uri = result.assets[0].uri;
     setUploadingAvatar(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
-      // 파일을 blob으로 변환 후 Supabase Storage 업로드
-      const response = await fetch(uri);
-      const blob = await response.blob();
+      const res = await fetch(uri);
+      const blob = await res.blob();
       const ext = uri.split('.').pop() ?? 'jpg';
       const filePath = `${user.id}/avatar.${ext}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, blob, { upsert: true, contentType: `image/${ext}` });
-
-      if (uploadError) {
-        // Storage 버킷이 없을 경우 로컬 URI 사용 (개발 환경)
-        console.warn('Storage 업로드 실패, 로컬 URI 사용:', uploadError.message);
-        setEditProfile(prev => ({ ...prev, avatar_url: uri }));
+      const { error } = await supabase.storage.from('avatars').upload(filePath, blob, { upsert: true, contentType: `image/${ext}` });
+      if (error) {
+        setEditProfile(p => ({ ...p, avatar_url: uri }));
       } else {
-        const { data: publicUrl } = supabase.storage.from('avatars').getPublicUrl(filePath);
-        setEditProfile(prev => ({ ...prev, avatar_url: publicUrl.publicUrl }));
+        const { data: pub } = supabase.storage.from('avatars').getPublicUrl(filePath);
+        setEditProfile(p => ({ ...p, avatar_url: pub.publicUrl }));
       }
-    } catch (e) {
-      console.warn('Avatar upload error:', e);
-      setEditProfile(prev => ({ ...prev, avatar_url: uri }));
-    } finally {
-      setUploadingAvatar(false);
-    }
+    } catch { setEditProfile(p => ({ ...p, avatar_url: uri })); }
+    finally { setUploadingAvatar(false); }
   }
 
-  async function handleSaveProfile() {
+  async function saveProfile() {
     if (!editProfile.name.trim()) { Alert.alert('오류', '이름을 입력해주세요.'); return; }
     setSavingProfile(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSavingProfile(false); return; }
-
     const { error } = await supabase.from('coach_profiles').upsert({
       id: user.id,
       name: editProfile.name.trim(),
       avatar_url: editProfile.avatar_url || null,
-      sport: editProfile.sport || '테니스',
+      sport: editProfile.sport,
       region_city: editProfile.region_city.trim() || null,
       region_district: editProfile.region_district.trim() || null,
       center_name: editProfile.center_name.trim() || null,
       bio: editProfile.bio.trim() || null,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'id' });
-
     setSavingProfile(false);
     if (error) { Alert.alert('오류', '저장에 실패했습니다.'); return; }
-
-    setProfileInfo({ ...editProfile });
+    setProfile({ ...editProfile });
     setProfileModal(false);
   }
 
-  async function handleSaveSettlement() {
-    if (!editSettlement.settlement_bank) { Alert.alert('오류', '은행을 선택해주세요.'); return; }
-    if (!editSettlement.settlement_account.trim()) { Alert.alert('오류', '계좌번호를 입력해주세요.'); return; }
-    if (!editSettlement.settlement_holder.trim()) { Alert.alert('오류', '예금주를 입력해주세요.'); return; }
-
-    setSavingSettlement(true);
+  async function saveCareer() {
+    setSavingCareer(true);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setSavingSettlement(false); return; }
-
+    if (!user) { setSavingCareer(false); return; }
     const { error } = await supabase.from('coach_profiles').upsert({
       id: user.id,
-      settlement_bank: editSettlement.settlement_bank,
-      settlement_account: editSettlement.settlement_account.replace(/\s/g, ''),
-      settlement_holder: editSettlement.settlement_holder.trim(),
-      settlement_verified: false,
+      coaching_years: editCareer.coaching_years ? parseInt(editCareer.coaching_years, 10) : null,
+      has_player_career: editCareer.has_player_career,
+      career_details: editCareer.career_details.trim() || null,
+      certifications: editCareer.certifications.trim() || null,
+      awards: editCareer.awards.trim() || null,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'id' });
-
-    setSavingSettlement(false);
-    if (error) { Alert.alert('오류', '저장에 실패했습니다. 다시 시도해주세요.'); return; }
-
-    setSettlement({ ...editSettlement, settlement_verified: false });
-    setSettlementModal(false);
-    Alert.alert('저장 완료', '정산 계좌가 등록됐습니다.');
+    setSavingCareer(false);
+    if (error) { Alert.alert('오류', '저장에 실패했습니다.'); return; }
+    setCareer({ ...editCareer });
+    setCareerModal(false);
   }
 
   async function handleSignOut() {
@@ -268,441 +225,178 @@ export default function ProfileScreen() {
     ]);
   }
 
-  const hasSettlement = !!settlement.settlement_account;
-
-  const certifiedData = [
-    { icon: 'flash', label: '누적 레슨', value: `${stats.totalLessons}회`, desc: '출석 체크된 레슨 기준' },
-    { icon: 'people', label: '누적 회원', value: `${stats.totalMembers}명`, desc: '전체 등록 회원' },
-    { icon: 'checkmark-circle', label: '리포트 발송률', value: `${stats.reportRate}%`, desc: `${stats.totalLessons}회 레슨 중 ${Math.round(stats.totalLessons * stats.reportRate / 100)}개 발송` },
-    { icon: 'wallet', label: '누적 수익', value: `${stats.totalEarnings.toLocaleString()}원`, desc: '납부완료 전체 합산' },
-    { icon: 'trending-up', label: '이번 달 수익', value: `${stats.thisMonthEarnings.toLocaleString()}원`, desc: '납부완료 기준' },
-    { icon: 'calendar', label: '지난 달 수익', value: `${stats.lastMonthEarnings.toLocaleString()}원`, desc: '납부완료 기준' },
-  ];
-
-  const marketEarnings: MarketEarning[] = [
-    { icon: 'people-outline', label: '신규 회원 중계', count: '준비 중', amount: 0 },
-    { icon: 'time-outline', label: '빈 시간 매칭', count: '준비 중', amount: 0 },
-    { icon: 'document-text-outline', label: '리포트 구독 분배', count: '준비 중', amount: 0 },
-  ];
-
   return (
     <View style={styles.screen}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadProfile(); setRefreshing(false); }} tintColor={Colors.mint} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadProfile(); setRefreshing(false); }} tintColor={Colors.mint} />}
       >
-        {/* Hero Header */}
+        {/* ── Hero ── */}
         <View style={styles.hero}>
           <View style={styles.heroTop}>
             <Text style={styles.heroTitle}>내 프로필</Text>
             <TouchableOpacity onPress={handleSignOut} style={styles.logoutBtn}>
-              <Ionicons name="log-out-outline" size={20} color="rgba(255,255,255,0.8)" />
+              <Ionicons name="log-out-outline" size={20} color="rgba(255,255,255,0.7)" />
             </TouchableOpacity>
           </View>
           <View style={styles.avatarSection}>
-            <TouchableOpacity style={styles.avatarRing} onPress={() => { setEditProfile({ ...profileInfo }); setProfileModal(true); }}>
-              {profileInfo.avatar_url ? (
-                <Image source={{ uri: profileInfo.avatar_url }} style={styles.avatarImage} />
-              ) : (
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{initial}</Text>
-                </View>
-              )}
-              <View style={styles.avatarEditBadge}>
-                <Ionicons name="camera" size={11} color={Colors.white} />
-              </View>
+            <TouchableOpacity style={styles.avatarRing} onPress={() => { setEditProfile({ ...profile }); setProfileModal(true); }}>
+              {profile.avatar_url
+                ? <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} />
+                : <View style={styles.avatar}><Text style={styles.avatarText}>{initial}</Text></View>
+              }
+              <View style={styles.cameraPin}><Ionicons name="camera" size={11} color="#fff" /></View>
             </TouchableOpacity>
-            <Text style={styles.heroName}>{profileInfo.name} 코치</Text>
-            {profileInfo.bio ? (
-              <Text style={styles.heroBio}>{profileInfo.bio}</Text>
-            ) : null}
-            <View style={styles.badgeRow}>
-              <View style={[styles.badge, styles.badgeGold]}><Ionicons name="trophy" size={11} color="#F59E0B" /><Text style={[styles.badgeText, { color: '#F59E0B' }]}>Gold</Text></View>
-              <View style={[styles.badge, styles.badgeSport]}><Text style={[styles.badgeText, { color: 'rgba(255,255,255,0.9)' }]}>{profileInfo.sport}</Text></View>
-              <View style={[styles.badge, styles.badgeKerri]}><Ionicons name="shield-checkmark" size={11} color={Colors.mint} /><Text style={[styles.badgeText, { color: Colors.white }]}>KERRI 인증</Text></View>
-            </View>
-            {(regionLabel || profileInfo.center_name) ? (
+            <Text style={styles.heroName}>{profile.name} 코치</Text>
+            {profile.bio ? <Text style={styles.heroBio}>{profile.bio}</Text> : null}
+            {(regionLabel || profile.center_name) ? (
               <View style={styles.metaRow}>
-                {regionLabel ? (
-                  <View style={styles.metaItem}>
-                    <Ionicons name="location-outline" size={12} color="rgba(255,255,255,0.6)" />
-                    <Text style={styles.metaText}>{regionLabel}</Text>
-                  </View>
-                ) : null}
-                {profileInfo.center_name ? (
-                  <View style={styles.metaItem}>
-                    <Ionicons name="business-outline" size={12} color="rgba(255,255,255,0.6)" />
-                    <Text style={styles.metaText}>{profileInfo.center_name}</Text>
-                  </View>
-                ) : null}
+                {regionLabel ? <View style={styles.metaItem}><Ionicons name="location-outline" size={12} color="rgba(255,255,255,.6)" /><Text style={styles.metaText}>{regionLabel}</Text></View> : null}
+                {profile.center_name ? <View style={styles.metaItem}><Ionicons name="business-outline" size={12} color="rgba(255,255,255,.6)" /><Text style={styles.metaText}>{profile.center_name}</Text></View> : null}
               </View>
             ) : null}
           </View>
           <View style={styles.statsStrip}>
             <View style={styles.statItem}><Text style={styles.statNum}>{stats.totalMembers}명</Text><Text style={styles.statLbl}>누적 회원</Text></View>
-            <View style={styles.statDivider} />
+            <View style={styles.statDiv} />
             <View style={styles.statItem}><Text style={styles.statNum}>{stats.totalLessons}회</Text><Text style={styles.statLbl}>누적 레슨</Text></View>
-            <View style={styles.statDivider} />
+            <View style={styles.statDiv} />
             <View style={styles.statItem}><Text style={styles.statNum}>{stats.reportRate}%</Text><Text style={styles.statLbl}>리포트율</Text></View>
           </View>
         </View>
 
         <View style={styles.body}>
 
-          {/* 내 프로필 정보 섹션 */}
+          {/* ── 1. 기본 프로필 ── */}
+          <SectionCard icon="person-circle-outline" title="기본 프로필" onEdit={() => { setEditProfile({ ...profile }); setProfileModal(true); }}>
+            <InfoRow icon="person-outline" label="이름" value={profile.name} />
+            <InfoRow icon="tennisball-outline" label="종목" value={profile.sport} />
+            <InfoRow icon="location-outline" label="활동 지역" value={regionLabel || undefined} />
+            <InfoRow icon="business-outline" label="소속 센터" value={profile.center_name} last />
+          </SectionCard>
+
+          {/* ── 4. 경력 정보 ── */}
+          <SectionCard icon="document-text-outline" title="경력 정보" onEdit={() => { setEditCareer({ ...career }); setCareerModal(true); }}>
+            <InfoRow icon="time-outline" label="코칭 경력" value={career.coaching_years ? `${career.coaching_years}년` : undefined} />
+            <InfoRow icon="trophy-outline" label="선수 경력" value={career.has_player_career ? '있음' : '없음'} />
+            <InfoRow icon="briefcase-outline" label="주요 경력" value={career.career_details} multiline />
+            <InfoRow icon="ribbon-outline" label="자격증" value={career.certifications} multiline />
+            <InfoRow icon="medal-outline" label="수상 / 대회" value={career.awards} multiline last />
+          </SectionCard>
+
+          {/* ── 계정 ── */}
           <View style={styles.section}>
-            <View style={styles.sectionHeaderRow}>
-              <Ionicons name="person-circle-outline" size={16} color={Colors.navy} />
-              <Text style={styles.sectionTitle}>프로필 정보</Text>
-              <TouchableOpacity
-                style={styles.editBtn}
-                onPress={() => { setEditProfile({ ...profileInfo }); setProfileModal(true); }}
-              >
-                <Ionicons name="pencil-outline" size={13} color={Colors.navy} />
-                <Text style={styles.editBtnText}>수정</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.card}>
-              <View style={[styles.dataRow, styles.dataRowBorder]}>
-                <View style={styles.dataIcon}><Ionicons name="person-outline" size={16} color={Colors.mutedFg} /></View>
-                <View style={styles.dataLabel}><Text style={styles.dataLabelText}>코치 이름</Text></View>
-                <Text style={[styles.dataValueText, { color: Colors.mutedFg }]}>{profileInfo.name || '-'}</Text>
-              </View>
-              <View style={[styles.dataRow, styles.dataRowBorder]}>
-                <View style={styles.dataIcon}><Ionicons name="tennisball-outline" size={16} color={Colors.mutedFg} /></View>
-                <View style={styles.dataLabel}><Text style={styles.dataLabelText}>종목</Text></View>
-                <Text style={[styles.dataValueText, { color: Colors.mutedFg }]}>{profileInfo.sport || '-'}</Text>
-              </View>
-              <View style={[styles.dataRow, styles.dataRowBorder]}>
-                <View style={styles.dataIcon}><Ionicons name="location-outline" size={16} color={Colors.mutedFg} /></View>
-                <View style={styles.dataLabel}><Text style={styles.dataLabelText}>활동 지역</Text></View>
-                <Text style={[styles.dataValueText, { color: Colors.mutedFg }]}>{regionLabel || '-'}</Text>
-              </View>
-              <View style={[styles.dataRow, styles.dataRowBorder]}>
-                <View style={styles.dataIcon}><Ionicons name="business-outline" size={16} color={Colors.mutedFg} /></View>
-                <View style={styles.dataLabel}><Text style={styles.dataLabelText}>소속 센터</Text></View>
-                <Text style={[styles.dataValueText, { color: Colors.mutedFg, flex: 1, textAlign: 'right' }]} numberOfLines={1}>{profileInfo.center_name || '-'}</Text>
-              </View>
-              <View style={styles.dataRow}>
-                <View style={styles.dataIcon}><Ionicons name="chatbubble-ellipses-outline" size={16} color={Colors.mutedFg} /></View>
-                <View style={styles.dataLabel}><Text style={styles.dataLabelText}>한 줄 소개</Text></View>
-                <Text style={[styles.dataValueText, { color: Colors.mutedFg, flex: 1, textAlign: 'right' }]} numberOfLines={1}>{profileInfo.bio || '-'}</Text>
-              </View>
-            </View>
+            <TouchableOpacity style={styles.logoutRow} onPress={handleSignOut}>
+              <Ionicons name="log-out-outline" size={16} color={Colors.destructive} />
+              <Text style={styles.logoutRowText}>로그아웃</Text>
+            </TouchableOpacity>
+            <Text style={styles.emailHint}>{email}</Text>
           </View>
 
-          {/* KERRI 인증 코칭 데이터 */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeaderRow}>
-              <Ionicons name="shield-checkmark" size={16} color={Colors.navy} />
-              <Text style={styles.sectionTitle}>KERRI 인증 코칭 데이터</Text>
-            </View>
-            <Text style={styles.sectionSub}>레슨 데이터 기반 자동 산출 · 조작 불가</Text>
-            <View style={styles.card}>
-              {certifiedData.map((item, i) => (
-                <View key={i} style={[styles.dataRow, i < certifiedData.length - 1 && styles.dataRowBorder]}>
-                  <View style={styles.dataIcon}><Ionicons name={item.icon as any} size={16} color={Colors.navy} /></View>
-                  <View style={styles.dataLabel}><Text style={styles.dataLabelText}>{item.label}</Text></View>
-                  <View style={styles.dataValue}>
-                    <Text style={styles.dataValueText}>{item.value}</Text>
-                    <Text style={styles.dataDesc}>{item.desc}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          {/* 이번 달 마켓 수익 */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>이번 달 마켓 수익</Text>
-            <View style={styles.card}>
-              {marketEarnings.map((m, i) => (
-                <View key={i} style={[styles.dataRow, styles.dataRowBorder]}>
-                  <View style={styles.dataIcon}><Ionicons name={m.icon as any} size={16} color={Colors.navy} /></View>
-                  <View style={styles.dataLabel}><Text style={styles.dataLabelText}>{m.label}</Text><Text style={styles.dataDesc}>{m.count}</Text></View>
-                  <Text style={styles.dataValueText}>{m.amount > 0 ? `${m.amount.toLocaleString()}원` : '-'}</Text>
-                </View>
-              ))}
-              <View style={[styles.dataRow, styles.totalRow]}>
-                <Text style={styles.totalLabel}>합계</Text>
-                <Text style={styles.totalValue}>{marketEarnings.reduce((s, m) => s + m.amount, 0).toLocaleString()}원</Text>
-              </View>
-            </View>
-            <Text style={styles.sectionFooter}>레슨 수익 외 추가 수익 (서비스 오픈 예정)</Text>
-          </View>
-
-          {/* 정산 계좌 설정 */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeaderRow}>
-              <Ionicons name="wallet-outline" size={16} color={Colors.navy} />
-              <Text style={styles.sectionTitle}>정산 계좌</Text>
-              {hasSettlement && (
-                <View style={styles.verifiedBadge}>
-                  <Ionicons name="checkmark-circle" size={12} color={Colors.success} />
-                  <Text style={styles.verifiedText}>등록됨</Text>
-                </View>
-              )}
-            </View>
-            <Text style={styles.sectionSub}>회원 결제 시 수익이 입금될 테니스장 사업자 계좌</Text>
-            <View style={styles.card}>
-              {hasSettlement ? (
-                <>
-                  <View style={[styles.dataRow, styles.dataRowBorder]}>
-                    <View style={styles.dataIcon}><Ionicons name="business-outline" size={16} color={Colors.mutedFg} /></View>
-                    <View style={styles.dataLabel}><Text style={styles.dataLabelText}>은행</Text></View>
-                    <Text style={[styles.dataValueText, { color: Colors.mutedFg }]}>{settlement.settlement_bank}</Text>
-                  </View>
-                  <View style={[styles.dataRow, styles.dataRowBorder]}>
-                    <View style={styles.dataIcon}><Ionicons name="card-outline" size={16} color={Colors.mutedFg} /></View>
-                    <View style={styles.dataLabel}><Text style={styles.dataLabelText}>계좌번호</Text></View>
-                    <Text style={[styles.dataValueText, { color: Colors.mutedFg }]}>
-                      {settlement.settlement_account.replace(/(\d{4})(?=\d)/g, '$1-').replace(/-$/, '')}
-                    </Text>
-                  </View>
-                  <View style={[styles.dataRow, styles.dataRowBorder]}>
-                    <View style={styles.dataIcon}><Ionicons name="person-outline" size={16} color={Colors.mutedFg} /></View>
-                    <View style={styles.dataLabel}><Text style={styles.dataLabelText}>예금주</Text></View>
-                    <Text style={[styles.dataValueText, { color: Colors.mutedFg }]}>{settlement.settlement_holder}</Text>
-                  </View>
-                  <TouchableOpacity style={styles.dataRow} onPress={() => { setEditSettlement({ ...settlement }); setSettlementModal(true); }}>
-                    <View style={styles.dataIcon}><Ionicons name="pencil-outline" size={16} color={Colors.navy} /></View>
-                    <Text style={[styles.dataLabelText, { color: Colors.navy }]}>계좌 수정</Text>
-                    <Ionicons name="chevron-forward" size={14} color={Colors.placeholder} style={{ marginLeft: 'auto' }} />
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <TouchableOpacity
-                  style={styles.settlementEmptyBtn}
-                  onPress={() => { setEditSettlement({ settlement_bank: '', settlement_account: '', settlement_holder: '', settlement_verified: false }); setSettlementModal(true); }}
-                >
-                  <View style={styles.settlementEmptyIcon}><Ionicons name="add-circle-outline" size={24} color={Colors.navy} /></View>
-                  <Text style={styles.settlementEmptyText}>정산 계좌 등록하기</Text>
-                  <Text style={styles.settlementEmptySub}>등록 후 회원 앱 결제 기능이 활성화됩니다</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-
-          {/* 리포트 샘플 */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>리포트 샘플</Text>
-              <View style={styles.anonBadge}><Text style={styles.anonText}>익명 처리됨</Text></View>
-            </View>
-            <View style={styles.reportCard}>
-              <View style={styles.reportWeekBadge}><Text style={styles.reportWeekText}>3주차 레슨</Text></View>
-              <Text style={styles.reportContent}>포핸드 손목 고정 교정 완료. 이번 주부터 슬라이스 서브 1단계 드릴 시작. 임팩트 직전 라켓 각도 의식적으로 확인 필요.</Text>
-              <View style={styles.reportTags}>
-                <View style={[styles.reportTag, { backgroundColor: Colors.navy + '10' }]}><Text style={[styles.reportTagText, { color: Colors.white }]}>포핸드 완료</Text></View>
-                <View style={[styles.reportTag, { backgroundColor: '#FEF3C7' }]}><Text style={[styles.reportTagText, { color: '#92400E' }]}>슬라이스 진입</Text></View>
-                <View style={[styles.reportTag, { backgroundColor: Colors.navy + '18' }]}><Text style={[styles.reportTagText, { color: Colors.navy }]}>다음: 네트 플레이</Text></View>
-              </View>
-            </View>
-          </View>
-
-          {/* 계정 설정 */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>계정</Text>
-            <View style={styles.card}>
-              <View style={[styles.dataRow, styles.dataRowBorder]}>
-                <View style={styles.dataIcon}><Ionicons name="mail-outline" size={16} color={Colors.mutedFg} /></View>
-                <View style={styles.dataLabel}><Text style={styles.dataLabelText}>이메일</Text></View>
-                <Text style={[styles.dataValueText, { color: Colors.mutedFg, fontSize: 13 }]}>{email}</Text>
-              </View>
-              <TouchableOpacity style={styles.dataRow} onPress={handleSignOut}>
-                <View style={styles.dataIcon}><Ionicons name="log-out-outline" size={16} color={Colors.destructive} /></View>
-                <Text style={[styles.dataLabelText, { color: Colors.destructive }]}>로그아웃</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={{ height: 100 }} />
+          <View style={{ height: 60 }} />
         </View>
       </ScrollView>
 
-      {/* 하단 CTA */}
+      {/* ── 하단 바 ── */}
       <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.earningsBtn}>
-          <Ionicons name="wallet-outline" size={18} color={Colors.mint} />
-          <Text style={styles.earningsBtnText}>수익 현황</Text>
-        </TouchableOpacity>
         <TouchableOpacity style={styles.previewBtn}>
-          <Ionicons name="eye-outline" size={18} color={Colors.white} />
+          <Ionicons name="eye-outline" size={18} color="#fff" />
           <Text style={styles.previewBtnText}>내 프로필 미리보기</Text>
         </TouchableOpacity>
       </View>
 
-      {/* 프로필 정보 편집 모달 */}
+      {/* ══ 모달: 1. 기본 프로필 ══ */}
       <Modal visible={profileModal} transparent animationType="slide" onRequestClose={() => setProfileModal(false)}>
-        <View style={styles.modalOverlay}>
-          <ScrollView style={styles.modalScrollArea} keyboardShouldPersistTaps="handled">
-            <View style={[styles.modalSheet, { paddingBottom: 48 }]}>
-              <View style={styles.modalHandle} />
-              <Text style={styles.modalTitle}>프로필 정보</Text>
-              <Text style={styles.modalSub}>코치 프로필을 완성하면 회원들에게 더 잘 보여요.</Text>
+        <View style={styles.overlay}>
+          <ScrollView style={{ maxHeight: '92%' }} keyboardShouldPersistTaps="handled">
+            <View style={styles.sheet}>
+              <View style={styles.handle} />
+              <Text style={styles.modalTitle}>기본 프로필</Text>
 
-              {/* 프로필 사진 */}
-              <View style={styles.avatarEditSection}>
-                <TouchableOpacity style={styles.avatarEditContainer} onPress={handlePickAvatar} disabled={uploadingAvatar}>
-                  {uploadingAvatar ? (
-                    <View style={styles.avatarEditPlaceholder}>
-                      <ActivityIndicator color={Colors.navy} />
-                    </View>
-                  ) : editProfile.avatar_url ? (
-                    <Image source={{ uri: editProfile.avatar_url }} style={styles.avatarEditImage} />
-                  ) : (
-                    <View style={styles.avatarEditPlaceholder}>
-                      <Ionicons name="camera-outline" size={28} color={Colors.navy} />
-                    </View>
-                  )}
+              <View style={styles.avatarEditWrap}>
+                <TouchableOpacity style={styles.avatarEditBtn} onPress={handlePickAvatar} disabled={uploadingAvatar}>
+                  {uploadingAvatar
+                    ? <ActivityIndicator color={Colors.navy} />
+                    : editProfile.avatar_url
+                      ? <Image source={{ uri: editProfile.avatar_url }} style={styles.avatarEditImg} />
+                      : <Ionicons name="camera-outline" size={28} color={Colors.navy} />
+                  }
                   <View style={styles.avatarEditOverlay}>
-                    <Ionicons name="camera" size={14} color={Colors.white} />
-                    <Text style={styles.avatarEditOverlayText}>사진 변경</Text>
+                    <Ionicons name="camera" size={12} color="#fff" />
+                    <Text style={styles.avatarEditOverlayTxt}>사진 변경</Text>
                   </View>
                 </TouchableOpacity>
               </View>
 
-              {/* 코치 이름 */}
-              <Text style={styles.inputLabel}>코치 이름 *</Text>
-              <TextInput
-                style={styles.modalInput}
-                value={editProfile.name}
-                onChangeText={v => setEditProfile(p => ({ ...p, name: v }))}
-                placeholder="코치 이름"
-                placeholderTextColor={Colors.placeholder}
-              />
+              <ModalLabel>코치 이름 *</ModalLabel>
+              <TextInput style={styles.input} value={editProfile.name} onChangeText={v => setEditProfile(p => ({ ...p, name: v }))} placeholder="코치 이름" placeholderTextColor={Colors.placeholder} />
 
-              {/* 종목 */}
-              <Text style={styles.inputLabel}>종목 *</Text>
-              <TouchableOpacity style={styles.bankSelector} onPress={() => setSportPickerVisible(!sportPickerVisible)}>
-                <Text style={[styles.bankSelectorText, !editProfile.sport && { color: Colors.placeholder }]}>
-                  {editProfile.sport || '종목 선택'}
-                </Text>
-                <Ionicons name={sportPickerVisible ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.mutedFg} />
+              <ModalLabel>종목 *</ModalLabel>
+              <TouchableOpacity style={styles.picker} onPress={() => setSportPickerOpen(o => !o)}>
+                <Text style={styles.pickerTxt}>{editProfile.sport || '종목 선택'}</Text>
+                <Ionicons name={sportPickerOpen ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.mutedFg} />
               </TouchableOpacity>
-              {sportPickerVisible && (
-                <View style={styles.bankList}>
+              {sportPickerOpen && (
+                <View style={styles.pickerList}>
                   {SPORTS.map(s => (
-                    <TouchableOpacity
-                      key={s}
-                      style={[styles.bankOption, editProfile.sport === s && styles.bankOptionSelected]}
-                      onPress={() => { setEditProfile(p => ({ ...p, sport: s })); setSportPickerVisible(false); }}
-                    >
-                      <Text style={[styles.bankOptionText, editProfile.sport === s && { color: Colors.navy, fontWeight: '700' }]}>{s}</Text>
+                    <TouchableOpacity key={s} style={[styles.pickerOption, editProfile.sport === s && styles.pickerOptionSel]} onPress={() => { setEditProfile(p => ({ ...p, sport: s })); setSportPickerOpen(false); }}>
+                      <Text style={[styles.pickerOptionTxt, editProfile.sport === s && { color: Colors.navy, fontWeight: '700' }]}>{s}</Text>
                       {editProfile.sport === s && <Ionicons name="checkmark" size={14} color={Colors.navy} />}
                     </TouchableOpacity>
                   ))}
                 </View>
               )}
 
-              {/* 활동 지역 */}
-              <Text style={styles.inputLabel}>활동 지역</Text>
-              <View style={styles.regionRow}>
-                <TextInput
-                  style={[styles.modalInput, styles.regionInput]}
-                  value={editProfile.region_city}
-                  onChangeText={v => setEditProfile(p => ({ ...p, region_city: v }))}
-                  placeholder="시 (예: 서울)"
-                  placeholderTextColor={Colors.placeholder}
-                />
-                <TextInput
-                  style={[styles.modalInput, styles.regionInput]}
-                  value={editProfile.region_district}
-                  onChangeText={v => setEditProfile(p => ({ ...p, region_district: v }))}
-                  placeholder="구 (예: 강남구)"
-                  placeholderTextColor={Colors.placeholder}
-                />
+              <ModalLabel>활동 지역</ModalLabel>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TextInput style={[styles.input, { flex: 1 }]} value={editProfile.region_city} onChangeText={v => setEditProfile(p => ({ ...p, region_city: v }))} placeholder="시 (예: 서울)" placeholderTextColor={Colors.placeholder} />
+                <TextInput style={[styles.input, { flex: 1 }]} value={editProfile.region_district} onChangeText={v => setEditProfile(p => ({ ...p, region_district: v }))} placeholder="구 (예: 강남구)" placeholderTextColor={Colors.placeholder} />
               </View>
 
-              {/* 소속 센터 */}
-              <Text style={styles.inputLabel}>소속 센터</Text>
-              <TextInput
-                style={styles.modalInput}
-                value={editProfile.center_name}
-                onChangeText={v => setEditProfile(p => ({ ...p, center_name: v }))}
-                placeholder="소속 센터 또는 클럽명"
-                placeholderTextColor={Colors.placeholder}
-              />
+              <ModalLabel>소속 센터</ModalLabel>
+              <TextInput style={styles.input} value={editProfile.center_name} onChangeText={v => setEditProfile(p => ({ ...p, center_name: v }))} placeholder="센터 또는 클럽명" placeholderTextColor={Colors.placeholder} />
 
-              {/* 한 줄 소개 */}
-              <Text style={styles.inputLabel}>한 줄 소개</Text>
-              <TextInput
-                style={[styles.modalInput, styles.bioInput]}
-                value={editProfile.bio}
-                onChangeText={v => setEditProfile(p => ({ ...p, bio: v }))}
-                placeholder="나를 한 문장으로 소개해보세요"
-                placeholderTextColor={Colors.placeholder}
-                multiline
-                maxLength={80}
-              />
+              <ModalLabel>한 줄 소개</ModalLabel>
+              <TextInput style={[styles.input, { minHeight: 60, textAlignVertical: 'top', paddingTop: 12 }]} value={editProfile.bio} onChangeText={v => setEditProfile(p => ({ ...p, bio: v }))} placeholder="나를 한 문장으로 소개해보세요" placeholderTextColor={Colors.placeholder} multiline maxLength={80} />
               <Text style={styles.charCount}>{editProfile.bio.length}/80</Text>
 
-              <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSaveProfile} disabled={savingProfile}>
-                {savingProfile ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.modalSaveBtnText}>저장하기</Text>}
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setProfileModal(false)}>
-                <Text style={styles.modalCancelText}>취소</Text>
-              </TouchableOpacity>
+              <SaveBtn onPress={saveProfile} loading={savingProfile} />
+              <CancelBtn onPress={() => setProfileModal(false)} />
             </View>
           </ScrollView>
         </View>
       </Modal>
 
-      {/* 정산 계좌 등록 모달 */}
-      <Modal visible={settlementModal} transparent animationType="slide" onRequestClose={() => setSettlementModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { paddingBottom: 40 }]}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>정산 계좌 등록</Text>
-            <Text style={styles.modalSub}>회원 결제 수익이 입금될 테니스장 사업자 계좌를 입력해주세요.</Text>
+      {/* ══ 모달: 4. 경력 정보 ══ */}
+      <Modal visible={careerModal} transparent animationType="slide" onRequestClose={() => setCareerModal(false)}>
+        <View style={styles.overlay}>
+          <ScrollView style={{ maxHeight: '92%' }} keyboardShouldPersistTaps="handled">
+            <View style={styles.sheet}>
+              <View style={styles.handle} />
+              <Text style={styles.modalTitle}>경력 정보</Text>
 
-            <Text style={styles.inputLabel}>은행 *</Text>
-            <TouchableOpacity style={styles.bankSelector} onPress={() => setBankPickerVisible(!bankPickerVisible)}>
-              <Text style={[styles.bankSelectorText, !editSettlement.settlement_bank && { color: Colors.placeholder }]}>
-                {editSettlement.settlement_bank || '은행 선택'}
-              </Text>
-              <Ionicons name={bankPickerVisible ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.mutedFg} />
-            </TouchableOpacity>
-            {bankPickerVisible && (
-              <View style={styles.bankList}>
-                {BANKS.map(b => (
-                  <TouchableOpacity key={b} style={[styles.bankOption, editSettlement.settlement_bank === b && styles.bankOptionSelected]}
-                    onPress={() => { setEditSettlement(s => ({ ...s, settlement_bank: b })); setBankPickerVisible(false); }}>
-                    <Text style={[styles.bankOptionText, editSettlement.settlement_bank === b && { color: Colors.navy, fontWeight: '700' }]}>{b}</Text>
-                    {editSettlement.settlement_bank === b && <Ionicons name="checkmark" size={14} color={Colors.navy} />}
-                  </TouchableOpacity>
-                ))}
+              <ModalLabel>코칭 경력 (연수)</ModalLabel>
+              <TextInput style={styles.input} value={editCareer.coaching_years} onChangeText={v => setEditCareer(c => ({ ...c, coaching_years: v.replace(/[^0-9]/g, '') }))} placeholder="예: 7" placeholderTextColor={Colors.placeholder} keyboardType="numeric" maxLength={2} />
+
+              <ModalLabel>선수 경력</ModalLabel>
+              <View style={styles.switchRow}>
+                <Text style={styles.switchLabel}>{editCareer.has_player_career ? '있음' : '없음'}</Text>
+                <Switch value={editCareer.has_player_career} onValueChange={v => setEditCareer(c => ({ ...c, has_player_career: v }))} trackColor={{ false: Colors.border, true: Colors.navy }} thumbColor="#fff" />
               </View>
-            )}
 
-            <Text style={styles.inputLabel}>계좌번호 *</Text>
-            <TextInput
-              style={styles.modalInput} keyboardType="numeric" maxLength={20}
-              value={editSettlement.settlement_account} onChangeText={v => setEditSettlement(s => ({ ...s, settlement_account: v }))}
-              placeholder="계좌번호 (- 없이 입력)" placeholderTextColor={Colors.placeholder}
-            />
+              <ModalLabel>주요 경력</ModalLabel>
+              <TextInput style={[styles.input, styles.multilineInput]} value={editCareer.career_details} onChangeText={v => setEditCareer(c => ({ ...c, career_details: v }))} placeholder={'예: 전 대학 선수\n○○테니스아카데미 수석코치'} placeholderTextColor={Colors.placeholder} multiline />
 
-            <Text style={styles.inputLabel}>예금주 *</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={editSettlement.settlement_holder} onChangeText={v => setEditSettlement(s => ({ ...s, settlement_holder: v }))}
-              placeholder="예금주명" placeholderTextColor={Colors.placeholder}
-            />
+              <ModalLabel>자격증</ModalLabel>
+              <TextInput style={[styles.input, styles.multilineInput]} value={editCareer.certifications} onChangeText={v => setEditCareer(c => ({ ...c, certifications: v }))} placeholder={'예: 생활체육지도자 2급\nKTA 공인 코치'} placeholderTextColor={Colors.placeholder} multiline />
 
-            <View style={styles.settlementNotice}>
-              <Ionicons name="information-circle-outline" size={14} color={Colors.mutedFg} />
-              <Text style={styles.settlementNoticeText}>입력한 계좌로 수익이 정산됩니다. 정확히 입력해주세요.</Text>
+              <ModalLabel>수상 / 대회 경력</ModalLabel>
+              <TextInput style={[styles.input, styles.multilineInput]} value={editCareer.awards} onChangeText={v => setEditCareer(c => ({ ...c, awards: v }))} placeholder={'예: 2023 전국 동호인 대회 우승\n○○오픈 준우승'} placeholderTextColor={Colors.placeholder} multiline />
+
+              <SaveBtn onPress={saveCareer} loading={savingCareer} />
+              <CancelBtn onPress={() => setCareerModal(false)} />
             </View>
-
-            <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSaveSettlement} disabled={savingSettlement}>
-              {savingSettlement ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.modalSaveBtnText}>저장</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setSettlementModal(false)}>
-              <Text style={styles.modalCancelText}>취소</Text>
-            </TouchableOpacity>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
     </View>
@@ -713,100 +407,65 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
   hero: { backgroundColor: Colors.primary, paddingBottom: 24 },
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 8 },
-  heroTitle: { fontSize: 18, fontWeight: '700', color: Colors.white },
+  heroTitle: { fontSize: 18, fontWeight: '800', color: '#fff' },
   logoutBtn: { padding: 4 },
   avatarSection: { alignItems: 'center', paddingTop: 8, paddingBottom: 16 },
   avatarRing: { width: 84, height: 84, borderRadius: 42, borderWidth: 3, borderColor: Colors.mint + '50', justifyContent: 'center', alignItems: 'center', marginBottom: 10, position: 'relative' },
-  avatar: { width: 76, height: 76, borderRadius: 38, backgroundColor: Colors.white, justifyContent: 'center', alignItems: 'center' },
+  avatar: { width: 76, height: 76, borderRadius: 38, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
   avatarImage: { width: 76, height: 76, borderRadius: 38 },
   avatarText: { fontSize: 30, fontWeight: '800', color: Colors.navy },
-  avatarEditBadge: { position: 'absolute', bottom: 0, right: 0, width: 22, height: 22, borderRadius: 11, backgroundColor: Colors.navy, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: Colors.primary },
-  heroName: { fontSize: 20, fontWeight: '800', color: Colors.white, marginBottom: 4 },
-  heroBio: { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 8, paddingHorizontal: 24, textAlign: 'center' },
-  metaRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  cameraPin: { position: 'absolute', bottom: 0, right: 0, width: 22, height: 22, borderRadius: 11, backgroundColor: Colors.navy, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: Colors.primary },
+  heroName: { fontSize: 20, fontWeight: '800', color: '#fff', marginBottom: 4 },
+  heroBio: { fontSize: 13, color: 'rgba(255,255,255,.7)', marginBottom: 8, paddingHorizontal: 24, textAlign: 'center' },
+  metaRow: { flexDirection: 'row', gap: 12, marginTop: 4 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  metaText: { fontSize: 12, color: 'rgba(255,255,255,0.6)' },
-  badgeRow: { flexDirection: 'row', gap: 8, marginBottom: 4 },
-  badge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radius.full, borderWidth: 1 },
-  badgeGold: { backgroundColor: 'rgba(245,158,11,0.15)', borderColor: 'rgba(245,158,11,0.4)' },
-  badgeSport: { backgroundColor: 'rgba(255,255,255,0.1)', borderColor: 'rgba(255,255,255,0.2)' },
-  badgeKerri: { backgroundColor: 'rgba(255,255,255,0.15)', borderColor: 'rgba(255,255,255,0.3)' },
-  badgeText: { fontSize: 11, fontWeight: '700' },
-  statsStrip: { flexDirection: 'row', marginHorizontal: 20, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: Radius.lg, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  metaText: { fontSize: 12, color: 'rgba(255,255,255,.6)' },
+  statsStrip: { flexDirection: 'row', marginHorizontal: 20, backgroundColor: 'rgba(255,255,255,.08)', borderRadius: Radius.lg, padding: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,.1)' },
   statItem: { flex: 1, alignItems: 'center' },
-  statDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.15)' },
-  statNum: { fontSize: 18, fontWeight: '800', color: Colors.white },
-  statLbl: { fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 },
+  statDiv: { width: 1, backgroundColor: 'rgba(255,255,255,.15)' },
+  statNum: { fontSize: 18, fontWeight: '800', color: '#fff' },
+  statLbl: { fontSize: 11, color: 'rgba(255,255,255,.6)', marginTop: 2 },
   body: { paddingHorizontal: 16, paddingTop: 20 },
-  section: { marginBottom: 24 },
-  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: Colors.navy },
-  sectionSub: { fontSize: 11, color: Colors.mutedFg, marginBottom: 10 },
-  sectionFooter: { fontSize: 11, color: Colors.mutedFg, textAlign: 'center', marginTop: 6 },
+  section: { marginBottom: 20 },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  sectionTitle: { fontSize: 15, fontWeight: '800', color: Colors.navy },
   editBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 'auto', backgroundColor: Colors.navy + '10', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
   editBtnText: { fontSize: 12, fontWeight: '700', color: Colors.navy },
   card: { backgroundColor: Colors.card, borderRadius: Radius.xl, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', ...Shadow.sm },
-  dataRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 13 },
-  dataRowBorder: { borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
-  dataIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: Colors.navy + '12', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  dataLabel: { flex: 1 },
-  dataLabelText: { fontSize: 14, fontWeight: '600', color: Colors.navy },
-  dataDesc: { fontSize: 11, color: Colors.mutedFg, marginTop: 1 },
-  dataValue: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  dataValueText: { fontSize: 14, fontWeight: '700', color: Colors.navy },
-  totalRow: { backgroundColor: Colors.navy + '05' },
-  totalLabel: { flex: 1, fontSize: 14, fontWeight: '800', color: Colors.navy, marginLeft: 48 },
-  totalValue: { fontSize: 16, fontWeight: '800', color: Colors.navy },
-  verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: Colors.success + '15', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginLeft: 'auto' },
-  verifiedText: { fontSize: 11, fontWeight: '700', color: Colors.success },
-  settlementEmptyBtn: { alignItems: 'center', paddingVertical: 24, paddingHorizontal: 16 },
-  settlementEmptyIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.navy + '10', justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-  settlementEmptyText: { fontSize: 15, fontWeight: '700', color: Colors.navy, marginBottom: 4 },
-  settlementEmptySub: { fontSize: 12, color: Colors.mutedFg, textAlign: 'center' },
-  reportCard: { backgroundColor: Colors.card, borderRadius: Radius.xl, borderWidth: 1, borderColor: Colors.border, padding: 16, ...Shadow.sm },
-  reportWeekBadge: { alignSelf: 'flex-start', backgroundColor: Colors.navy + '12', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 10 },
-  reportWeekText: { fontSize: 11, fontWeight: '700', color: Colors.navy },
-  reportContent: { fontSize: 14, color: Colors.foreground, lineHeight: 22, marginBottom: 12 },
-  reportTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  reportTag: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
-  reportTagText: { fontSize: 11, fontWeight: '700' },
-  anonBadge: { backgroundColor: Colors.mutedBg, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginLeft: 'auto' },
-  anonText: { fontSize: 10, fontWeight: '600', color: Colors.mutedFg },
-  bottomBar: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: Colors.white, paddingBottom: 28 },
-  earningsBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 48, paddingHorizontal: 18, borderRadius: Radius.lg, borderWidth: 1.5, borderColor: Colors.navy },
-  earningsBtnText: { fontSize: 14, fontWeight: '700', color: Colors.navy },
-  previewBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 48, borderRadius: Radius.lg, backgroundColor: Colors.navy },
-  previewBtnText: { fontSize: 14, fontWeight: '700', color: Colors.white },
-  // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-  modalScrollArea: { maxHeight: '90%' },
-  modalSheet: { backgroundColor: Colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 48 },
-  modalHandle: { width: 40, height: 4, backgroundColor: Colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: Colors.navy, marginBottom: 8 },
-  modalSub: { fontSize: 13, color: Colors.mutedFg, marginBottom: 20, lineHeight: 18 },
-  inputLabel: { fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6, marginTop: 4 },
-  modalInput: { backgroundColor: Colors.mutedBg, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, color: Colors.foreground, borderWidth: 1, borderColor: Colors.border, marginBottom: 12 },
-  bioInput: { minHeight: 60, textAlignVertical: 'top', paddingTop: 12 },
-  charCount: { fontSize: 11, color: Colors.placeholder, textAlign: 'right', marginTop: -8, marginBottom: 12 },
-  regionRow: { flexDirection: 'row', gap: 10 },
-  regionInput: { flex: 1 },
-  // Avatar edit in modal
-  avatarEditSection: { alignItems: 'center', marginBottom: 20 },
-  avatarEditContainer: { width: 88, height: 88, borderRadius: 44, overflow: 'hidden', position: 'relative' },
-  avatarEditPlaceholder: { width: 88, height: 88, borderRadius: 44, backgroundColor: Colors.navy + '12', justifyContent: 'center', alignItems: 'center' },
-  avatarEditImage: { width: 88, height: 88, borderRadius: 44 },
-  avatarEditOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.45)', paddingVertical: 6, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 3 },
-  avatarEditOverlayText: { fontSize: 11, color: Colors.white, fontWeight: '600' },
-  bankSelector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.mutedBg, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: Colors.border, marginBottom: 4 },
-  bankSelectorText: { fontSize: 16, color: Colors.foreground },
-  bankList: { backgroundColor: Colors.white, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, marginBottom: 12, maxHeight: 200, overflow: 'scroll' },
-  bankOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
-  bankOptionSelected: { backgroundColor: Colors.navy + '08' },
-  bankOptionText: { fontSize: 15, color: Colors.foreground },
-  settlementNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, backgroundColor: Colors.mutedBg, borderRadius: Radius.md, padding: 12, marginBottom: 16 },
-  settlementNoticeText: { fontSize: 12, color: Colors.mutedFg, flex: 1, lineHeight: 18 },
-  modalSaveBtn: { backgroundColor: Colors.navy, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center', marginBottom: 8 },
-  modalSaveBtnText: { color: Colors.white, fontSize: 16, fontWeight: '700' },
-  modalCancelBtn: { alignItems: 'center', paddingVertical: 10 },
-  modalCancelText: { fontSize: 15, color: Colors.mutedFg, fontWeight: '600' },
+  infoRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
+  infoRowBorder: { borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
+  infoIcon: { width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.navy + '10', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
+  infoLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: Colors.navy },
+  infoValue: { fontSize: 14, color: Colors.mutedFg, maxWidth: '55%', textAlign: 'right' },
+  logoutRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 14, backgroundColor: Colors.card, borderRadius: Radius.xl, borderWidth: 1, borderColor: Colors.border },
+  logoutRowText: { fontSize: 14, fontWeight: '600', color: Colors.destructive },
+  emailHint: { fontSize: 11, color: Colors.placeholder, marginTop: 6, textAlign: 'center' },
+  bottomBar: { paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: Colors.white, paddingBottom: 28 },
+  previewBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 48, borderRadius: Radius.lg, backgroundColor: Colors.navy },
+  previewBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,.4)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 48 },
+  handle: { width: 40, height: 4, backgroundColor: Colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: Colors.navy, marginBottom: 16 },
+  modalLabel: { fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6, marginTop: 12 },
+  input: { backgroundColor: Colors.mutedBg, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: Colors.foreground, borderWidth: 1, borderColor: Colors.border, marginBottom: 4 },
+  multilineInput: { minHeight: 72, textAlignVertical: 'top', paddingTop: 12 },
+  charCount: { fontSize: 11, color: Colors.placeholder, textAlign: 'right', marginBottom: 8 },
+  picker: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.mutedBg, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: Colors.border, marginBottom: 4 },
+  pickerTxt: { fontSize: 15, color: Colors.foreground },
+  pickerList: { backgroundColor: '#fff', borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, marginBottom: 8 },
+  pickerOption: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
+  pickerOptionSel: { backgroundColor: Colors.navy + '08' },
+  pickerOptionTxt: { fontSize: 15, color: Colors.foreground },
+  switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.mutedBg, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: Colors.border, marginBottom: 4 },
+  switchLabel: { fontSize: 15, color: Colors.foreground, fontWeight: '600' },
+  saveBtn: { backgroundColor: Colors.navy, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center', marginTop: 20, marginBottom: 8 },
+  saveBtnTxt: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  cancelBtn: { alignItems: 'center', paddingVertical: 10 },
+  cancelBtnTxt: { fontSize: 15, color: Colors.mutedFg, fontWeight: '600' },
+  avatarEditWrap: { alignItems: 'center', marginBottom: 8 },
+  avatarEditBtn: { width: 88, height: 88, borderRadius: 44, overflow: 'hidden', backgroundColor: Colors.navy + '12', justifyContent: 'center', alignItems: 'center', position: 'relative' },
+  avatarEditImg: { width: 88, height: 88, borderRadius: 44 },
+  avatarEditOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,.4)', paddingVertical: 5, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 3 },
+  avatarEditOverlayTxt: { fontSize: 10, color: '#fff', fontWeight: '600' },
 });
