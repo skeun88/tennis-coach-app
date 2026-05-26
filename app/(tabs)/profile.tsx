@@ -170,40 +170,65 @@ export default function ProfileScreen() {
     if (!user) return;
     setEmail(user.email ?? '');
 
-    const [membersRes, lessonIdsRes, plansRes, profileRes] = await Promise.all([
+    const [membersRes, allLessonsRes, plansRes, profileRes] = await Promise.all([
       supabase.from('members').select('*', { count: 'exact', head: true }).eq('coach_id', user.id),
-      supabase.from('lessons').select('id').eq('coach_id', user.id),
+      supabase.from('lessons').select('id, date').eq('coach_id', user.id),
       supabase.from('lesson_plans').select('*', { count: 'exact', head: true }).eq('coach_id', user.id),
       supabase.from('coach_profiles').select('*').eq('id', user.id).maybeSingle(),
     ]);
 
     const totalMembers = membersRes.count ?? 0;
-    const totalReports = plansRes.count ?? 0;   // AI 레포트 발송 절대값
-    const myLessonIds = (lessonIdsRes.data ?? []).map((l: any) => l.id);
+    const totalReports = plansRes.count ?? 0;
+    const allLessons = allLessonsRes.data ?? [];
+    const allLessonIds = allLessons.map((l: any) => l.id);
+
+    // lesson_id → date 맵
+    const lessonDateMap = new Map<string, string>();
+    allLessons.forEach((l: any) => lessonDateMap.set(l.id, l.date));
 
     let totalLessons = 0;
-    if (myLessonIds.length > 0) {
-      const { data: attended } = await supabase
-        .from('attendance').select('lesson_id')
-        .in('lesson_id', myLessonIds).eq('status', '출석');
-      totalLessons = new Set((attended ?? []).map((r: any) => r.lesson_id)).size;
+    let reregistrationRate = 0;
+
+    if (allLessonIds.length > 0) {
+      const { data: allAttended } = await supabase
+        .from('attendance')
+        .select('lesson_id, member_id')
+        .in('lesson_id', allLessonIds)
+        .eq('status', '출석');
+
+      const attended = allAttended ?? [];
+
+      // 총 진행 레슨 수 (distinct lesson_id)
+      totalLessons = new Set(attended.map((r: any) => r.lesson_id)).size;
+
+      // 월별 출석 회원 집합 구성
+      // { 'YYYY-MM': Set<member_id> }
+      const monthMemberMap = new Map<string, Set<string>>();
+      attended.forEach((r: any) => {
+        const date = lessonDateMap.get(r.lesson_id);
+        if (!date) return;
+        const month = date.slice(0, 7);
+        if (!monthMemberMap.has(month)) monthMemberMap.set(month, new Set());
+        monthMemberMap.get(month)!.add(r.member_id);
+      });
+
+      // 연속 월 retention 계산 후 평균
+      // (이전달+이번달 모두 출석한 회원 / 이전달 출석 회원) × 100
+      const months = Array.from(monthMemberMap.keys()).sort();
+      const rates: number[] = [];
+      for (let i = 1; i < months.length; i++) {
+        const prev = monthMemberMap.get(months[i - 1])!;
+        const curr = monthMemberMap.get(months[i])!;
+        if (prev.size === 0) continue;
+        const retained = Array.from(prev).filter(m => curr.has(m)).length;
+        rates.push((retained / prev.size) * 100);
+      }
+      reregistrationRate = rates.length > 0
+        ? Math.round(rates.reduce((a, b) => a + b, 0) / rates.length)
+        : 0;
     }
 
-    // 회원 재등록율: 전체 기간 납부완료 2회 이상인 회원 / 전체 회원
-    const { data: paymentRows } = await supabase
-      .from('payments')
-      .select('member_id')
-      .eq('coach_id', user.id)
-      .eq('status', '납부완료');
-
-    const memberPayCount = new Map<string, number>();
-    (paymentRows ?? []).forEach((p: any) => {
-      memberPayCount.set(p.member_id, (memberPayCount.get(p.member_id) ?? 0) + 1);
-    });
-    const reregisteredCount = Array.from(memberPayCount.values()).filter(c => c >= 2).length;
-
     const feedbackRate = totalLessons > 0 ? Math.round((totalReports / totalLessons) * 100) : 0;
-    const reregistrationRate = totalMembers > 0 ? Math.round((reregisteredCount / totalMembers) * 100) : 0;
 
     setPerf({ totalLessons, totalReports, feedbackRate, reregistrationRate, totalMembers });
 
@@ -379,7 +404,7 @@ export default function ProfileScreen() {
                   />
                   <GradeProgressRow
                     icon="people"
-                    label="회원 재등록율"
+                    label="회원 유지율"
                     value={`${perf.reregistrationRate} / ${GRADE_REQS[nextGradeKey].retention}%`}
                     pct={nextProgress.retention.pct}
                     color={nextGradeMeta.color}
@@ -397,7 +422,7 @@ export default function ProfileScreen() {
             <View style={metric.grid}>
               <MetricCard icon="flash"         label="총 진행 레슨"    value={`${perf.totalLessons}회`}  sub="출석 기준"      color={Colors.navy} />
               <MetricCard icon="document-text" label="AI 레포트 발송"  value={`${perf.totalReports}개`}  sub="누적 총합"      color="#8B5CF6" />
-              <MetricCard icon="people"        label="회원 재등록율"     value={perf.totalMembers > 0 ? `${perf.reregistrationRate}%` : '-'} sub="전체 기간 평균" color="#10B981" />
+              <MetricCard icon="people"        label="회원 유지율"     value={perf.totalMembers > 0 ? `${perf.reregistrationRate}%` : '-'} sub="월평균 유지율" color="#10B981" />
             </View>
           </View>
 
