@@ -19,21 +19,22 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y postgresql-client
 
-      - name: Run new migrations via psql
+      - name: Run migrations via psql
         run: |
           for file in supabase/migrations/*.sql; do
             echo "▶ Applying: $file"
-            psql "$DATABASE_URL" -f "$file" && echo "✅ Done: $file" || echo "⚠️ Skipped (already applied): $file"
+            psql "$DATABASE_URL" -f "$file" && echo "✅ Done: $file" || echo "⚠️ Already applied: $file"
           done
         env:
-          DATABASE_URL: postgresql://postgres:${{ secrets.SUPABASE_DB_PASSWORD }}@db.luhuiwyhewofjxnbzbdt.supabase.co:5432/postgres
+          DATABASE_URL: postgresql://postgres:${{ secrets.SUPABASE_DB_PASSWORD }}@db.luhuiwyhewofjxnbzbdt.supabase.co:5432/postgres?sslmode=require
 
       - name: Install Supabase CLI
         run: |
-          curl -fsSL https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz \
-            | tar -xz -C /tmp
-          sudo mv /tmp/supabase /usr/local/bin/supabase
-          supabase --version
+          mkdir -p "$HOME/.local/share/supabase"
+          curl -sL https://github.com/supabase/cli/releases/download/v2.103.0/supabase_2.103.0_linux_amd64.tar.gz \
+            | tar -xzf - -C "$HOME/.local/share/supabase"
+          echo "$HOME/.local/share/supabase" >> $GITHUB_PATH
+          "$HOME/.local/share/supabase/supabase" --version
 
       - name: Deploy Edge Functions
         run: |
