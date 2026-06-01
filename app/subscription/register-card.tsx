@@ -80,14 +80,14 @@ export default function RegisterCardScreen() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('로그인 필요');
 
-        const subscription = await createTrialSubscription(
+        const { subscription, error: subError } = await createTrialSubscription(
           user.id,
           planId || 'basic',
           data.billingKey,
           customerKey
         );
 
-        if (!subscription) throw new Error('구독 생성 실패');
+        if (!subscription) throw new Error(subError || '구독 생성 실패');
 
         router.replace('/subscription/trial-started');
       } catch (err: any) {

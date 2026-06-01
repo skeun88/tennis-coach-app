@@ -144,38 +144,40 @@ export async function createTrialSubscription(
   planId: PlanId,
   billingKey: string,
   customerKey: string
-): Promise<Subscription | null> {
+): Promise<{ subscription: Subscription | null; error: string | null }> {
   const trialEndsAt = new Date();
   trialEndsAt.setDate(trialEndsAt.getDate() + 30);
 
+  // 이미 구독이 있으면 업데이트 (upsert)
   const { data, error } = await supabase
     .from('subscriptions')
-    .insert({
+    .upsert({
       coach_id: coachId,
       plan_id: planId,
       status: 'trial',
+      trial_starts_at: new Date().toISOString(),
       trial_ends_at: trialEndsAt.toISOString(),
       next_billing_at: trialEndsAt.toISOString(),
       toss_billing_key: billingKey,
       toss_customer_key: customerKey,
-    })
+    }, { onConflict: 'coach_id' })
     .select()
     .single();
 
   if (error) {
     console.error('Failed to create trial subscription:', error);
-    return null;
+    return { subscription: null, error: error.message };
   }
 
-  // 로그 기록
+  // 로그 기록 (실패해도 구독은 성공으로 처리)
   await supabase.from('subscription_logs').insert({
     subscription_id: data.id,
     coach_id: coachId,
     event_type: 'trial_started',
     plan_id: planId,
-  });
+  }).catch(e => console.warn('Log insert failed:', e));
 
-  return data as Subscription;
+  return { subscription: data as Subscription, error: null };
 }
 
 /** 코치의 현재 회원 수 조회 */
