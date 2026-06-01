@@ -13,15 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Fix git safe directory
-        run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
-
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
+      - name: Install Supabase CLI
+        run: |
+          curl -fsSL https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz \
+            | tar -xz -C /tmp
+          sudo mv /tmp/supabase /usr/local/bin/supabase
+          supabase --version
 
       - name: Link Supabase project
         run: |
