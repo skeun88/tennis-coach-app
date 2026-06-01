@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { MemberLevel } from '../../types';
 import { Colors } from '../../lib/theme';
+import { getCurrentSubscription, FREE_MEMBER_LIMIT, getMemberCount } from '../../lib/subscription';
 
 const LEVELS: MemberLevel[] = ['입문', '초급', '중급', '고급', '선수'];
 const DAYS_KR = ['일', '월', '화', '수', '목', '금', '토'];
@@ -352,6 +353,25 @@ export default function NewMemberScreen() {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
+
+    // 3번째 회원부터 구독 필요
+    const memberCount = await getMemberCount(user.id);
+    if (memberCount >= FREE_MEMBER_LIMIT) {
+      const subscription = await getCurrentSubscription();
+      const isActive = subscription?.status === 'trial' || subscription?.status === 'active';
+      if (!isActive) {
+        setLoading(false);
+        Alert.alert(
+          '구독이 필요합니다',
+          `회원 ${FREE_MEMBER_LIMIT + 1}명부터는 구독이 필요합니다.\n1달 무료 체험을 시작해 보세요!`,
+          [
+            { text: '나중에', style: 'cancel' },
+            { text: '구독 시작하기', onPress: () => router.push('/subscription/select-plan') },
+          ]
+        );
+        return;
+      }
+    }
 
     if (allDaysHaveTimes) {
       const selectedPkg2 = lessonPackages.find(p => p.id === selectedPackageId);

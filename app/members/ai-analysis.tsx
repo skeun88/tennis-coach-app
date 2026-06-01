@@ -9,6 +9,7 @@ import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync, use
 import { supabase } from '../../lib/supabase';
 import { LessonPlan, DrillSuggestion } from '../../types';
 import { Colors } from '../../lib/theme';
+import { useSubscription } from '../../hooks/useSubscription';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -28,6 +29,7 @@ export default function AIAnalysisScreen() {
     memberLevel: string;
   }>();
   const router = useRouter();
+  const { canUse, loading: subLoading } = useSubscription();
 
   const audioRecorder = useAudioRecorder({
     ...RecordingPresets.HIGH_QUALITY,
