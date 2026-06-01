@@ -170,12 +170,16 @@ export async function createTrialSubscription(
   }
 
   // 로그 기록 (실패해도 구독은 성공으로 처리)
-  await supabase.from('subscription_logs').insert({
-    subscription_id: data.id,
-    coach_id: coachId,
-    event_type: 'trial_started',
-    plan_id: planId,
-  }).catch(e => console.warn('Log insert failed:', e));
+  try {
+    await supabase.from('subscription_logs').insert({
+      subscription_id: data.id,
+      coach_id: coachId,
+      event_type: 'trial_started',
+      plan_id: planId,
+    });
+  } catch (e) {
+    console.warn('Log insert failed:', e);
+  }
 
   return { subscription: data as Subscription, error: null };
 }
