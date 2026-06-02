@@ -13,7 +13,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { PlanId, createTrialSubscription } from '../../lib/subscription';
 
-const TOSS_CLIENT_KEY = 'test_ck_XZYkKL4MrjOxJb6G74A180zJwlEW';
+const TOSS_CLIENT_KEY = 'test_c…wlEW';
 
 export default function RegisterCardScreen() {
   const router = useRouter();
@@ -51,55 +51,67 @@ export default function RegisterCardScreen() {
 </html>
   `;
 
-  const handleNavigationChange = async (event: WebViewNavigation) => {
-    const { url } = event;
+  // 성공 콜백 처리 (비동기 분리 — onShouldStartLoadWithRequest는 동기 반환 필요)
+  const processSuccess = async (url: string) => {
+    if (processing) return; // 중복 실행 방지
+    setProcessing(true);
 
-    // 성공 콜백 처리
-    if (url.startsWith('kerricoach://billing/success')) {
-      setProcessing(true);
-      const urlObj = new URL(url.replace('kerricoach://', 'https://'));
-      const authKey = urlObj.searchParams.get('authKey');
-      const customerKey = urlObj.searchParams.get('customerKey');
+    const urlObj = new URL(url.replace('kerricoach://', 'https://'));
+    const authKey = urlObj.searchParams.get('authKey');
+    const customerKey = urlObj.searchParams.get('customerKey');
 
-      if (!authKey || !customerKey) {
-        Alert.alert('오류', '카드 등록에 실패했습니다.');
-        setProcessing(false);
-        return;
-      }
-
-      try {
-        // 서버사이드에서 빌링키 발급 (Edge Function 호출)
-        const { data, error } = await supabase.functions.invoke('issue-billing-key', {
-          body: { authKey, customerKey, planId },
-        });
-
-        if (error || !data?.billingKey) {
-          throw new Error(error?.message || '빌링키 발급 실패');
-        }
-
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('로그인 필요');
-
-        const { subscription, error: subError } = await createTrialSubscription(
-          user.id,
-          planId || 'basic',
-          data.billingKey,
-          customerKey
-        );
-
-        if (!subscription) throw new Error(subError || '구독 생성 실패');
-
-        router.replace('/subscription/trial-started');
-      } catch (err: any) {
-        Alert.alert('오류', err.message || '카드 등록 중 오류가 발생했습니다.');
-        setProcessing(false);
-      }
+    if (!authKey || !customerKey) {
+      Alert.alert('오류', '카드 등록에 실패했습니다.');
+      setProcessing(false);
+      return;
     }
 
-    // 실패 콜백
+    try {
+      // 서버사이드에서 빌링키 발급 (Edge Function 호출)
+      const { data, error } = await supabase.functions.invoke('issue-billing-key', {
+        body: { authKey, customerKey, planId },
+      });
+
+      if (error || !data?.billingKey) {
+        throw new Error(error?.message || '빌링키 발급 실패');
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('로그인 필요');
+
+      const { subscription, error: subError } = await createTrialSubscription(
+        user.id,
+        planId || 'basic',
+        data.billingKey,
+        customerKey
+      );
+
+      if (!subscription) throw new Error(subError || '구독 생성 실패');
+
+      router.replace('/subscription/trial-started');
+    } catch (err: any) {
+      Alert.alert('오류', err.message || '카드 등록 중 오류가 발생했습니다.');
+      setProcessing(false);
+    }
+  };
+
+  // onShouldStartLoadWithRequest: 동기 반환으로 커스텀 URL 인터셉트
+  // iOS에서 kerricoach:// 같은 커스텀 스킴은 onNavigationStateChange가 
+  // 호출되지 않을 수 있어 이 방식으로 변경
+  const handleShouldStartLoad = (request: { url: string }): boolean => {
+    const { url } = request;
+
+    if (url.startsWith('kerricoach://billing/success')) {
+      processSuccess(url); // 비동기 처리
+      return false; // WebView가 이 URL 로드 시도 차단
+    }
+
     if (url.startsWith('kerricoach://billing/fail')) {
       Alert.alert('카드 등록 실패', '다시 시도해 주세요.');
+      return false;
     }
+
+    return true;
   };
 
   const getCustomerKey = async (): Promise<string> => {
@@ -141,9 +153,9 @@ export default function RegisterCardScreen() {
           ref={webViewRef}
           source={{ html: getBillingHtml(customerKey) }}
           onLoadEnd={() => setLoading(false)}
-          onNavigationStateChange={handleNavigationChange}
+          onShouldStartLoadWithRequest={handleShouldStartLoad}
           style={styles.webview}
-          originWhitelist={['*']}
+          originWhitelist={['*', 'kerricoach://*']}
           javaScriptEnabled
         />
       )}
