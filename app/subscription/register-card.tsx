@@ -20,6 +20,7 @@ export default function RegisterCardScreen() {
   const { planId } = useLocalSearchParams<{ planId: PlanId }>();
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const processingRef = useRef(false);
   const webViewRef = useRef<WebView>(null);
 
   // 빌링키 발급 HTML (토스 SDK 사용)
@@ -53,7 +54,8 @@ export default function RegisterCardScreen() {
 
   // 성공 콜백 처리 (비동기 분리 — onShouldStartLoadWithRequest는 동기 반환 필요)
   const processSuccess = async (url: string) => {
-    if (processing) return; // 중복 실행 방지
+    if (processingRef.current) return; // ref 기반 중복 실행 방지 (closure race condition 방지)
+    processingRef.current = true;
     setProcessing(true);
 
     const urlObj = new URL(url.replace('kerricoach://', 'https://'));
