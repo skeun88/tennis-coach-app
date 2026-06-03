@@ -8,6 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../lib/supabase';
+import { useSubscription } from '../../hooks/useSubscription';
+import { PLANS } from '../../lib/subscription';
 import { Colors, Radius, Shadow } from '../../lib/theme';
 
 const SPORTS = ['테니스', '배드민턴', '스쿼시', '탁구', '골프', '기타'];
@@ -148,6 +150,18 @@ function CancelBtn({ onPress }: { onPress: () => void }) {
 
 // ─── 메인 스크린 ─────────────────────────
 export default function ProfileScreen() {
+  const { subscription, isActive, isTrial, trialDaysLeft } = useSubscription();
+  const planLabel = subscription ? PLANS[subscription.plan_id]?.name ?? subscription.plan_id : null;
+  const statusLabel = isTrial
+    ? `무료 체험 중 (${trialDaysLeft}일 남음)`
+    : subscription?.status === 'active'
+    ? '구독 중'
+    : subscription?.status === 'cancelled'
+    ? '해지됨'
+    : subscription?.status === 'past_due'
+    ? '결제 실패'
+    : null;
+
   const [email, setEmail] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -443,6 +457,19 @@ export default function ProfileScreen() {
             <InfoRow icon="medal-outline"     label="수상 / 대회" value={career.awards}          multiline last />
           </SectionCard>
 
+          {/* 구독 */}
+          {isActive && planLabel && (
+            <View style={styles.subCard}>
+              <View style={styles.subCardLeft}>
+                <Ionicons name="card-outline" size={20} color="#4A90D9" />
+                <View>
+                  <Text style={styles.subPlanName}>{planLabel} 플랜</Text>
+                  {statusLabel ? <Text style={styles.subStatus}>{statusLabel}</Text> : null}
+                </View>
+              </View>
+            </View>
+          )}
+
           {/* 계정 */}
           <View style={styles.section}>
             <TouchableOpacity style={styles.logoutRow} onPress={handleSignOut}>
@@ -590,6 +617,19 @@ const styles = StyleSheet.create({
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   metaText: { fontSize: 12, color: 'rgba(255,255,255,.6)' },
   body: { paddingHorizontal: 16, paddingTop: 20 },
+  subCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#EBF4FF',
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
+  },
+  subCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  subPlanName: { fontSize: 15, fontWeight: '700', color: '#1a1a2e' },
+  subStatus: { fontSize: 12, color: '#4A90D9', marginTop: 2 },
   section: { marginBottom: 20 },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
   sectionTitle: { fontSize: 15, fontWeight: '800', color: Colors.navy },
