@@ -13,7 +13,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { PlanId, createTrialSubscription } from '../../lib/subscription';
 
-const TOSS_CLIENT_KEY = 'test_c…wlEW';
+const TOSS_CLIENT_KEY = 'test_ck_XZYkKL4MrjOxJb6G74A180zJwlEW';
 
 export default function RegisterCardScreen() {
   const router = useRouter();
