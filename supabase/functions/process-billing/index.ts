@@ -28,7 +28,7 @@ serve(async (req) => {
 
     const { data: subscriptions, error } = await supabase
       .from('subscriptions')
-      .select('*, subscription_plans(*)')
+      .select('*')
       .in('status', ['active', 'trial'])
       .gte('next_billing_at', todayStart.toISOString())
       .lte('next_billing_at', todayEnd.toISOString())
