@@ -319,6 +319,45 @@ export default function AIAnalysisScreen() {
     );
   }
 
+  // ── 구독 권한 체크 ──
+  if (!subLoading && !canUse('ai_analysis')) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <Ionicons name="chevron-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.headerTitle}>AI 레슨 분석</Text>
+            <Text style={styles.headerSub}>{memberName} · {memberLevel}</Text>
+          </View>
+        </View>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 }}>
+          <Ionicons name="lock-closed" size={56} color="#4A90D9" style={{ marginBottom: 20 }} />
+          <Text style={{ fontSize: 22, fontWeight: '800', color: '#1a1a2e', marginBottom: 12, textAlign: 'center' }}>
+            Pro 플랜 전용 기능
+          </Text>
+          <Text style={{ fontSize: 15, color: '#666', textAlign: 'center', lineHeight: 22, marginBottom: 32 }}>
+            AI 음성 분석은 Pro 플랜에서만 사용할 수 있어요.{'\n'}
+            지금 업그레이드하고 AI 레슨 분석을 시작해보세요!
+          </Text>
+          <TouchableOpacity
+            style={{ backgroundColor: '#4A90D9', borderRadius: 14, padding: 18, width: '100%', alignItems: 'center', marginBottom: 12 }}
+            onPress={() => router.push('/subscription/select-plan')}
+          >
+            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Pro로 업그레이드</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{ padding: 12 }}
+            onPress={() => router.back()}
+          >
+            <Text style={{ color: '#888', fontSize: 14 }}>돌아가기</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   // ── 렌더 ──
   return (
     <View style={styles.container}>
