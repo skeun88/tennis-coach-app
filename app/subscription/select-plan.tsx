@@ -24,6 +24,11 @@ export default function SelectPlanScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
+          <Ionicons name="close" size={24} color="#1a1a2e" />
+        </TouchableOpacity>
+      </View>
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>플랜을 선택하세요</Text>
         <Text style={styles.subtitle}>
@@ -125,6 +130,8 @@ export default function SelectPlanScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f9fa' },
+  header: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 8 },
+  closeBtn: { padding: 8 },
   scroll: { padding: 20, paddingBottom: 40 },
   title: { fontSize: 24, fontWeight: '700', color: '#1a1a2e', marginBottom: 8 },
   subtitle: { fontSize: 14, color: '#666', marginBottom: 24, lineHeight: 20 },
