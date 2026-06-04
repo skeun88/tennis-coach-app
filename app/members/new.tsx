@@ -11,7 +11,7 @@ import { MemberLevel } from '../../types';
 import { Colors } from '../../lib/theme';
 import { getCurrentSubscription, FREE_MEMBER_LIMIT, getMemberCount } from '../../lib/subscription';
 
-const LEVELS: MemberLevel[] = ['입문', '초급', '중급', '고급', '선수'];
+const LEVELS: MemberLevel[] = ['입문', '초급', '중급', '상급', '선수'];
 const DAYS_KR = ['일', '월', '화', '수', '목', '금', '토'];
 const HOURS = Array.from({ length: 17 }, (_, i) => String(i + 6).padStart(2, '0')); // 06~22
 const MINUTES = ['00', '10', '20', '30', '40', '50'];
@@ -152,6 +152,14 @@ function formatPhone(value: string): string {
   if (digits.length <= 3) return digits;
   if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
   return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+}
+
+
+function formatDate(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
 }
 
 export default function NewMemberScreen() {
@@ -422,9 +430,9 @@ export default function NewMemberScreen() {
           <Text style={styles.label}>전화번호 *</Text>
           <TextInput style={styles.input} placeholder="010-0000-0000" value={phone} onChangeText={v => setPhone(formatPhone(v))} keyboardType="phone-pad" />
           <Text style={styles.label}>생년월일</Text>
-          <TextInput style={styles.input} placeholder="YYYY-MM-DD" value={birthDate} onChangeText={setBirthDate} />
+          <TextInput style={styles.input} placeholder="YYYY-MM-DD" value={birthDate} onChangeText={v => setBirthDate(formatDate(v))} />
           <Text style={styles.label}>가입일</Text>
-          <TextInput style={styles.input} value={joinDate} onChangeText={setJoinDate} />
+          <TextInput style={styles.input} value={joinDate} onChangeText={v => setJoinDate(formatDate(v))} />
         </View>
 
         {/* 레벨 */}
@@ -441,13 +449,13 @@ export default function NewMemberScreen() {
 
         {/* 고정 레슨 스케줄 */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>고정 레슨 스케줄</Text>
+          <Text style={styles.sectionTitle}>레슨 스케줄</Text>
           <Text style={styles.label}>레슨 시작일</Text>
           <TextInput
             style={styles.input}
             placeholder="YYYY-MM-DD"
             value={lessonStartDate}
-            onChangeText={setLessonStartDate}
+            onChangeText={v => setLessonStartDate(formatDate(v))}
           />
           <Text style={styles.label}>레슨 요일</Text>
           <View style={styles.dayRow}>
