@@ -140,11 +140,24 @@ async function generateScheduleLessons(params: {
   return { successCount, errors };
 }
 
+
+function formatPhone(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (digits.startsWith('02')) {
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 5) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+    if (digits.length <= 9) return `${digits.slice(0, 2)}-${digits.slice(2, 5)}-${digits.slice(5)}`;
+    return `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+}
+
 export default function NewMemberScreen() {
   const router = useRouter();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [level, setLevel] = useState<MemberLevel>('초급');
   const [joinDate, setJoinDate] = useState(toKSTDateStr(new Date()));
@@ -314,7 +327,7 @@ export default function NewMemberScreen() {
 
     const { data: newMember, error } = await supabase.from('members').insert({
       coach_id: userId, name: name.trim(), phone: phone.trim(),
-      email: email.trim() || null, birth_date: birthDate || null,
+      birth_date: birthDate || null,
       level, join_date: joinDate, notes: notes.trim() || null, is_active: true,
       fixed_schedule_days: scheduleDays,
       fixed_schedule_time: firstDayTime,
@@ -407,9 +420,7 @@ export default function NewMemberScreen() {
           <Text style={styles.label}>이름 *</Text>
           <TextInput style={styles.input} placeholder="홍길동" value={name} onChangeText={setName} />
           <Text style={styles.label}>전화번호 *</Text>
-          <TextInput style={styles.input} placeholder="010-0000-0000" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-          <Text style={styles.label}>이메일</Text>
-          <TextInput style={styles.input} placeholder="example@email.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+          <TextInput style={styles.input} placeholder="010-0000-0000" value={phone} onChangeText={v => setPhone(formatPhone(v))} keyboardType="phone-pad" />
           <Text style={styles.label}>생년월일</Text>
           <TextInput style={styles.input} placeholder="YYYY-MM-DD" value={birthDate} onChangeText={setBirthDate} />
           <Text style={styles.label}>가입일</Text>
