@@ -84,8 +84,14 @@ serve(async (req) => {
     }
 
     // ── 녹음 데이터 없으면 분석 거부 ──
-    if (!audioFile || audioFile.size < 1000) {
-      return new Response(JSON.stringify({ error: '유효한 녹음 파일이 없습니다. 레슨을 녹음한 후 분석을 시작하세요.' }), {
+    if (!audioFile || audioFile.size < 5000) {
+      return new Response(JSON.stringify({ error: '녹음 파일이 너무 짧거나 없습니다. 최소 10초 이상 레슨을 녹음한 후 분석을 시작하세요.' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+    // duration_seconds가 있으면 10초 미만 차단
+    if (durationSeconds !== null && durationSeconds < 10) {
+      return new Response(JSON.stringify({ error: `녹음 시간이 너무 짧습니다 (${durationSeconds}초). 최소 10초 이상 녹음해 주세요.` }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
@@ -115,8 +121,19 @@ serve(async (req) => {
     ])
 
     const whisperData = await whisperRes.json()
-    const transcript = whisperData.text
+    const transcript = (whisperData.text || '').trim()
     if (!transcript) throw new Error(`음성 변환 실패: ${JSON.stringify(whisperData)}`)
+
+    // 인식된 내용이 너무 적으면 분석 거부 (잡음/무음 오디오 필터)
+    const wordCount = transcript.split(/\s+/).filter((w: string) => w.length > 0).length
+    if (wordCount < 10) {
+      return new Response(JSON.stringify({
+        error: `인식된 레슨 내용이 너무 적습니다 (${wordCount}단어). 실제 레슨 음성이 녹음됐는지 확인해 주세요.`,
+        transcript,
+      }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
 
     const member = memberRes.data
     const coachProfile = coachRes.data
