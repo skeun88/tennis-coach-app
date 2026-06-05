@@ -210,15 +210,33 @@ ${sampledTranscript}`
 
     let knowledgeContext = ''
     if (embedData.data?.[0]?.embedding) {
-      const { data: knowledgeResults } = await supabase.rpc('search_tennis_knowledge', {
-        query_embedding: embedData.data[0].embedding,
-        match_threshold: 0.4,
-        match_count: 4,
-        filter_level: member?.level || null,
-        filter_court_type: effectiveCourtType,
-      })
-      knowledgeContext = (knowledgeResults || [])
-        .map((k: any) => `[${k.category}][${k.level || '전체'}] ${k.title}\n${k.content}`)
+      // 코치 개인 자료 우선(3개) + 공용 자료 보충(2개) 병렬 검색
+      const [personalRes, publicRes] = await Promise.all([
+        supabase.rpc('search_tennis_knowledge', {
+          query_embedding: embedData.data[0].embedding,
+          match_threshold: 0.35,
+          match_count: 3,
+          filter_level: member?.level || null,
+          filter_court_type: effectiveCourtType,
+          filter_coach_id: coachId,
+        }),
+        supabase.rpc('search_tennis_knowledge', {
+          query_embedding: embedData.data[0].embedding,
+          match_threshold: 0.4,
+          match_count: 2,
+          filter_level: member?.level || null,
+          filter_court_type: effectiveCourtType,
+          filter_coach_id: null,
+        }),
+      ])
+      const personalResults = (personalRes.data || [])
+      const publicResults = (publicRes.data || [])
+      const allResults = [...personalResults, ...publicResults]
+      knowledgeContext = allResults
+        .map((k: any) => {
+          const sourceTag = k.coach_id ? '[코치 개인 자료]' : '[공용 자료]'
+          return `${sourceTag}[${k.category}][${k.level || '전체'}] ${k.title}\n${k.content}`
+        })
         .join('\n\n---\n\n')
     }
 
