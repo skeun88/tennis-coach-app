@@ -15,24 +15,44 @@ jobs:
       - name: Call process-billing Edge Function
         id: billing
         run: |
-          RESPONSE=$(curl -s -w "\n%{http_code}" \
+          HTTP_CODE=$(curl -s -o /tmp/billing_response.json -w "%{http_code}" \
             -X POST \
             "${{ secrets.SUPABASE_URL }}/functions/v1/process-billing" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_KEY }}" \
             -H "Content-Type: application/json" \
             -d '{}')
 
-          HTTP_BODY=$(echo "$RESPONSE" | head -n -1)
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
-
-          echo "status=$HTTP_CODE" >> $GITHUB_OUTPUT
-          echo "body=$HTTP_BODY" >> $GITHUB_OUTPUT
+          HTTP_BODY=$(cat /tmp/billing_response.json)
 
           echo "📋 Response (HTTP $HTTP_CODE):"
           echo "$HTTP_BODY" | python3 -m json.tool || echo "$HTTP_BODY"
 
+          # GitHub Output — heredoc 형식으로 멀티라인 안전 처리
+          echo "status=$HTTP_CODE" >> $GITHUB_OUTPUT
+          EOF_DELIM=$(openssl rand -hex 8)
+          echo "body<<$EOF_DELIM" >> $GITHUB_OUTPUT
+          echo "$HTTP_BODY" >> $GITHUB_OUTPUT
+          echo "$EOF_DELIM" >> $GITHUB_OUTPUT
+
           if [ "$HTTP_CODE" != "200" ]; then
             echo "❌ Billing function failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+          # 개별 결제 실패 건수 체크
+          FAIL_COUNT=$(echo "$HTTP_BODY" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    failed = [r for r in data.get('results', []) if not r.get('success', True)]
+    print(len(failed))
+except:
+    print(0)
+")
+          echo "fail_count=$FAIL_COUNT" >> $GITHUB_OUTPUT
+
+          if [ "$FAIL_COUNT" -gt "0" ]; then
+            echo "⚠️ $FAIL_COUNT 건의 결제 실패 발생"
             exit 1
           fi
 
@@ -44,7 +64,7 @@ jobs:
           webhook-type: incoming-webhook
           payload: |
             {
-              "text": "✅ *[구독 결제]* 일일 자동결제 완료\n처리: ${{ steps.billing.outputs.body }}"
+              "text": "✅ *[구독 결제]* 일일 자동결제 완료\n${{ steps.billing.outputs.body }}"
             }
 
       - name: Notify Slack on failure
@@ -55,5 +75,5 @@ jobs:
           webhook-type: incoming-webhook
           payload: |
             {
-              "text": "🚨 *[구독 결제 실패]* 일일 자동결제 오류 발생!\nHTTP: ${{ steps.billing.outputs.status }}\n즉시 확인 필요!"
+              "text": "🚨 *[구독 결제 실패]* 일일 자동결제 오류 발생!\nHTTP: ${{ steps.billing.outputs.status }} | 실패 건수: ${{ steps.billing.outputs.fail_count }}\n상세: ${{ steps.billing.outputs.body }}\n즉시 확인 필요!"
             }
