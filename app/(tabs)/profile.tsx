@@ -7,6 +7,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import { Audio } from 'expo-av';
 import { supabase } from '../../lib/supabase';
 import { useSubscription } from '../../hooks/useSubscription';
 import { PLANS } from '../../lib/subscription';
@@ -78,6 +79,24 @@ interface CareerInfo {
 }
 
 // ─── 서브 컴포넌트 ────────────────────────
+async function startRecording(setRec: (r: Audio.Recording) => void, setIsRec: (b: boolean) => void) {
+  try {
+    await Audio.requestPermissionsAsync();
+    await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+    const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+    setRec(recording);
+    setIsRec(true);
+  } catch (e) { Alert.alert('오류', '녹음을 시작할 수 없어요.'); }
+}
+
+async function stopRecording(recording: Audio.Recording | null, setRec: (r: null) => void, setIsRec: (b: boolean) => void): Promise<string | null> {
+  if (!recording) return null;
+  await recording.stopAndUnloadAsync();
+  setRec(null);
+  setIsRec(false);
+  return recording.getURI() || null;
+}
+
 function SectionCard({ icon, title, onEdit, children }: { icon: string; title: string; onEdit: () => void; children: React.ReactNode }) {
   return (
     <View style={styles.section}>
@@ -151,6 +170,15 @@ function CancelBtn({ onPress }: { onPress: () => void }) {
 // ─── 메인 스크린 ─────────────────────────
 export default function ProfileScreen() {
   const { subscription, isActive, isTrial, trialDaysLeft } = useSubscription();
+
+  // ── AI 코칭 모델 상태 ──
+  const [knowledgeList, setKnowledgeList] = useState<any[]>([]);
+  const [knowledgeCount, setKnowledgeCount] = useState(0);
+  const [knowledgeModal, setKnowledgeModal] = useState(false);
+  const [knowledgeUploading, setKnowledgeUploading] = useState(false);
+  const [knowledgeCategory, setKnowledgeCategory] = useState('기타');
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
   const planLabel = subscription ? PLANS[subscription.plan_id]?.name ?? subscription.plan_id : null;
   const statusLabel = isTrial
     ? `무료 체험 중 (${trialDaysLeft}일 남음)`
@@ -263,6 +291,16 @@ export default function ProfileScreen() {
       certifications: p?.certifications ?? '',
       awards: p?.awards ?? '',
     });
+
+    // AI 코칭 모델 로드
+    const { data: kList } = await supabase
+      .from('tennis_knowledge')
+      .select('id, title, category, created_at')
+      .eq('coach_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    setKnowledgeList(kList || []);
+    setKnowledgeCount(kList?.length || 0);
   }
 
   useFocusEffect(useCallback(() => { loadProfile(); }, []));
@@ -457,6 +495,130 @@ export default function ProfileScreen() {
             <InfoRow icon="medal-outline"     label="수상 / 대회" value={career.awards}          multiline last />
           </SectionCard>
 
+          {/* 내 AI 코칭 모델 */}
+          <View style={styles.knowledgeCard}>
+            <View style={styles.knowledgeHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="bulb" size={20} color="#8B5CF6" />
+                <Text style={styles.knowledgeTitle}>내 AI 코칭 모델</Text>
+              </View>
+              <TouchableOpacity onPress={() => setKnowledgeModal(true)} style={styles.knowledgeAddBtn}>
+                <Ionicons name="add" size={18} color="#fff" />
+                <Text style={styles.knowledgeAddText}>추가</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.knowledgeCount}>코칭 스타일 {knowledgeCount}개 등록됨</Text>
+            {knowledgeList.slice(0, 5).map((k) => (
+              <View key={k.id} style={styles.knowledgeItem}>
+                <View style={styles.knowledgeItemLeft}>
+                  <Text style={styles.knowledgeItemCategory}>{k.category}</Text>
+                  <Text style={styles.knowledgeItemTitle} numberOfLines={1}>{k.title}</Text>
+                </View>
+                <TouchableOpacity onPress={async () => {
+                  Alert.alert('삭제', `"${k.title}" 삭제할까요?`, [
+                    { text: '취소', style: 'cancel' },
+                    { text: '삭제', style: 'destructive', onPress: async () => {
+                      await supabase.from('tennis_knowledge').delete().eq('id', k.id);
+                      setKnowledgeList(prev => prev.filter(x => x.id !== k.id));
+                      setKnowledgeCount(prev => prev - 1);
+                    }},
+                  ]);
+                }}>
+                  <Ionicons name="trash-outline" size={16} color={Colors.mutedFg} />
+                </TouchableOpacity>
+              </View>
+            ))}
+            {knowledgeList.length > 5 && (
+              <Text style={styles.knowledgeMore}>+{knowledgeList.length - 5}개 더...</Text>
+            )}
+          </View>
+
+          {/* AI 코칭 모델 추가 모달 */}
+          <Modal visible={knowledgeModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setKnowledgeModal(false)}>
+            <View style={styles.knowledgeModalCont}>
+              <View style={styles.knowledgeModalHead}>
+                <Text style={styles.knowledgeModalTtl}>코칭 스타일 추가</Text>
+                <TouchableOpacity onPress={() => setKnowledgeModal(false)}>
+                  <Ionicons name="close" size={24} color={Colors.foreground} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, gap: 16 }}>
+                <Text style={styles.modalLabel}>카테고리</Text>
+                <View style={styles.categoryRow}>
+                  {['포핸드','백핸드','서브','전술','멘탈','기타'].map(cat => (
+                    <TouchableOpacity
+                      key={cat}
+                      style={[styles.categoryBtn, knowledgeCategory === cat && styles.categoryBtnActive]}
+                      onPress={() => setKnowledgeCategory(cat)}
+                    >
+                      <Text style={[styles.categoryBtnText, knowledgeCategory === cat && styles.categoryBtnTextActive]}>{cat}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* 음성 입력 */}
+                <TouchableOpacity
+                  style={[styles.uploadBtn, isRecording && styles.uploadBtnActive]}
+                  onPress={async () => {
+                    if (!isRecording) {
+                      await startRecording(
+                        (r) => setRecording(r),
+                        setIsRecording
+                      );
+                    } else {
+                      setKnowledgeUploading(true);
+                      const uri = await stopRecording(recording, () => setRecording(null), setIsRecording);
+                      if (uri) {
+                        try {
+                          const { data: { user } } = await supabase.auth.getUser();
+                          const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+                          const { data: { session } } = await supabase.auth.getSession();
+                          const form = new FormData();
+                          form.append('coach_id', user!.id);
+                          form.append('category', knowledgeCategory);
+                          form.append('audio', { uri, type: 'audio/m4a', name: 'recording.m4a' } as any);
+                          const res = await fetch(`${SUPABASE_URL}/functions/v1/add-coach-knowledge`, {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${session?.access_token}` },
+                            body: form,
+                          });
+                          const result = await res.json();
+                          if (result.success) {
+                            Alert.alert('완료', `${result.saved}개 항목이 등록됐어요!`);
+                            setKnowledgeModal(false);
+                            setKnowledgeCount(prev => prev + result.saved);
+                          } else {
+                            Alert.alert('오류', result.error || '등록 실패');
+                          }
+                        } catch (e) { Alert.alert('오류', '업로드 실패'); }
+                      }
+                      setKnowledgeUploading(false);
+                    }
+                  }}
+                  disabled={knowledgeUploading}
+                >
+                  {knowledgeUploading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name={isRecording ? "stop-circle" : "mic"} size={22} color="#fff" />
+                      <Text style={styles.uploadBtnText}>{isRecording ? '녹음 중... 탭하면 완료' : '음성으로 코칭 스타일 녹음'}</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                {/* 파일 입력 */}
+                <TouchableOpacity
+                  style={[styles.uploadBtn, { backgroundColor: '#6366F1' }]}
+                  onPress={() => Alert.alert('파일 업로드', '텍스트 파일 업로드 기능은 곧 지원 예정이에요.')}
+                >
+                  <Ionicons name="document-text" size={22} color="#fff" />
+                  <Text style={styles.uploadBtnText}>텍스트 파일(.txt) 업로드 (준비중)</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </Modal>
+
           {/* 구독 */}
           {isActive && planLabel && (
             <View style={styles.subCard}>
@@ -496,7 +658,7 @@ export default function ProfileScreen() {
           <ScrollView style={{ maxHeight: '92%' }} keyboardShouldPersistTaps="handled">
             <View style={styles.sheet}>
               <View style={styles.handle} />
-              <Text style={styles.modalTitle}>기본 프로필</Text>
+              <Text style={styles.knowledgeModalTtl}>기본 프로필</Text>
               <View style={styles.avatarEditWrap}>
                 <TouchableOpacity style={styles.avatarEditBtn} onPress={handlePickAvatar} disabled={uploadingAvatar}>
                   {uploadingAvatar ? <ActivityIndicator color={Colors.navy} />
@@ -548,7 +710,7 @@ export default function ProfileScreen() {
           <ScrollView style={{ maxHeight: '92%' }} keyboardShouldPersistTaps="handled">
             <View style={styles.sheet}>
               <View style={styles.handle} />
-              <Text style={styles.modalTitle}>경력 정보</Text>
+              <Text style={styles.knowledgeModalTtl}>경력 정보</Text>
               <Text style={styles.modalLabel}>코칭 경력 (연수)</Text>
               <TextInput style={styles.input} value={editCareer.coaching_years} onChangeText={v => setEditCareer(c => ({ ...c, coaching_years: v.replace(/[^0-9]/g, '') }))} placeholder="예: 7" placeholderTextColor={Colors.placeholder} keyboardType="numeric" maxLength={2} />
               <Text style={styles.modalLabel}>선수 경력</Text>
@@ -592,8 +754,8 @@ const gradeStyle = StyleSheet.create({
 
 const metric = StyleSheet.create({
   grid: { flexDirection: 'row', gap: 10, marginBottom: 4 },
-  card: { flex: 1, backgroundColor: Colors.card, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border, padding: 14, alignItems: 'center', ...Shadow.sm },
-  iconWrap: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+  card: { flex: 1, backgroundColor: Colors.white, borderRadius: Radius.lg, padding: 14, alignItems: 'center', ...Shadow.sm },
+  iconWrap: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
   value: { fontSize: 20, fontWeight: '800', color: Colors.navy, marginBottom: 2 },
   label: { fontSize: 11, fontWeight: '700', color: Colors.mutedFg, textAlign: 'center' },
   sub: { fontSize: 10, color: Colors.placeholder, marginTop: 2, textAlign: 'center' },
@@ -636,7 +798,7 @@ const styles = StyleSheet.create({
   sectionSub: { fontSize: 11, color: Colors.placeholder, marginLeft: 4 },
   editBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 'auto', backgroundColor: Colors.navy + '10', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
   editBtnText: { fontSize: 12, fontWeight: '700', color: Colors.navy },
-  card: { backgroundColor: Colors.card, borderRadius: Radius.xl, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', ...Shadow.sm },
+  card: { backgroundColor: Colors.white, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border, padding: 16, marginBottom: 4 },
   infoRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
   infoRowBorder: { borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
   infoIcon: { width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.navy + '10', justifyContent: 'center', alignItems: 'center', marginRight: 10 },
@@ -651,7 +813,7 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,.4)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 48 },
   handle: { width: 40, height: 4, backgroundColor: Colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: Colors.navy, marginBottom: 16 },
+  knowledgeModalTtl: { fontSize: 18, fontWeight: '800', color: Colors.navy, marginBottom: 16 },
   modalLabel: { fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6, marginTop: 12 },
   input: { backgroundColor: Colors.mutedBg, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: Colors.foreground, borderWidth: 1, borderColor: Colors.border, marginBottom: 4 },
   multilineInput: { minHeight: 72, textAlignVertical: 'top', paddingTop: 12 },
@@ -673,4 +835,28 @@ const styles = StyleSheet.create({
   avatarEditImg: { width: 88, height: 88, borderRadius: 44 },
   avatarEditOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,.4)', paddingVertical: 5, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 3 },
   avatarEditOverlayTxt: { fontSize: 10, color: '#fff', fontWeight: '600' },
+  // AI 코칭 모델
+  knowledgeCard: { backgroundColor: Colors.white, borderRadius: Radius.lg, padding: 16, marginHorizontal: 16, marginBottom: 12, ...Shadow.sm },
+  knowledgeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  knowledgeTitle: { fontSize: 15, fontWeight: '700', color: Colors.foreground },
+  knowledgeCount: { fontSize: 12, color: Colors.mutedFg, marginBottom: 10 },
+  knowledgeAddBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#8B5CF6', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  knowledgeAddText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  knowledgeItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: 1, borderTopColor: Colors.border },
+  knowledgeItemLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  knowledgeItemCategory: { fontSize: 11, color: '#8B5CF6', backgroundColor: '#F3E8FF', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, fontWeight: '600' },
+  knowledgeItemTitle: { fontSize: 13, color: Colors.foreground, flex: 1 },
+  knowledgeMore: { fontSize: 12, color: Colors.mutedFg, textAlign: 'center', marginTop: 6 },
+  // 모달
+  knowledgeModalCont: { flex: 1, backgroundColor: Colors.background },
+  knowledgeModalHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: Colors.border },
+
+  categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  categoryBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.white },
+  categoryBtnActive: { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' },
+  categoryBtnText: { fontSize: 13, color: Colors.mutedFg },
+  categoryBtnTextActive: { color: '#fff', fontWeight: '700' },
+  uploadBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#8B5CF6', borderRadius: 12, padding: 16 },
+  uploadBtnActive: { backgroundColor: '#DC2626' },
+  uploadBtnText: { color: '#fff', fontSize: 14, fontWeight: '600', flex: 1 },
 });
