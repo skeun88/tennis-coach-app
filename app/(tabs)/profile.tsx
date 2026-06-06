@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import ProUpsellModal from '../../components/ProUpsellModal';
 import * as DocumentPicker from 'expo-document-picker';
 import { Audio } from 'expo-av';
 import { supabase } from '../../lib/supabase';
@@ -182,6 +183,7 @@ export default function ProfileScreen() {
   const [knowledgeCategory, setKnowledgeCategory] = useState('기타');
   const [knowledgeText, setKnowledgeText] = useState('');
   const [knowledgeFileUploading, setKnowledgeFileUploading] = useState(false);
+  const [upsellVisible, setUpsellVisible] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const planLabel = subscription ? PLANS[subscription.plan_id]?.name ?? subscription.plan_id : null;
@@ -510,14 +512,7 @@ export default function ProfileScreen() {
               <TouchableOpacity
                 onPress={() => {
                   if (!canUse('ai_analysis')) {
-                    Alert.alert(
-                      'Pro 플랜 전용 기능',
-                      'AI 코칭 모델 추가는 Pro 플랜에서만 사용할 수 있어요.\nPro로 업그레이드하시겠어요?',
-                      [
-                        { text: '취소', style: 'cancel' },
-                        { text: 'Pro 업그레이드', onPress: () => router.push('/subscription/select-plan') },
-                      ]
-                    );
+                    setUpsellVisible(true);
                     return;
                   }
                   setKnowledgeModal(true);
@@ -553,6 +548,14 @@ export default function ProfileScreen() {
               <Text style={styles.knowledgeMore}>+{knowledgeList.length - 5}개 더...</Text>
             )}
           </View>
+
+          {/* Pro Upsell 모달 */}
+          <ProUpsellModal
+            visible={upsellVisible}
+            onClose={() => setUpsellVisible(false)}
+            featureTitle="AI 코칭 모델"
+            featureDesc={`나만의 AI 코칭 모델을 개발하는 기능은 Pro 플랜 전용이에요.\n음성, 텍스트, 파일로 코칭 스타일을 학습시킬 수 있어요.`}
+          />
 
           {/* AI 코칭 모델 추가 모달 */}
           <Modal visible={knowledgeModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setKnowledgeModal(false)}>
