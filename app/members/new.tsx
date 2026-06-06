@@ -97,24 +97,42 @@ async function generateScheduleLessons(params: {
   coachId: string; memberId: string; memberName: string;
   scheduleDays: number[]; dayTimes: DayTimes; lessonDuration: number;
   totalCredits: number; joinDate: string;
+  repeatType?: 'none' | 'weekly' | 'custom';
+  repeatInterval?: number; // weeks (custom 전용)
 }) {
-  const { coachId, memberId, memberName, scheduleDays, dayTimes, lessonDuration, totalCredits, joinDate } = params;
+  const {
+    coachId, memberId, memberName, scheduleDays, dayTimes,
+    lessonDuration, totalCredits, joinDate,
+    repeatType = 'weekly', repeatInterval = 1,
+  } = params;
   if (!scheduleDays.length || totalCredits <= 0) return;
 
-  const cursor = new Date(joinDate + 'T00:00:00+09:00');
+  const startDate = new Date(joinDate + 'T00:00:00+09:00');
   const todayForGen = kstToday();
+  const cursor = new Date(startDate);
   if (cursor < todayForGen) cursor.setTime(todayForGen.getTime());
+
+  // '안 함': 첫 번째 매칭 날짜/시간 1개만
+  const limit = repeatType === 'none' ? 1 : totalCredits;
+  const interval = repeatType === 'custom' ? Math.max(1, repeatInterval) : 1;
 
   const dates: { date: string; time: string }[] = [];
   let iter = 0;
-  const maxIter = totalCredits * 14 * 3 + 100;
-  while (dates.length < totalCredits && iter < maxIter) {
+  const maxIter = limit * 14 * (interval + 1) + 100;
+  while (dates.length < limit && iter < maxIter) {
     const dow = cursor.getDay();
     if (scheduleDays.includes(dow)) {
-      const times = dayTimes[dow] ?? [];
-      for (const time of times) {
-        if (dates.length < totalCredits) {
-          dates.push({ date: toKSTDateStr(cursor), time });
+      // 주 간격 체크 (custom: interval주마다)
+      const weekOffset = Math.floor(
+        (cursor.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000)
+      );
+      const inValidWeek = weekOffset % interval === 0;
+      if (inValidWeek) {
+        const times = dayTimes[dow] ?? [];
+        for (const time of times) {
+          if (dates.length < limit) {
+            dates.push({ date: toKSTDateStr(cursor), time });
+          }
         }
       }
     }
@@ -188,6 +206,12 @@ export default function NewMemberScreen() {
   const [lessonPackages, setLessonPackages] = useState<any[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // 반복 설정
+  const [repeatType, setRepeatType] = useState<'none' | 'weekly' | 'custom'>('weekly');
+  const [repeatInterval, setRepeatInterval] = useState<1 | 2 | 3 | 4>(1);
+  const [repeatModalVisible, setRepeatModalVisible] = useState(false);
+  const [customRepeatVisible, setCustomRepeatVisible] = useState(false);
 
   // 빈 시간대 모달
   const [slotsModalVisible, setSlotsModalVisible] = useState(false);
@@ -351,6 +375,7 @@ export default function NewMemberScreen() {
       genResult = await generateScheduleLessons({
         coachId: userId, memberId: newMember.id, memberName: name.trim(),
         scheduleDays, dayTimes, lessonDuration: duration, totalCredits: credits, joinDate: lessonStartDate,
+        repeatType, repeatInterval,
       });
     }
     setLoading(false);
@@ -506,6 +531,17 @@ export default function NewMemberScreen() {
               )}
             </View>
           )}
+
+          {/* 반복 설정 행 */}
+          <Text style={[styles.label, { marginTop: 14 }]}>반복</Text>
+          <TouchableOpacity style={styles.repeatRow} onPress={() => setRepeatModalVisible(true)}>
+            <Text style={styles.repeatRowValue}>
+              {repeatType === 'none' ? '안 함'
+                : repeatType === 'weekly' ? '매주'
+                : `${repeatInterval}주마다 (사용자 지정)`}
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color={Colors.mutedFg} />
+          </TouchableOpacity>
         </View>
 
         {/* 레슨권 */}
@@ -562,6 +598,81 @@ export default function NewMemberScreen() {
           {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>회원 등록</Text>}
         </TouchableOpacity>
       </ScrollView>
+
+      {/* 반복 설정 모달 */}
+      <Modal visible={repeatModalVisible} transparent animationType="slide" onRequestClose={() => setRepeatModalVisible(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setRepeatModalVisible(false)}>
+          <TouchableOpacity activeOpacity={1} style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>반복</Text>
+              <TouchableOpacity onPress={() => setRepeatModalVisible(false)}>
+                <Ionicons name="close" size={22} color={Colors.foreground} />
+              </TouchableOpacity>
+            </View>
+            {(['none', 'weekly', 'custom'] as const).map((opt) => {
+              const label = opt === 'none' ? '안 함' : opt === 'weekly' ? '매주' : '사용자 지정';
+              const isActive = repeatType === opt;
+              return (
+                <TouchableOpacity
+                  key={opt}
+                  style={styles.repeatOption}
+                  onPress={() => {
+                    setRepeatType(opt);
+                    if (opt === 'custom') {
+                      setRepeatModalVisible(false);
+                      setCustomRepeatVisible(true);
+                    } else {
+                      setRepeatModalVisible(false);
+                    }
+                  }}
+                >
+                  <Text style={[styles.repeatOptionText, isActive && styles.repeatOptionTextActive]}>{label}</Text>
+                  {isActive && <Ionicons name="checkmark" size={20} color={Colors.primary} />}
+                </TouchableOpacity>
+              );
+            })}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 사용자 지정 모달 */}
+      <Modal visible={customRepeatVisible} transparent animationType="slide" onRequestClose={() => setCustomRepeatVisible(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setCustomRepeatVisible(false)}>
+          <TouchableOpacity activeOpacity={1} style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>사용자 지정</Text>
+              <TouchableOpacity onPress={() => setCustomRepeatVisible(false)}>
+                <Ionicons name="close" size={22} color={Colors.foreground} />
+              </TouchableOpacity>
+            </View>
+            <View style={{ padding: 20, gap: 16 }}>
+              <Text style={styles.label}>반복 간격</Text>
+              <View style={styles.intervalRow}>
+                {([1, 2, 3, 4] as const).map(n => (
+                  <TouchableOpacity
+                    key={n}
+                    style={[styles.intervalBtn, repeatInterval === n && styles.intervalBtnActive]}
+                    onPress={() => setRepeatInterval(n)}
+                  >
+                    <Text style={[styles.intervalBtnText, repeatInterval === n && styles.intervalBtnTextActive]}>
+                      {n}주마다
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={styles.customRepeatHint}>
+                레슨권 횟수 소진 시 자동 종료됩니다.
+              </Text>
+              <TouchableOpacity
+                style={styles.confirmBtn}
+                onPress={() => setCustomRepeatVisible(false)}
+              >
+                <Text style={styles.confirmBtnText}>확인</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       {/* 빈 시간대 모달 */}
       <Modal visible={slotsModalVisible} transparent animationType="slide" onRequestClose={() => setSlotsModalVisible(false)}>
@@ -771,4 +882,16 @@ const styles = StyleSheet.create({
   slotBusyLabel: { fontSize: 10, color: Colors.mutedFg, marginTop: 2 },
   loginBtn: { backgroundColor: Colors.primary, borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
   loginBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  // 반복 설정
+  repeatRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.mutedBg, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderColor: Colors.border },
+  repeatRowValue: { fontSize: 15, color: Colors.foreground, fontWeight: '500' },
+  repeatOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
+  repeatOptionText: { fontSize: 16, color: Colors.foreground },
+  repeatOptionTextActive: { color: Colors.primary, fontWeight: '700' },
+  intervalRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+  intervalBtn: { flex: 1, minWidth: 70, paddingVertical: 12, borderRadius: 10, borderWidth: 1.5, borderColor: Colors.border, alignItems: 'center', backgroundColor: Colors.mutedBg },
+  intervalBtnActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight },
+  intervalBtnText: { fontSize: 14, fontWeight: '600', color: Colors.mutedFg },
+  intervalBtnTextActive: { color: Colors.primary },
+  customRepeatHint: { fontSize: 12, color: Colors.mutedFg, textAlign: 'center' },
 });
