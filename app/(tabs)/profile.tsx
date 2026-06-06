@@ -6,7 +6,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { Audio } from 'expo-av';
 import { supabase } from '../../lib/supabase';
 import { useSubscription } from '../../hooks/useSubscription';
@@ -169,7 +171,8 @@ function CancelBtn({ onPress }: { onPress: () => void }) {
 
 // ─── 메인 스크린 ─────────────────────────
 export default function ProfileScreen() {
-  const { subscription, isActive, isTrial, trialDaysLeft } = useSubscription();
+  const { subscription, isActive, isTrial, trialDaysLeft, canUse } = useSubscription();
+  const router = useRouter();
 
   // ── AI 코칭 모델 상태 ──
   const [knowledgeList, setKnowledgeList] = useState<any[]>([]);
@@ -177,6 +180,8 @@ export default function ProfileScreen() {
   const [knowledgeModal, setKnowledgeModal] = useState(false);
   const [knowledgeUploading, setKnowledgeUploading] = useState(false);
   const [knowledgeCategory, setKnowledgeCategory] = useState('기타');
+  const [knowledgeText, setKnowledgeText] = useState('');
+  const [knowledgeFileUploading, setKnowledgeFileUploading] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const planLabel = subscription ? PLANS[subscription.plan_id]?.name ?? subscription.plan_id : null;
@@ -502,7 +507,23 @@ export default function ProfileScreen() {
                 <Ionicons name="bulb" size={20} color="#8B5CF6" />
                 <Text style={styles.knowledgeTitle}>내 AI 코칭 모델</Text>
               </View>
-              <TouchableOpacity onPress={() => setKnowledgeModal(true)} style={styles.knowledgeAddBtn}>
+              <TouchableOpacity
+                onPress={() => {
+                  if (!canUse('ai_analysis')) {
+                    Alert.alert(
+                      'Pro 플랜 전용 기능',
+                      'AI 코칭 모델 추가는 Pro 플랜에서만 사용할 수 있어요.\nPro로 업그레이드하시겠어요?',
+                      [
+                        { text: '취소', style: 'cancel' },
+                        { text: 'Pro 업그레이드', onPress: () => router.push('/subscription/select-plan') },
+                      ]
+                    );
+                    return;
+                  }
+                  setKnowledgeModal(true);
+                }}
+                style={styles.knowledgeAddBtn}
+              >
                 <Ionicons name="add" size={18} color="#fff" />
                 <Text style={styles.knowledgeAddText}>추가</Text>
               </TouchableOpacity>
@@ -607,13 +628,95 @@ export default function ProfileScreen() {
                   )}
                 </TouchableOpacity>
 
-                {/* 파일 입력 */}
+                {/* 텍스트 직접 입력 */}
+                <View style={styles.knowledgeTextSection}>
+                  <Text style={styles.modalLabel}>텍스트로 직접 입력</Text>
+                  <TextInput
+                    style={styles.knowledgeTextInput}
+                    placeholder="코칭 철학, 훈련 방법, 기술 포인트 등 자유롭게 입력하세요"
+                    placeholderTextColor={Colors.mutedFg}
+                    multiline
+                    numberOfLines={5}
+                    value={knowledgeText}
+                    onChangeText={setKnowledgeText}
+                    textAlignVertical="top"
+                  />
+                  <TouchableOpacity
+                    style={[styles.uploadBtn, { backgroundColor: '#059669', marginTop: 8 }, (!knowledgeText.trim() || knowledgeUploading) && { opacity: 0.5 }]}
+                    disabled={!knowledgeText.trim() || knowledgeUploading}
+                    onPress={async () => {
+                      setKnowledgeUploading(true);
+                      try {
+                        const { data: { user } } = await supabase.auth.getUser();
+                        const { data: { session } } = await supabase.auth.getSession();
+                        const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+                        const res = await fetch(`${SUPABASE_URL}/functions/v1/add-coach-knowledge`, {
+                          method: 'POST',
+                          headers: { 'Authorization': `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ coach_id: user!.id, category: knowledgeCategory, text: knowledgeText }),
+                        });
+                        const result = await res.json();
+                        if (result.success) {
+                          Alert.alert('완료', `${result.saved}개 항목이 등록됐어요!`);
+                          setKnowledgeText('');
+                          setKnowledgeModal(false);
+                          setKnowledgeCount(prev => prev + result.saved);
+                        } else {
+                          Alert.alert('오류', result.error || '등록 실패');
+                        }
+                      } catch (e) { Alert.alert('오류', '텍스트 등록 실패'); }
+                      setKnowledgeUploading(false);
+                    }}
+                  >
+                    {knowledgeUploading ? <ActivityIndicator color="#fff" /> : (
+                      <>
+                        <Ionicons name="checkmark-circle" size={22} color="#fff" />
+                        <Text style={styles.uploadBtnText}>텍스트로 등록</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                {/* 파일(.txt) 업로드 */}
                 <TouchableOpacity
-                  style={[styles.uploadBtn, { backgroundColor: '#6366F1' }]}
-                  onPress={() => Alert.alert('파일 업로드', '텍스트 파일 업로드 기능은 곧 지원 예정이에요.')}
+                  style={[styles.uploadBtn, { backgroundColor: '#6366F1' }, knowledgeFileUploading && { opacity: 0.6 }]}
+                  disabled={knowledgeFileUploading}
+                  onPress={async () => {
+                    try {
+                      const result = await DocumentPicker.getDocumentAsync({ type: 'text/plain', copyToCacheDirectory: true });
+                      if (result.canceled || !result.assets?.[0]) return;
+                      const file = result.assets[0];
+                      setKnowledgeFileUploading(true);
+                      const { data: { user } } = await supabase.auth.getUser();
+                      const { data: { session } } = await supabase.auth.getSession();
+                      const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+                      const form = new FormData();
+                      form.append('coach_id', user!.id);
+                      form.append('category', knowledgeCategory);
+                      form.append('file', { uri: file.uri, type: 'text/plain', name: file.name } as any);
+                      const res = await fetch(`${SUPABASE_URL}/functions/v1/add-coach-knowledge`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${session?.access_token}` },
+                        body: form,
+                      });
+                      const json = await res.json();
+                      if (json.success) {
+                        Alert.alert('완료', `${json.saved}개 항목이 등록됐어요!`);
+                        setKnowledgeModal(false);
+                        setKnowledgeCount(prev => prev + json.saved);
+                      } else {
+                        Alert.alert('오류', json.error || '파일 등록 실패');
+                      }
+                    } catch (e) { Alert.alert('오류', '파일 업로드 실패'); }
+                    setKnowledgeFileUploading(false);
+                  }}
                 >
-                  <Ionicons name="document-text" size={22} color="#fff" />
-                  <Text style={styles.uploadBtnText}>텍스트 파일(.txt) 업로드 (준비중)</Text>
+                  {knowledgeFileUploading ? <ActivityIndicator color="#fff" /> : (
+                    <>
+                      <Ionicons name="document-text" size={22} color="#fff" />
+                      <Text style={styles.uploadBtnText}>텍스트 파일(.txt) 업로드</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               </ScrollView>
             </View>
@@ -859,4 +962,6 @@ const styles = StyleSheet.create({
   uploadBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#8B5CF6', borderRadius: 12, padding: 16 },
   uploadBtnActive: { backgroundColor: '#DC2626' },
   uploadBtnText: { color: '#fff', fontSize: 14, fontWeight: '600', flex: 1 },
+  knowledgeTextSection: { gap: 0 },
+  knowledgeTextInput: { borderWidth: 1, borderColor: Colors.border, borderRadius: 10, padding: 12, fontSize: 14, color: Colors.foreground, minHeight: 120, backgroundColor: '#FAFAFA' },
 });
