@@ -186,6 +186,8 @@ export default function ProfileScreen() {
   const [upsellVisible, setUpsellVisible] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [voiceUsedSeconds, setVoiceUsedSeconds] = useState(0);
+  const VOICE_MONTHLY_LIMIT = 1800; // 30분
   const planLabel = subscription ? PLANS[subscription.plan_id]?.name ?? subscription.plan_id : null;
   const statusLabel = isTrial
     ? `무료 체험 중 (${trialDaysLeft}일 남음)`
@@ -300,14 +302,24 @@ export default function ProfileScreen() {
     });
 
     // AI 코칭 모델 로드
-    const { data: kList } = await supabase
-      .from('tennis_knowledge')
-      .select('id, title, category, created_at')
-      .eq('coach_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(20);
-    setKnowledgeList(kList || []);
-    setKnowledgeCount(kList?.length || 0);
+    const currentYearMonth = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+    const [kListRes, voiceRes] = await Promise.all([
+      supabase
+        .from('tennis_knowledge')
+        .select('id, title, category, created_at')
+        .eq('coach_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(20),
+      supabase
+        .from('coach_voice_usage')
+        .select('used_seconds')
+        .eq('coach_id', user.id)
+        .eq('year_month', currentYearMonth)
+        .maybeSingle(),
+    ]);
+    setKnowledgeList(kListRes.data || []);
+    setKnowledgeCount(kListRes.data?.length || 0);
+    setVoiceUsedSeconds(voiceRes.data?.used_seconds ?? 0);
   }
 
   useFocusEffect(useCallback(() => { loadProfile(); }, []));
@@ -523,7 +535,18 @@ export default function ProfileScreen() {
                 <Text style={styles.knowledgeAddText}>추가</Text>
               </TouchableOpacity>
             </View>
-            <Text style={styles.knowledgeCount}>코칭 스타일 {knowledgeCount}개 등록됨</Text>
+            <View style={styles.knowledgeMetaRow}>
+              <Text style={styles.knowledgeCount}>코칭 스타일 {knowledgeCount}개 등록됨</Text>
+              <Text style={[
+                styles.knowledgeVoiceLimit,
+                voiceUsedSeconds >= VOICE_MONTHLY_LIMIT && { color: '#DC2626' },
+              ]}>
+                {voiceUsedSeconds >= VOICE_MONTHLY_LIMIT
+                  ? '🎙 음성 한도 마소'
+                  : `🎙 음성 ${Math.floor((VOICE_MONTHLY_LIMIT - voiceUsedSeconds) / 60)}분 ${(VOICE_MONTHLY_LIMIT - voiceUsedSeconds) % 60}초 남음`
+                }
+              </Text>
+            </View>
             {knowledgeList.slice(0, 5).map((k) => (
               <View key={k.id} style={styles.knowledgeItem}>
                 <View style={styles.knowledgeItemLeft}>
@@ -591,6 +614,9 @@ export default function ProfileScreen() {
                       );
                     } else {
                       setKnowledgeUploading(true);
+                      // 녹음 시간 측정
+                      const durationMs = recording ? (await recording.getStatusAsync()).durationMillis ?? 0 : 0;
+                      const durationSeconds = Math.round(durationMs / 1000);
                       const uri = await stopRecording(recording, () => setRecording(null), setIsRecording);
                       if (uri) {
                         try {
@@ -600,6 +626,7 @@ export default function ProfileScreen() {
                           const form = new FormData();
                           form.append('coach_id', user!.id);
                           form.append('category', knowledgeCategory);
+                          form.append('duration_seconds', String(durationSeconds));
                           form.append('audio', { uri, type: 'audio/m4a', name: 'recording.m4a' } as any);
                           const res = await fetch(`${SUPABASE_URL}/functions/v1/add-coach-knowledge`, {
                             method: 'POST',
@@ -611,6 +638,7 @@ export default function ProfileScreen() {
                             Alert.alert('완료', `${result.saved}개 항목이 등록됐어요!`);
                             setKnowledgeModal(false);
                             setKnowledgeCount(prev => prev + result.saved);
+                            setVoiceUsedSeconds(prev => prev + durationSeconds);
                           } else {
                             Alert.alert('오류', result.error || '등록 실패');
                           }
@@ -945,7 +973,9 @@ const styles = StyleSheet.create({
   knowledgeCard: { backgroundColor: Colors.white, borderRadius: Radius.lg, padding: 16, marginHorizontal: 16, marginBottom: 12, ...Shadow.sm },
   knowledgeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   knowledgeTitle: { fontSize: 15, fontWeight: '700', color: Colors.foreground },
-  knowledgeCount: { fontSize: 12, color: Colors.mutedFg, marginBottom: 10 },
+  knowledgeMetaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  knowledgeCount: { fontSize: 12, color: Colors.mutedFg },
+  knowledgeVoiceLimit: { fontSize: 11, color: '#8B5CF6', fontWeight: '600' },
   knowledgeAddBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#8B5CF6', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
   knowledgeAddText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   knowledgeItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: 1, borderTopColor: Colors.border },

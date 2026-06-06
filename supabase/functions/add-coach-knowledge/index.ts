@@ -6,6 +6,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const VOICE_MONTHLY_LIMIT_SECONDS = 1800 // 월 30분 = 1800초
+
+// 현재 연월 'YYYY-MM' 반환
+function getCurrentYearMonth(): string {
+  const now = new Date()
+  const year = now.getUTCFullYear()
+  const month = String(now.getUTCMonth() + 1).padStart(2, '0')
+  return `${year}-${month}`
+}
+
 // 500~800자 단위로 청킹 (20% overlap)
 function chunkText(text: string, chunkSize = 650, overlap = 130): string[] {
   const chunks: string[] = []
@@ -31,6 +41,28 @@ async function createEmbedding(text: string, apiKey: string): Promise<number[]> 
   return data.data[0].embedding
 }
 
+// 월 음성 사용량 조회
+async function getMonthlyVoiceUsage(supabase: ReturnType<typeof createClient>, coachId: string, yearMonth: string): Promise<number> {
+  const { data } = await supabase
+    .from('coach_voice_usage')
+    .select('used_seconds')
+    .eq('coach_id', coachId)
+    .eq('year_month', yearMonth)
+    .maybeSingle()
+  return data?.used_seconds ?? 0
+}
+
+// 월 음성 사용량 추가 (upsert)
+async function addMonthlyVoiceUsage(supabase: ReturnType<typeof createClient>, coachId: string, yearMonth: string, addSeconds: number): Promise<void> {
+  const current = await getMonthlyVoiceUsage(supabase, coachId, yearMonth)
+  await supabase
+    .from('coach_voice_usage')
+    .upsert(
+      { coach_id: coachId, year_month: yearMonth, used_seconds: current + addSeconds },
+      { onConflict: 'coach_id,year_month' }
+    )
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -45,6 +77,7 @@ serve(async (req) => {
     const contentType = req.headers.get('content-type') || ''
     let coachId: string, category: string, level: string, title: string, source: string
     let textContent = ''
+    let audioDurationSeconds = 0
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await req.formData()
@@ -52,6 +85,9 @@ serve(async (req) => {
       category = (formData.get('category') as string) || '기타'
       level = (formData.get('level') as string) || '전체'
       title = formData.get('title') as string
+      const durationRaw = formData.get('duration_seconds') as string | null
+      audioDurationSeconds = durationRaw ? Math.round(parseFloat(durationRaw)) : 0
+
       const audioFile = formData.get('audio') as File | null
       const textFile = formData.get('file') as File | null
 
@@ -62,13 +98,47 @@ serve(async (req) => {
       }
 
       if (audioFile) {
-        // 음성 입력: Whisper STT
+        // ── 음성 입력: 월 사용량 체크 ──
         source = '코치 직접 입력'
         if (audioFile.size < 5000) {
           return new Response(JSON.stringify({ error: '녹음이 너무 짧습니다. 최소 10초 이상 녹음해 주세요.' }), {
             status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           })
         }
+
+        // duration_seconds가 없으면 파일 크기로 추정 (m4a ~16kbps 기준)
+        if (audioDurationSeconds <= 0) {
+          audioDurationSeconds = Math.max(10, Math.round(audioFile.size / 2000))
+        }
+
+        const yearMonth = getCurrentYearMonth()
+        const usedSeconds = await getMonthlyVoiceUsage(supabase, coachId, yearMonth)
+        const remainingSeconds = VOICE_MONTHLY_LIMIT_SECONDS - usedSeconds
+
+        if (remainingSeconds <= 0) {
+          return new Response(JSON.stringify({
+            error: `이번 달 음성 녹음 한도(30분)를 모두 사용했습니다. 다음 달 1일에 초기화됩니다.`,
+            used_seconds: usedSeconds,
+            limit_seconds: VOICE_MONTHLY_LIMIT_SECONDS,
+          }), {
+            status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          })
+        }
+
+        if (audioDurationSeconds > remainingSeconds) {
+          const remainMin = Math.floor(remainingSeconds / 60)
+          const remainSec = remainingSeconds % 60
+          return new Response(JSON.stringify({
+            error: `이번 달 남은 음성 녹음 시간(${remainMin}분 ${remainSec}초)을 초과합니다. 더 짧게 녹음해 주세요.`,
+            used_seconds: usedSeconds,
+            remaining_seconds: remainingSeconds,
+            limit_seconds: VOICE_MONTHLY_LIMIT_SECONDS,
+          }), {
+            status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          })
+        }
+
+        // Whisper STT
         const whisperForm = new FormData()
         whisperForm.append('file', audioFile, 'audio.m4a')
         whisperForm.append('model', 'whisper-1')
@@ -85,6 +155,10 @@ serve(async (req) => {
             status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           })
         }
+
+        // 사용량 기록 (STT 성공 후)
+        await addMonthlyVoiceUsage(supabase, coachId, yearMonth, audioDurationSeconds)
+
       } else if (textFile) {
         // 파일 입력: txt 지원 (PDF는 추후)
         source = '코치 파일 업로드'
