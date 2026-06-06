@@ -8,6 +8,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Colors, Radius, Shadow } from '../../lib/theme';
+import { useSubscription } from '../../hooks/useSubscription';
+import ProUpsellModal from '../../components/ProUpsellModal';
 
 const ABSENCE_REASONS = ['개인사정', '부상', '일정충돌', '무단결석', '기타'] as const;
 const DEDUCTION_TYPES = ['정상차감', '미차감', '보강예정'] as const;
@@ -53,6 +55,9 @@ export default function HomeScreen() {
   const [selectedReason, setSelectedReason] = useState('');
   const [selectedDeduction, setSelectedDeduction] = useState('');
   const [savingAbsence, setSavingAbsence] = useState(false);
+  const [knowledgeCount, setKnowledgeCount] = useState(0);
+  const [homeUpsellVisible, setHomeUpsellVisible] = useState(false);
+  const { canUse } = useSubscription();
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -86,6 +91,12 @@ export default function HomeScreen() {
 
     await loadTodayCards(user.id);
     await checkAutoGenSchedule(user.id);
+    // AI 코칭 모델 카운트
+    const { count } = await supabase
+      .from('tennis_knowledge')
+      .select('id', { count: 'exact', head: true })
+      .eq('coach_id', user.id);
+    setKnowledgeCount(count ?? 0);
   }
 
   async function loadTodayCards(uid: string) {
@@ -481,6 +492,43 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* AI 코칭 모델 카드 */}
+        <TouchableOpacity
+          style={styles.aiCoachingCard}
+          activeOpacity={0.85}
+          onPress={() => {
+            if (!canUse('ai_analysis')) {
+              setHomeUpsellVisible(true);
+            } else {
+              router.push('/(tabs)/profile');
+            }
+          }}
+        >
+          <View style={styles.aiCoachingLeft}>
+            <View style={styles.aiCoachingIconWrap}>
+              <Ionicons name="bulb" size={20} color="#8B5CF6" />
+            </View>
+            <View>
+              <Text style={styles.aiCoachingTitle}>내 AI 코칭 모델</Text>
+              <Text style={styles.aiCoachingDesc}>코칭 스타일 {knowledgeCount}개 등록됨</Text>
+            </View>
+          </View>
+          <View style={styles.aiCoachingRight}>
+            {!canUse('ai_analysis') && (
+              <View style={styles.proBadgeSmall}><Text style={styles.proBadgeSmallText}>PRO</Text></View>
+            )}
+            <Ionicons name="chevron-forward" size={18} color={Colors.mutedFg} />
+          </View>
+        </TouchableOpacity>
+
+        {/* Pro Upsell 모달 (홈) */}
+        <ProUpsellModal
+          visible={homeUpsellVisible}
+          onClose={() => setHomeUpsellVisible(false)}
+          featureTitle="AI 코칭 모델"
+          featureDesc={`나만의 AI 코칭 모델을 개발하는 기능은\nPro 플랜 전용이에요.`}
+        />
+
         {/* Today's Lessons Section */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>오늘 레슨</Text>
@@ -806,6 +854,14 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 11, color: Colors.mutedFg, fontWeight: '500' },
   statHint: { fontSize: 10, color: Colors.placeholder, marginTop: 2 },
 
+  aiCoachingCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F5F3FF', borderRadius: Radius.lg, padding: 14, marginHorizontal: 16, marginBottom: 12, borderWidth: 1, borderColor: '#DDD6FE', ...Shadow.sm },
+  aiCoachingLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  aiCoachingIconWrap: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#EDE9FE', alignItems: 'center', justifyContent: 'center' },
+  aiCoachingTitle: { fontSize: 14, fontWeight: '700', color: '#5B21B6' },
+  aiCoachingDesc: { fontSize: 12, color: '#7C3AED', marginTop: 2 },
+  aiCoachingRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  proBadgeSmall: { backgroundColor: '#8B5CF6', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
+  proBadgeSmallText: { color: '#fff', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
   sectionHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     marginHorizontal: 16, marginBottom: 10,
