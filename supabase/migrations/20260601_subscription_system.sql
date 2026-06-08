@@ -58,14 +58,17 @@ alter table subscription_plans enable row level security;
 alter table subscription_logs enable row level security;
 
 -- 코치는 자신의 구독만
+drop policy if exists "coach own subscription" on subscriptions;
 create policy "coach own subscription" on subscriptions
   for all using (auth.uid() = coach_id);
 
 -- 플랜은 모두 읽기 가능
+drop policy if exists "plans readable by all" on subscription_plans;
 create policy "plans readable by all" on subscription_plans
   for select using (true);
 
 -- 코치는 자신의 로그만
+drop policy if exists "coach own logs" on subscription_logs;
 create policy "coach own logs" on subscription_logs
   for all using (auth.uid() = coach_id);
 
@@ -78,6 +81,7 @@ begin
 end;
 $$ language plpgsql;
 
+drop trigger if exists subscription_updated_at on subscriptions;
 create trigger subscription_updated_at
   before update on subscriptions
   for each row execute function update_subscription_updated_at();
@@ -94,6 +98,7 @@ create or replace view coach_subscription_public as
   join subscription_plans p on p.id = s.plan_id;
 
 -- 회원용: 자신의 레슨 코치 구독 조회
+drop policy if exists "member can view their coach subscription" on subscriptions;
 create policy "member can view their coach subscription" on subscriptions
   for select using (
     coach_id in (
