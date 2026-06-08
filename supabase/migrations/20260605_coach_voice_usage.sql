@@ -15,14 +15,17 @@ create table if not exists coach_voice_usage (
 alter table coach_voice_usage enable row level security;
 
 -- 코치 본인만 자신의 사용량 조회/수정 가능
+drop policy if exists "coach_own_voice_usage_select" on coach_voice_usage;
 create policy "coach_own_voice_usage_select"
   on coach_voice_usage for select
   using (coach_id = auth.uid());
 
+drop policy if exists "coach_own_voice_usage_insert" on coach_voice_usage;
 create policy "coach_own_voice_usage_insert"
   on coach_voice_usage for insert
   with check (coach_id = auth.uid());
 
+drop policy if exists "coach_own_voice_usage_update" on coach_voice_usage;
 create policy "coach_own_voice_usage_update"
   on coach_voice_usage for update
   using (coach_id = auth.uid());
@@ -36,6 +39,7 @@ begin
 end;
 $$;
 
+drop trigger if exists coach_voice_usage_updated_at on coach_voice_usage;
 create trigger coach_voice_usage_updated_at
   before update on coach_voice_usage
   for each row execute function update_coach_voice_usage_timestamp();
