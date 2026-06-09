@@ -39,10 +39,9 @@ let testLessonId = null;
 
 async function setupTestData() {
   console.log('\n📋 테스트 데이터 준비 중...');
-  // 실데이터 호환: members에서 실존 coach_id 사용
-  const { data: any } = await supabase.from('members').select('coach_id').limit(1);
-  if (!any || any.length === 0) throw new Error('코치 데이터 없음 (members 비어있음)');
-  testCoachId = any[0].coach_id;
+  const { data: coaches } = await supabase.from('coaches').select('id').limit(1);
+  if (!coaches || coaches.length === 0) throw new Error('코치 데이터 없음');
+  testCoachId = coaches[0].id;
   console.log(`  코치 ID: ${testCoachId}`);
 }
 
@@ -72,7 +71,7 @@ async function tc001_memberRegistration() {
   const { data: newMember, error } = await supabase
     .from('members')
     .insert({
-      name: '[TEST] 자동테스트회원', phone: '010-0000-0001',
+      name: '[TEST] 자동테스트회원',
       coach_id: testCoachId,
       fixed_schedule_days: [todayDow],
       fixed_schedule_time: '10:00',
@@ -255,7 +254,7 @@ async function tc009_cascadeDelete() {
 
   // 임시 회원 생성
   const { data: tmpMember } = await supabase.from('members').insert({
-    name: '[TEST-DEL] 삭제테스트', phone: '010-0000-0002',
+    name: '[TEST-DEL] 삭제테스트',
     coach_id: testCoachId,
     fixed_schedule_days: [],
     total_credits: 5, remaining_credits: 5, level: '초급',

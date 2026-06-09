@@ -8,6 +8,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Lesson, AttendanceStatus } from '../../types';
 import { Colors } from '../../lib/theme';
+import { useSubscription } from '../../hooks/useSubscription';
+import LessonBriefingModal from '../../components/LessonBriefingModal';
+import ProUpsellModal from '../../components/ProUpsellModal';
 
 const STATUS_OPTIONS: AttendanceStatus[] = ['출석', '결석'];
 const ABSENCE_REASONS = ['개인사정', '부상', '일정충돌', '무단결석', '기타'] as const;
@@ -57,6 +60,11 @@ export default function LessonDetailScreen() {
   const [hourPickerOpen, setHourPickerOpen] = useState(false);
   const [minutePickerOpen, setMinutePickerOpen] = useState(false);
   const [durationPickerOpen, setDurationPickerOpen] = useState(false);
+
+  // ② 레슨 브리핑 모달 상태
+  const [briefingVisible, setBriefingVisible] = useState(false);
+  const [showProModal, setShowProModal] = useState(false);
+  const { canUse } = useSubscription();
 
   // 결석 처리 모달
   const [absenceModal, setAbsenceModal] = useState(false);
@@ -337,7 +345,26 @@ export default function LessonDetailScreen() {
             <Text style={styles.infoText}>{lesson.notes}</Text>
           </View>
         )}
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+          {/* ② 레슨 브리핑 버튼 (프로 전용) */}
+          <TouchableOpacity
+            style={styles.briefingBtn}
+            onPress={() => {
+              if (canUse('ai_analysis')) {
+                setBriefingVisible(true);
+              } else {
+                setShowProModal(true);
+              }
+            }}
+          >
+            <Ionicons name="clipboard-outline" size={14} color="#8B5CF6" />
+            <Text style={styles.briefingBtnText}>레슨 브리핑</Text>
+            {!canUse('ai_analysis') && (
+              <View style={styles.proBadgeInline}>
+                <Text style={styles.proBadgeInlineText}>PRO</Text>
+              </View>
+            )}
+          </TouchableOpacity>
           <TouchableOpacity style={styles.editBtn} onPress={openEditModal}>
             <Ionicons name="create-outline" size={14} color={Colors.primary} />
             <Text style={styles.editBtnText}>시간 수정</Text>
@@ -562,6 +589,21 @@ export default function LessonDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ② 레슨 브리핑 모달 (프로 전용) */}
+      <LessonBriefingModal
+        visible={briefingVisible}
+        onClose={() => setBriefingVisible(false)}
+        memberIds={attendance.map(a => a.member_id)}
+      />
+
+      {/* Pro 업셀 모달 */}
+      <ProUpsellModal
+        visible={showProModal}
+        onClose={() => setShowProModal(false)}
+        featureTitle="레슨 브리핑 카드"
+        featureDesc="레슨 전 지난 레슨 핵심 포인트, 반복 이슈 태그, 집중 포인트를 한눈에 확인할 수 있어요.\nPro 플랜으로 업그레이드하고 모든 기능을 활용해보세요!"
+      />
     </View>
   );
 }
@@ -613,6 +655,10 @@ const styles = StyleSheet.create({
   summaryCount: { fontSize: 18, fontWeight: '800', color: Colors.foreground },
   editBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: Colors.primaryLight, borderRadius: 8, borderWidth: 1, borderColor: Colors.successLight },
   editBtnText: { fontSize: 13, color: Colors.navy, fontWeight: '600' },
+  briefingBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#F3E8FF', borderRadius: 8, borderWidth: 1, borderColor: '#DDD6FE' },
+  briefingBtnText: { fontSize: 13, color: '#7C3AED', fontWeight: '600' },
+  proBadgeInline: { backgroundColor: '#8B5CF6', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1, marginLeft: 2 },
+  proBadgeInlineText: { fontSize: 9, color: '#fff', fontWeight: '800', letterSpacing: 0.5 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },

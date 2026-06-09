@@ -9,6 +9,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Member, MemberLevel, Attendance, Payment, MemberNote } from '../../types';
 import { Colors } from '../../lib/theme';
+import { useSubscription } from '../../hooks/useSubscription';
+import MemberIssueTags from '../../components/MemberIssueTags';
+import ProUpsellModal from '../../components/ProUpsellModal';
 
 type DayTimes = Record<number, string[]>;
 
@@ -192,6 +195,8 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   const [payments, setPayments] = useState<Payment[]>([]);
   const [memberNotes, setMemberNotes] = useState<MemberNote[]>([]);
   const [newNote, setNewNote] = useState('');
+  const [showProModal, setShowProModal] = useState(false);
+  const { canUse } = useSubscription();
   const [timePickerVisible, setTimePickerVisible] = useState(false);
   const [editingDay, setEditingDay] = useState<number | null>(null);
   const [tempHour, setTempHour] = useState('');
@@ -785,6 +790,15 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
           <Ionicons name="sparkles" size={14} color="#fff" />
           <Text style={styles.aiBtnText}>AI 레슨 분석</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* ① 반복 이슈 태그 (프로 전용) — 탭 위 프로필 하단에 표시 */}
+      <View style={{ paddingHorizontal: 16, paddingBottom: 4 }}>
+        <MemberIssueTags
+          memberId={member.id}
+          isPro={canUse('tagging')}
+          onUpgrade={() => setShowProModal(true)}
+        />
       </View>
 
       {/* Tabs */}
@@ -1528,6 +1542,14 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
           </View>
         </View>
       </Modal>
+
+      {/* Pro 업셀 모달 */}
+      <ProUpsellModal
+        visible={showProModal}
+        onClose={() => setShowProModal(false)}
+        featureTitle="반복 이슈 태그"
+        featureDesc="애이가 최근 5회 레슨에서 반복되는 이슈를 자동으로 추출해드려요.\nPro 플랜으로 업그레이드하고 모든 기능을 활용해보세요!"
+      />
     </KeyboardAvoidingView>
   );
 }
