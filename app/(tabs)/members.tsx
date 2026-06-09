@@ -16,7 +16,12 @@ interface MemberWithUnread extends Member {
 }
 
 const LEVEL_COLORS: Record<MemberLevel, string> = {
-  '입문': Colors.level.입문, '초급': Colors.success, '중급': Colors.info, '상급': Colors.warning, '선수': Colors.destructive,
+  '입문': Colors.level.입문,
+  '초급': Colors.success,
+  '중급': Colors.info,
+  '상급': Colors.warning,
+  '선수': Colors.destructive,
+  '상급': Colors.warning,
 };
 
 export default function MembersScreen() {

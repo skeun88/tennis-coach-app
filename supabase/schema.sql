@@ -12,7 +12,7 @@ create table members (
   phone text not null,
   email text,
   birth_date date,
-  level text not null default '초급' check (level in ('입문', '초급', '중급', '고급', '선수')),
+  level text not null default '초급' check (level in ('입문', '초급', '중급', '상급', '선수')),
   join_date date not null default current_date,
   notes text,
   photo_url text,

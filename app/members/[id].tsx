@@ -17,7 +17,12 @@ type DayTimes = Record<number, string[]>;
 
 const LEVELS: MemberLevel[] = ['입문', '초급', '중급', '상급', '선수'];
 const LEVEL_COLORS: Record<MemberLevel, string> = {
-  '입문': Colors.level.입문, '초급': Colors.success, '중급': Colors.info, '상급': Colors.warning, '선수': Colors.destructive,
+  '입문': Colors.level.입문,
+  '초급': Colors.success,
+  '중급': Colors.info,
+  '상급': Colors.warning,
+  '선수': Colors.destructive,
+  '상급': Colors.warning,
 };
 
 const TIME_OPTIONS: string[] = [];
@@ -197,6 +202,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   const [newNote, setNewNote] = useState('');
   const [showProModal, setShowProModal] = useState(false);
   const { canUse } = useSubscription();
+  const [sendingReregister, setSendingReregister] = useState(false);
   const [timePickerVisible, setTimePickerVisible] = useState(false);
   const [editingDay, setEditingDay] = useState<number | null>(null);
   const [tempHour, setTempHour] = useState('');
@@ -648,6 +654,32 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     }
   }
 
+  async function handleSendReregisterNotif() {
+    if (!member) return;
+    setSendingReregister(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setSendingReregister(false); return; }
+
+    // member_notifications 테이블에 알림 레코드 저장
+    const { error } = await supabase.from('member_notifications').insert({
+      coach_id: user.id,
+      member_id: member.id,
+      title: '레슨권이 곧 만료돼요',
+      body: `레슨권이 곧 만료돼요. 코치님께 문의해보세요.`,
+      type: 'reregister',
+    });
+
+    if (error) {
+      Alert.alert('실패', '알림 발송에 실패했어요.');
+    } else {
+      Alert.alert(
+        '안내 발송 완료 📨',
+        `${member.name}님에게 재등록 안내를 동로했어요.\n회원이 앱을 열면 확인할 수 있다요.`,
+      );
+    }
+    setSendingReregister(false);
+  }
+
   async function handlePermanentDelete() {
     Alert.alert(
       '⚠️ 영구 삭제',
@@ -866,6 +898,22 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                   <Ionicons name="paper-plane-outline" size={16} color={Colors.primary} />
                   <Text style={styles.inviteBtnText}>회원앱 초대 문자 발송</Text>
                 </TouchableOpacity>
+
+                {/* ⑤ 재등록 안내 알림 발송 버튼 (잔여 2회 이하 시 표시) */}
+                {((member as any).remaining_credits ?? 0) <= 2 && (
+                  <TouchableOpacity
+                    style={styles.reregisterBtn}
+                    onPress={handleSendReregisterNotif}
+                    disabled={sendingReregister}
+                  >
+                    {sendingReregister ? (
+                      <ActivityIndicator size="small" color="#D97706" />
+                    ) : (
+                      <Ionicons name="notifications-outline" size={16} color="#D97706" />
+                    )}
+                    <Text style={styles.reregisterBtnText}>재등록 안내 보내기</Text>
+                  </TouchableOpacity>
+                )}
 
                 <View style={styles.btnRow}>
                   <TouchableOpacity style={styles.editBtn} onPress={() => setEditing(true)}>
@@ -1599,6 +1647,8 @@ const styles = StyleSheet.create({
   deletePermBtnText: { color: Colors.white, fontWeight: '700', fontSize: 14 },
   inviteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderColor: Colors.primary, borderRadius: 10, paddingVertical: 11, marginBottom: 10 },
   inviteBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 14 },
+  reregisterBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderColor: '#D97706', borderRadius: 10, paddingVertical: 11, marginBottom: 10, backgroundColor: '#FFFBEB' },
+  reregisterBtnText: { color: '#D97706', fontWeight: '700', fontSize: 14 },
   editLabel: { fontSize: 12, color: Colors.mutedFg, fontWeight: '600', marginBottom: 4, marginTop: 8 },
   editInput: { backgroundColor: Colors.mutedBg, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, fontSize: 15, color: Colors.foreground, marginBottom: 4, borderWidth: 1, borderColor: Colors.border },
   levelRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
