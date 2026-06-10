@@ -31,13 +31,15 @@ export default function MembersScreen() {
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [activeOnly, setActiveOnly] = useState(true);
+  const [trialOnly, setTrialOnly] = useState(false);
   const [packageCount, setPackageCount] = useState(0);
 
   async function loadMembers() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     let query = supabase.from('members').select('*').eq('coach_id', user.id).order('name');
-    if (activeOnly) query = query.eq('is_active', true);
+    if (trialOnly) query = query.eq('is_trial', true);
+    else if (activeOnly) query = query.eq('is_active', true);
     const { data: rawMembers } = await query;
     if (!rawMembers) { setMembers([]); return; }
 
@@ -98,7 +100,7 @@ export default function MembersScreen() {
   useFocusEffect(useCallback(() => {
     loadMembers();
     loadPackageCount();
-  }, [activeOnly]));
+  }, [activeOnly, trialOnly]));
 
   useEffect(() => {
     const q = search.toLowerCase();
@@ -134,6 +136,7 @@ export default function MembersScreen() {
           </View>
           <Text style={styles.phone}>{item.phone}</Text>
           {!item.is_active && <Text style={styles.inactive}>비활성</Text>}
+          {(item as any).is_trial && <Text style={styles.trialBadge}>체험 중</Text>}
         </View>
         <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
       </TouchableOpacity>
@@ -183,10 +186,22 @@ export default function MembersScreen() {
           )}
         </View>
         <TouchableOpacity
-          style={[styles.filterBtn, activeOnly && styles.filterActive]}
-          onPress={() => setActiveOnly(v => !v)}
+          style={[styles.filterBtn, !trialOnly && activeOnly && styles.filterActive]}
+          onPress={() => { setTrialOnly(false); setActiveOnly(true); }}
         >
-          <Text style={[styles.filterText, activeOnly && styles.filterTextActive]}>활성</Text>
+          <Text style={[styles.filterText, !trialOnly && activeOnly && styles.filterTextActive]}>활성</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterBtn, !trialOnly && !activeOnly && styles.filterActive]}
+          onPress={() => { setTrialOnly(false); setActiveOnly(false); }}
+        >
+          <Text style={[styles.filterText, !trialOnly && !activeOnly && styles.filterTextActive]}>전체</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterBtn, trialOnly && styles.filterTrialActive]}
+          onPress={() => { setTrialOnly(true); }}
+        >
+          <Text style={[styles.filterText, trialOnly && styles.filterTextActive]}>체험</Text>
         </TouchableOpacity>
       </View>
 
@@ -254,9 +269,11 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 14, color: Colors.foreground },
   filterBtn: {
-    backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 14,
-    justifyContent: 'center', borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 12,
+    justifyContent: 'center', borderWidth: 1, borderColor: Colors.border, paddingVertical: 6,
   },
+  filterTrialActive: { backgroundColor: '#D97706', borderColor: '#D97706' },
+  trialBadge: { fontSize: 11, fontWeight: '700', color: '#D97706', backgroundColor: '#FEF3C7', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginTop: 2, alignSelf: 'flex-start' },
   filterActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   filterText: { fontSize: 13, color: Colors.mutedFg, fontWeight: '600' },
   filterTextActive: { color: '#fff' },

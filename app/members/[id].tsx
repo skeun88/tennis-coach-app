@@ -203,6 +203,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   const [showProModal, setShowProModal] = useState(false);
   const { canUse } = useSubscription();
   const [sendingReregister, setSendingReregister] = useState(false);
+  const [convertingTrial, setConvertingTrial] = useState(false);
   const [timePickerVisible, setTimePickerVisible] = useState(false);
   const [editingDay, setEditingDay] = useState<number | null>(null);
   const [tempHour, setTempHour] = useState('');
@@ -654,6 +655,34 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     }
   }
 
+  async function handleConvertTrial() {
+    if (!member) return;
+    Alert.alert(
+      '정규 전환',
+      `${member.name}님을 체험에서 정규 회원으로 전환할까요?\n전환 후 크레딧/레슨권은 수정 화면에서 설정할 수 있어요.`,
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '전환',
+          onPress: async () => {
+            setConvertingTrial(true);
+            const { error } = await supabase.from('members').update({
+              is_trial: false,
+              trial_started_at: null,
+            }).eq('id', member.id);
+            setConvertingTrial(false);
+            if (error) {
+              Alert.alert('실패', '전환에 실패했어요.');
+            } else {
+              Alert.alert('전환 완료 ✅', `${member.name}님이 정규 회원으로 전환됩다. 수정 화면에서 레슨권을 설정해주세요.`);
+              await loadMember();
+            }
+          },
+        },
+      ]
+    );
+  }
+
   async function handleSendReregisterNotif() {
     if (!member) return;
     setSendingReregister(true);
@@ -892,6 +921,32 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                     </>
                   )}
                 </View>
+
+                {/* 체험 회원 배너 */}
+                {(member as any).is_trial && (
+                  <View style={styles.trialBanner}>
+                    <View style={styles.trialBannerLeft}>
+                      <Ionicons name="star-half" size={16} color="#D97706" />
+                      <View>
+                        <Text style={styles.trialBannerTitle}>체험 회원</Text>
+                        <Text style={styles.trialBannerSub}>
+                          {(member as any).trial_started_at
+                            ? `D+${Math.floor((Date.now() - new Date((member as any).trial_started_at + 'T00:00:00').getTime()) / 86400000)}일 · 체험 ${(member as any).trial_lesson_count ?? 0}회 진행`
+                            : `체험 ${(member as any).trial_lesson_count ?? 0}회 진행`}
+                        </Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.convertBtn}
+                      onPress={handleConvertTrial}
+                      disabled={convertingTrial}
+                    >
+                      {convertingTrial
+                        ? <ActivityIndicator size="small" color="#fff" />
+                        : <Text style={styles.convertBtnText}>정규 전환</Text>}
+                    </TouchableOpacity>
+                  </View>
+                )}
 
                 {/* 앱 초대 문자 버튼 */}
                 <TouchableOpacity style={styles.inviteBtn} onPress={handleSendInvite}>
@@ -1649,6 +1704,12 @@ const styles = StyleSheet.create({
   inviteBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 14 },
   reregisterBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderColor: '#D97706', borderRadius: 10, paddingVertical: 11, marginBottom: 10, backgroundColor: '#FFFBEB' },
   reregisterBtnText: { color: '#D97706', fontWeight: '700', fontSize: 14 },
+  trialBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FEF3C7', borderRadius: 10, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#FDE68A' },
+  trialBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  trialBannerTitle: { fontSize: 13, fontWeight: '700', color: '#92400E' },
+  trialBannerSub: { fontSize: 12, color: '#B45309', marginTop: 1 },
+  convertBtn: { backgroundColor: '#D97706', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
+  convertBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
   editLabel: { fontSize: 12, color: Colors.mutedFg, fontWeight: '600', marginBottom: 4, marginTop: 8 },
   editInput: { backgroundColor: Colors.mutedBg, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, fontSize: 15, color: Colors.foreground, marginBottom: 4, borderWidth: 1, borderColor: Colors.border },
   levelRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
