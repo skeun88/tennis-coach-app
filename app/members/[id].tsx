@@ -319,8 +319,8 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       const pkgId = (data as any).lesson_package_id;
       setSelectedPackageId(pkgId || null);
       if (pkgId) {
-        const { data: pkg } = await supabase.from('lesson_packages').select('title, color, total_credits, price').eq('id', pkgId).single();
-        setLessonPackage(pkg);
+        const { data: pkg } = await supabase.from('lesson_packages').select('title, color, total_credits, price').eq('id', pkgId).maybeSingle();
+        if (pkg) setLessonPackage({ ...pkg, color: pkg.color ?? '#888888', price: pkg.price ?? 0, total_credits: pkg.total_credits ?? 0 });
       }
     }
     // 레슨권 목록 로드 (수정 모드용)
@@ -878,7 +878,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                       <View style={[styles.packageDot, { backgroundColor: lessonPackage.color }]} />
                       <View style={{ flex: 1 }}>
                         <Text style={styles.packageTitle}>{lessonPackage.title}</Text>
-                        <Text style={styles.packageMeta}>{lessonPackage.total_credits}회 · {lessonPackage.price.toLocaleString()}원</Text>
+                        <Text style={styles.packageMeta}>{lessonPackage.total_credits ?? 0}회 · {(lessonPackage.price ?? 0).toLocaleString()}원</Text>
                       </View>
                       <Ionicons name="card-outline" size={18} color={Colors.primary} />
                     </>
@@ -1055,7 +1055,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                           <View style={[styles.editPkgColorBar, { backgroundColor: pkg.color }]} />
                           <Text style={styles.editPkgTitle} numberOfLines={2}>{pkg.title}</Text>
                           <Text style={styles.editPkgMeta}>{pkg.duration_minutes}분 · {pkg.total_credits}회</Text>
-                          <Text style={[styles.editPkgPrice, { color: pkg.color }]}>{pkg.price.toLocaleString()}원</Text>
+                          <Text style={[styles.editPkgPrice, { color: pkg.color ?? Colors.primary }]}>{(pkg.price ?? 0).toLocaleString()}원</Text>
                         </TouchableOpacity>
                       );
                     })}
