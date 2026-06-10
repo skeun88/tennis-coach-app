@@ -1,4 +1,4 @@
-export type MemberLevel = '입문' | '초급' | '중급' | '상급' | '선수';
+export type MemberLevel = '입문' | '초급' | '중급' | '상급' | '선수' | '고급';
 export type PaymentStatus = '납부완료' | '미납' | '부분납부';
 export type AttendanceStatus = '출석' | '결석' | '지각' | '조퇴';
 export type AbsenceReason = '개인사정' | '부상' | '일정충돌' | '무단결석' | '기타';
@@ -18,6 +18,10 @@ export interface Member {
   is_active: boolean;
   total_credits: number;
   remaining_credits: number;
+  // 체험 회원 필드
+  is_trial?: boolean;
+  trial_started_at?: string | null;
+  trial_lesson_count?: number;
   created_at: string;
   updated_at: string;
 }

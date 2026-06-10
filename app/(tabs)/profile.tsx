@@ -15,6 +15,7 @@ import { supabase } from '../../lib/supabase';
 import { useSubscription } from '../../hooks/useSubscription';
 import { PLANS } from '../../lib/subscription';
 import { Colors, Radius, Shadow } from '../../lib/theme';
+import CoachQRModal from '../../components/CoachQRModal';
 
 const SPORTS = ['테니스', '배드민턴', '스쿼시', '탁구', '골프', '기타'];
 
@@ -200,6 +201,8 @@ export default function ProfileScreen() {
     : null;
 
   const [email, setEmail] = useState('');
+  const [coachId, setCoachId] = useState<string | null>(null);
+  const [qrModalVisible, setQrModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
@@ -220,6 +223,7 @@ export default function ProfileScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setEmail(user.email ?? '');
+    setCoachId(user.id);
 
     const [membersRes, allLessonsRes, plansRes, profileRes] = await Promise.all([
       supabase.from('members').select('*', { count: 'exact', head: true }).eq('coach_id', user.id),
@@ -580,6 +584,16 @@ export default function ProfileScreen() {
             featureDesc={`나만의 AI 코칭 모델을 개발하는 기능은 Pro 플랜 전용이에요.\n음성, 텍스트, 파일로 코칭 스타일을 학습시킬 수 있어요.`}
           />
 
+          {/* 코치 초대 QR 모달 */}
+          {coachId ? (
+            <CoachQRModal
+              visible={qrModalVisible}
+              onClose={() => setQrModalVisible(false)}
+              coachId={coachId}
+              coachName={profile.name}
+            />
+          ) : null}
+
           {/* AI 코칭 모델 추가 모달 */}
           <Modal visible={knowledgeModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setKnowledgeModal(false)}>
             <View style={styles.knowledgeModalCont}>
@@ -766,6 +780,29 @@ export default function ProfileScreen() {
             </View>
           )}
 
+          {/* ☂️ 초대 QR 코드 섹션 */}
+          {coachId ? (
+            <View style={styles.section}>
+              <View style={styles.sectionHeaderRow}>
+                <Ionicons name="qr-code-outline" size={16} color={Colors.primary} />
+                <Text style={styles.sectionTitle}>내 초대 QR</Text>
+              </View>
+              <View style={styles.qrInlineCard}>
+                <View style={styles.qrInlineLeft}>
+                  <Text style={styles.qrInlineTitle}>QR 코드로 회원 초대</Text>
+                  <Text style={styles.qrInlineDesc}>스캔하면 앱으로 바로 연결돼요</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.qrInlineBtn}
+                  onPress={() => setQrModalVisible(true)}
+                >
+                  <Ionicons name="qr-code" size={20} color={Colors.primary} />
+                  <Text style={styles.qrInlineBtnText}>QR 보기</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null}
+
           {/* 계정 */}
           <View style={styles.section}>
             <TouchableOpacity style={styles.logoutRow} onPress={handleSignOut}>
@@ -940,6 +977,13 @@ const styles = StyleSheet.create({
   infoValue: { fontSize: 14, color: Colors.mutedFg, maxWidth: '55%', textAlign: 'right' },
   logoutRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 14, backgroundColor: Colors.card, borderRadius: Radius.xl, borderWidth: 1, borderColor: Colors.border },
   logoutRowText: { fontSize: 14, fontWeight: '600', color: Colors.destructive },
+  // QR 인라인 카드
+  qrInlineCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.primaryLight, borderRadius: Radius.lg, padding: 14, borderWidth: 1, borderColor: Colors.primary + '30' },
+  qrInlineLeft: { flex: 1 },
+  qrInlineTitle: { fontSize: 14, fontWeight: '700', color: Colors.navy },
+  qrInlineDesc: { fontSize: 12, color: Colors.mutedFg, marginTop: 2 },
+  qrInlineBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: Colors.white, borderRadius: Radius.md, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: Colors.primary + '50', marginLeft: 10 },
+  qrInlineBtnText: { fontSize: 13, fontWeight: '700', color: Colors.primary },
   emailHint: { fontSize: 11, color: Colors.placeholder, marginTop: 6, textAlign: 'center' },
   bottomBar: { paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: Colors.white, paddingBottom: 28 },
   previewBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 48, borderRadius: Radius.lg, backgroundColor: Colors.navy },

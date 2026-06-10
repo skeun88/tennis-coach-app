@@ -189,6 +189,8 @@ export default function NewMemberScreen() {
   const [joinDate, setJoinDate] = useState(toKSTDateStr(new Date()));
   const [lessonStartDate, setLessonStartDate] = useState(toKSTDateStr(new Date()));
   const [notes, setNotes] = useState('');
+  // 체험 회원 토글
+  const [isTrial, setIsTrial] = useState(false);
 
   // 요일 및 요일별 시간 (다중 시간 지원)
   const [scheduleDays, setScheduleDays] = useState<number[]>([]);
@@ -365,8 +367,12 @@ export default function NewMemberScreen() {
       fixed_schedule_time: firstDayTime,
       fixed_schedule_times: Object.keys(scheduleTimesJson).length > 0 ? scheduleTimesJson : null,
       fixed_lesson_duration: duration,
-      total_credits: credits, remaining_credits: credits,
-      lesson_package_id: selectedPackageId || null,
+      total_credits: isTrial ? 0 : credits,
+      remaining_credits: isTrial ? 0 : credits,
+      lesson_package_id: isTrial ? null : (selectedPackageId || null),
+      is_trial: isTrial,
+      trial_started_at: isTrial ? toKSTDateStr(new Date()) : null,
+      trial_lesson_count: 0,
     }).select('id').single();
     if (error || !newMember) { setLoading(false); Alert.alert('오류', '회원 등록에 실패했습니다.'); return; }
 
@@ -446,6 +452,33 @@ export default function NewMemberScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
+
+        {/* 정규 / 체험 토글 */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>회원 유형</Text>
+          <View style={trialStyles.toggleRow}>
+            <TouchableOpacity
+              style={[trialStyles.toggleBtn, !isTrial && trialStyles.toggleBtnActive]}
+              onPress={() => setIsTrial(false)}
+            >
+              <Ionicons name="person-circle" size={16} color={!isTrial ? '#fff' : Colors.mutedFg} />
+              <Text style={[trialStyles.toggleBtnText, !isTrial && trialStyles.toggleBtnTextActive]}>정규 회원</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[trialStyles.toggleBtn, isTrial && trialStyles.toggleBtnTrial]}
+              onPress={() => setIsTrial(true)}
+            >
+              <Ionicons name="star-half" size={16} color={isTrial ? '#fff' : Colors.mutedFg} />
+              <Text style={[trialStyles.toggleBtnText, isTrial && trialStyles.toggleBtnTextActive]}>체험 회원</Text>
+            </TouchableOpacity>
+          </View>
+          {isTrial && (
+            <View style={trialStyles.trialNotice}>
+              <Ionicons name="information-circle-outline" size={14} color="#D97706" />
+              <Text style={trialStyles.trialNoticeText}>체험 회원은 크레딧 없이 등록돼요. 레슨 시작 후 7일에 알림이 옴.</Text>
+            </View>
+          )}
+        </View>
 
         {/* 기본 정보 */}
         <View style={styles.section}>
@@ -544,7 +577,8 @@ export default function NewMemberScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* 레슨권 */}
+        {/* 레슨권 (체험 회원이면 스킵) */}
+        {!isTrial && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>레슨권 선택</Text>
           {lessonPackages.length === 0 ? (
@@ -586,6 +620,7 @@ export default function NewMemberScreen() {
             </View>
           )}
         </View>
+        )}
 
         {/* 메모 */}
         <View style={styles.section}>
@@ -894,4 +929,22 @@ const styles = StyleSheet.create({
   intervalBtnText: { fontSize: 14, fontWeight: '600', color: Colors.mutedFg },
   intervalBtnTextActive: { color: Colors.primary },
   customRepeatHint: { fontSize: 12, color: Colors.mutedFg, textAlign: 'center' },
+});
+const trialStyles = StyleSheet.create({
+  toggleRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  toggleBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 11, borderRadius: 10,
+    borderWidth: 1.5, borderColor: Colors.border, backgroundColor: Colors.mutedBg,
+  },
+  toggleBtnActive: { borderColor: Colors.navy, backgroundColor: Colors.navy },
+  toggleBtnTrial: { borderColor: '#D97706', backgroundColor: '#D97706' },
+  toggleBtnText: { fontSize: 14, fontWeight: '700', color: Colors.mutedFg },
+  toggleBtnTextActive: { color: '#fff' },
+  trialNotice: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 6,
+    backgroundColor: '#FFFBEB', borderRadius: 8, padding: 10,
+    borderWidth: 1, borderColor: '#FDE68A',
+  },
+  trialNoticeText: { fontSize: 12, color: '#92400E', flex: 1, lineHeight: 18 },
 });

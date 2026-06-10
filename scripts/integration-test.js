@@ -140,7 +140,7 @@ async function tc004_payment() {
     .from('payments')
     .insert({
       member_id: testMemberId, coach_id: testCoachId,
-      amount: 300000, paid_amount: 0, status: 'unpaid',
+      amount: 300000, paid_amount: 0, status: '미납',
       description: '[TEST] 자동테스트 결제',
       due_date: new Date().toISOString().split('T')[0],
     })
@@ -150,7 +150,7 @@ async function tc004_payment() {
 
   const { data: list } = await supabase.from('payments').select('id, status').eq('member_id', testMemberId);
   assert(list && list.length > 0, 'TC-004-B', '결제 내역 조회 가능');
-  assert(list?.some(p => p.status === 'unpaid'), 'TC-004-C', '미납 상태 정확히 저장됨');
+  assert(list?.some(p => p.status === '미납'), 'TC-004-C', '미납 상태 정확히 저장됨');
 }
 
 // ─── TC-006: 크레딧 0일 때 출석 체크 ────────────────────────
@@ -266,7 +266,7 @@ async function tc009_cascadeDelete() {
   // 결제 데이터 추가
   await supabase.from('payments').insert({
     member_id: tmpMember.id, coach_id: testCoachId,
-    amount: 100000, paid_amount: 0, status: 'unpaid',
+    amount: 100000, paid_amount: 0, status: '미납',
     description: '[TEST] 삭제테스트 결제',
   });
 
@@ -351,7 +351,7 @@ async function tc012_paymentStatusUpdate() {
 
   const { data: payment } = await supabase.from('payments').insert({
     member_id: testMemberId, coach_id: testCoachId,
-    amount: 150000, paid_amount: 0, status: 'unpaid',
+    amount: 150000, paid_amount: 0, status: '미납',
     description: '[TEST] 상태변경 테스트',
   }).select().single();
 
@@ -359,7 +359,7 @@ async function tc012_paymentStatusUpdate() {
 
   // 완료로 변경
   const { error: updateErr } = await supabase.from('payments')
-    .update({ status: 'paid', paid_amount: 150000 })
+    .update({ status: '납부완료', paid_amount: 150000 })
     .eq('id', payment.id);
 
   assert(!updateErr, 'TC-012-A', '결제 상태 완료로 변경 성공');
@@ -367,7 +367,7 @@ async function tc012_paymentStatusUpdate() {
   const { data: updated } = await supabase.from('payments')
     .select('status, paid_amount').eq('id', payment.id).single();
 
-  assert(updated?.status === 'paid', 'TC-012-B', '상태 paid로 정확히 업데이트됨');
+  assert(updated?.status === '납부완료', 'TC-012-B', '상태 paid로 정확히 업데이트됨');
   assert(updated?.paid_amount === 150000, 'TC-012-C', '납부 금액 정확히 기록됨');
 
   await supabase.from('payments').delete().eq('id', payment.id);

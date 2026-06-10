@@ -20,8 +20,8 @@ const LEVEL_COLORS: Record<MemberLevel, string> = {
   '초급': Colors.success,
   '중급': Colors.info,
   '상급': Colors.warning,
+  '고급': Colors.level.고급,
   '선수': Colors.destructive,
-  '상급': Colors.warning,
 };
 
 export default function MembersScreen() {

@@ -10,6 +10,7 @@ import { supabase } from '../../lib/supabase';
 import { Colors, Radius, Shadow } from '../../lib/theme';
 import { useSubscription } from '../../hooks/useSubscription';
 import ProUpsellModal from '../../components/ProUpsellModal';
+import CoachQRModal from '../../components/CoachQRModal';
 
 const ABSENCE_REASONS = ['개인사정', '부상', '일정충돌', '무단결석', '기타'] as const;
 const DEDUCTION_TYPES = ['정상차감', '미차감', '보강예정'] as const;
@@ -67,6 +68,28 @@ export default function HomeScreen() {
   const [unpaidMemberList, setUnpaidMemberList] = useState<{id:string;name:string;level:string;remaining_credits:number}[]>([]);
   const [expiringMemberList, setExpiringMemberList] = useState<{id:string;name:string;level:string;remaining_credits:number}[]>([]);
 
+  // QR 모달
+  const [qrModalVisible, setQrModalVisible] = useState(false);
+
+  // ④ 이탈 위험
+  interface ChurnRiskMember { id: string; name: string; level: string; lastAttended: string | null; }
+  const [churnRiskList, setChurnRiskList] = useState<ChurnRiskMember[]>([]);
+  const [churnModal, setChurnModal] = useState(false);
+
+  // ⑤ 재등록
+  const [sendingNotif, setSendingNotif] = useState<string | null>(null);
+
+  // ① 체험 회원
+  const [trialCount, setTrialCount] = useState(0);
+  const [trialModal, setTrialModal] = useState(false);
+  interface TrialMember { id: string; name: string; trial_started_at: string | null; trial_lesson_count: number; }
+  const [trialMembers, setTrialMembers] = useState<TrialMember[]>([]);
+
+  // ③ 관심 회원 (member_interest)
+  interface InterestMember { id: string; name: string | null; phone: string | null; package_title: string | null; created_at: string; packageId: string | null; }
+  const [interestList, setInterestList] = useState<InterestMember[]>([]);
+  const [interestModal, setInterestModal] = useState(false);
+
   async function loadAll() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -74,20 +97,47 @@ export default function HomeScreen() {
     setUserId(user.id);
 
     const [membersRes, lessonsRes] = await Promise.all([
-      supabase.from('members').select('id, remaining_credits').eq('coach_id', user.id),
+      supabase.from('members').select('id, name, level, remaining_credits, is_active, is_trial').eq('coach_id', user.id),
       supabase.from('lessons').select('id').eq('coach_id', user.id).eq('date', today),
     ]);
 
     const members = membersRes.data ?? [];
+    const activeMembers = members.filter((m: any) => m.is_active !== false);
     setStats({
-      totalMembers: members.length,
+      totalMembers: activeMembers.length,
       todayLessons: lessonsRes.data?.length ?? 0,
-      unpaidMembers: members.filter(m => (m.remaining_credits ?? 0) === 0).length,
-      expiringMembers: members.filter(m => {
+      unpaidMembers: activeMembers.filter((m: any) => (m.remaining_credits ?? 0) === 0 && !m.is_trial).length,
+      expiringMembers: activeMembers.filter((m: any) => {
         const rc = m.remaining_credits ?? 0;
-        return rc > 0 && rc <= 2;
+        return rc > 0 && rc <= 2 && !m.is_trial;
       }).length,
     });
+
+    // ④ 이탈 위험
+    await loadChurnRisk(user.id, activeMembers as any[]);
+
+    // ① 체험 회원
+    const trials = activeMembers.filter((m: any) => m.is_trial);
+    setTrialCount(trials.length);
+    setTrialMembers(trials.map((m: any) => ({
+      id: m.id, name: m.name,
+      trial_started_at: m.trial_started_at ?? null,
+      trial_lesson_count: m.trial_lesson_count ?? 0,
+    })));
+
+    // ③ 관심 회원 (member_interest)
+    const { data: interests } = await supabase
+      .from('member_interest')
+      .select('id, name, phone, package_id, created_at, lesson_packages(title)')
+      .eq('coach_id', user.id)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+    setInterestList((interests ?? []).map((i: any) => ({
+      id: i.id, name: i.name, phone: i.phone,
+      package_title: i.lesson_packages?.title ?? null,
+      packageId: i.package_id ?? null,
+      created_at: i.created_at,
+    })));
 
     await loadTodayCards(user.id);
     await checkAutoGenSchedule(user.id);
@@ -97,6 +147,47 @@ export default function HomeScreen() {
       .select('id', { count: 'exact', head: true })
       .eq('coach_id', user.id);
     setKnowledgeCount(count ?? 0);
+  }
+
+  async function loadChurnRisk(coachId: string, activeMembers: { id: string; name: string; level: string; is_trial?: boolean }[]) {
+    if (activeMembers.length === 0) { setChurnRiskList([]); return; }
+    const threeWeeksAgo = new Date();
+    threeWeeksAgo.setDate(threeWeeksAgo.getDate() - 21);
+    const cutoff = threeWeeksAgo.toISOString().split('T')[0];
+
+    // 각 회원의 마지막 출석 날짜를 동시에 가져오기 (join with lessons)
+    const memberIds = activeMembers.filter(m => !m.is_trial).map(m => m.id);
+    if (memberIds.length === 0) { setChurnRiskList([]); return; }
+
+    const { data: recentAttendance } = await supabase
+      .from('attendance')
+      .select('member_id, lessons!inner(date)')
+      .in('member_id', memberIds)
+      .gte('lessons.date' as any, cutoff);
+
+    const attendedRecently = new Set((recentAttendance ?? []).map((a: any) => a.member_id));
+    const atRisk = activeMembers
+      .filter(m => !m.is_trial && !attendedRecently.has(m.id))
+      .map(m => ({ id: m.id, name: m.name, level: m.level, lastAttended: null }));
+
+    // 마지막 출석일 데이터 쭄우기 (셀택)
+    if (atRisk.length > 0) {
+      const { data: lastAttData } = await supabase
+        .from('attendance')
+        .select('member_id, lessons!inner(date)')
+        .in('member_id', atRisk.map(m => m.id))
+        .order('lessons.date' as any, { ascending: false });
+
+      const lastAttMap: Record<string, string> = {};
+      for (const row of lastAttData ?? []) {
+        const mid = (row as any).member_id;
+        const d = (row as any).lessons?.date ?? null;
+        if (d && !lastAttMap[mid]) lastAttMap[mid] = d;
+      }
+      setChurnRiskList(atRisk.map(m => ({ ...m, lastAttended: lastAttMap[m.id] ?? null })));
+    } else {
+      setChurnRiskList([]);
+    }
   }
 
   async function loadTodayCards(uid: string) {
@@ -446,6 +537,15 @@ export default function HomeScreen() {
               <Text style={styles.email}>{coachEmail}</Text>
             </View>
             <View style={styles.headerActions}>
+              {/* QR 초대 버튼 */}
+              {userId ? (
+                <TouchableOpacity
+                  onPress={() => setQrModalVisible(true)}
+                  style={styles.headerIconBtn}
+                >
+                  <Ionicons name="qr-code-outline" size={22} color="rgba(255,255,255,0.8)" />
+                </TouchableOpacity>
+              ) : null}
               <TouchableOpacity
                 onPress={() => router.push('/settings/notifications')}
                 style={styles.headerIconBtn}
@@ -492,6 +592,58 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* ① 체험 회원 카드 */}
+        {trialCount > 0 && (
+          <TouchableOpacity style={styles.trialCard} onPress={() => setTrialModal(true)} activeOpacity={0.85}>
+            <View style={styles.churnCardLeft}>
+              <View style={[styles.churnIconWrap, { backgroundColor: '#FEF3C7' }]}>
+                <Ionicons name="star-half" size={18} color="#D97706" />
+              </View>
+              <View>
+                <Text style={[styles.churnTitle, { color: '#D97706' }]}>체험 중 {trialCount}명</Text>
+                <Text style={[styles.churnSub, { color: '#F59E0B' }]}>정규 전환 안내 확인</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#D97706" />
+          </TouchableOpacity>
+        )}
+
+        {/* ③ 관심 회원 카드 */}
+        {interestList.length > 0 && (
+          <TouchableOpacity style={styles.interestCard} onPress={() => setInterestModal(true)} activeOpacity={0.85}>
+            <View style={styles.churnCardLeft}>
+              <View style={[styles.churnIconWrap, { backgroundColor: '#EDE9FE' }]}>
+                <Ionicons name="person-add" size={18} color="#7C3AED" />
+              </View>
+              <View>
+                <Text style={[styles.churnTitle, { color: '#7C3AED' }]}>관심 회원 {interestList.length}명</Text>
+                <Text style={[styles.churnSub, { color: '#8B5CF6' }]}>QR 스캔 → 레슨권 선택한 회원</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#7C3AED" />
+          </TouchableOpacity>
+        )}
+
+        {/* ④ 이탈 위험 알림 카드 */}
+        {churnRiskList.length > 0 && (
+          <TouchableOpacity
+            style={styles.churnCard}
+            onPress={() => setChurnModal(true)}
+            activeOpacity={0.85}
+          >
+            <View style={styles.churnCardLeft}>
+              <View style={styles.churnIconWrap}>
+                <Ionicons name="warning" size={18} color="#DC2626" />
+              </View>
+              <View>
+                <Text style={styles.churnTitle}>이탈 위험 {churnRiskList.length}명</Text>
+                <Text style={styles.churnSub}>3주 이상 레슨 기록 없음</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#DC2626" />
+          </TouchableOpacity>
+        )}
+
         {/* AI 코칭 모델 카드 */}
         <TouchableOpacity
           style={styles.aiCoachingCard}
@@ -528,6 +680,160 @@ export default function HomeScreen() {
           featureTitle="AI 코칭 모델"
           featureDesc={`나만의 AI 코칭 모델을 개발하는 기능은\nPro 플랜 전용이에요.`}
         />
+
+        {/* QR 초대 모달 */}
+        {userId ? (
+          <CoachQRModal
+            visible={qrModalVisible}
+            onClose={() => setQrModalVisible(false)}
+            coachId={userId}
+            coachName={coachEmail.split('@')[0]}
+          />
+        ) : null}
+
+        {/* ④ 이탈 위험 회원 모달 */}
+        <Modal visible={churnModal} transparent animationType="slide" onRequestClose={() => setChurnModal(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalSheet}>
+              <View style={styles.modalHeader}>
+                <View>
+                  <Text style={styles.modalTitle}>이탈 위험 회원</Text>
+                  <Text style={{ fontSize: 12, color: Colors.mutedFg, marginTop: 2 }}>3주 이상 레슨 기록 없음</Text>
+                </View>
+                <TouchableOpacity onPress={() => setChurnModal(false)}>
+                  <Ionicons name="close" size={22} color={Colors.mutedFg} />
+                </TouchableOpacity>
+              </View>
+              {churnRiskList.length === 0 ? (
+                <Text style={{ fontSize: 14, color: Colors.placeholder, padding: 20, textAlign: 'center' }}>이탈 위험 회원이 없어요 🎉</Text>
+              ) : (
+                <FlatList
+                  data={churnRiskList}
+                  keyExtractor={item => item.id}
+                  style={{ maxHeight: 400 }}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={styles.modalMemberRow}
+                      onPress={() => { setChurnModal(false); router.push(`/members/${item.id}`); }}
+                    >
+                      <View style={styles.modalMemberAvatar}>
+                        <Text style={styles.modalMemberAvatarText}>{item.name.slice(0, 1)}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.modalMemberName}>{item.name}</Text>
+                        <Text style={styles.modalMemberSub}>
+                          {item.lastAttended
+                            ? `마지막 출석: ${item.lastAttended}`
+                            : '출석 기록 없음'}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={Colors.mutedFg} />
+                    </TouchableOpacity>
+                  )}
+                />
+              )}
+            </View>
+          </View>
+        </Modal>
+
+        {/* ① 체험 회원 모달 */}
+        <Modal visible={trialModal} transparent animationType="slide" onRequestClose={() => setTrialModal(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalSheet}>
+              <View style={styles.modalHeader}>
+                <View>
+                  <Text style={styles.modalTitle}>체험 중 회원</Text>
+                  <Text style={{ fontSize: 12, color: Colors.mutedFg, marginTop: 2 }}>정규 전환 후보 회원</Text>
+                </View>
+                <TouchableOpacity onPress={() => setTrialModal(false)}>
+                  <Ionicons name="close" size={22} color={Colors.mutedFg} />
+                </TouchableOpacity>
+              </View>
+              <FlatList
+                data={trialMembers}
+                keyExtractor={item => item.id}
+                style={{ maxHeight: 400 }}
+                ListEmptyComponent={<Text style={{ fontSize: 14, color: Colors.placeholder, padding: 20, textAlign: 'center' }}>체험 회원이 없어요</Text>}
+                renderItem={({ item }) => {
+                  const daysSince = item.trial_started_at
+                    ? Math.floor((Date.now() - new Date(item.trial_started_at).getTime()) / 86400000)
+                    : null;
+                  return (
+                    <TouchableOpacity
+                      style={styles.modalMemberRow}
+                      onPress={() => { setTrialModal(false); router.push(`/members/${item.id}`); }}
+                    >
+                      <View style={[styles.modalMemberAvatar, { backgroundColor: '#D97706' }]}>
+                        <Text style={styles.modalMemberAvatarText}>{item.name.slice(0, 1)}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.modalMemberName}>{item.name}</Text>
+                        <Text style={styles.modalMemberSub}>
+                          {daysSince !== null ? `D+${daysSince}일` : '체험 중'} · {item.trial_lesson_count}회 진행
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={Colors.mutedFg} />
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            </View>
+          </View>
+        </Modal>
+
+        {/* ③ 관심 회원 모달 */}
+        <Modal visible={interestModal} transparent animationType="slide" onRequestClose={() => setInterestModal(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalSheet}>
+              <View style={styles.modalHeader}>
+                <View>
+                  <Text style={styles.modalTitle}>관심 회원</Text>
+                  <Text style={{ fontSize: 12, color: Colors.mutedFg, marginTop: 2 }}>QR 스캔 후 레슨권 선택한 회원</Text>
+                </View>
+                <TouchableOpacity onPress={() => setInterestModal(false)}>
+                  <Ionicons name="close" size={22} color={Colors.mutedFg} />
+                </TouchableOpacity>
+              </View>
+              <FlatList
+                data={interestList}
+                keyExtractor={item => item.id}
+                style={{ maxHeight: 440 }}
+                ListEmptyComponent={<Text style={{ fontSize: 14, color: Colors.placeholder, padding: 20, textAlign: 'center' }}>관심 회원이 없어요</Text>}
+                renderItem={({ item }) => (
+                  <View style={styles.modalMemberRow}>
+                    <View style={[styles.modalMemberAvatar, { backgroundColor: '#7C3AED' }]}>
+                      <Ionicons name="person" size={16} color="#fff" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.modalMemberName}>{item.name ?? '이름 미입력'}</Text>
+                      <Text style={styles.modalMemberSub}>{item.package_title ?? '레슨권 미선택'}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      <TouchableOpacity
+                        style={styles.interestRegBtn}
+                        onPress={() => {
+                          setInterestModal(false);
+                          router.push({ pathname: '/members/new', params: { fromInterestId: item.id, packageId: item.packageId ?? '' } } as any);
+                        }}
+                      >
+                        <Text style={styles.interestRegBtnText}>등록</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.interestDismissBtn}
+                        onPress={async () => {
+                          await supabase.from('member_interest').update({ status: 'dismissed' }).eq('id', item.id);
+                          setInterestList(prev => prev.filter(i => i.id !== item.id));
+                        }}
+                      >
+                        <Text style={styles.interestDismissBtnText}>무시</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              />
+            </View>
+          </View>
+        </Modal>
 
         {/* Today's Lessons Section */}
         <View style={styles.sectionHeader}>
@@ -983,4 +1289,54 @@ const styles = StyleSheet.create({
   },
   saveBtnDis: { backgroundColor: Colors.iconMuted },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  // 이탈 위험 카드
+  churnCard: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginHorizontal: 16, marginBottom: 10,
+    backgroundColor: '#FEF2F2', borderRadius: Radius.lg,
+    paddingHorizontal: 14, paddingVertical: 12,
+    borderWidth: 1, borderColor: '#FECACA',
+  },
+  churnCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  churnIconWrap: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center',
+  },
+  churnTitle: { fontSize: 14, fontWeight: '700', color: '#DC2626' },
+  churnSub: { fontSize: 12, color: '#EF4444', marginTop: 1 },
+  trialCard: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginHorizontal: 16, marginBottom: 10,
+    backgroundColor: '#FFFBEB', borderRadius: Radius.lg,
+    paddingHorizontal: 14, paddingVertical: 12,
+    borderWidth: 1, borderColor: '#FDE68A',
+  },
+  interestCard: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginHorizontal: 16, marginBottom: 10,
+    backgroundColor: '#F5F3FF', borderRadius: Radius.lg,
+    paddingHorizontal: 14, paddingVertical: 12,
+    borderWidth: 1, borderColor: '#DDD6FE',
+  },
+  interestRegBtn: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
+    backgroundColor: '#7C3AED',
+  },
+  interestRegBtnText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  interestDismissBtn: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
+    backgroundColor: Colors.mutedBg, borderWidth: 1, borderColor: Colors.border,
+  },
+  interestDismissBtnText: { fontSize: 12, fontWeight: '600', color: Colors.mutedFg },
+  // 모달 회원 그리드
+  modalMemberRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 20, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
+  modalMemberAvatar: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center',
+  },
+  modalMemberAvatarText: { fontSize: 14, fontWeight: '800', color: '#fff' },
 });
