@@ -2,7 +2,7 @@
 -- member_notifications: 코치 → 회원 인앱 알림 테이블
 -- ─────────────────────────────────────────────
 create table if not exists member_notifications (
-  id            uuid default uuid_generate_v4() primary key,
+  id            uuid default gen_random_uuid() primary key,
   coach_id      uuid references auth.users(id) on delete cascade not null,
   member_id     uuid references members(id) on delete cascade not null,
   title         text not null,
@@ -25,7 +25,7 @@ create policy "coaches manage own notifications"
 -- (회원 앱 구현 시 활성화; 현재는 테이블만 준비)
 -- ─────────────────────────────────────────────
 create table if not exists member_push_tokens (
-  id         uuid default uuid_generate_v4() primary key,
+  id         uuid default gen_random_uuid() primary key,
   member_id  uuid references members(id) on delete cascade not null unique,
   push_token text not null,
   platform   text check (platform in ('ios', 'android')),
