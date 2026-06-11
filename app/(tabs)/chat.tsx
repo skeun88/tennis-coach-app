@@ -18,10 +18,11 @@ interface Message {
 }
 
 const QUICK_QUESTIONS = [
+  '서브 속도를 높이는 드릴 추천해줘',
+  '입문자용 포핸드 레슨 플랜 알려줘',
+  '랠리 전술 훈련 방법이 궁금해요',
   '미납 알림은 어떻게 확인하나요?',
-  '레슨 크레딧은 어떻게 관리하나요?',
   '고정 스케줄 설정 방법이 궁금해요',
-  'AI 레슨 분석은 어떻게 사용하나요?',
 ];
 
 export default function ChatScreen() {
@@ -29,7 +30,7 @@ export default function ChatScreen() {
     {
       id: '0',
       role: 'assistant',
-      content: '안녕하세요! 테니스 코치 앱 사용에 대해 궁금한 점이 있으신가요? 편하게 물어보세요 🎾',
+      content: '안녕하세요! 앱 사용법은 물론, 드릴 구성·훈련법·테니스 이론까지 무엇이든 편하게 물어보세요 🎾\n참고 자료를 활용할 때는 출처도 함께 알려드릴게요 📚',
       timestamp: new Date(),
     },
   ]);
@@ -146,6 +147,10 @@ export default function ChatScreen() {
           ListHeaderComponent={
             messages.length <= 1 ? (
               <View style={styles.quickBox}>
+                <View style={styles.hintBanner}>
+                  <Ionicons name="bulb-outline" size={14} color="#7C3AED" />
+                  <Text style={styles.hintText}>앱 사용법 외에도 드릴, 테니스 이론 등 코칭 관련 무엇이든 질문해보세요!</Text>
+                </View>
                 <Text style={styles.quickTitle}>자주 묻는 질문</Text>
                 {QUICK_QUESTIONS.map((q, i) => (
                   <TouchableOpacity
@@ -199,6 +204,8 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 }, elevation: 2,
   },
+  hintBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F5F3FF', borderRadius: 8, padding: 10, marginBottom: 14 },
+  hintText: { fontSize: 12, color: '#7C3AED', flex: 1, lineHeight: 18 },
   quickTitle: { fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 10 },
   quickBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
