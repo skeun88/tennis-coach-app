@@ -398,8 +398,9 @@ export default function PaymentsScreen() {
       {/* 납부 모달 */}
       <Modal visible={payModal} transparent animationType="slide"
         onRequestClose={() => { setPayModal(false); setPayTarget(null); }}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1}
+          onPress={() => { setPayModal(false); setPayTarget(null); }}>
+          <TouchableOpacity style={styles.modalSheet} activeOpacity={1} onPress={() => {}}>
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>납부 처리</Text>
 
@@ -458,8 +459,8 @@ export default function PaymentsScreen() {
                 </TouchableOpacity>
               </>
             )}
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </View>
   );

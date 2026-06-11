@@ -15,7 +15,7 @@ import ProUpsellModal from '../../components/ProUpsellModal';
 
 type DayTimes = Record<number, string[]>;
 
-const LEVELS: MemberLevel[] = ['입문', '초급', '중급', '상급', '고급', '선수'];
+const LEVELS: MemberLevel[] = ['입문', '초급', '중급', '상급', '선수'];
 const LEVEL_COLORS: Record<MemberLevel, string> = {
   '입문': Colors.level.입문,
   '초급': Colors.success,
