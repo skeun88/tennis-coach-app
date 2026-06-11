@@ -229,7 +229,7 @@ async function tc008_dateBoundary() {
 
   const { data: tomorrowLesson } = await supabase.from('lessons').insert({
     coach_id: testCoachId, date: tomorrowStr,
-    start_time: '23:00', end_time: '24:00', title: '[TEST] 내일레슨',
+    start_time: '23:00', end_time: '23:59', title: '[TEST] 내일레슨',
   }).select().single();
 
   // 오늘 레슨만 쿼리
