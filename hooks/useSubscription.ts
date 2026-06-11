@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import {
   Subscription,
@@ -23,6 +23,8 @@ interface UseSubscriptionResult {
 export function useSubscription(): UseSubscriptionResult {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
+  const channelIdRef = useRef(`${Date.now()}-${Math.random().toString(36).slice(2)}`);
+
 
   const refresh = useCallback(async () => {
     const sub = await getCurrentSubscription();
@@ -33,9 +35,10 @@ export function useSubscription(): UseSubscriptionResult {
   useEffect(() => {
     refresh();
 
-    // Realtime 구독: 플랜 변경 즉시 반영
+    // Realtime 구독: 플랜 변경 즉시 반영 (채널명 고유화 — 동일 이름 중복 subscribe 방지)
+    const channelName = `subscription-changes-${channelIdRef.current}`;
     const channel = supabase
-      .channel('subscription-changes')
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
