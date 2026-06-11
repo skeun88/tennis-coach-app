@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   packageBannerTitle: { fontSize: 15, fontWeight: '800', color: Colors.foreground, marginBottom: 2 },
-  packageBannerSub: { fontSize: 12, color: Colors.mutedFg },
+  packageBannerSub: { fontSize: 14, color: Colors.mutedFg },
   packageBannerRight: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   packageBannerAction: { fontSize: 13, fontWeight: '700', color: Colors.navy },
 
@@ -273,11 +273,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center', borderWidth: 1, borderColor: Colors.border, paddingVertical: 6,
   },
   filterTrialActive: { backgroundColor: '#D97706', borderColor: '#D97706' },
-  trialBadge: { fontSize: 11, fontWeight: '700', color: '#D97706', backgroundColor: '#FEF3C7', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginTop: 2, alignSelf: 'flex-start' },
+  trialBadge: { fontSize: 13, fontWeight: '700', color: '#D97706', backgroundColor: '#FEF3C7', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginTop: 2, alignSelf: 'flex-start' },
   filterActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   filterText: { fontSize: 13, color: Colors.mutedFg, fontWeight: '600' },
   filterTextActive: { color: '#fff' },
-  count: { fontSize: 12, color: Colors.mutedFg, paddingHorizontal: 16, marginBottom: 8 },
+  count: { fontSize: 14, color: Colors.mutedFg, paddingHorizontal: 16, marginBottom: 8 },
 
   // Member card
   cardUnread: { borderWidth: 1.5, borderColor: Colors.primary },
@@ -287,11 +287,11 @@ const styles = StyleSheet.create({
     minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center',
     paddingHorizontal: 4,
   },
-  unreadBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+  unreadBadgeText: { color: '#fff', fontSize: 12, fontWeight: '800' },
   newMsgBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: Colors.primary, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
-  newMsgText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  newMsgText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   newMsgCount: { backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1, marginLeft: 2 },
-  newMsgCountText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+  newMsgCountText: { color: '#fff', fontSize: 12, fontWeight: '800' },
   card: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
     borderRadius: 12, padding: 14, marginBottom: 8,
@@ -303,9 +303,9 @@ const styles = StyleSheet.create({
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
   name: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
   levelBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 },
-  levelText: { fontSize: 11, fontWeight: '700' },
+  levelText: { fontSize: 13, fontWeight: '700' },
   phone: { fontSize: 13, color: Colors.mutedFg },
-  inactive: { fontSize: 11, color: Colors.destructive, marginTop: 2 },
+  inactive: { fontSize: 13, color: Colors.destructive, marginTop: 2 },
 
   // Empty
   empty: { alignItems: 'center', padding: 40 },

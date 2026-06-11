@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity,
   Alert, RefreshControl, ActivityIndicator, Modal,
@@ -58,6 +59,7 @@ export default function HomeScreen() {
   const [savingAbsence, setSavingAbsence] = useState(false);
   const [knowledgeCount, setKnowledgeCount] = useState(0);
   const [homeUpsellVisible, setHomeUpsellVisible] = useState(false);
+  const [showChatHint, setShowChatHint] = useState(false);
   const { canUse } = useSubscription();
 
   const today = new Date().toISOString().split('T')[0];
@@ -361,6 +363,17 @@ export default function HomeScreen() {
   }
 
   useFocusEffect(useCallback(() => { loadAll(); }, []));
+
+  useEffect(() => {
+    AsyncStorage.getItem('chat_hint_dismissed').then(val => {
+      if (!val) setShowChatHint(true);
+    });
+  }, []);
+
+  function dismissChatHint() {
+    setShowChatHint(false);
+    AsyncStorage.setItem('chat_hint_dismissed', '1');
+  }
 
   // Realtime: lessons/members 변경 시 홈 즉시 갱신 (새 회원 등록 등)
   useEffect(() => {
@@ -698,7 +711,7 @@ export default function HomeScreen() {
               <View style={styles.modalHeader}>
                 <View>
                   <Text style={styles.modalTitle}>이탈 위험 회원</Text>
-                  <Text style={{ fontSize: 12, color: Colors.mutedFg, marginTop: 2 }}>3주 이상 레슨 기록 없음</Text>
+                  <Text style={{ fontSize: 14, color: Colors.mutedFg, marginTop: 2 }}>3주 이상 레슨 기록 없음</Text>
                 </View>
                 <TouchableOpacity onPress={() => setChurnModal(false)}>
                   <Ionicons name="close" size={22} color={Colors.mutedFg} />
@@ -743,7 +756,7 @@ export default function HomeScreen() {
               <View style={styles.modalHeader}>
                 <View>
                   <Text style={styles.modalTitle}>체험 중 회원</Text>
-                  <Text style={{ fontSize: 12, color: Colors.mutedFg, marginTop: 2 }}>정규 전환 후보 회원</Text>
+                  <Text style={{ fontSize: 14, color: Colors.mutedFg, marginTop: 2 }}>정규 전환 후보 회원</Text>
                 </View>
                 <TouchableOpacity onPress={() => setTrialModal(false)}>
                   <Ionicons name="close" size={22} color={Colors.mutedFg} />
@@ -788,7 +801,7 @@ export default function HomeScreen() {
               <View style={styles.modalHeader}>
                 <View>
                   <Text style={styles.modalTitle}>관심 회원</Text>
-                  <Text style={{ fontSize: 12, color: Colors.mutedFg, marginTop: 2 }}>QR 스캔 후 레슨권 선택한 회원</Text>
+                  <Text style={{ fontSize: 14, color: Colors.mutedFg, marginTop: 2 }}>QR 스캔 후 레슨권 선택한 회원</Text>
                 </View>
                 <TouchableOpacity onPress={() => setInterestModal(false)}>
                   <Ionicons name="close" size={22} color={Colors.mutedFg} />
@@ -952,8 +965,19 @@ export default function HomeScreen() {
         )}
       </ScrollView>
 
-      {/* Chatbot FAB */}
-      <TouchableOpacity style={styles.chatFab} onPress={() => router.push('/(tabs)/chat')}>
+      {/* Chatbot FAB + 힌트 툴팁 */}
+      {showChatHint && (
+        <View style={styles.chatHintBubble}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.chatHintText}>앱 사용법 외에도 드릴·테니스 이론 등</Text>
+            <Text style={styles.chatHintText}>무엇이든 물어보세요 🎾</Text>
+          </View>
+          <TouchableOpacity onPress={dismissChatHint} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close" size={16} color="#5B21B6" />
+          </TouchableOpacity>
+        </View>
+      )}
+      <TouchableOpacity style={styles.chatFab} onPress={() => { dismissChatHint(); router.push('/(tabs)/chat'); }}>
         <Ionicons name="chatbubble-ellipses" size={24} color={Colors.white} />
       </TouchableOpacity>
 
@@ -964,7 +988,7 @@ export default function HomeScreen() {
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>미납 회원</Text>
-                <Text style={{ fontSize: 12, color: Colors.mutedFg, marginTop: 2 }}>잔여 0회 회원</Text>
+                <Text style={{ fontSize: 14, color: Colors.mutedFg, marginTop: 2 }}>잔여 0회 회원</Text>
               </View>
               <TouchableOpacity onPress={() => setUnpaidModal(false)}>
                 <Ionicons name="close" size={22} color={Colors.mutedFg} />
@@ -988,10 +1012,10 @@ export default function HomeScreen() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.foreground }}>{m.name}</Text>
-                      <Text style={{ fontSize: 12, color: Colors.mutedFg, marginTop: 2 }}>{m.level} · 잔여 {m.remaining_credits}회</Text>
+                      <Text style={{ fontSize: 14, color: Colors.mutedFg, marginTop: 2 }}>{m.level} · 잔여 {m.remaining_credits}회</Text>
                     </View>
                     <View style={{ backgroundColor: Colors.destructive + '18', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.destructive }}>0회</Text>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.destructive }}>0회</Text>
                     </View>
                   </TouchableOpacity>
                 ))}
@@ -1011,7 +1035,7 @@ export default function HomeScreen() {
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>만료 예정 회원</Text>
-                <Text style={{ fontSize: 12, color: Colors.mutedFg, marginTop: 2 }}>잔여 1~2회 회원</Text>
+                <Text style={{ fontSize: 14, color: Colors.mutedFg, marginTop: 2 }}>잔여 1~2회 회원</Text>
               </View>
               <TouchableOpacity onPress={() => setExpiringModal(false)}>
                 <Ionicons name="close" size={22} color={Colors.mutedFg} />
@@ -1035,10 +1059,10 @@ export default function HomeScreen() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.foreground }}>{m.name}</Text>
-                      <Text style={{ fontSize: 12, color: Colors.mutedFg, marginTop: 2 }}>{m.level}</Text>
+                      <Text style={{ fontSize: 14, color: Colors.mutedFg, marginTop: 2 }}>{m.level}</Text>
                     </View>
                     <View style={{ backgroundColor: Colors.warning + '25', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.warning }}>잔여 {m.remaining_credits}회</Text>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.warning }}>잔여 {m.remaining_credits}회</Text>
                     </View>
                   </TouchableOpacity>
                 ))}
@@ -1157,17 +1181,17 @@ const styles = StyleSheet.create({
     ...Shadow.sm,
   },
   statValue: { fontSize: 20, fontWeight: '800', color: Colors.foreground, marginBottom: 1 },
-  statLabel: { fontSize: 11, color: Colors.mutedFg, fontWeight: '500' },
-  statHint: { fontSize: 10, color: Colors.placeholder, marginTop: 2 },
+  statLabel: { fontSize: 13, color: Colors.mutedFg, fontWeight: '500' },
+  statHint: { fontSize: 12, color: Colors.placeholder, marginTop: 2 },
 
   aiCoachingCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F5F3FF', borderRadius: Radius.lg, padding: 14, marginHorizontal: 16, marginBottom: 12, borderWidth: 1, borderColor: '#DDD6FE', ...Shadow.sm },
   aiCoachingLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   aiCoachingIconWrap: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#EDE9FE', alignItems: 'center', justifyContent: 'center' },
   aiCoachingTitle: { fontSize: 14, fontWeight: '700', color: '#5B21B6' },
-  aiCoachingDesc: { fontSize: 12, color: '#7C3AED', marginTop: 2 },
+  aiCoachingDesc: { fontSize: 14, color: '#7C3AED', marginTop: 2 },
   aiCoachingRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   proBadgeSmall: { backgroundColor: '#8B5CF6', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
-  proBadgeSmallText: { color: '#fff', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  proBadgeSmallText: { color: '#fff', fontSize: 12, fontWeight: '800', letterSpacing: 1 },
   sectionHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     marginHorizontal: 16, marginBottom: 10,
@@ -1197,12 +1221,12 @@ const styles = StyleSheet.create({
   memberNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
   memberName: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
   levelBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: Radius.full },
-  levelText: { fontSize: 11, fontWeight: '700' },
-  packageName: { fontSize: 12, color: Colors.mutedFg, marginBottom: 4 },
+  levelText: { fontSize: 13, fontWeight: '700' },
+  packageName: { fontSize: 14, color: Colors.mutedFg, marginBottom: 4 },
   creditsRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  creditsText: { fontSize: 12, fontWeight: '500' },
+  creditsText: { fontSize: 14, fontWeight: '500' },
   deductionBadge: { backgroundColor: '#fee2e2', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8 },
-  deductionBadgeText: { fontSize: 10, color: Colors.destructive, fontWeight: '700' },
+  deductionBadgeText: { fontSize: 12, color: Colors.destructive, fontWeight: '700' },
 
   attendBtns: { flexDirection: 'row', gap: 6, marginLeft: 10 },
   attendBtn: {
@@ -1212,7 +1236,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   attendBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  attendBtnLabel: { fontSize: 10, fontWeight: '700', color: Colors.primary },
+  attendBtnLabel: { fontSize: 12, fontWeight: '700', color: Colors.primary },
   absentBtn: {
     width: 58, paddingVertical: 7, borderRadius: 10,
     borderWidth: 1.5, borderColor: Colors.destructive,
@@ -1220,7 +1244,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   absentBtnActive: { backgroundColor: Colors.destructive, borderColor: Colors.destructive },
-  absentBtnLabel: { fontSize: 10, fontWeight: '700', color: Colors.destructive },
+  absentBtnLabel: { fontSize: 12, fontWeight: '700', color: Colors.destructive },
 
   emptyCard: {
     alignItems: 'center', backgroundColor: Colors.card, borderRadius: Radius.lg,
@@ -1244,6 +1268,14 @@ const styles = StyleSheet.create({
   autoGenName: { fontSize: 14, color: Colors.foreground, fontWeight: '500' },
   autoGenBtn: { marginTop: 12, backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 10, alignItems: 'center' },
   autoGenBtnText: { color: Colors.white, fontWeight: '700', fontSize: 14 },
+  chatHintBubble: {
+    position: 'absolute', bottom: 92, right: 12,
+    backgroundColor: '#F5F3FF', borderRadius: 12, padding: 12,
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    maxWidth: 260, borderWidth: 1, borderColor: '#DDD6FE',
+    ...Shadow.sm,
+  },
+  chatHintText: { fontSize: 14, color: '#5B21B6', lineHeight: 22 },
   chatFab: {
     position: 'absolute', bottom: 24, right: 20,
     width: 56, height: 56, borderRadius: 28,
@@ -1266,7 +1298,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background, marginHorizontal: 16, borderRadius: Radius.md, marginTop: 12,
   },
   modalMemberName: { fontSize: 15, fontWeight: '700', color: Colors.foreground },
-  modalMemberSub: { fontSize: 12, color: Colors.mutedFg, marginLeft: 2 },
+  modalMemberSub: { fontSize: 14, color: Colors.mutedFg, marginLeft: 2 },
   modalSectionLabel: { fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginTop: 16, marginBottom: 8, marginHorizontal: 20 },
   optionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginHorizontal: 20 },
   optionChip: {
@@ -1282,7 +1314,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.mutedBg, borderWidth: 1.5, borderColor: Colors.border,
   },
   deductionChipText: { fontSize: 13, fontWeight: '700', color: Colors.mutedFg },
-  deductionHint: { fontSize: 12, color: Colors.destructive, marginHorizontal: 20, marginTop: 8, fontWeight: '500' },
+  deductionHint: { fontSize: 14, color: Colors.destructive, marginHorizontal: 20, marginTop: 8, fontWeight: '500' },
   saveBtn: {
     margin: 16, marginTop: 20, backgroundColor: Colors.primary,
     borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center',
@@ -1303,7 +1335,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center',
   },
   churnTitle: { fontSize: 14, fontWeight: '700', color: '#DC2626' },
-  churnSub: { fontSize: 12, color: '#EF4444', marginTop: 1 },
+  churnSub: { fontSize: 14, color: '#EF4444', marginTop: 1 },
   trialCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     marginHorizontal: 16, marginBottom: 10,
@@ -1322,12 +1354,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
     backgroundColor: '#7C3AED',
   },
-  interestRegBtnText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  interestRegBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
   interestDismissBtn: {
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
     backgroundColor: Colors.mutedBg, borderWidth: 1, borderColor: Colors.border,
   },
-  interestDismissBtnText: { fontSize: 12, fontWeight: '600', color: Colors.mutedFg },
+  interestDismissBtnText: { fontSize: 14, fontWeight: '600', color: Colors.mutedFg },
   // 모달 회원 그리드
   modalMemberRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,

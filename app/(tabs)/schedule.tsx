@@ -716,11 +716,11 @@ ${rejectMsg.trim()}`
                   onPress={() => { setSelectedRequest(req); setRequestModal(true); }}
                 >
                   <Ionicons name="time-outline" size={15} color={Colors.warning} />
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: Colors.warning }}>예약 요청 대기중</Text>
-                  <Text style={{ fontSize: 11, color: Colors.warning }}>
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: Colors.warning }}>예약 요청 대기중</Text>
+                  <Text style={{ fontSize: 13, color: Colors.warning }}>
                     {req.start_time?.slice(0,5)} ~ {req.end_time?.slice(0,5)}
                   </Text>
-                  <Text style={{ fontSize: 11, color: Colors.warning }}>
+                  <Text style={{ fontSize: 13, color: Colors.warning }}>
                     {req.member?.name ?? '회원'} · 탭하여 수락/거절
                   </Text>
                 </TouchableOpacity>
@@ -1016,7 +1016,7 @@ ${rejectMsg.trim()}`
           </View>
           <Text style={styles.dateHeader}>
             {new Date(selectedDate + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })}
-            <Text style={{ fontSize: 12, color: Colors.navy, fontWeight: '500' }}>  시간 탭해서 레슨 등록</Text>
+            <Text style={{ fontSize: 14, color: Colors.navy, fontWeight: '500' }}>  시간 탭해서 레슨 등록</Text>
           </Text>
           {renderDayGrid()}
         </>
@@ -1137,7 +1137,7 @@ ${rejectMsg.trim()}`
                     <Text style={styles.requestMemberName}>{selectedRequest.member?.name ?? '회원'}</Text>
                     {pendingRequests.length > 1 && (
                       <View style={{ backgroundColor: Colors.warning + '22', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
-                        <Text style={{ fontSize: 11, color: Colors.warning, fontWeight: '700' }}>외 {pendingRequests.length - 1}건 대기중</Text>
+                        <Text style={{ fontSize: 13, color: Colors.warning, fontWeight: '700' }}>외 {pendingRequests.length - 1}건 대기중</Text>
                       </View>
                     )}
                   </View>
@@ -1155,7 +1155,7 @@ ${rejectMsg.trim()}`
 
                 {/* 거절 시 메시지 입력 */}
                 <View style={{ marginBottom: 16 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6 }}>
                     거절 메시지 (선택)
                   </Text>
                   <TextInput
@@ -1298,14 +1298,14 @@ const styles = StyleSheet.create({
   weekStrip: { flexDirection: 'row', backgroundColor: '#fff', paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
   dayBtn: { flex: 1, alignItems: 'center', paddingVertical: 6, borderRadius: 10 },
   daySelected: { backgroundColor: Colors.primary },
-  dayName: { fontSize: 11, color: Colors.mutedFg, marginBottom: 4 },
+  dayName: { fontSize: 13, color: Colors.mutedFg, marginBottom: 4 },
   dayNum: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
   dayTextSelected: { color: '#fff' },
   dayToday: { color: Colors.navy },
   dateHeader: { fontSize: 14, color: Colors.mutedFg, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: Colors.mutedBg },
   // 그리드
   hourRow: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center' },
-  hourLabel: { width: 48, fontSize: 12, color: Colors.placeholder, fontWeight: '600', textAlign: 'right', paddingRight: 8 },
+  hourLabel: { width: 48, fontSize: 14, color: Colors.placeholder, fontWeight: '600', textAlign: 'right', paddingRight: 8 },
   hourLine: { flex: 1, height: 1, backgroundColor: Colors.border },
   gridTapOverlay: { position: 'absolute', left: 48, right: 0, top: 0 },
   // 레슨 카드 (그리드)
@@ -1314,9 +1314,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary, borderRadius: 8, padding: 6, paddingHorizontal: 8,
     },
   lessonCardDragging: { opacity: 0.85, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
-  lessonCardTime: { fontSize: 12, color: 'rgba(255,255,255,0.75)', fontWeight: '600', flexShrink: 0 },
+  lessonCardTime: { fontSize: 14, color: 'rgba(255,255,255,0.75)', fontWeight: '600', flexShrink: 0 },
   lessonCardTitle: { fontSize: 14, color: '#fff', fontWeight: '800', flexShrink: 1 },
-  lessonCardMembers: { fontSize: 10, color: 'rgba(255,255,255,0.75)', marginTop: 1 },
+  lessonCardMembers: { fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 1 },
   dragHandle: { position: 'absolute', bottom: 3, right: 6 },
   // 주간 뷰
   weekScroll: { flex: 1 },
@@ -1333,7 +1333,7 @@ const styles = StyleSheet.create({
   weekLessonCard: { margin: 8, backgroundColor: Colors.primaryLight, borderRadius: 8, padding: 8 },
   weekLessonTime: { fontSize: 13, color: Colors.navy, fontWeight: '700', marginBottom: 2 },
   weekLessonTitle: { fontSize: 14, color: Colors.foreground, fontWeight: '600' },
-  weekLessonMembers: { fontSize: 11, color: Colors.navy, marginTop: 2 },
+  weekLessonMembers: { fontSize: 13, color: Colors.navy, marginTop: 2 },
   // FAB
   fab: { position: 'absolute', bottom: 24, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 6 },
   // 모달
@@ -1362,9 +1362,9 @@ const styles = StyleSheet.create({
   memberItemSelected: { backgroundColor: Colors.primaryLight },
   memberItemText: { fontSize: 14, color: Colors.foreground },
   memberItemTextSelected: { color: Colors.navy, fontWeight: '700' },
-  selectedNames: { fontSize: 12, color: Colors.navy, fontWeight: '600', marginBottom: 4, backgroundColor: Colors.primaryLight, padding: 8, borderRadius: 8 },
+  selectedNames: { fontSize: 14, color: Colors.navy, fontWeight: '600', marginBottom: 4, backgroundColor: Colors.primaryLight, padding: 8, borderRadius: 8 },
   spinnerBtn: { flex: 1, backgroundColor: Colors.mutedBg, borderRadius: 10, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: Colors.border },
-  spinnerBtnLabel: { fontSize: 11, color: Colors.placeholder, fontWeight: '600', marginBottom: 2 },
+  spinnerBtnLabel: { fontSize: 13, color: Colors.placeholder, fontWeight: '600', marginBottom: 2 },
   spinnerBtnValue: { fontSize: 20, fontWeight: '800', color: Colors.navy },
   colonText: { fontSize: 24, fontWeight: '800', color: Colors.foreground, paddingHorizontal: 8, alignSelf: 'center', marginTop: 12 },
   inlinePickerBox: { backgroundColor: Colors.background, borderRadius: 10, padding: 8, marginTop: 6, marginBottom: 4 },
@@ -1379,11 +1379,11 @@ const styles = StyleSheet.create({
   weekNavBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: Colors.mutedBg, justifyContent: 'center', alignItems: 'center' },
   weekNavTitle: { flex: 1, textAlign: 'center', fontSize: 16, fontWeight: '800', color: Colors.navy },
   weekTodayBtn: { backgroundColor: Colors.primary, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8 },
-  weekTodayBtnText: { color: Colors.white, fontSize: 12, fontWeight: '700' },
+  weekTodayBtnText: { color: Colors.white, fontSize: 14, fontWeight: '700' },
   weekDayHeaderRow: { flexDirection: 'row', backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border },
   weekColHeader: { alignItems: 'center', paddingVertical: 8, borderLeftWidth: 1, borderLeftColor: Colors.border },
   weekColHeaderToday: { backgroundColor: Colors.primary },
-  weekColDayName: { fontSize: 11, fontWeight: '700', color: Colors.mutedFg },
+  weekColDayName: { fontSize: 13, fontWeight: '700', color: Colors.mutedFg },
   weekColDayNameToday: { color: 'rgba(255,255,255,0.8)' },
   weekColDayNum: { fontSize: 17, fontWeight: '800', color: Colors.foreground, marginTop: 1 },
   weekColDayNumToday: { color: Colors.white },
@@ -1392,13 +1392,13 @@ const styles = StyleSheet.create({
   weekHourLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: Colors.border },
   weekNowLine: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', zIndex: 10 },
   weekLessonBlock: { position: 'absolute', borderRadius: 4, paddingHorizontal: 3, paddingVertical: 2, overflow: 'hidden' },
-  weekBlockName: { fontSize: 10, fontWeight: '700', color: Colors.white, lineHeight: 13 },
+  weekBlockName: { fontSize: 12, fontWeight: '700', color: Colors.white, lineHeight: 13 },
   // 월간 뷰
   monthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border },
   monthNavBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.mutedBg, justifyContent: 'center', alignItems: 'center' },
   monthTitle: { fontSize: 17, fontWeight: '800', color: Colors.navy },
   monthDayHeaders: { flexDirection: 'row', backgroundColor: Colors.white, paddingVertical: 8, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  monthDayName: { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '700', color: Colors.mutedFg },
+  monthDayName: { flex: 1, textAlign: 'center', fontSize: 14, fontWeight: '700', color: Colors.mutedFg },
   monthGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 4, paddingTop: 4 },
   monthCell: { width: '14.28%', minHeight: 64, padding: 4, alignItems: 'center', borderRadius: 8 },
   monthCellToday: { backgroundColor: Colors.primary + '18' },
@@ -1406,12 +1406,12 @@ const styles = StyleSheet.create({
   monthCellDayToday: { color: Colors.primary, fontWeight: '800' },
   monthLessonDots: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   monthDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.primary },
-  monthLessonCount: { fontSize: 10, fontWeight: '700', color: Colors.primary, marginLeft: 1 },
+  monthLessonCount: { fontSize: 12, fontWeight: '700', color: Colors.primary, marginLeft: 1 },
   monthSummary: { flexDirection: 'row', marginHorizontal: 16, marginTop: 16, backgroundColor: Colors.white, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border },
   monthSummaryItem: { flex: 1, alignItems: 'center' },
   monthSummaryDivider: { width: 1, backgroundColor: Colors.border },
   monthSummaryNum: { fontSize: 22, fontWeight: '800', color: Colors.navy },
-  monthSummaryLabel: { fontSize: 11, color: Colors.mutedFg, marginTop: 2 },
+  monthSummaryLabel: { fontSize: 13, color: Colors.mutedFg, marginTop: 2 },
 
   requestBanner: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -1431,9 +1431,9 @@ const styles = StyleSheet.create({
   requestMemberName: { fontSize: 18, fontWeight: '900', color: Colors.navy, marginBottom: 4 },
   requestDateTime: { fontSize: 14, color: Colors.primary, fontWeight: '700', marginBottom: 8 },
   requestMsgBox: { backgroundColor: '#fff', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: Colors.border },
-  requestMsgLabel: { fontSize: 11, fontWeight: '700', color: Colors.mutedFg, marginBottom: 4 },
+  requestMsgLabel: { fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 4 },
   requestMsgText: { fontSize: 14, color: Colors.foreground },
-  requestMore: { fontSize: 12, color: Colors.mutedFg, textAlign: 'center', marginBottom: 12 },
+  requestMore: { fontSize: 14, color: Colors.mutedFg, textAlign: 'center', marginBottom: 12 },
   requestBtnRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
   requestBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, paddingVertical: 14 },
   requestBtnReject: { backgroundColor: Colors.destructive + '12', borderWidth: 1.5, borderColor: Colors.destructive },

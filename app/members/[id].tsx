@@ -916,7 +916,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                       <Ionicons name="card-outline" size={18} color={Colors.iconMuted} />
                       <Text style={[styles.packageMeta, { color: Colors.placeholder, marginLeft: 8 }]}>연결된 레슨권 없음</Text>
                       <TouchableOpacity onPress={() => setEditing(true)} style={{ marginLeft: 'auto' }}>
-                        <Text style={{ fontSize: 12, color: Colors.navy, fontWeight: '600' }}>설정 →</Text>
+                        <Text style={{ fontSize: 14, color: Colors.navy, fontWeight: '600' }}>설정 →</Text>
                       </TouchableOpacity>
                     </>
                   )}
@@ -1046,7 +1046,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                           }}
                         >
                           <Ionicons name="add" size={14} color={Colors.primary} />
-                          <Text style={{ fontSize: 12, color: Colors.navy, fontWeight: '700' }}>시간 추가</Text>
+                          <Text style={{ fontSize: 14, color: Colors.navy, fontWeight: '700' }}>시간 추가</Text>
                         </TouchableOpacity>
                       </View>
                       {/* 시간 목록 */}
@@ -1068,7 +1068,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                         </View>
                       ))}
                       {times.length === 0 && (
-                        <Text style={{ fontSize: 12, color: Colors.placeholder, marginLeft: 4, marginBottom: 2 }}>시간 추가 버튼을 눌러 시작 시간을 설정하세요</Text>
+                        <Text style={{ fontSize: 14, color: Colors.placeholder, marginLeft: 4, marginBottom: 2 }}>시간 추가 버튼을 눌러 시작 시간을 설정하세요</Text>
                       )}
                     </View>
                   );
@@ -1159,7 +1159,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                       {dateLabel}
                     </Text>
                     {isAbsent && absReason && !isEditing && (
-                      <Text style={{ fontSize: 11, color: Colors.mutedFg }}>사유: {absReason}</Text>
+                      <Text style={{ fontSize: 13, color: Colors.mutedFg }}>사유: {absReason}</Text>
                     )}
                     {/* 수정 중: 3개 옵션 인라인 */}
                     {isEditing && (
@@ -1175,7 +1175,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                                 borderWidth: 1.5, borderColor: isActive ? col : Colors.border }}
                               onPress={() => setEditStatus2(opt)}
                             >
-                              <Text style={{ fontSize: 12, fontWeight: '700', color: isActive ? '#fff' : Colors.mutedFg }}>{opt}</Text>
+                              <Text style={{ fontSize: 14, fontWeight: '700', color: isActive ? '#fff' : Colors.mutedFg }}>{opt}</Text>
                             </TouchableOpacity>
                           );
                         })}
@@ -1203,7 +1203,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                   {!isEditing && (
                     <View style={{ alignItems: 'flex-end', gap: 5 }}>
                       <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: statusColor + '20' }}>
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: statusColor }}>{displayStatus}</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: statusColor }}>{displayStatus}</Text>
                       </View>
                       <TouchableOpacity
                         style={{ flexDirection: 'row', alignItems: 'center', gap: 3,
@@ -1212,7 +1212,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                         onPress={() => { setEditingAttId(a.id); setEditStatus2(displayStatus); }}
                       >
                         <Ionicons name="create-outline" size={12} color={Colors.primary} />
-                        <Text style={{ fontSize: 11, color: Colors.primary, fontWeight: '700' }}>수정</Text>
+                        <Text style={{ fontSize: 13, color: Colors.primary, fontWeight: '700' }}>수정</Text>
                       </TouchableOpacity>
                     </View>
                   )}
@@ -1315,7 +1315,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
             <View style={[styles.emptyCard, { flex: 1, justifyContent: 'center' }]}>
               <Ionicons name="chatbubbles-outline" size={36} color={Colors.iconMuted} />
               <Text style={styles.emptyText}>아직 메시지가 없어요</Text>
-              <Text style={[styles.emptyText, { fontSize: 12, marginTop: 4 }]}>회원에게 첫 메시지를 보내보세요</Text>
+              <Text style={[styles.emptyText, { fontSize: 14, marginTop: 4 }]}>회원에게 첫 메시지를 보내보세요</Text>
             </View>
           ) : (
             <FlatList
@@ -1335,18 +1335,18 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                   <>
                     {showDate && (
                       <View style={{ alignItems: 'center', marginVertical: 10 }}>
-                        <Text style={{ fontSize: 12, color: Colors.mutedFg, backgroundColor: Colors.border, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 }}>{dateStr}</Text>
+                        <Text style={{ fontSize: 14, color: Colors.mutedFg, backgroundColor: Colors.border, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 }}>{dateStr}</Text>
                       </View>
                     )}
                     <View style={{ flexDirection: isMe ? 'row-reverse' : 'row', alignItems: 'flex-end', marginBottom: 8, gap: 8 }}>
                       {!isMe && (
                         <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.primary + '30', justifyContent: 'center', alignItems: 'center' }}>
-                          <Text style={{ fontSize: 11, fontWeight: '800', color: Colors.primary }}>{member?.name?.slice(0,1)}</Text>
+                          <Text style={{ fontSize: 13, fontWeight: '800', color: Colors.primary }}>{member?.name?.slice(0,1)}</Text>
                         </View>
                       )}
                       <View style={{ maxWidth: '75%', borderRadius: 14, padding: 10, backgroundColor: isMe ? Colors.primary : '#fff', borderBottomRightRadius: isMe ? 4 : 14, borderBottomLeftRadius: isMe ? 14 : 4 }}>
                         <Text style={{ fontSize: 14, color: isMe ? '#fff' : Colors.foreground, lineHeight: 20 }}>{item.content}</Text>
-                        <Text style={{ fontSize: 10, color: isMe ? 'rgba(255,255,255,0.6)' : Colors.mutedFg, marginTop: 3, textAlign: 'right' }}>
+                        <Text style={{ fontSize: 12, color: isMe ? 'rgba(255,255,255,0.6)' : Colors.mutedFg, marginTop: 3, textAlign: 'right' }}>
                           {d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
                         </Text>
                       </View>
@@ -1384,7 +1384,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
             <View style={styles.modalHeaderTP}>
               <View>
                 <Text style={styles.modalTitleTP}>언제부터 반영할까요?</Text>
-                <Text style={{ fontSize: 12, color: Colors.mutedFg, marginTop: 2 }}>선택한 날짜 이후 레슨이 새 스케줄로 교체됩니다</Text>
+                <Text style={{ fontSize: 14, color: Colors.mutedFg, marginTop: 2 }}>선택한 날짜 이후 레슨이 새 스케줄로 교체됩니다</Text>
               </View>
               <TouchableOpacity onPress={() => setStartDateModal(false)}>
                 <Ionicons name="close" size={22} color={Colors.mutedFg} />
@@ -1402,7 +1402,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
               </Text>
               {scheduleStartDate === toKSTDateStr(new Date()) && (
                 <View style={{ marginLeft: 'auto', backgroundColor: Colors.primary, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}>
-                  <Text style={{ fontSize: 11, color: '#fff', fontWeight: '700' }}>오늘</Text>
+                  <Text style={{ fontSize: 13, color: '#fff', fontWeight: '700' }}>오늘</Text>
                 </View>
               )}
             </View>
@@ -1447,7 +1447,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                     {/* 요일 헤더 */}
                     <View style={{ flexDirection: 'row', marginBottom: 4 }}>
                       {DAYS_LABEL.map((dl, di) => (
-                        <Text key={di} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '700',
+                        <Text key={di} style={{ flex: 1, textAlign: 'center', fontSize: 14, fontWeight: '700',
                           color: di === 0 ? Colors.destructive : di === 6 ? Colors.info : Colors.mutedFg,
                           paddingVertical: 4 }}>{dl}</Text>
                       ))}
@@ -1525,7 +1525,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                 <Text style={styles.modalTitleTP}>
                   {slotsModalDay !== null ? DAYS_KR[slotsModalDay] : ''}요일 빈 시간대
                 </Text>
-                {slotsDateStr ? <Text style={{ fontSize: 12, color: Colors.mutedFg, marginTop: 2 }}>{slotsDateStr} 기준</Text> : null}
+                {slotsDateStr ? <Text style={{ fontSize: 14, color: Colors.mutedFg, marginTop: 2 }}>{slotsDateStr} 기준</Text> : null}
               </View>
               <TouchableOpacity onPress={() => setSlotsModalVisible(false)}>
                 <Ionicons name="close" size={22} color={Colors.mutedFg} />
@@ -1559,11 +1559,11 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                       }}
                     >
                       <Text style={{ fontSize: 15, fontWeight: '700', color: slot.available ? Colors.success : Colors.placeholder }}>{slot.time}</Text>
-                      {!slot.available && <Text style={{ fontSize: 10, color: Colors.placeholder, marginTop: 2 }}>레슨중</Text>}
+                      {!slot.available && <Text style={{ fontSize: 12, color: Colors.placeholder, marginTop: 2 }}>레슨중</Text>}
                     </TouchableOpacity>
                   ))}
                 </View>
-                <Text style={{ fontSize: 12, color: Colors.mutedFg, paddingHorizontal: 16, paddingBottom: 8 }}>
+                <Text style={{ fontSize: 14, color: Colors.mutedFg, paddingHorizontal: 16, paddingBottom: 8 }}>
                   빈 시간 탭하면 바로 추가됩니다. 닫으면 직접 입력 가능해요.
                 </Text>
               </ScrollView>
@@ -1685,13 +1685,13 @@ const styles = StyleSheet.create({
   tabRow: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: Colors.border },
   tabBtn: { flex: 1, alignItems: 'center', paddingVertical: 10, flexDirection: 'row', justifyContent: 'center', gap: 4 },
   tabBtnActive: { borderBottomWidth: 2, borderBottomColor: Colors.primary },
-  tabLabel: { fontSize: 12, color: Colors.mutedFg, fontWeight: '600' },
+  tabLabel: { fontSize: 14, color: Colors.mutedFg, fontWeight: '600' },
   tabLabelActive: { color: Colors.navy },
   content: { flex: 1, backgroundColor: Colors.background },
   card: { backgroundColor: '#fff', margin: 16, borderRadius: 12, padding: 16 },
   cardTitle: { fontSize: 15, fontWeight: '700', color: Colors.foreground, marginBottom: 12 },
   infoRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.mutedBg },
-  infoLabel: { fontSize: 11, color: Colors.mutedFg, marginBottom: 2 },
+  infoLabel: { fontSize: 13, color: Colors.mutedFg, marginBottom: 2 },
   infoValue: { fontSize: 15, color: Colors.foreground, fontWeight: '500' },
   btnRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
   editBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1.5, borderColor: Colors.primary, borderRadius: 10, paddingVertical: 10 },
@@ -1707,10 +1707,10 @@ const styles = StyleSheet.create({
   trialBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#FEF3C7', borderRadius: 10, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#FDE68A' },
   trialBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   trialBannerTitle: { fontSize: 13, fontWeight: '700', color: '#92400E' },
-  trialBannerSub: { fontSize: 12, color: '#B45309', marginTop: 1 },
+  trialBannerSub: { fontSize: 14, color: '#B45309', marginTop: 1 },
   convertBtn: { backgroundColor: '#D97706', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
   convertBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  editLabel: { fontSize: 12, color: Colors.mutedFg, fontWeight: '600', marginBottom: 4, marginTop: 8 },
+  editLabel: { fontSize: 14, color: Colors.mutedFg, fontWeight: '600', marginBottom: 4, marginTop: 8 },
   editInput: { backgroundColor: Colors.mutedBg, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, fontSize: 15, color: Colors.foreground, marginBottom: 4, borderWidth: 1, borderColor: Colors.border },
   levelRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
   levelBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: Colors.mutedBg },
@@ -1729,13 +1729,13 @@ const styles = StyleSheet.create({
   attendanceRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.mutedBg, gap: 10 },
   statusDot: { width: 10, height: 10, borderRadius: 5 },
   attendanceTitle: { fontSize: 14, color: Colors.foreground, fontWeight: '600' },
-  attendanceDate: { fontSize: 12, color: Colors.mutedFg, marginTop: 2 },
+  attendanceDate: { fontSize: 14, color: Colors.mutedFg, marginTop: 2 },
   attendanceStatus: { fontSize: 13, fontWeight: '700' },
   paymentRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.mutedBg },
   paymentDesc: { fontSize: 14, color: Colors.foreground, fontWeight: '600', marginBottom: 2 },
-  paymentDate: { fontSize: 12, color: Colors.mutedFg },
+  paymentDate: { fontSize: 14, color: Colors.mutedFg },
   paymentAmount: { fontSize: 15, fontWeight: '700', color: Colors.foreground },
-  paymentStatus: { fontSize: 12, fontWeight: '700', marginTop: 2 },
+  paymentStatus: { fontSize: 14, fontWeight: '700', marginTop: 2 },
   noteInputCard: { backgroundColor: '#fff', margin: 16, marginBottom: 0, borderRadius: 12, padding: 12 },
   noteInput: { backgroundColor: Colors.mutedBg, borderRadius: 8, padding: 10, fontSize: 14, color: Colors.foreground, minHeight: 70, marginBottom: 8 },
   noteAddBtn: { backgroundColor: Colors.primary, borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
@@ -1745,24 +1745,24 @@ const styles = StyleSheet.create({
 
   // Timeline
   timelineContainer: { marginHorizontal: 16, marginTop: 8 },
-  historyLabel: { fontSize: 12, color: Colors.mutedFg, fontWeight: '600', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
+  historyLabel: { fontSize: 14, color: Colors.mutedFg, fontWeight: '600', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
   timelineItem: { flexDirection: 'row', gap: 12, marginBottom: 4 },
   timelineLine: { alignItems: 'center', width: 16 },
   timelineDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.primary, marginTop: 18 },
   timelineBar: { width: 2, flex: 1, backgroundColor: Colors.successLight, marginTop: 2 },
   timelineContent: { flex: 1, paddingBottom: 16 },
-  timelineDate: { fontSize: 11, color: Colors.mutedFg, fontWeight: '600', marginBottom: 6, marginTop: 14 },
+  timelineDate: { fontSize: 13, color: Colors.mutedFg, fontWeight: '600', marginBottom: 6, marginTop: 14 },
   timelineTime: { color: Colors.placeholder, fontWeight: '400' },
   timelineCard: { backgroundColor: '#fff', borderRadius: 10, padding: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1 },
   deleteNoteBtn: { padding: 2 },
   noteFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
-  noteDate: { fontSize: 11, color: Colors.placeholder },
+  noteDate: { fontSize: 13, color: Colors.placeholder },
   emptyCard: { margin: 16, padding: 20, alignItems: 'center' },
   emptyText: { fontSize: 14, color: Colors.placeholder, textAlign: 'center' },
   packageBanner: { flexDirection: 'row', alignItems: 'center', padding: 12, backgroundColor: Colors.background, borderRadius: 10, marginTop: 8, gap: 10 },
   packageDot: { width: 10, height: 10, borderRadius: 5 },
   packageTitle: { fontSize: 14, fontWeight: '700', color: Colors.foreground },
-  packageMeta: { fontSize: 12, color: Colors.mutedFg, marginTop: 2 },
+  packageMeta: { fontSize: 14, color: Colors.mutedFg, marginTop: 2 },
   editPkgGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   editPkgCard: { width: '47%', borderRadius: 10, borderWidth: 2, borderColor: Colors.border, padding: 10, position: 'relative', backgroundColor: '#fff' },
   editPkgCardNone: { borderColor: Colors.border, alignItems: 'center', justifyContent: 'center', paddingVertical: 14 },
@@ -1771,13 +1771,13 @@ const styles = StyleSheet.create({
   editPkgNoneText: { fontSize: 13, color: Colors.mutedFg, marginTop: 4, fontWeight: '600' },
   editPkgColorBar: { height: 3, borderRadius: 2, marginBottom: 6 },
   editPkgTitle: { fontSize: 13, fontWeight: '700', color: Colors.foreground, marginBottom: 2 },
-  editPkgMeta: { fontSize: 11, color: Colors.mutedFg },
+  editPkgMeta: { fontSize: 13, color: Colors.mutedFg },
   editPkgPrice: { fontSize: 13, fontWeight: '800', marginTop: 4 },
   // per-day time rows
   dayTimeRow2: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.mutedBg, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: Colors.border, gap: 10, marginBottom: 6 },
   dayTimeBadge2: { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.border, justifyContent: 'center', alignItems: 'center' },
   dayTimeBadge2Set: { backgroundColor: Colors.primary },
-  dayTimeBadge2Text: { fontSize: 12, fontWeight: '700', color: Colors.mutedFg },
+  dayTimeBadge2Text: { fontSize: 14, fontWeight: '700', color: Colors.mutedFg },
   // time picker modal styles
   modalOverlayTP: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalSheetTP: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 },
@@ -1785,7 +1785,7 @@ const styles = StyleSheet.create({
   modalTitleTP: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
   spinnerRowTP: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20, paddingTop: 12 },
   spinnerColTP: { flex: 1, alignItems: 'center' },
-  spinnerLabelTP: { fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  spinnerLabelTP: { fontSize: 14, fontWeight: '700', color: Colors.mutedFg, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
   spinnerListTP: { height: 220 },
   spinnerItemTP: { paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, marginBottom: 2, alignItems: 'center' },
   spinnerItemTPSel: { backgroundColor: Colors.primary },

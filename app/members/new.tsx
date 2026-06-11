@@ -718,7 +718,7 @@ export default function NewMemberScreen() {
                 <Text style={styles.modalTitle}>
                   {slotsModalDay !== null ? DAYS_KR[slotsModalDay] : ''}요일 빈 시간대
                 </Text>
-                {slotsDateStr ? <Text style={{ fontSize: 12, color: Colors.mutedFg, marginTop: 2 }}>{slotsDateStr} 기준</Text> : null}
+                {slotsDateStr ? <Text style={{ fontSize: 14, color: Colors.mutedFg, marginTop: 2 }}>{slotsDateStr} 기준</Text> : null}
               </View>
               <TouchableOpacity onPress={() => setSlotsModalVisible(false)}>
                 <Ionicons name="close" size={22} color={Colors.mutedFg} />
@@ -760,7 +760,7 @@ export default function NewMemberScreen() {
                     </TouchableOpacity>
                   ))}
                 </View>
-                <Text style={{ fontSize: 12, color: Colors.mutedFg, paddingHorizontal: 16, paddingBottom: 8 }}>
+                <Text style={{ fontSize: 14, color: Colors.mutedFg, paddingHorizontal: 16, paddingBottom: 8 }}>
                   * 빈 시간 탭하면 바로 추가됩니다
                 </Text>
               </ScrollView>
@@ -846,7 +846,7 @@ const styles = StyleSheet.create({
   section: { backgroundColor: '#fff', borderRadius: 12, margin: 16, marginBottom: 0, padding: 16 },
   sectionTitle: { fontSize: 14, fontWeight: '700', color: Colors.mutedFg, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
   label: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg, marginBottom: 6 },
-  labelHint: { fontSize: 11, fontWeight: '400', color: Colors.placeholder },
+  labelHint: { fontSize: 13, fontWeight: '400', color: Colors.placeholder },
   input: { backgroundColor: Colors.mutedBg, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, color: Colors.foreground, marginBottom: 12, borderWidth: 1, borderColor: Colors.border },
   textArea: { minHeight: 100, paddingTop: 10 },
   levelRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -874,17 +874,17 @@ const styles = StyleSheet.create({
   dayTimeRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: Colors.border, gap: 8 },
   dayTimeValue: { flex: 1, fontSize: 15, fontWeight: '600', color: Colors.foreground },
   timeAction: { padding: 2 },
-  dayTimeHint: { fontSize: 12, color: Colors.warning, marginTop: 4 },
+  dayTimeHint: { fontSize: 14, color: Colors.warning, marginTop: 4 },
   packageGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   packageCard: { width: '47%', borderRadius: 12, borderWidth: 2, padding: 12, position: 'relative', overflow: 'hidden', backgroundColor: '#fff' },
   packageCheckmark: { position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
   packageColorBar: { height: 3, borderRadius: 2, marginBottom: 8 },
   packageTitle: { fontSize: 14, fontWeight: '700', color: Colors.foreground, marginBottom: 4 },
-  packageMeta: { fontSize: 11, color: Colors.mutedFg, marginBottom: 2 },
+  packageMeta: { fontSize: 13, color: Colors.mutedFg, marginBottom: 2 },
   packagePrice: { fontSize: 14, fontWeight: '800', marginTop: 4 },
   noPackageBox: { alignItems: 'center', paddingVertical: 20, gap: 6 },
   noPackageText: { fontSize: 14, fontWeight: '600', color: Colors.placeholder },
-  noPackageSubText: { fontSize: 12, color: Colors.iconMuted },
+  noPackageSubText: { fontSize: 14, color: Colors.iconMuted },
   creditPreview: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.primaryLight, borderRadius: 8, padding: 10, marginTop: 8 },
   creditPreviewText: { fontSize: 14, color: Colors.navy, fontWeight: '600' },
   saveBtn: { backgroundColor: Colors.primary, margin: 16, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
@@ -895,7 +895,7 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
   spinnerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20, paddingTop: 12 },
   spinnerCol: { flex: 1, alignItems: 'center' },
-  spinnerLabel: { fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  spinnerLabel: { fontSize: 14, fontWeight: '700', color: Colors.mutedFg, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
   spinnerList: { height: 220 },
   spinnerItem: { paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, marginBottom: 2, alignItems: 'center' },
   spinnerItemSelected: { backgroundColor: Colors.primary },
@@ -914,7 +914,7 @@ const styles = StyleSheet.create({
   slotBtnBusy: { backgroundColor: Colors.mutedBg, borderColor: Colors.border, opacity: 0.45 },
   slotBtnText: { fontSize: 14, fontWeight: '600', color: Colors.primary },
   slotBtnTextBusy: { color: Colors.mutedFg },
-  slotBusyLabel: { fontSize: 10, color: Colors.mutedFg, marginTop: 2 },
+  slotBusyLabel: { fontSize: 12, color: Colors.mutedFg, marginTop: 2 },
   loginBtn: { backgroundColor: Colors.primary, borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
   loginBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   // 반복 설정
@@ -928,7 +928,7 @@ const styles = StyleSheet.create({
   intervalBtnActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight },
   intervalBtnText: { fontSize: 14, fontWeight: '600', color: Colors.mutedFg },
   intervalBtnTextActive: { color: Colors.primary },
-  customRepeatHint: { fontSize: 12, color: Colors.mutedFg, textAlign: 'center' },
+  customRepeatHint: { fontSize: 14, color: Colors.mutedFg, textAlign: 'center' },
 });
 const trialStyles = StyleSheet.create({
   toggleRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
@@ -946,5 +946,5 @@ const trialStyles = StyleSheet.create({
     backgroundColor: '#FFFBEB', borderRadius: 8, padding: 10,
     borderWidth: 1, borderColor: '#FDE68A',
   },
-  trialNoticeText: { fontSize: 12, color: '#92400E', flex: 1, lineHeight: 18 },
+  trialNoticeText: { fontSize: 14, color: '#92400E', flex: 1, lineHeight: 18 },
 });
