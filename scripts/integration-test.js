@@ -48,7 +48,7 @@ async function setupTestData() {
 
 async function cleanupTestData() {
   if (testMemberId) {
-    await supabase.from('attendances').delete().eq('member_id', testMemberId);
+    await supabase.from('attendance').delete().eq('member_id', testMemberId);
     await supabase.from('lesson_members').delete().eq('member_id', testMemberId);
     await supabase.from('payments').delete().eq('member_id', testMemberId);
     await supabase.from('members').delete().eq('id', testMemberId);
@@ -113,8 +113,8 @@ async function tc003_attendance() {
     .from('members').select('remaining_credits').eq('id', testMemberId).single();
   const creditsBefore = before?.remaining_credits;
 
-  await supabase.from('attendances').insert({
-    lesson_id: testLessonId, member_id: testMemberId, status: 'attended',
+  await supabase.from('attendance').insert({
+    lesson_id: testLessonId, member_id: testMemberId, status: '출석', deduct_credit: true,
   });
   await sleep(800);
 
@@ -123,7 +123,7 @@ async function tc003_attendance() {
   assert(after?.remaining_credits === creditsBefore - 1, 'TC-003-A', `크레딧 차감 (${creditsBefore} → ${after?.remaining_credits})`);
 
   // 출석 취소 → 복원
-  await supabase.from('attendances').delete().eq('lesson_id', testLessonId).eq('member_id', testMemberId);
+  await supabase.from('attendance').delete().eq('lesson_id', testLessonId).eq('member_id', testMemberId);
   await sleep(800);
 
   const { data: restored } = await supabase
@@ -167,8 +167,8 @@ async function tc006_zeroCredit() {
   assert(zeroMember?.remaining_credits === 0, 'TC-006-A', '크레딧 0 세팅 확인');
 
   // 출석 체크 시도 (DB trigger가 막는지 확인)
-  const { error: attError } = await supabase.from('attendances').insert({
-    lesson_id: testLessonId, member_id: testMemberId, status: 'attended',
+  const { error: attError } = await supabase.from('attendance').insert({
+    lesson_id: testLessonId, member_id: testMemberId, status: '출석', deduct_credit: true,
   });
   await sleep(500);
 
@@ -179,7 +179,7 @@ async function tc006_zeroCredit() {
   assert((afterZero?.remaining_credits ?? 0) >= 0, 'TC-006-B', '크레딧 음수 방지 확인');
 
   // 정리
-  await supabase.from('attendances').delete().eq('lesson_id', testLessonId).eq('member_id', testMemberId);
+  await supabase.from('attendance').delete().eq('lesson_id', testLessonId).eq('member_id', testMemberId);
   await supabase.from('members').update({ remaining_credits: 10 }).eq('id', testMemberId);
   await sleep(300);
 }
@@ -286,23 +286,25 @@ async function tc010_aiAnalysisJsonIntegrity() {
   console.log('\n🧪 TC-010: AI 분석 결과 JSON 무결성 검증');
   if (!testMemberId || !testLessonId) { console.log('  ⚠️ 선행 테스트 실패로 스킵'); return; }
 
-  // lesson_analyses 테이블에 깨진 JSON 넣기 시도 방지 검증
+  // member_lesson_reports 테이블에 데이터 저장 검증
   const validAnalysis = {
-    lesson_id: testLessonId,
     member_id: testMemberId,
+    coach_id: testCoachId,
+    lesson_date: new Date(new Date().getTime() + 9 * 60 * 60 * 1000).toISOString().split('T')[0],
     summary: '테스트 요약입니다.',
-    strengths: ['포핸드 스트로크 안정적'],
-    improvements: ['백핸드 폼 교정 필요'],
-    overall_score: 85,
+    achievements: ['포핸드 스트로크 안정적'],
+    improvement_points: ['백핸드 폼 교정 필요'],
+    practice_plan: [],
+    is_read: false,
   };
 
-  // lesson_analyses 테이블 존재 확인
+  // member_lesson_reports 테이블 존재 확인
   const { error: insertErr } = await supabase
-    .from('lesson_analyses')
+    .from('member_lesson_reports')
     .insert(validAnalysis);
 
-  if (insertErr?.message?.includes('does not exist')) {
-    console.log('  ℹ️ lesson_analyses 테이블 없음 — 스킵');
+  if (insertErr?.message?.includes('Could not find')) {
+    console.log('  ℹ️ member_lesson_reports 테이블 없음 — 스킵');
     return;
   }
 
@@ -310,19 +312,20 @@ async function tc010_aiAnalysisJsonIntegrity() {
 
   // 저장된 데이터 타입 검증
   const { data: analysis } = await supabase
-    .from('lesson_analyses')
+    .from('member_lesson_reports')
     .select('*')
-    .eq('lesson_id', testLessonId)
     .eq('member_id', testMemberId)
+    .order('created_at', { ascending: false })
+    .limit(1)
     .single();
 
   assert(typeof analysis?.summary === 'string', 'TC-010-B', 'summary 필드가 string 타입');
-  assert(Array.isArray(analysis?.strengths), 'TC-010-C', 'strengths 필드가 배열 타입');
-  assert(typeof analysis?.overall_score === 'number', 'TC-010-D', 'overall_score가 숫자 타입');
+  assert(Array.isArray(analysis?.achievements), 'TC-010-C', 'achievements 필드가 배열 타입');
+  assert(Array.isArray(analysis?.achievements) && analysis.achievements.length > 0, 'TC-010-D', 'achievements 배열에 데이터 있음');
 
   // 정리
-  await supabase.from('lesson_analyses').delete()
-    .eq('lesson_id', testLessonId).eq('member_id', testMemberId);
+  await supabase.from('member_lesson_reports').delete()
+    .eq('member_id', testMemberId);
 }
 
 // ─── TC-011: 잔여 크레딧 1 이하 경고 상태 ───────────────────
