@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Alert, ActivityIndicator, Platform, Animated,
+  Alert, ActivityIndicator, Platform, Animated, Modal, TextInput, KeyboardAvoidingView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -44,6 +44,21 @@ export default function AIAnalysisScreen() {
   const [plans, setPlans] = useState<LessonPlan[]>([]);
   const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // 수동 레포트 모달
+  const [manualModalVisible, setManualModalVisible] = useState(false);
+  const [manualSummary, setManualSummary] = useState('');
+  const [manualAchievements, setManualAchievements] = useState('');
+  const [manualImprovement, setManualImprovement] = useState('');
+  const [manualPracticePlan, setManualPracticePlan] = useState('');
+  const [polishing, setPolishing] = useState(false);
+  const [polishedReport, setPolishedReport] = useState<null | {
+    summary: string;
+    achievements: string[];
+    improvement_points: string[];
+    practice_plan: Array<{ title: string; description: string; duration?: string; frequency?: string }>;
+  }>(null);
+  const [savingReport, setSavingReport] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -92,6 +107,69 @@ export default function AIAnalysisScreen() {
       .limit(10);
     setPlans(data ?? []);
     setLoading(false);
+  }
+
+  async function polishManualReport() {
+    if (!manualSummary.trim()) {
+      Alert.alert('오류', '오늘 레슨 요약은 필수입니다.');
+      return;
+    }
+    setPolishing(true);
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/polish-manual-report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({
+          memberName,
+          memberLevel,
+          lessonDate: new Date().toISOString().split('T')[0],
+          raw: {
+            summary: manualSummary,
+            achievements: manualAchievements,
+            improvementPoints: manualImprovement,
+            practicePlan: manualPracticePlan,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPolishedReport(data.report);
+      } else {
+        Alert.alert('오류', data.error ?? 'AI 다듬기 실패');
+      }
+    } catch (e) {
+      Alert.alert('오류', '네트워크 오류가 발생했습니다.');
+    } finally {
+      setPolishing(false);
+    }
+  }
+
+  async function saveManualReport() {
+    if (!polishedReport) return;
+    setSavingReport(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('not authenticated');
+      const { error } = await supabase.from('member_lesson_reports').insert({
+        coach_id: user.id,
+        member_id: memberId,
+        lesson_date: new Date().toISOString().split('T')[0],
+        summary: polishedReport.summary,
+        achievements: polishedReport.achievements,
+        improvement_points: polishedReport.improvement_points,
+        practice_plan: polishedReport.practice_plan,
+        source: 'manual',
+      });
+      if (error) throw error;
+      Alert.alert('저장 완료', '레포트가 저장되었습니다.');
+      setManualModalVisible(false);
+      setPolishedReport(null);
+      setManualSummary(''); setManualAchievements(''); setManualImprovement(''); setManualPracticePlan('');
+    } catch (e) {
+      Alert.alert('오류', '저장에 실패했습니다.');
+    } finally {
+      setSavingReport(false);
+    }
   }
 
   async function startRecording() {
@@ -384,6 +462,120 @@ export default function AIAnalysisScreen() {
           )}
         </View>
 
+        {/* 수동 레포트 작성 버튼 */}
+        <TouchableOpacity
+          style={styles.manualReportBtn}
+          onPress={() => { setPolishedReport(null); setManualModalVisible(true); }}
+          activeOpacity={0.85}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Ionicons name="create-outline" size={20} color="#7C3AED" />
+            <View>
+              <Text style={styles.manualReportBtnTitle}>수동 레포트 작성</Text>
+              <Text style={styles.manualReportBtnSub}>녹음을 놓쳤을 때 메모로 작성 → AI가 다듬어 리포트로</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#7C3AED" />
+        </TouchableOpacity>
+
+        {/* 수동 레포트 모달 */}
+        <Modal visible={manualModalVisible} animationType="slide" transparent onRequestClose={() => setManualModalVisible(false)}>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <View style={styles.manualOverlay}>
+              <View style={styles.manualSheet}>
+                <View style={styles.manualHeader}>
+                  <Text style={styles.manualHeaderTitle}>✏️ 수동 레포트 작성</Text>
+                  <TouchableOpacity onPress={() => setManualModalVisible(false)}>
+                    <Ionicons name="close" size={22} color={Colors.mutedFg} />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
+                  {!polishedReport ? (
+                    <View style={styles.manualForm}>
+                      <Text style={styles.manualFormHint}>각 항목에 간단히 메모하면 AI가 회원용 리포트로 다듬어드려요.</Text>
+
+                      {[
+                        { label: 'a. 오늘 레슨 요약 *', value: manualSummary, onChange: setManualSummary, placeholder: '예) 포핸드 스윙 교정 집중, 토스 연습...' },
+                        { label: 'b. 오늘의 중요 성과', value: manualAchievements, onChange: setManualAchievements, placeholder: '예) 백핸드 안정성 향상, 서브 속도 개선...' },
+                        { label: 'c. 개선 및 보완 포인트', value: manualImprovement, onChange: setManualImprovement, placeholder: '예) 풋워크 더 빠르게, 라켓 그립 조정...' },
+                        { label: 'd. 맞춤 개인 연습 플랜', value: manualPracticePlan, onChange: setManualPracticePlan, placeholder: '예) 벽 치기 30분/일, 그립 교정 반복...' },
+                      ].map(({ label, value, onChange, placeholder }) => (
+                        <View key={label} style={styles.manualFieldWrap}>
+                          <Text style={styles.manualFieldLabel}>{label}</Text>
+                          <TextInput
+                            style={styles.manualInput}
+                            value={value}
+                            onChangeText={onChange}
+                            placeholder={placeholder}
+                            placeholderTextColor={Colors.placeholder}
+                            multiline
+                            numberOfLines={3}
+                          />
+                        </View>
+                      ))}
+
+                      <TouchableOpacity
+                        style={[styles.polishBtn, polishing && { opacity: 0.6 }]}
+                        onPress={polishManualReport}
+                        disabled={polishing}
+                      >
+                        {polishing
+                          ? <ActivityIndicator color="#fff" size="small" />
+                          : <><Ionicons name="sparkles" size={16} color="#fff" /><Text style={styles.polishBtnText}>  AI로 다듬기</Text></>
+                        }
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={styles.manualForm}>
+                      <Text style={styles.polishedTitle}>✨ AI가 다듬은 리포트</Text>
+
+                      <View style={styles.polishedSection}>
+                        <Text style={styles.polishedLabel}>📝 레슨 요약</Text>
+                        <Text style={styles.polishedText}>{polishedReport.summary}</Text>
+                      </View>
+                      <View style={styles.polishedSection}>
+                        <Text style={styles.polishedLabel}>🏆 오늘의 성과</Text>
+                        {polishedReport.achievements.map((a, i) => <Text key={i} style={styles.polishedText}>• {a}</Text>)}
+                      </View>
+                      <View style={styles.polishedSection}>
+                        <Text style={styles.polishedLabel}>🔧 개선 포인트</Text>
+                        {polishedReport.improvement_points.map((p, i) => <Text key={i} style={styles.polishedText}>• {p}</Text>)}
+                      </View>
+                      <View style={styles.polishedSection}>
+                        <Text style={styles.polishedLabel}>🎯 연습 플랜</Text>
+                        {polishedReport.practice_plan.map((p, i) => (
+                          <View key={i} style={styles.practicePlanItem}>
+                            <Text style={styles.practicePlanTitle}>{p.title}</Text>
+                            <Text style={styles.polishedText}>{p.description}</Text>
+                            {p.duration ? <Text style={styles.practicePlanMeta}>⏱ {p.duration}{p.frequency ? `  🔁 ${p.frequency}` : ''}</Text> : null}
+                          </View>
+                        ))}
+                      </View>
+
+                      <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+                        <TouchableOpacity style={styles.retryBtn} onPress={() => setPolishedReport(null)}>
+                          <Text style={styles.retryBtnText}>다시 작성</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.saveBtn, savingReport && { opacity: 0.6 }]}
+                          onPress={saveManualReport}
+                          disabled={savingReport}
+                        >
+                          {savingReport
+                            ? <ActivityIndicator color="#fff" size="small" />
+                            : <Text style={styles.saveBtnText}>저장하기</Text>
+                          }
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+                </ScrollView>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
+
         {/* 분석 기록 */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>📋 AI 분석 기록</Text>
@@ -525,6 +717,54 @@ const styles = StyleSheet.create({
   // 분석 기록
   section: { paddingHorizontal: 16 },
   sectionTitle: { fontSize: 16, fontWeight: '800', color: Colors.foreground, marginBottom: 12 },
+
+  // 수동 레포트
+  manualReportBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginHorizontal: 16, marginBottom: 16, padding: 14,
+    backgroundColor: '#F5F3FF', borderRadius: 12, borderWidth: 1, borderColor: '#DDD6FE',
+  },
+  manualReportBtnTitle: { fontSize: 14, fontWeight: '700', color: '#5B21B6' },
+  manualReportBtnSub: { fontSize: 11, color: '#7C3AED', marginTop: 2 },
+  manualOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  manualSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '85%', maxHeight: '92%' },
+  manualHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 16,
+    borderBottomWidth: 1, borderBottomColor: '#F3F4F6',
+  },
+  manualHeaderTitle: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
+  manualForm: { padding: 20, paddingBottom: 40 },
+  manualFormHint: { fontSize: 12, color: Colors.mutedFg, marginBottom: 16, lineHeight: 18 },
+  manualFieldWrap: { marginBottom: 14 },
+  manualFieldLabel: { fontSize: 13, fontWeight: '600', color: Colors.foreground, marginBottom: 6 },
+  manualInput: {
+    borderWidth: 1, borderColor: Colors.border, borderRadius: 8,
+    padding: 10, fontSize: 13, color: Colors.foreground,
+    minHeight: 72, textAlignVertical: 'top', lineHeight: 20,
+  },
+  polishBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#7C3AED', borderRadius: 10, paddingVertical: 13, marginTop: 8,
+  },
+  polishBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  polishedTitle: { fontSize: 15, fontWeight: '800', color: Colors.foreground, marginBottom: 16 },
+  polishedSection: { marginBottom: 16 },
+  polishedLabel: { fontSize: 13, fontWeight: '700', color: Colors.primary, marginBottom: 6 },
+  polishedText: { fontSize: 13, color: Colors.foreground, lineHeight: 20 },
+  practicePlanItem: { backgroundColor: Colors.mutedBg, borderRadius: 8, padding: 10, marginBottom: 8 },
+  practicePlanTitle: { fontSize: 13, fontWeight: '700', color: Colors.foreground, marginBottom: 4 },
+  practicePlanMeta: { fontSize: 11, color: Colors.mutedFg, marginTop: 4 },
+  retryBtn: {
+    flex: 1, borderWidth: 1, borderColor: Colors.border, borderRadius: 10,
+    paddingVertical: 12, alignItems: 'center',
+  },
+  retryBtnText: { fontSize: 14, color: Colors.foreground, fontWeight: '600' },
+  saveBtn: {
+    flex: 2, backgroundColor: Colors.primary, borderRadius: 10,
+    paddingVertical: 12, alignItems: 'center',
+  },
+  saveBtnText: { fontSize: 14, color: '#fff', fontWeight: '700' },
   emptyBox: { alignItems: 'center', paddingVertical: 32, gap: 8 },
   emptyText: { fontSize: 15, color: Colors.placeholder, fontWeight: '600' },
   emptySubText: { fontSize: 13, color: Colors.placeholder, textAlign: 'center' },
