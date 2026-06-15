@@ -62,7 +62,8 @@ export default function HomeScreen() {
   const [showChatHint, setShowChatHint] = useState(false);
   const { canUse } = useSubscription();
 
-  const today = new Date().toISOString().split('T')[0];
+  // today를 state로 관리: 자정이 지나면 자동 갱신
+  const [today, setToday] = useState(() => new Date().toISOString().split('T')[0]);
 
   // 미납/만료 모달 상태
   const [unpaidModal, setUnpaidModal] = useState(false);
@@ -92,7 +93,8 @@ export default function HomeScreen() {
   const [interestList, setInterestList] = useState<InterestMember[]>([]);
   const [interestModal, setInterestModal] = useState(false);
 
-  async function loadAll() {
+  async function loadAll(targetDate?: string) {
+    const date = targetDate ?? today;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setCoachEmail(user.email ?? '');
@@ -100,7 +102,7 @@ export default function HomeScreen() {
 
     const [membersRes, lessonsRes] = await Promise.all([
       supabase.from('members').select('id, name, level, remaining_credits, is_active, is_trial').eq('coach_id', user.id),
-      supabase.from('lessons').select('id').eq('coach_id', user.id).eq('date', today),
+      supabase.from('lessons').select('id').eq('coach_id', user.id).eq('date', date),
     ]);
 
     const members = membersRes.data ?? [];
@@ -141,7 +143,7 @@ export default function HomeScreen() {
       created_at: i.created_at,
     })));
 
-    await loadTodayCards(user.id);
+    await loadTodayCards(user.id, date);
     await checkAutoGenSchedule(user.id);
     // AI 코칭 모델 카운트
     const { count } = await supabase
@@ -192,12 +194,13 @@ export default function HomeScreen() {
     }
   }
 
-  async function loadTodayCards(uid: string) {
+  async function loadTodayCards(uid: string, targetDate?: string) {
+    const date = targetDate ?? today;
     const { data: lessons } = await supabase
       .from('lessons')
       .select('id, title, start_time')
       .eq('coach_id', uid)
-      .eq('date', today)
+      .eq('date', date)
       .order('start_time');
 
     if (!lessons || lessons.length === 0) {
@@ -364,6 +367,22 @@ export default function HomeScreen() {
 
   useFocusEffect(useCallback(() => { loadAll(); }, []));
 
+  // 자정 다음날 자동 갱신 타이머
+  useEffect(() => {
+    const now = new Date();
+    const midnight = new Date(now);
+    midnight.setHours(24, 0, 0, 0);
+    const msUntilMidnight = midnight.getTime() - now.getTime();
+
+    const timer = setTimeout(() => {
+      const newDate = new Date().toISOString().split('T')[0];
+      setToday(newDate);
+      loadAll(newDate);
+    }, msUntilMidnight);
+
+    return () => clearTimeout(timer);
+  }, [today]);
+
   useEffect(() => {
     AsyncStorage.getItem('chat_hint_dismissed').then(val => {
       if (!val) setShowChatHint(true);
@@ -397,6 +416,16 @@ export default function HomeScreen() {
           loadAll();
         })
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'members' }, (payload) => {
+          const row = payload.new as any;
+          if (row.coach_id !== coachId) return;
+          loadAll();
+        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'payments' }, (payload) => {
+          const row = payload.new as any;
+          if (row.coach_id !== coachId) return;
+          loadAll();
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'payments' }, (payload) => {
           const row = payload.new as any;
           if (row.coach_id !== coachId) return;
           loadAll();

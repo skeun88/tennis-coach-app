@@ -17,16 +17,24 @@ let passed = 0;
 let failed = 0;
 const results = [];
 
-function assert(condition, testId, description) {
+/** 테스트 단언 — reason에 실제값/에러 메시지 전달 */
+function assert(condition, testId, description, reason) {
   if (condition) {
     console.log(`  ✅ PASS [${testId}] ${description}`);
     passed++;
     results.push({ id: testId, status: 'PASS', description });
   } else {
-    console.error(`  ❌ FAIL [${testId}] ${description}`);
+    const reasonStr = reason ? ` | 이유: ${reason}` : '';
+    console.error(`  ❌ FAIL [${testId}] ${description}${reasonStr}`);
     failed++;
-    results.push({ id: testId, status: 'FAIL', description });
+    results.push({ id: testId, status: 'FAIL', description, reason: reason || '(이유 없음)' });
   }
+}
+
+/** 선행 조건 미충족으로 실행 불가한 티켓 명시적 스킵 */
+function skipTest(testId, description, reason) {
+  console.warn(`  ⏭️ SKIP [${testId}] ${description} | 스킵 이유: ${reason}`);
+  results.push({ id: testId, status: 'SKIP', description, reason });
 }
 
 async function sleep(ms) {
@@ -107,7 +115,11 @@ async function tc001_memberRegistration() {
 // ─── TC-003: 출석 체크 → 크레딧 차감 ────────────────────────
 async function tc003_attendance() {
   console.log('\n🧪 TC-003: 출석 체크 → 크레딧 차감/복원');
-  if (!testMemberId || !testLessonId) { console.log('  ⚠️ 선행 테스트 실패로 스킵'); return; }
+  if (!testMemberId || !testLessonId) {
+    skipTest('TC-003-A', '크레딧 차감', 'TC-001 실패로 testMemberId/testLessonId 없음');
+    skipTest('TC-003-B', '출석 취소 시 크레딧 복원', 'TC-001 실패로 testMemberId/testLessonId 없음');
+    return;
+  }
 
   const { data: before } = await supabase
     .from('members').select('remaining_credits').eq('id', testMemberId).single();
@@ -120,7 +132,14 @@ async function tc003_attendance() {
 
   const { data: after } = await supabase
     .from('members').select('remaining_credits').eq('id', testMemberId).single();
-  assert(after?.remaining_credits === creditsBefore - 1, 'TC-003-A', `크레딧 차감 (${creditsBefore} → ${after?.remaining_credits})`);
+  assert(
+    after?.remaining_credits === creditsBefore - 1,
+    'TC-003-A',
+    `크레딧 차감 (${creditsBefore} → ${creditsBefore - 1})`,
+    after?.remaining_credits !== creditsBefore - 1
+      ? `실제값 ${after?.remaining_credits}. DB 트리거 trg_auto_deduct_credit 미적용 또는 deduct_credit 조건 불일치`
+      : undefined
+  );
 
   // 출석 취소 → 복원
   await supabase.from('attendance').delete().eq('lesson_id', testLessonId).eq('member_id', testMemberId);
@@ -128,13 +147,25 @@ async function tc003_attendance() {
 
   const { data: restored } = await supabase
     .from('members').select('remaining_credits').eq('id', testMemberId).single();
-  assert(restored?.remaining_credits === creditsBefore, 'TC-003-B', `출석 취소 시 크레딧 복원`);
+  assert(
+    restored?.remaining_credits === creditsBefore,
+    'TC-003-B',
+    `출석 취소 시 크레딧 복원 (기댓값 ${creditsBefore})`,
+    restored?.remaining_credits !== creditsBefore
+      ? `실제값 ${restored?.remaining_credits}. trg_restore_credit 트리거 미적용 가능성`
+      : undefined
+  );
 }
 
 // ─── TC-004: 결제 등록 ───────────────────────────────────────
 async function tc004_payment() {
   console.log('\n🧪 TC-004: 결제 등록 → DB 저장');
-  if (!testMemberId) { console.log('  ⚠️ 선행 테스트 실패로 스킵'); return; }
+  if (!testMemberId) {
+    skipTest('TC-004-A', '결제 등록 성공', 'TC-001 실패로 testMemberId 없음');
+    skipTest('TC-004-B', '결제 내역 조회 가능', 'TC-001 실패로 testMemberId 없음');
+    skipTest('TC-004-C', '미납 상태 저장 확인', 'TC-001 실패로 testMemberId 없음');
+    return;
+  }
 
   const { data: payment, error } = await supabase
     .from('payments')
@@ -146,17 +177,21 @@ async function tc004_payment() {
     })
     .select().single();
 
-  assert(!error && payment, 'TC-004-A', '결제 등록 성공');
+  assert(!error && payment, 'TC-004-A', '결제 등록 성공', error?.message);
 
   const { data: list } = await supabase.from('payments').select('id, status').eq('member_id', testMemberId);
-  assert(list && list.length > 0, 'TC-004-B', '결제 내역 조회 가능');
-  assert(list?.some(p => p.status === '미납'), 'TC-004-C', '미납 상태 정확히 저장됨');
+  assert(list && list.length > 0, 'TC-004-B', '결제 내역 조회 가능', list ? '조회됐으나 빈 배열' : '조회 실패');
+  assert(list?.some(p => p.status === '미납'), 'TC-004-C', '미납 상태 저장 확인', `실제 상태: ${JSON.stringify(list?.map(p => p.status))}`);
 }
 
 // ─── TC-006: 크레딧 0일 때 출석 체크 ────────────────────────
 async function tc006_zeroCredit() {
   console.log('\n🧪 TC-006: 크레딧 0 상태에서 출석 체크 방지');
-  if (!testMemberId || !testLessonId) { console.log('  ⚠️ 선행 테스트 실패로 스킵'); return; }
+  if (!testMemberId || !testLessonId) {
+    skipTest('TC-006-A', '크레딧 0 세팅 확인', 'TC-001 실패로 testMemberId/testLessonId 없음');
+    skipTest('TC-006-B', '크레딧 음수 방지 확인', 'TC-001 실패로 testMemberId/testLessonId 없음');
+    return;
+  }
 
   // 크레딧 0으로 강제 세팅
   await supabase.from('members').update({ remaining_credits: 0 }).eq('id', testMemberId);
@@ -164,7 +199,7 @@ async function tc006_zeroCredit() {
 
   const { data: zeroMember } = await supabase
     .from('members').select('remaining_credits').eq('id', testMemberId).single();
-  assert(zeroMember?.remaining_credits === 0, 'TC-006-A', '크레딧 0 세팅 확인');
+  assert(zeroMember?.remaining_credits === 0, 'TC-006-A', '크레딧 0 세팅 확인', `실제값 ${zeroMember?.remaining_credits}`);
 
   // 출석 체크 시도 (DB trigger가 막는지 확인)
   const { error: attError } = await supabase.from('attendance').insert({
@@ -176,7 +211,7 @@ async function tc006_zeroCredit() {
     .from('members').select('remaining_credits').eq('id', testMemberId).single();
 
   // 크레딧이 음수가 되면 안 됨
-  assert((afterZero?.remaining_credits ?? 0) >= 0, 'TC-006-B', '크레딧 음수 방지 확인');
+  assert((afterZero?.remaining_credits ?? 0) >= 0, 'TC-006-B', '크레딧 음수 방지 확인', `실제값 ${afterZero?.remaining_credits}`);
 
   // 정리
   await supabase.from('attendance').delete().eq('lesson_id', testLessonId).eq('member_id', testMemberId);
@@ -197,7 +232,7 @@ async function tc007_duplicateLesson() {
   };
 
   const { data: l1, error: e1 } = await supabase.from('lessons').insert(lessonData).select().single();
-  assert(!e1 && l1, 'TC-007-A', '첫 번째 레슨 생성 성공');
+  assert(!e1 && l1, 'TC-007-A', '첫 번째 레슨 생성 성공', e1?.message);
 
   const { data: l2, error: e2 } = await supabase.from('lessons').insert(lessonData).select().single();
   // DB constraint 또는 앱 레벨에서 막혀야 함
@@ -205,7 +240,7 @@ async function tc007_duplicateLesson() {
     assert(true, 'TC-007-B', 'DB 레벨에서 중복 레슨 방지됨');
   } else {
     // 중복이 허용되면 경고 (버그)
-    assert(false, 'TC-007-B', '중복 레슨이 DB에 저장됨 (버그!)');
+    assert(false, 'TC-007-B', '중복 레슨이 DB에 저장됨 (버그!)', 'unique constraint 없음 — lessons 테이블 (coach_id, date, start_time) unique index 필요');
     if (l2) await supabase.from('lessons').delete().eq('id', l2.id);
   }
 
@@ -215,7 +250,12 @@ async function tc007_duplicateLesson() {
 // ─── TC-008: 날짜 경계 — 오늘/내일 레슨 분류 ────────────────
 async function tc008_dateBoundary() {
   console.log('\n🧪 TC-008: 날짜 경계 — 오늘/내일 레슨 정확히 분류');
-  if (!testMemberId) { console.log('  ⚠️ 선행 테스트 실패로 스킵'); return; }
+  if (!testMemberId) {
+    skipTest('TC-008-A', '오늘 레슨 날짜 정확성', 'TC-001 실패로 testMemberId 없음');
+    skipTest('TC-008-B', '내일 레슨 날짜 정확성', 'TC-001 실패로 testMemberId 없음');
+    skipTest('TC-008-C', '내일 레슨 오늘 목록 제외', 'TC-001 실패로 testMemberId 없음');
+    return;
+  }
 
   const nowKST = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
   const todayStr = nowKST.toISOString().split('T')[0];
@@ -240,9 +280,9 @@ async function tc008_dateBoundary() {
     .from('lessons').select('id, date').eq('coach_id', testCoachId).eq('date', tomorrowStr)
     .like('title', '[TEST]%');
 
-  assert(todayOnly?.some(l => l.id === todayLesson?.id), 'TC-008-A', '오늘 레슨 오늘 날짜로 정확히 저장');
-  assert(tomorrowOnly?.some(l => l.id === tomorrowLesson?.id), 'TC-008-B', '내일 레슨 내일 날짜로 정확히 저장');
-  assert(!todayOnly?.some(l => l.id === tomorrowLesson?.id), 'TC-008-C', '내일 레슨이 오늘 목록에 없음');
+  assert(todayOnly?.some(l => l.id === todayLesson?.id), 'TC-008-A', '오늘 레슨 날짜 정확성', `오늘(${todayStr}) 레슨 ID 미포함`);
+  assert(tomorrowOnly?.some(l => l.id === tomorrowLesson?.id), 'TC-008-B', '내일 레슨 날짜 정확성', `내일(${tomorrowStr}) 레슨 ID 미포함`);
+  assert(!todayOnly?.some(l => l.id === tomorrowLesson?.id), 'TC-008-C', '내일 레슨 오늘 목록 제외', '내일 레슨이 오늘로 잘못 분류됨');
 
   // 정리
   if (todayLesson) await supabase.from('lessons').delete().eq('id', todayLesson.id);
@@ -261,7 +301,11 @@ async function tc009_cascadeDelete() {
     total_credits: 5, remaining_credits: 5, level: '초급',
   }).select().single();
 
-  if (!tmpMember) { assert(false, 'TC-009-A', '임시 회원 생성 실패'); return; }
+  if (!tmpMember) {
+    assert(false, 'TC-009-A', '임시 회원 생성 실패', 'members INSERT 오류 — coach_id 확인 필요');
+    skipTest('TC-009-B', '회원 삭제 cascade 확인', 'TC-009-A 실패로 임시 회원 없음');
+    return;
+  }
 
   // 결제 데이터 추가
   await supabase.from('payments').insert({
@@ -272,13 +316,18 @@ async function tc009_cascadeDelete() {
 
   // 회원 삭제
   const { error: delError } = await supabase.from('members').delete().eq('id', tmpMember.id);
-  assert(!delError, 'TC-009-A', '회원 삭제 성공');
+  assert(!delError, 'TC-009-A', '회원 삭제 성공', delError?.message);
   await sleep(500);
 
   // 고아 결제 데이터 없는지 확인
   const { data: orphanPayments } = await supabase
     .from('payments').select('id').eq('member_id', tmpMember.id);
-  assert(!orphanPayments || orphanPayments.length === 0, 'TC-009-B', '회원 삭제 시 결제 데이터 함께 정리됨 (cascade)');
+  assert(
+    !orphanPayments || orphanPayments.length === 0,
+    'TC-009-B',
+    '회원 삭제 시 결제 데이터 cascade 확인',
+    orphanPayments?.length ? `고아 결제 ${orphanPayments.length}건 남아있음 — payments ON DELETE CASCADE 미설정` : undefined
+  );
 }
 
 // ─── TC-010: AI 분석 결과 JSON 파싱 무결성 ───────────────────
@@ -304,11 +353,14 @@ async function tc010_aiAnalysisJsonIntegrity() {
     .insert(validAnalysis);
 
   if (insertErr?.message?.includes('Could not find')) {
-    console.log('  ℹ️ member_lesson_reports 테이블 없음 — 스킵');
+    skipTest('TC-010-A', 'AI 분석 데이터 저장', 'member_lesson_reports 테이블 미존재 — 마이그레이션 미적용');
+    skipTest('TC-010-B', 'summary string 타입', 'TC-010-A skip');
+    skipTest('TC-010-C', 'achievements 배열 타입', 'TC-010-A skip');
+    skipTest('TC-010-D', 'achievements 데이터 존재', 'TC-010-A skip');
     return;
   }
 
-  assert(!insertErr, 'TC-010-A', 'AI 분석 데이터 저장 성공');
+  assert(!insertErr, 'TC-010-A', 'AI 분석 데이터 저장 성공', insertErr?.message);
 
   // 저장된 데이터 타입 검증
   const { data: analysis } = await supabase
@@ -319,9 +371,9 @@ async function tc010_aiAnalysisJsonIntegrity() {
     .limit(1)
     .single();
 
-  assert(typeof analysis?.summary === 'string', 'TC-010-B', 'summary 필드가 string 타입');
-  assert(Array.isArray(analysis?.achievements), 'TC-010-C', 'achievements 필드가 배열 타입');
-  assert(Array.isArray(analysis?.achievements) && analysis.achievements.length > 0, 'TC-010-D', 'achievements 배열에 데이터 있음');
+  assert(typeof analysis?.summary === 'string', 'TC-010-B', 'summary 필드가 string 타입', `실제 타입: ${typeof analysis?.summary}`);
+  assert(Array.isArray(analysis?.achievements), 'TC-010-C', 'achievements 필드가 배열 타입', `실제 타입: ${typeof analysis?.achievements}`);
+  assert(Array.isArray(analysis?.achievements) && analysis.achievements.length > 0, 'TC-010-D', 'achievements 배열에 데이터 있음', `데이터 없음 — 길이 ${analysis?.achievements?.length ?? 0}`);
 
   // 정리
   await supabase.from('member_lesson_reports').delete()
@@ -331,7 +383,11 @@ async function tc010_aiAnalysisJsonIntegrity() {
 // ─── TC-011: 잔여 크레딧 1 이하 경고 상태 ───────────────────
 async function tc011_lowCreditWarning() {
   console.log('\n🧪 TC-011: 잔여 크레딧 1 이하 → 경고 상태 확인');
-  if (!testMemberId) { console.log('  ⚠️ 선행 테스트 실패로 스킵'); return; }
+  if (!testMemberId) {
+    skipTest('TC-011-A', '크레딧 1 업데이트', 'TC-001 실패로 testMemberId 없음');
+    skipTest('TC-011-B', '알림 조건 충족 (크레딧 ≤ 1)', 'TC-001 실패로 testMemberId 없음');
+    return;
+  }
 
   await supabase.from('members').update({ remaining_credits: 1 }).eq('id', testMemberId);
   await sleep(300);
@@ -339,9 +395,8 @@ async function tc011_lowCreditWarning() {
   const { data: member } = await supabase
     .from('members').select('remaining_credits').eq('id', testMemberId).single();
 
-  assert(member?.remaining_credits === 1, 'TC-011-A', '크레딧 1로 업데이트됨');
-  // 실제 앱에서는 잔여 1 이하 시 알림 표시 — DB 값 기준 검증
-  assert(member?.remaining_credits <= 1, 'TC-011-B', '알림 조건 충족 (크레딧 ≤ 1)');
+  assert(member?.remaining_credits === 1, 'TC-011-A', '크레딧 1로 업데이트됨', `실제값 ${member?.remaining_credits}`);
+  assert(member?.remaining_credits <= 1, 'TC-011-B', '알림 조건 충족 (크레딧 ≤ 1)', `실제값 ${member?.remaining_credits}`);
 
   // 복원
   await supabase.from('members').update({ remaining_credits: 10 }).eq('id', testMemberId);
@@ -350,7 +405,12 @@ async function tc011_lowCreditWarning() {
 // ─── TC-012: 결제 완료 처리 상태 변경 ───────────────────────
 async function tc012_paymentStatusUpdate() {
   console.log('\n🧪 TC-012: 결제 미납 → 완료 상태 변경');
-  if (!testMemberId) { console.log('  ⚠️ 선행 테스트 실패로 스킵'); return; }
+  if (!testMemberId) {
+    skipTest('TC-012-A', '결제 상태 변경', 'TC-001 실패로 testMemberId 없음');
+    skipTest('TC-012-B', '상태 업데이트 확인', 'TC-001 실패로 testMemberId 없음');
+    skipTest('TC-012-C', '납부 금액 확인', 'TC-001 실패로 testMemberId 없음');
+    return;
+  }
 
   const { data: payment } = await supabase.from('payments').insert({
     member_id: testMemberId, coach_id: testCoachId,
@@ -359,20 +419,25 @@ async function tc012_paymentStatusUpdate() {
     due_date: new Date().toISOString().split('T')[0],
   }).select().single();
 
-  if (!payment) { assert(false, 'TC-012-A', '결제 생성 실패'); return; }
+  if (!payment) {
+    assert(false, 'TC-012-A', '결제 생성 실패', 'payments INSERT 오류 — 필드 값 확인 필요');
+    skipTest('TC-012-B', '상태 업데이트 확인', 'TC-012-A 실패');
+    skipTest('TC-012-C', '납부 금액 확인', 'TC-012-A 실패');
+    return;
+  }
 
   // 완료로 변경
   const { error: updateErr } = await supabase.from('payments')
     .update({ status: '납부완료', paid_amount: 150000 })
     .eq('id', payment.id);
 
-  assert(!updateErr, 'TC-012-A', '결제 상태 완료로 변경 성공');
+  assert(!updateErr, 'TC-012-A', '결제 상태 완료로 변경 성공', updateErr?.message);
 
   const { data: updated } = await supabase.from('payments')
     .select('status, paid_amount').eq('id', payment.id).single();
 
-  assert(updated?.status === '납부완료', 'TC-012-B', '상태 paid로 정확히 업데이트됨');
-  assert(updated?.paid_amount === 150000, 'TC-012-C', '납부 금액 정확히 기록됨');
+  assert(updated?.status === '납부완료', 'TC-012-B', '상태 정확히 업데이트됨', `실제값: '${updated?.status}'`);
+  assert(updated?.paid_amount === 150000, 'TC-012-C', '납부 금액 정확히 기록됨', `실제값: ${updated?.paid_amount}`);
 
   await supabase.from('payments').delete().eq('id', payment.id);
 }
@@ -382,39 +447,59 @@ async function main() {
   console.log('🚀 KERRI Integration Test — Coach App');
   console.log('═'.repeat(50));
 
+  // 각 테스트를 독립적으로 실행 — 한 개 터져도 다음 것 계속
+  const runTest = async (fn) => {
+    try { await fn(); }
+    catch (err) {
+      console.error(`\n💥 [${fn.name}] 예외 발생: ${err.message}`);
+      failed++;
+      results.push({ id: fn.name, status: 'ERROR', description: '예외 발생', reason: err.message });
+    }
+  };
+
   try {
     await setupTestData();
-    await tc001_memberRegistration();
-    await tc003_attendance();
-    await tc004_payment();
-    await tc006_zeroCredit();
-    await tc007_duplicateLesson();
-    await tc008_dateBoundary();
-    await tc009_cascadeDelete();
-    await tc010_aiAnalysisJsonIntegrity();
-    await tc011_lowCreditWarning();
-    await tc012_paymentStatusUpdate();
   } catch (err) {
-    console.error('\n💥 테스트 실행 오류:', err.message);
-    console.error(err.stack);
+    console.error('\n💥 setupTestData 실패:', err.message);
     failed++;
-  } finally {
-    await cleanupTestData();
+    results.push({ id: 'SETUP', status: 'ERROR', description: '테스트 데이터 준비 실패', reason: err.message });
   }
+
+  await runTest(tc001_memberRegistration);
+  await runTest(tc003_attendance);
+  await runTest(tc004_payment);
+  await runTest(tc006_zeroCredit);
+  await runTest(tc007_duplicateLesson);
+  await runTest(tc008_dateBoundary);
+  await runTest(tc009_cascadeDelete);
+  await runTest(tc010_aiAnalysisJsonIntegrity);
+  await runTest(tc011_lowCreditWarning);
+  await runTest(tc012_paymentStatusUpdate);
+
+  try { await cleanupTestData(); } catch (_) {}
 
   console.log('\n' + '═'.repeat(50));
-  console.log(`📊 결과: ${passed} 통과 / ${failed} 실패`);
+  const skipped = results.filter(r => r.status === 'SKIP').length;
+  console.log(`📊 결과: ${passed} 통과 / ${failed} 실패 / ${skipped} 스킵`);
 
-  if (failed > 0) {
-    console.error('\n❌ 실패한 테스트:');
-    results.filter(r => r.status === 'FAIL').forEach(r => {
+  const failedItems = results.filter(r => r.status === 'FAIL' || r.status === 'ERROR');
+  if (failedItems.length > 0) {
+    console.error('\n❌ 실패/에러 목록 (이유 포함):');
+    failedItems.forEach(r => {
       console.error(`  - [${r.id}] ${r.description}`);
+      if (r.reason) console.error(`         💬 이유: ${r.reason}`);
     });
-    process.exit(1);
-  } else {
-    console.log('\n✅ 전체 통과!');
-    process.exit(0);
   }
+
+  if (results.filter(r => r.status === 'SKIP').length > 0) {
+    console.warn('\n⏭️ 스킵 목록:');
+    results.filter(r => r.status === 'SKIP').forEach(r => {
+      console.warn(`  - [${r.id}] ${r.description} | 이유: ${r.reason}`);
+    });
+  }
+
+  if (failed > 0) process.exit(1);
+  else { console.log('\n✅ 전체 통과!'); process.exit(0); }
 }
 
 main();

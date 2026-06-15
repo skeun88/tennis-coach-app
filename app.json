@@ -53,7 +53,9 @@
           "sounds": [],
           "mode": "production"
         }
-      ]
+      ],
+      "expo-font",
+      "expo-asset"
     ],
     "extra": {
       "router": {},

@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl,
-  Alert, Modal, ScrollView,
+  Alert, Modal, ScrollView, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,6 +31,8 @@ interface ActionMember {
   paymentId?: string;
   unpaidAmount?: number;
   dueDate?: string;
+  // low_credit 패키지 총 횟수 (납부 시 credits 복원용)
+  packageTotalCredits?: number;
 }
 
 function getDDay(dueDateStr: string): string {
@@ -73,6 +75,18 @@ export default function PaymentsScreen() {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // 결제 수정 모달
+  const [editModal, setEditModal] = useState(false);
+  const [editTarget, setEditTarget] = useState<Payment | null>(null);
+  const [editDesc, setEditDesc] = useState('');
+  const [editAmount, setEditAmount] = useState('');
+  const [editPaidAmount, setEditPaidAmount] = useState('');
+  const [editDueDate, setEditDueDate] = useState('');
+  const [editPaidDate, setEditPaidDate] = useState('');
+  const [editStatus, setEditStatus] = useState<PaymentStatus>('미납');
+  const [editMethod, setEditMethod] = useState<PaymentMethod | ''>('');
+  const [editSaving, setEditSaving] = useState(false);
+
   async function loadData() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -85,10 +99,10 @@ export default function PaymentsScreen() {
       .order('due_date', { ascending: false });
     setPayments(paymentsData ?? []);
 
-    // 잔여 3회 이하 회원 (레슨권 가격 포함)
+    // 잔여 3회 이하 회원 (레슨권 가격 + 총 횟수 포함)
     const { data: lowCredits } = await supabase
       .from('members')
-      .select('id, name, phone, remaining_credits, lesson_package_id, lesson_packages(id, title, price)')
+      .select('id, name, phone, remaining_credits, lesson_package_id, lesson_packages(id, title, price, total_credits)')
       .eq('coach_id', user.id)
       .eq('is_active', true)
       .lte('remaining_credits', 3)
@@ -130,6 +144,7 @@ export default function PaymentsScreen() {
           remainingCredits: m.remaining_credits,
           packageTitle: pkg?.title ?? null,
           packagePrice: pkg?.price ?? null,
+          packageTotalCredits: pkg?.total_credits ?? null,
         });
       }
     }
@@ -190,13 +205,57 @@ export default function PaymentsScreen() {
         paid_date: today,
         payment_method: selectedMethod,
       });
-      // 레슨권 크레딧 갱신 (총 횟수로 리셋하거나 그냥 기록만)
+      // 레슨권 크레딧 갱신: 패키지 전체 횟수를 remaining_credits에 추가
+      if (payTarget.packageTotalCredits) {
+        await supabase.from('members').update({
+          remaining_credits: (payTarget.remainingCredits ?? 0) + payTarget.packageTotalCredits,
+        }).eq('id', payTarget.memberId);
+      }
     }
 
     setSaving(false);
     setPayModal(false);
     setPayTarget(null);
     Alert.alert('납부 완료', `${payTarget.name}님 납부 처리됐습니다 (${selectedMethod})`);
+    loadData();
+  }
+
+  function openEditModal(payment: Payment) {
+    setEditTarget(payment);
+    setEditDesc(payment.description);
+    setEditAmount(String(payment.amount));
+    setEditPaidAmount(String(payment.paid_amount));
+    setEditDueDate(payment.due_date);
+    setEditPaidDate(payment.paid_date ?? '');
+    setEditStatus(payment.status);
+    setEditMethod(((payment as any).payment_method as PaymentMethod) ?? '');
+    setEditModal(true);
+  }
+
+  async function saveEditPayment() {
+    if (!editTarget) return;
+    setEditSaving(true);
+    const amount = parseInt(editAmount) || editTarget.amount;
+    const paidAmount = editStatus === '납부완료'
+      ? amount
+      : editStatus === '미납'
+        ? 0
+        : parseInt(editPaidAmount) || editTarget.paid_amount;
+    const paidDate = editStatus === '미납' ? null : (editPaidDate || new Date().toISOString().split('T')[0]);
+
+    await supabase.from('payments').update({
+      description: editDesc,
+      amount,
+      paid_amount: paidAmount,
+      due_date: editDueDate,
+      paid_date: paidDate,
+      status: editStatus,
+      payment_method: editMethod || null,
+    }).eq('id', editTarget.id);
+
+    setEditSaving(false);
+    setEditModal(false);
+    setEditTarget(null);
     loadData();
   }
 
@@ -289,11 +348,17 @@ export default function PaymentsScreen() {
             <Ionicons name="calendar-outline" size={12} color={Colors.mutedFg} />
             <Text style={styles.dueDate}>납부기한: {item.due_date}</Text>
           </View>
-          {item.status !== '납부완료' && (
-            <TouchableOpacity style={styles.paidBtn} onPress={() => markPaidQuick(item)}>
-              <Text style={styles.paidBtnText}>납부 처리</Text>
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            <TouchableOpacity style={styles.editPayBtn} onPress={() => openEditModal(item)}>
+              <Ionicons name="create-outline" size={13} color={Colors.mutedFg} />
+              <Text style={styles.editPayBtnText}>수정</Text>
             </TouchableOpacity>
-          )}
+            {item.status !== '납부완료' && (
+              <TouchableOpacity style={styles.paidBtn} onPress={() => markPaidQuick(item)}>
+                <Text style={styles.paidBtnText}>납부 처리</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
     );
@@ -394,6 +459,126 @@ export default function PaymentsScreen() {
           </View>
         }
       />
+
+      {/* 결제 수정 모달 */}
+      <Modal visible={editModal} transparent animationType="slide"
+        onRequestClose={() => { setEditModal(false); setEditTarget(null); }}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1}
+            onPress={() => { setEditModal(false); setEditTarget(null); }}>
+            <TouchableOpacity style={[styles.modalSheet, { paddingBottom: 32 }]} activeOpacity={1} onPress={() => {}}>
+              <View style={styles.modalHandle} />
+              <Text style={styles.modalTitle}>결제 수정</Text>
+
+              <ScrollView style={{ paddingHorizontal: 16 }} keyboardShouldPersistTaps="handled">
+                {/* 설명 */}
+                <Text style={styles.editFieldLabel}>내용</Text>
+                <TextInput
+                  style={styles.editInput}
+                  value={editDesc}
+                  onChangeText={setEditDesc}
+                  placeholder="레슨권명 등"
+                  placeholderTextColor={Colors.placeholder}
+                />
+
+                {/* 금액 */}
+                <Text style={styles.editFieldLabel}>청구금액 (원)</Text>
+                <TextInput
+                  style={styles.editInput}
+                  value={editAmount}
+                  onChangeText={setEditAmount}
+                  keyboardType="numeric"
+                  placeholder="예: 150000"
+                  placeholderTextColor={Colors.placeholder}
+                />
+
+                {/* 납부 상태 */}
+                <Text style={styles.editFieldLabel}>납부 상태</Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                  {(['미납', '부분납부', '납부완료'] as PaymentStatus[]).map(s => (
+                    <TouchableOpacity
+                      key={s}
+                      style={[
+                        styles.editChip,
+                        editStatus === s && { backgroundColor: STATUS_COLOR[s], borderColor: STATUS_COLOR[s] },
+                      ]}
+                      onPress={() => setEditStatus(s)}
+                    >
+                      <Text style={[styles.editChipText, editStatus === s && { color: '#fff' }]}>{s}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* 부분납부일 때 실납부금액 */}
+                {editStatus === '부분납부' && (
+                  <>
+                    <Text style={styles.editFieldLabel}>실납부금액 (원)</Text>
+                    <TextInput
+                      style={styles.editInput}
+                      value={editPaidAmount}
+                      onChangeText={setEditPaidAmount}
+                      keyboardType="numeric"
+                      placeholder="예: 75000"
+                      placeholderTextColor={Colors.placeholder}
+                    />
+                  </>
+                )}
+
+                {/* 납부 방법 */}
+                <Text style={styles.editFieldLabel}>결제 방법</Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                  {(['', ...METHODS] as (PaymentMethod | '')[]).map(m => (
+                    <TouchableOpacity
+                      key={m || 'none'}
+                      style={[
+                        styles.editChip,
+                        editMethod === m && { backgroundColor: Colors.navy, borderColor: Colors.navy },
+                      ]}
+                      onPress={() => setEditMethod(m)}
+                    >
+                      <Text style={[styles.editChipText, editMethod === m && { color: '#fff' }]}>
+                        {m || '미지정'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* 납부기한 */}
+                <Text style={styles.editFieldLabel}>납부기한 (YYYY-MM-DD)</Text>
+                <TextInput
+                  style={styles.editInput}
+                  value={editDueDate}
+                  onChangeText={setEditDueDate}
+                  placeholder="2026-06-30"
+                  placeholderTextColor={Colors.placeholder}
+                />
+
+                {/* 납부일 */}
+                {editStatus !== '미납' && (
+                  <>
+                    <Text style={styles.editFieldLabel}>납부일 (YYYY-MM-DD)</Text>
+                    <TextInput
+                      style={styles.editInput}
+                      value={editPaidDate}
+                      onChangeText={setEditPaidDate}
+                      placeholder="2026-06-15"
+                      placeholderTextColor={Colors.placeholder}
+                    />
+                  </>
+                )}
+
+                <TouchableOpacity
+                  style={[styles.confirmBtn, { marginTop: 8, marginBottom: 16 }, editSaving && styles.confirmBtnDisabled]}
+                  onPress={saveEditPayment}
+                  disabled={editSaving}
+                >
+                  <Text style={styles.confirmBtnText}>{editSaving ? '저장 중...' : '수정 저장'}</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* 납부 모달 */}
       <Modal visible={payModal} transparent animationType="slide"
@@ -525,6 +710,13 @@ const styles = StyleSheet.create({
   dueDate: { fontSize: 14, color: Colors.mutedFg },
   paidBtn: { backgroundColor: Colors.primary, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8 },
   paidBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  editPayBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: Colors.mutedBg, borderWidth: 1, borderColor: Colors.border },
+  editPayBtnText: { fontSize: 13, color: Colors.mutedFg, fontWeight: '600' },
+  // 수정 모달
+  editFieldLabel: { fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginTop: 14, marginBottom: 6 },
+  editInput: { borderWidth: 1.5, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, color: Colors.foreground, backgroundColor: Colors.background },
+  editChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: Colors.mutedBg, borderWidth: 1.5, borderColor: Colors.border },
+  editChipText: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg },
   empty: { alignItems: 'center', padding: 60 },
   emptyText: { fontSize: 15, color: Colors.placeholder, fontWeight: '500', marginTop: 12 },
   // Modal
