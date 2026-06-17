@@ -411,27 +411,34 @@ export default function ProfileScreen() {
         {/* ── Hero ── */}
         <View style={styles.hero}>
           <View style={styles.heroTop}>
-            <Text style={styles.heroTitle}>내 프로필</Text>
+            <View style={{ flex: 1 }} />
             <TouchableOpacity onPress={handleSignOut} style={styles.logoutBtn}>
               <Ionicons name="log-out-outline" size={20} color="rgba(255,255,255,0.7)" />
             </TouchableOpacity>
           </View>
-          <View style={styles.avatarSection}>
+          <View style={styles.heroProfileRow}>
             <TouchableOpacity style={styles.avatarRing} onPress={() => { setEditProfile({ ...profile }); setProfileModal(true); }}>
               {profile.avatar_url
                 ? <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} />
                 : <View style={styles.avatar}><Text style={styles.avatarText}>{initial}</Text></View>}
               <View style={styles.cameraPin}><Ionicons name="camera" size={11} color="#fff" /></View>
             </TouchableOpacity>
-            <Text style={styles.heroName}>{profile.name} 코치</Text>
-            {profile.bio ? <Text style={styles.heroBio}>{profile.bio}</Text> : null}
-            {(regionLabel || profile.center_name) ? (
+            <View style={{ flex: 1 }}>
+              <Text style={styles.heroName}>{profile.name} 코치</Text>
+              <Text style={styles.heroBio}>{email}</Text>
+              {isActive && (
+                <View style={styles.planBadge}>
+                  <Text style={styles.planBadgeText}>{isTrial ? 'TRIAL' : 'PRO'}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+          {(regionLabel || profile.center_name) ? (
               <View style={styles.metaRow}>
                 {regionLabel ? <View style={styles.metaItem}><Ionicons name="location-outline" size={12} color="rgba(255,255,255,.6)" /><Text style={styles.metaText}>{regionLabel}</Text></View> : null}
                 {profile.center_name ? <View style={styles.metaItem}><Ionicons name="business-outline" size={12} color="rgba(255,255,255,.6)" /><Text style={styles.metaText}>{profile.center_name}</Text></View> : null}
               </View>
             ) : null}
-          </View>
         </View>
 
         <View style={styles.body}>
@@ -934,19 +941,22 @@ const metric = StyleSheet.create({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
-  hero: { backgroundColor: '#1B2E4B', paddingBottom: 24 },
-  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 8 },
+  hero: { backgroundColor: '#1B2E4B', paddingHorizontal: 20, paddingBottom: 20 },
+  heroTop: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', paddingTop: 16, paddingBottom: 8 },
   heroTitle: { fontSize: 18, fontWeight: '800', color: '#fff' },
   logoutBtn: { padding: 4 },
+  heroProfileRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 12 },
   avatarSection: { alignItems: 'center', paddingTop: 8, paddingBottom: 20 },
-  avatarRing: { width: 84, height: 84, borderRadius: 42, borderWidth: 3, borderColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 10, position: 'relative' },
-  avatar: { width: 76, height: 76, borderRadius: 38, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center' },
-  avatarImage: { width: 76, height: 76, borderRadius: 38 },
-  avatarText: { fontSize: 30, fontWeight: '800', color: '#fff' },
+  avatarRing: { width: 72, height: 72, borderRadius: 36, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', position: 'relative' },
+  avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center' },
+  avatarImage: { width: 72, height: 72, borderRadius: 36 },
+  avatarText: { fontSize: 28, fontWeight: '700', color: '#fff' },
   cameraPin: { position: 'absolute', bottom: 0, right: 0, width: 22, height: 22, borderRadius: 11, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#fff' },
   heroName: { fontSize: 22, fontWeight: '800', color: '#fff', marginBottom: 4 },
-  heroBio: { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 8, paddingHorizontal: 24, textAlign: 'center' },
-  metaRow: { flexDirection: 'row', gap: 12, marginTop: 4 },
+  heroBio: { fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 4 },
+  planBadge: { backgroundColor: '#8B5CF6', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20, alignSelf: 'flex-start', marginTop: 8 },
+  planBadgeText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
+  metaRow: { flexDirection: 'row', gap: 12, marginTop: 4, flexWrap: 'wrap' },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   metaText: { fontSize: 12, color: 'rgba(255,255,255,0.6)' },
   body: { paddingHorizontal: 16, paddingTop: 20 },
