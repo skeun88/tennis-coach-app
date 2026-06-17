@@ -136,7 +136,7 @@ export default function TabsLayout() {
     <View style={{ flex: 1 }}>
       <Tabs
         screenOptions={{
-          tabBarActiveTintColor: Colors.navy,
+          tabBarActiveTintColor: Colors.primary,
           tabBarInactiveTintColor: Colors.mutedFg,
           tabBarStyle: {
             borderTopWidth: 1,
@@ -144,9 +144,7 @@ export default function TabsLayout() {
             paddingBottom: 4,
             backgroundColor: Colors.white,
           },
-          headerStyle: { backgroundColor: Colors.primary },
-          headerTintColor: Colors.white,
-          headerTitleStyle: { fontWeight: '700' },
+          headerShown: false,
         }}
       >
         <Tabs.Screen
