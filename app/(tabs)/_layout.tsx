@@ -141,8 +141,15 @@ export default function TabsLayout() {
           tabBarStyle: {
             borderTopWidth: 1,
             borderTopColor: Colors.border,
-            paddingBottom: 4,
+            paddingTop: 8,
+            paddingBottom: 20,
             backgroundColor: Colors.white,
+            height: 83,
+          },
+          tabBarLabelStyle: {
+            fontSize: 11,
+            fontWeight: '500',
+            marginTop: 2,
           },
           headerShown: false,
         }}
@@ -152,7 +159,7 @@ export default function TabsLayout() {
           options={{
             title: '홈',
             tabBarLabel: '홈',
-            tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
+            tabBarIcon: ({ color, focused, size }) => <Ionicons name={focused ? 'home' : 'home-outline'} size={size} color={color} />,
             headerTitle: '테니스 코치',
           }}
         />
@@ -161,7 +168,7 @@ export default function TabsLayout() {
           options={{
             title: '회원',
             tabBarLabel: '회원',
-            tabBarIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} />,
+            tabBarIcon: ({ color, focused, size }) => <Ionicons name={focused ? 'people' : 'people-outline'} size={size} color={color} />,
             headerTitle: '회원 관리',
           }}
         />
@@ -170,7 +177,7 @@ export default function TabsLayout() {
           options={{
             title: '스케줄',
             tabBarLabel: '스케줄',
-            tabBarIcon: ({ color, size }) => <Ionicons name="calendar" size={size} color={color} />,
+            tabBarIcon: ({ color, focused, size }) => <Ionicons name={focused ? 'calendar' : 'calendar-outline'} size={size} color={color} />,
             headerTitle: '레슨 스케줄',
           }}
         />
@@ -179,7 +186,7 @@ export default function TabsLayout() {
           options={{
             title: '결제',
             tabBarLabel: '결제',
-            tabBarIcon: ({ color, size }) => <Ionicons name="card" size={size} color={color} />,
+            tabBarIcon: ({ color, focused, size }) => <Ionicons name={focused ? 'card' : 'card-outline'} size={size} color={color} />,
             headerTitle: '결제 관리',
           }}
         />
@@ -188,7 +195,7 @@ export default function TabsLayout() {
           options={{
             title: '내 프로필',
             tabBarLabel: '프로필',
-            tabBarIcon: ({ color, size }) => <Ionicons name="person-circle" size={size} color={color} />,
+            tabBarIcon: ({ color, focused, size }) => <Ionicons name={focused ? 'person' : 'person-outline'} size={size} color={color} />,
             headerShown: false,
           }}
         />
