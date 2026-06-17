@@ -1290,10 +1290,10 @@ function DraggableLesson({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  tabRow: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: Colors.border, paddingHorizontal: 16, paddingVertical: 8, gap: 8 },
-  tabBtn: { flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center', backgroundColor: Colors.mutedBg },
+  tabRow: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: Colors.border, paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
+  tabBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center', backgroundColor: Colors.mutedBg },
   tabBtnActive: { backgroundColor: Colors.primary },
-  tabText: { fontSize: 14, fontWeight: '700', color: Colors.mutedFg },
+  tabText: { fontSize: 14, fontWeight: '600', color: Colors.mutedFg },
   tabTextActive: { color: '#fff' },
   weekStrip: { flexDirection: 'row', backgroundColor: '#fff', paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
   dayBtn: { flex: 1, alignItems: 'center', paddingVertical: 6, borderRadius: 10 },
@@ -1302,7 +1302,7 @@ const styles = StyleSheet.create({
   dayNum: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
   dayTextSelected: { color: '#fff' },
   dayToday: { color: Colors.navy },
-  dateHeader: { fontSize: 14, color: Colors.mutedFg, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: Colors.mutedBg },
+  dateHeader: { fontSize: 20, fontWeight: '700', color: Colors.foreground, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: Colors.border },
   // 그리드
   hourRow: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center' },
   hourLabel: { width: 48, fontSize: 14, color: Colors.placeholder, fontWeight: '600', textAlign: 'right', paddingRight: 8 },
@@ -1311,12 +1311,14 @@ const styles = StyleSheet.create({
   // 레슨 카드 (그리드)
   lessonCard: {
     position: 'absolute',
-    backgroundColor: Colors.primary, borderRadius: 8, padding: 6, paddingHorizontal: 8,
+    backgroundColor: Colors.card, borderRadius: 10, padding: 8, paddingHorizontal: 10,
+    borderWidth: 1, borderColor: Colors.border,
+    borderLeftWidth: 3, borderLeftColor: Colors.primary,
     },
-  lessonCardDragging: { opacity: 0.85, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
-  lessonCardTime: { fontSize: 14, color: 'rgba(255,255,255,0.75)', fontWeight: '600', flexShrink: 0 },
-  lessonCardTitle: { fontSize: 14, color: '#fff', fontWeight: '800', flexShrink: 1 },
-  lessonCardMembers: { fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 1 },
+  lessonCardDragging: { opacity: 0.85, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 8 },
+  lessonCardTime: { fontSize: 13, color: Colors.mutedFg, fontWeight: '500', flexShrink: 0 },
+  lessonCardTitle: { fontSize: 15, color: Colors.foreground, fontWeight: '600', flexShrink: 1 },
+  lessonCardMembers: { fontSize: 13, color: Colors.mutedFg, marginTop: 2 },
   dragHandle: { position: 'absolute', bottom: 3, right: 6 },
   // 주간 뷰
   weekScroll: { flex: 1 },
@@ -1330,10 +1332,10 @@ const styles = StyleSheet.create({
   weekDayNumToday: { color: '#fff' },
   weekEmptySlot: { padding: 16, alignItems: 'center' },
   weekEmptyText: { fontSize: 20, color: Colors.border },
-  weekLessonCard: { margin: 8, backgroundColor: Colors.primaryLight, borderRadius: 8, padding: 8 },
-  weekLessonTime: { fontSize: 13, color: Colors.navy, fontWeight: '700', marginBottom: 2 },
+  weekLessonCard: { margin: 8, backgroundColor: Colors.card, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: Colors.border, borderLeftWidth: 3, borderLeftColor: Colors.primary },
+  weekLessonTime: { fontSize: 13, color: Colors.mutedFg, fontWeight: '500', marginBottom: 2 },
   weekLessonTitle: { fontSize: 14, color: Colors.foreground, fontWeight: '600' },
-  weekLessonMembers: { fontSize: 13, color: Colors.navy, marginTop: 2 },
+  weekLessonMembers: { fontSize: 13, color: Colors.mutedFg, marginTop: 2 },
   // FAB
   fab: { position: 'absolute', bottom: 24, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 6 },
   // 모달
