@@ -617,14 +617,14 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
           <View style={styles.statsRow}>
-            <TouchableOpacity style={styles.statCard} activeOpacity={0.85} onPress={() => { loadUnpaidMembers(); setUnpaidModal(true); }}>
+            <TouchableOpacity style={stats.unpaidMembers > 0 ? styles.statCardAlert : styles.statCard} activeOpacity={0.85} onPress={() => { loadUnpaidMembers(); setUnpaidModal(true); }}>
               <Text style={[styles.statValue, { color: stats.unpaidMembers > 0 ? Colors.destructive : Colors.foreground }]}>
                 {stats.unpaidMembers}
               </Text>
               <Text style={styles.statLabel}>미납 회원</Text>
               <Text style={styles.statHint}>잔여 0회</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.statCard} activeOpacity={0.85} onPress={() => { loadExpiringMembers(); setExpiringModal(true); }}>
+            <TouchableOpacity style={stats.expiringMembers > 0 ? styles.statCardAlert : styles.statCard} activeOpacity={0.85} onPress={() => { loadExpiringMembers(); setExpiringModal(true); }}>
               <Text style={[styles.statValue, { color: stats.expiringMembers > 0 ? Colors.warning : Colors.foreground }]}>
                 {stats.expiringMembers}
               </Text>
@@ -1189,7 +1189,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
 
   headerCard: {
-    backgroundColor: Colors.primary, padding: 16, paddingTop: 28,
+    backgroundColor: Colors.navy, padding: 16, paddingTop: 28,
     borderBottomLeftRadius: Radius.xl, borderBottomRightRadius: Radius.xl, marginBottom: 16,
   },
   headerTop: {
@@ -1207,9 +1207,15 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1, backgroundColor: Colors.card, borderRadius: Radius.md,
     paddingVertical: 10, paddingHorizontal: 12,
-    ...Shadow.sm,
+    borderWidth: 1, borderColor: Colors.border,
   },
-  statValue: { fontSize: 20, fontWeight: '800', color: Colors.foreground, marginBottom: 1 },
+  statCardAlert: {
+    flex: 1, backgroundColor: Colors.card, borderRadius: Radius.md,
+    paddingVertical: 10, paddingHorizontal: 12,
+    borderWidth: 1, borderColor: Colors.border,
+    borderLeftWidth: 3, borderLeftColor: Colors.foreground,
+  },
+  statValue: { fontSize: 28, fontWeight: '800', color: Colors.foreground, marginBottom: 1 },
   statLabel: { fontSize: 13, color: Colors.mutedFg, fontWeight: '500' },
   statHint: { fontSize: 12, color: Colors.placeholder, marginTop: 2 },
 

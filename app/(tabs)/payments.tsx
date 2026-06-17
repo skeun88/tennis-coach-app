@@ -307,7 +307,7 @@ export default function PaymentsScreen() {
     const ddayColor = getDDayColor(item.due_date, item.status);
 
     return (
-      <View style={styles.card}>
+      <View style={item.status === '납부완료' ? styles.card : styles.cardUnpaid}>
         <View style={styles.cardHeader}>
           <View>
             <Text style={styles.memberName}>{member?.name ?? '알 수 없음'}</Text>
@@ -654,8 +654,9 @@ export default function PaymentsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   summaryBanner: {
-    backgroundColor: Colors.primary, flexDirection: 'row',
-    paddingHorizontal: 20, paddingVertical: 18, alignItems: 'center',
+    backgroundColor: Colors.foreground, flexDirection: 'row',
+    paddingHorizontal: 20, paddingVertical: 20, alignItems: 'center',
+    justifyContent: 'space-around',
   },
   summaryDivider: { width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.25)', marginHorizontal: 16 },
   summaryLabel: { fontSize: 14, color: 'rgba(255,255,255,0.75)', marginBottom: 4 },
@@ -664,15 +665,16 @@ const styles = StyleSheet.create({
   // 납부 필요 섹션
   alertSection: {
     backgroundColor: '#fff', borderRadius: 12, padding: 14,
-    marginBottom: 10, borderWidth: 1.5, borderColor: Colors.destructiveBorder,
+    marginBottom: 10, borderWidth: 1, borderColor: Colors.border,
+    borderLeftWidth: 3, borderLeftColor: Colors.foreground,
   },
   alertHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
-  alertTitle: { flex: 1, fontSize: 14, fontWeight: '700', color: Colors.destructive },
-  alertCount: { backgroundColor: Colors.destructive, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 },
-  alertCountText: { fontSize: 14, color: '#fff', fontWeight: '700' },
+  alertTitle: { flex: 1, fontSize: 14, fontWeight: '600', color: Colors.foreground },
+  alertCount: { backgroundColor: Colors.foreground, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  alertCountText: { fontSize: 13, color: '#fff', fontWeight: '600' },
   alertRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 8, borderTopWidth: 1, borderTopColor: Colors.destructiveLight,
+    paddingVertical: 8, borderTopWidth: 1, borderTopColor: Colors.border,
   },
   alertDot: { width: 8, height: 8, borderRadius: 4 },
   alertName: { fontSize: 14, fontWeight: '700', color: Colors.foreground },
@@ -691,17 +693,22 @@ const styles = StyleSheet.create({
   count: { fontSize: 14, color: Colors.mutedFg, marginBottom: 8 },
   // Card
   card: {
-    backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 10,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
+    backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 8,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  cardUnpaid: {
+    backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 8,
+    borderWidth: 1, borderColor: Colors.border,
+    borderLeftWidth: 3, borderLeftColor: Colors.foreground,
   },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
-  memberName: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
-  memberPhone: { fontSize: 14, color: Colors.mutedFg, marginTop: 2 },
+  memberName: { fontSize: 16, fontWeight: '600', color: Colors.foreground },
+  memberPhone: { fontSize: 13, color: Colors.mutedFg, marginTop: 2 },
   cardHeaderRight: { alignItems: 'flex-end', gap: 4 },
-  ddayBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  ddayText: { fontSize: 13, fontWeight: '800' },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  statusText: { fontSize: 14, fontWeight: '700' },
+  ddayBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  ddayText: { fontSize: 12, fontWeight: '600' },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  statusText: { fontSize: 12, fontWeight: '500' },
   description: { fontSize: 13, color: Colors.mutedFg, marginBottom: 10 },
   amountRow: { flexDirection: 'row', gap: 20, marginBottom: 10 },
   amountLabel: { fontSize: 13, color: Colors.mutedFg, marginBottom: 2 },
