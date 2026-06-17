@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { Member, MemberLevel } from '../../types';
-import { Colors } from '../../lib/theme';
+import { Colors, Radius, Shadow } from '../../lib/theme';
 
 interface MemberWithUnread extends Member {
   unread_count?: number;
@@ -244,15 +244,15 @@ const styles = StyleSheet.create({
   // 레슨권 배너
   packageBanner: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#fff',
-    marginHorizontal: 16, marginTop: 14, marginBottom: 4,
-    borderRadius: 12, padding: 14,
+    backgroundColor: Colors.card,
+    marginHorizontal: 16, marginTop: 14, marginBottom: 12,
+    borderRadius: Radius.md, padding: 14,
     borderWidth: 1, borderColor: Colors.border,
   },
   packageBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
   packageIconBox: {
     width: 40, height: 40, borderRadius: 10,
-    backgroundColor: Colors.primary,
+    backgroundColor: '#FBF2EF',
     justifyContent: 'center', alignItems: 'center',
   },
   packageBannerTitle: { fontSize: 15, fontWeight: '600', color: Colors.foreground, marginBottom: 2 },
@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
   count: { fontSize: 14, color: Colors.mutedFg, paddingHorizontal: 16, marginBottom: 8 },
 
   // Member card
-  cardUnread: { borderWidth: 1.5, borderColor: Colors.primary },
+  cardUnread: { borderLeftWidth: 3, borderLeftColor: Colors.primary, borderWidth: 1, borderColor: Colors.border },
   unreadBadge: {
     position: 'absolute', top: -4, right: -4,
     backgroundColor: Colors.destructive, borderRadius: 10,
@@ -293,12 +293,13 @@ const styles = StyleSheet.create({
   newMsgCount: { backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1, marginLeft: 2 },
   newMsgCountText: { color: '#fff', fontSize: 12, fontWeight: '800' },
   card: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
-    borderRadius: 12, padding: 14, marginBottom: 8,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
+    flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card,
+    borderRadius: Radius.md, padding: 14, marginBottom: 8,
+    borderWidth: 1, borderColor: Colors.border,
+    ...Shadow.sm,
   },
-  avatar: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  avatarText: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  avatar: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 12, backgroundColor: Colors.mutedBg },
+  avatarText: { fontSize: 16, fontWeight: '600', color: Colors.foreground },
   cardInfo: { flex: 1 },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' },
   name: { fontSize: 15, fontWeight: '600', color: Colors.foreground },
@@ -314,9 +315,9 @@ const styles = StyleSheet.create({
 
   // FAB
   fab: {
-    position: 'absolute', bottom: 24, right: 20,
+    position: 'absolute', bottom: 90, right: 20,
     width: 56, height: 56, borderRadius: 28,
     backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 6,
+    shadowColor: Colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 5,
   },
 });

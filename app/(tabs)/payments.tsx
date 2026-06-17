@@ -660,10 +660,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, paddingVertical: 20, alignItems: 'center',
     justifyContent: 'space-around',
   },
-  summaryDivider: { width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.25)', marginHorizontal: 16 },
-  summaryLabel: { fontSize: 14, color: 'rgba(255,255,255,0.75)', marginBottom: 4 },
-  summaryAmount: { fontSize: 20, fontWeight: '800', color: '#fff' },
-  summaryPaid: { fontSize: 20, fontWeight: '800', color: Colors.white },
+  summaryDivider: { width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 16 },
+  summaryLabel: { fontSize: 12, color: 'rgba(255,255,255,0.6)', fontWeight: '500', marginBottom: 4 },
+  summaryAmount: { fontSize: 22, fontWeight: '800', color: '#FFFFFF' },
+  summaryPaid: { fontSize: 22, fontWeight: '800', color: '#FFFFFF' },
   // 납부 필요 섹션
   alertSection: {
     backgroundColor: '#fff', borderRadius: 12, padding: 14,

@@ -1671,8 +1671,8 @@ function InfoRow({ icon, label, value }: { icon: string; label: string; value: s
 
 const styles = StyleSheet.create({
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  profileHeader: { backgroundColor: Colors.primary, alignItems: 'center', paddingVertical: 24, paddingHorizontal: 16 },
-  bigAvatar: { width: 72, height: 72, borderRadius: 36, justifyContent: 'center', alignItems: 'center', marginBottom: 10, borderWidth: 3, borderColor: 'rgba(255,255,255,0.4)' },
+  profileHeader: { backgroundColor: '#1B2E4B', alignItems: 'center', paddingVertical: 24, paddingHorizontal: 16 },
+  bigAvatar: { width: 72, height: 72, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 10, backgroundColor: Colors.primary },
   bigAvatarText: { fontSize: 30, fontWeight: '800', color: '#fff' },
   profileName: { fontSize: 22, fontWeight: '800', color: '#fff', marginBottom: 8 },
   profileBadgeRow: { flexDirection: 'row', gap: 8 },
