@@ -585,17 +585,17 @@ export default function HomeScreen() {
                   onPress={() => setQrModalVisible(true)}
                   style={styles.headerIconBtn}
                 >
-                  <Ionicons name="qr-code-outline" size={22} color="rgba(255,255,255,0.8)" />
+                  <Ionicons name="qr-code-outline" size={22} color={Colors.mutedFg} />
                 </TouchableOpacity>
               ) : null}
               <TouchableOpacity
                 onPress={() => router.push('/settings/notifications')}
                 style={styles.headerIconBtn}
               >
-                <Ionicons name="notifications-outline" size={22} color="rgba(255,255,255,0.8)" />
+                <Ionicons name="notifications-outline" size={22} color={Colors.mutedFg} />
               </TouchableOpacity>
               <TouchableOpacity onPress={handleSignOut} style={styles.headerIconBtn}>
-                <Ionicons name="log-out-outline" size={22} color="rgba(255,255,255,0.8)" />
+                <Ionicons name="log-out-outline" size={22} color={Colors.mutedFg} />
               </TouchableOpacity>
             </View>
           </View>
@@ -618,14 +618,14 @@ export default function HomeScreen() {
           </View>
           <View style={styles.statsRow}>
             <TouchableOpacity style={stats.unpaidMembers > 0 ? styles.statCardAlert : styles.statCard} activeOpacity={0.85} onPress={() => { loadUnpaidMembers(); setUnpaidModal(true); }}>
-              <Text style={[styles.statValue, { color: stats.unpaidMembers > 0 ? Colors.destructive : Colors.foreground }]}>
+              <Text style={styles.statValue}>
                 {stats.unpaidMembers}
               </Text>
               <Text style={styles.statLabel}>미납 회원</Text>
               <Text style={styles.statHint}>잔여 0회</Text>
             </TouchableOpacity>
             <TouchableOpacity style={stats.expiringMembers > 0 ? styles.statCardAlert : styles.statCard} activeOpacity={0.85} onPress={() => { loadExpiringMembers(); setExpiringModal(true); }}>
-              <Text style={[styles.statValue, { color: stats.expiringMembers > 0 ? Colors.warning : Colors.foreground }]}>
+              <Text style={styles.statValue}>
                 {stats.expiringMembers}
               </Text>
               <Text style={styles.statLabel}>만료 예정</Text>
@@ -638,15 +638,15 @@ export default function HomeScreen() {
         {trialCount > 0 && (
           <TouchableOpacity style={styles.trialCard} onPress={() => setTrialModal(true)} activeOpacity={0.85}>
             <View style={styles.churnCardLeft}>
-              <View style={[styles.churnIconWrap, { backgroundColor: '#FEF3C7' }]}>
-                <Ionicons name="star-half" size={18} color="#D97706" />
+              <View style={styles.churnIconWrap}>
+                <Ionicons name="star-half" size={18} color={Colors.mutedFg} />
               </View>
               <View>
-                <Text style={[styles.churnTitle, { color: '#D97706' }]}>체험 중 {trialCount}명</Text>
-                <Text style={[styles.churnSub, { color: '#F59E0B' }]}>정규 전환 안내 확인</Text>
+                <Text style={styles.churnTitle}>체험 중 {trialCount}명</Text>
+                <Text style={styles.churnSub}>정규 전환 안내 확인</Text>
               </View>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#D97706" />
+            <Ionicons name="chevron-forward" size={18} color={Colors.mutedFg} />
           </TouchableOpacity>
         )}
 
@@ -654,15 +654,15 @@ export default function HomeScreen() {
         {interestList.length > 0 && (
           <TouchableOpacity style={styles.interestCard} onPress={() => setInterestModal(true)} activeOpacity={0.85}>
             <View style={styles.churnCardLeft}>
-              <View style={[styles.churnIconWrap, { backgroundColor: '#EDE9FE' }]}>
-                <Ionicons name="person-add" size={18} color="#7C3AED" />
+              <View style={styles.churnIconWrap}>
+                <Ionicons name="person-add" size={18} color={Colors.mutedFg} />
               </View>
               <View>
-                <Text style={[styles.churnTitle, { color: '#7C3AED' }]}>관심 회원 {interestList.length}명</Text>
-                <Text style={[styles.churnSub, { color: '#8B5CF6' }]}>QR 스캔 → 레슨권 선택한 회원</Text>
+                <Text style={styles.churnTitle}>관심 회원 {interestList.length}명</Text>
+                <Text style={styles.churnSub}>QR 스캔 → 레슨권 선택한 회원</Text>
               </View>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#7C3AED" />
+            <Ionicons name="chevron-forward" size={18} color={Colors.mutedFg} />
           </TouchableOpacity>
         )}
 
@@ -675,14 +675,14 @@ export default function HomeScreen() {
           >
             <View style={styles.churnCardLeft}>
               <View style={styles.churnIconWrap}>
-                <Ionicons name="warning" size={18} color="#DC2626" />
+                <Ionicons name="warning" size={18} color={Colors.mutedFg} />
               </View>
               <View>
                 <Text style={styles.churnTitle}>이탈 위험 {churnRiskList.length}명</Text>
                 <Text style={styles.churnSub}>3주 이상 레슨 기록 없음</Text>
               </View>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#DC2626" />
+            <Ionicons name="chevron-forward" size={18} color={Colors.mutedFg} />
           </TouchableOpacity>
         )}
 
@@ -700,7 +700,7 @@ export default function HomeScreen() {
         >
           <View style={styles.aiCoachingLeft}>
             <View style={styles.aiCoachingIconWrap}>
-              <Ionicons name="bulb" size={20} color="#8B5CF6" />
+              <Ionicons name="bulb" size={20} color={Colors.mutedFg} />
             </View>
             <View>
               <Text style={styles.aiCoachingTitle}>내 AI 코칭 모델</Text>
@@ -936,8 +936,8 @@ export default function HomeScreen() {
                   <View style={styles.memberInfo}>
                     <View style={styles.memberNameRow}>
                       <Text style={styles.memberName}>{card.memberName}</Text>
-                      <View style={[styles.levelBadge, { backgroundColor: (LEVEL_COLOR[card.memberLevel] ?? Colors.mutedFg) + '22' }]}>
-                        <Text style={[styles.levelText, { color: LEVEL_COLOR[card.memberLevel] ?? Colors.mutedFg }]}>
+                      <View style={styles.levelBadge}>
+                        <Text style={styles.levelText}>
                           {card.memberLevel}
                         </Text>
                       </View>
@@ -1036,15 +1036,15 @@ export default function HomeScreen() {
                     style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.mutedBg, gap: 12 }}
                     onPress={() => { setUnpaidModal(false); router.push(`/members/${m.id}`); }}
                   >
-                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.destructive + '22', justifyContent: 'center', alignItems: 'center' }}>
-                      <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.destructive }}>{m.name.slice(0,1)}</Text>
+                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(45,51,64,0.08)', justifyContent: 'center', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.foreground }}>{m.name.slice(0,1)}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.foreground }}>{m.name}</Text>
                       <Text style={{ fontSize: 14, color: Colors.mutedFg, marginTop: 2 }}>{m.level} · 잔여 {m.remaining_credits}회</Text>
                     </View>
-                    <View style={{ backgroundColor: Colors.destructive + '18', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.destructive }}>0회</Text>
+                    <View style={{ backgroundColor: 'rgba(45,51,64,0.08)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.foreground }}>0회</Text>
                     </View>
                   </TouchableOpacity>
                 ))}
@@ -1083,15 +1083,15 @@ export default function HomeScreen() {
                     style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.mutedBg, gap: 12 }}
                     onPress={() => { setExpiringModal(false); router.push(`/members/${m.id}`); }}
                   >
-                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.warning + '22', justifyContent: 'center', alignItems: 'center' }}>
-                      <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.warning }}>{m.name.slice(0,1)}</Text>
+                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(45,51,64,0.08)', justifyContent: 'center', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.foreground }}>{m.name.slice(0,1)}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.foreground }}>{m.name}</Text>
                       <Text style={{ fontSize: 14, color: Colors.mutedFg, marginTop: 2 }}>{m.level}</Text>
                     </View>
-                    <View style={{ backgroundColor: Colors.warning + '25', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.warning }}>잔여 {m.remaining_credits}회</Text>
+                    <View style={{ backgroundColor: 'rgba(45,51,64,0.08)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.foreground }}>잔여 {m.remaining_credits}회</Text>
                     </View>
                   </TouchableOpacity>
                 ))}
@@ -1189,18 +1189,18 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
 
   headerCard: {
-    backgroundColor: Colors.navy, padding: 16, paddingTop: 28,
-    borderBottomLeftRadius: Radius.xl, borderBottomRightRadius: Radius.xl, marginBottom: 16,
+    backgroundColor: Colors.background, paddingHorizontal: 16, paddingTop: 20, paddingBottom: 4,
+    marginBottom: 16,
   },
   headerTop: {
     flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'flex-start', marginBottom: 12,
+    alignItems: 'flex-start', marginBottom: 6,
   },
-  greeting: { fontSize: 22, fontWeight: '700', color: Colors.white },
-  email: { fontSize: 13, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
+  greeting: { fontSize: 24, fontWeight: '700', color: Colors.foreground },
+  email: { fontSize: 13, color: Colors.mutedFg, marginTop: 2 },
   headerActions: { flexDirection: 'row', gap: 8 },
   headerIconBtn: { padding: 4 },
-  dateText: { fontSize: 13, color: 'rgba(255,255,255,0.8)' },
+  dateText: { fontSize: 14, color: Colors.mutedFg },
 
   statsGrid: { paddingHorizontal: 16, gap: 8, marginBottom: 12 },
   statsRow: { flexDirection: 'row', gap: 8 },
@@ -1219,45 +1219,42 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 13, color: Colors.mutedFg, fontWeight: '500' },
   statHint: { fontSize: 12, color: Colors.placeholder, marginTop: 2 },
 
-  aiCoachingCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F5F3FF', borderRadius: Radius.lg, padding: 14, marginHorizontal: 16, marginBottom: 12, borderWidth: 1, borderColor: '#DDD6FE', ...Shadow.sm },
+  aiCoachingCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.card, borderRadius: Radius.lg, padding: 14, marginHorizontal: 16, marginBottom: 12, borderWidth: 1, borderColor: Colors.border, ...Shadow.sm },
   aiCoachingLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  aiCoachingIconWrap: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#EDE9FE', alignItems: 'center', justifyContent: 'center' },
-  aiCoachingTitle: { fontSize: 14, fontWeight: '700', color: '#5B21B6' },
-  aiCoachingDesc: { fontSize: 14, color: '#7C3AED', marginTop: 2 },
+  aiCoachingIconWrap: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.mutedBg, alignItems: 'center', justifyContent: 'center' },
+  aiCoachingTitle: { fontSize: 14, fontWeight: '700', color: Colors.foreground },
+  aiCoachingDesc: { fontSize: 14, color: Colors.mutedFg, marginTop: 2 },
   aiCoachingRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  proBadgeSmall: { backgroundColor: '#8B5CF6', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
+  proBadgeSmall: { backgroundColor: Colors.foreground, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
   proBadgeSmallText: { color: '#fff', fontSize: 12, fontWeight: '800', letterSpacing: 1 },
   sectionHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     marginHorizontal: 16, marginBottom: 10,
   },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
+  sectionTitle: { fontSize: 17, fontWeight: '600', color: Colors.foreground },
 
   lessonCardsList: { paddingHorizontal: 16, marginBottom: 16 },
   memberCard: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card,
-    borderRadius: Radius.lg, padding: 14, marginBottom: 8,
-    ...Shadow.sm,
-    borderWidth: 1, borderColor: Colors.transparent,
+    borderRadius: Radius.md, padding: 14, marginBottom: 8,
+    borderWidth: 1, borderColor: Colors.border,
   },
   memberCardAttended: {
-    backgroundColor: Colors.successLight, borderColor: Colors.successBorder,
+    backgroundColor: Colors.mutedBg, borderColor: Colors.border,
   },
   memberCardAbsent: {
     backgroundColor: '#fff1f2', borderColor: '#fecdd3',
   },
   timeBadge: {
-    backgroundColor: Colors.primaryLight, borderRadius: Radius.sm,
-    paddingHorizontal: 10, paddingVertical: 8,
-    alignItems: 'center', marginRight: 12, minWidth: 52,
+    marginRight: 12, minWidth: 52, justifyContent: 'center',
   },
-  timeText: { fontSize: 14, fontWeight: '700', color: Colors.navy },
+  timeText: { fontSize: 15, fontWeight: '600', color: Colors.foreground },
   memberInfo: { flex: 1 },
   memberNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
-  memberName: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
-  levelBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: Radius.full },
-  levelText: { fontSize: 13, fontWeight: '700' },
-  packageName: { fontSize: 14, color: Colors.mutedFg, marginBottom: 4 },
+  memberName: { fontSize: 15, fontWeight: '600', color: Colors.foreground },
+  levelBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: Colors.mutedBg },
+  levelText: { fontSize: 11, fontWeight: '500', color: Colors.mutedFg },
+  packageName: { fontSize: 13, color: Colors.placeholder, marginBottom: 4 },
   creditsRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   creditsText: { fontSize: 14, fontWeight: '500' },
   deductionBadge: { backgroundColor: '#fee2e2', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8 },
@@ -1305,16 +1302,16 @@ const styles = StyleSheet.create({
   autoGenBtnText: { color: Colors.white, fontWeight: '700', fontSize: 14 },
   chatHintBubble: {
     position: 'absolute', bottom: 92, right: 12,
-    backgroundColor: '#F5F3FF', borderRadius: 12, padding: 12,
+    backgroundColor: Colors.card, borderRadius: 12, padding: 12,
     flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    maxWidth: 260, borderWidth: 1, borderColor: '#DDD6FE',
+    maxWidth: 260, borderWidth: 1, borderColor: Colors.border,
     ...Shadow.sm,
   },
-  chatHintText: { fontSize: 14, color: '#5B21B6', lineHeight: 22 },
+  chatHintText: { fontSize: 14, color: Colors.mutedFg, lineHeight: 22 },
   chatFab: {
     position: 'absolute', bottom: 24, right: 20,
     width: 56, height: 56, borderRadius: 28,
-    backgroundColor: Colors.navy, justifyContent: 'center', alignItems: 'center',
+    backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center',
     ...Shadow.md,
   },
 
@@ -1360,30 +1357,33 @@ const styles = StyleSheet.create({
   churnCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     marginHorizontal: 16, marginBottom: 10,
-    backgroundColor: '#FEF2F2', borderRadius: Radius.lg,
+    backgroundColor: Colors.card, borderRadius: Radius.lg,
     paddingHorizontal: 14, paddingVertical: 12,
-    borderWidth: 1, borderColor: '#FECACA',
+    borderWidth: 1, borderColor: Colors.border,
+    borderLeftWidth: 3, borderLeftColor: Colors.foreground,
   },
   churnCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   churnIconWrap: {
     width: 36, height: 36, borderRadius: 18,
-    backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: Colors.mutedBg, alignItems: 'center', justifyContent: 'center',
   },
-  churnTitle: { fontSize: 14, fontWeight: '700', color: '#DC2626' },
-  churnSub: { fontSize: 14, color: '#EF4444', marginTop: 1 },
+  churnTitle: { fontSize: 14, fontWeight: '700', color: Colors.foreground },
+  churnSub: { fontSize: 14, color: Colors.mutedFg, marginTop: 1 },
   trialCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     marginHorizontal: 16, marginBottom: 10,
-    backgroundColor: '#FFFBEB', borderRadius: Radius.lg,
+    backgroundColor: Colors.card, borderRadius: Radius.lg,
     paddingHorizontal: 14, paddingVertical: 12,
-    borderWidth: 1, borderColor: '#FDE68A',
+    borderWidth: 1, borderColor: Colors.border,
+    borderLeftWidth: 3, borderLeftColor: Colors.foreground,
   },
   interestCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     marginHorizontal: 16, marginBottom: 10,
-    backgroundColor: '#F5F3FF', borderRadius: Radius.lg,
+    backgroundColor: Colors.card, borderRadius: Radius.lg,
     paddingHorizontal: 14, paddingVertical: 12,
-    borderWidth: 1, borderColor: '#DDD6FE',
+    borderWidth: 1, borderColor: Colors.border,
+    borderLeftWidth: 3, borderLeftColor: Colors.foreground,
   },
   interestRegBtn: {
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,

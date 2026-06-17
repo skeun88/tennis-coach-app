@@ -121,8 +121,8 @@ export default function MembersScreen() {
         <View style={styles.cardInfo}>
           <View style={styles.cardTop}>
             <Text style={styles.name}>{item.name}</Text>
-            <View style={[styles.levelBadge, { backgroundColor: (LEVEL_COLORS[item.level as MemberLevel] ?? Colors.level.입문) + '22' }]}>
-              <Text style={[styles.levelText, { color: LEVEL_COLORS[item.level as MemberLevel] ?? Colors.level.입문 }]}>{item.level}</Text>
+            <View style={styles.levelBadge}>
+              <Text style={styles.levelText}>{item.level}</Text>
             </View>
             {hasUnread && (
               <View style={styles.newMsgBadge}>
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
   packageBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
   packageIconBox: {
     width: 40, height: 40, borderRadius: 10,
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: Colors.primary,
     justifyContent: 'center', alignItems: 'center',
   },
   packageBannerTitle: { fontSize: 15, fontWeight: '600', color: Colors.foreground, marginBottom: 2 },
@@ -270,8 +270,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 12,
     justifyContent: 'center', borderWidth: 1, borderColor: Colors.border, paddingVertical: 6,
   },
-  filterTrialActive: { backgroundColor: '#D97706', borderColor: '#D97706' },
-  trialBadge: { fontSize: 13, fontWeight: '700', color: '#D97706', backgroundColor: '#FEF3C7', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginTop: 2, alignSelf: 'flex-start' },
+  filterTrialActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  trialBadge: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg, backgroundColor: Colors.mutedBg, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginTop: 2, alignSelf: 'flex-start' },
   filterActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   filterText: { fontSize: 13, color: Colors.mutedFg, fontWeight: '600' },
   filterTextActive: { color: '#fff' },
@@ -296,12 +296,12 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
   },
   avatar: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  avatarText: { fontSize: 16, fontWeight: '600', color: Colors.foreground },
+  avatarText: { fontSize: 16, fontWeight: '600', color: '#fff' },
   cardInfo: { flex: 1 },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' },
   name: { fontSize: 15, fontWeight: '600', color: Colors.foreground },
-  levelBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  levelText: { fontSize: 11, fontWeight: '500' },
+  levelBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: 'rgba(45,51,64,0.08)' },
+  levelText: { fontSize: 11, fontWeight: '500', color: Colors.foreground },
   phone: { fontSize: 13, color: Colors.mutedFg },
   inactive: { fontSize: 13, color: Colors.destructive, marginTop: 2 },
 

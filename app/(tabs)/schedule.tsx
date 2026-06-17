@@ -708,16 +708,16 @@ ${rejectMsg.trim()}`
                   activeOpacity={0.85}
                   style={{
                     position: 'absolute', top, left: GRID_LEFT, width: GRID_WIDTH, height,
-                    backgroundColor: Colors.warning + '38',
-                    borderRadius: 10, borderWidth: 2, borderColor: Colors.warning,
+                    backgroundColor: 'rgba(45,51,64,0.05)',
+                    borderRadius: 10, borderWidth: 1.5, borderColor: Colors.border,
                     borderStyle: 'dashed',
                     justifyContent: 'center', alignItems: 'center', gap: 3,
                   }}
                   onPress={() => { setSelectedRequest(req); setRequestModal(true); }}
                 >
-                  <Ionicons name="time-outline" size={15} color={Colors.warning} />
-                  <Text style={{ fontSize: 14, fontWeight: '800', color: Colors.warning }}>예약 요청 대기중</Text>
-                  <Text style={{ fontSize: 13, color: Colors.warning }}>
+                  <Ionicons name="time-outline" size={15} color={Colors.mutedFg} />
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: Colors.foreground }}>예약 요청 대기중</Text>
+                  <Text style={{ fontSize: 13, color: Colors.mutedFg }}>
                     {req.start_time?.slice(0,5)} ~ {req.end_time?.slice(0,5)}
                   </Text>
                   <Text style={{ fontSize: 13, color: Colors.warning }}>
