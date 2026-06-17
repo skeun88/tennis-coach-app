@@ -6,6 +6,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { Member, MemberLevel } from '../../types';
 import { Colors } from '../../lib/theme';
@@ -26,6 +27,7 @@ const LEVEL_COLORS: Record<MemberLevel, string> = {
 
 export default function MembersScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [members, setMembers] = useState<MemberWithUnread[]>([]);
   const [filtered, setFiltered] = useState<MemberWithUnread[]>([]);
   const [search, setSearch] = useState('');
@@ -144,7 +146,7 @@ export default function MembersScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* 레슨권 배너 */}
       <TouchableOpacity
         style={styles.packageBanner}

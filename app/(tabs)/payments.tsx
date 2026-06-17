@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { Payment, PaymentStatus } from '../../types';
 import { Colors, Radius, Shadow } from '../../lib/theme';
@@ -51,8 +52,8 @@ function getDDayColor(dueDateStr: string, status: PaymentStatus): string {
   today.setHours(0, 0, 0, 0);
   const due = new Date(dueDateStr + 'T00:00:00');
   const diff = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-  if (diff < 0) return Colors.destructive;
-  if (diff <= 3) return Colors.warning;
+  if (diff < 0) return Colors.foreground;
+  
   return Colors.mutedFg;
 }
 
@@ -63,6 +64,7 @@ const METHOD_ICONS: Record<PaymentMethod, string> = {
 };
 
 export default function PaymentsScreen() {
+  const insets = useSafeAreaInsets();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [filtered, setFiltered] = useState<Payment[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -333,13 +335,13 @@ export default function PaymentsScreen() {
           {item.status !== '납부완료' && (
             <View>
               <Text style={styles.amountLabel}>미납금액</Text>
-              <Text style={[styles.amount, { color: Colors.destructive }]}>{remaining.toLocaleString()}원</Text>
+              <Text style={[styles.amount, { color: Colors.foreground }]}>{remaining.toLocaleString()}원</Text>
             </View>
           )}
           {(item as any).payment_method && (
             <View>
               <Text style={styles.amountLabel}>납부방법</Text>
-              <Text style={[styles.amount, { color: Colors.success, fontSize: 13 }]}>{(item as any).payment_method}</Text>
+              <Text style={[styles.amount, { color: Colors.mutedFg, fontSize: 13 }]}>{(item as any).payment_method}</Text>
             </View>
           )}
         </View>
@@ -375,7 +377,7 @@ export default function PaymentsScreen() {
   return (
     <View style={styles.container}>
       {/* Summary Banner */}
-      <View style={styles.summaryBanner}>
+      <View style={[styles.summaryBanner, { paddingTop: insets.top + 16 }]}>
         <View style={{ flex: 1 }}>
           <Text style={styles.summaryLabel}>전체 미납 금액</Text>
           <Text style={styles.summaryAmount}>{totalUnpaid > 0 ? `${totalUnpaid.toLocaleString()}원` : '없음'}</Text>
@@ -403,7 +405,7 @@ export default function PaymentsScreen() {
             {actionMembers.length > 0 && (
               <View style={styles.alertSection}>
                 <View style={styles.alertHeader}>
-                  <Ionicons name="alert-circle" size={16} color={Colors.destructive} />
+                  <Ionicons name="alert-circle" size={16} color={Colors.mutedFg} />
                   <Text style={styles.alertTitle}>납부 필요 회원</Text>
                   <View style={styles.alertCount}>
                     <Text style={styles.alertCountText}>{actionMembers.length}명</Text>
@@ -411,7 +413,7 @@ export default function PaymentsScreen() {
                 </View>
                 {actionMembers.map(m => {
                   const isUnpaid = m.type === 'unpaid';
-                  const dotColor = isUnpaid ? Colors.destructive : Colors.warning;
+                  const dotColor = Colors.foreground;
                   const amount = isUnpaid ? m.unpaidAmount : m.packagePrice;
                   const subLabel = isUnpaid
                     ? `미납 ${(m.unpaidAmount ?? 0).toLocaleString()}원${m.dueDate ? ` · 기한 ${m.dueDate}` : ''}`

@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Colors, Radius, Shadow } from '../../lib/theme';
@@ -41,6 +42,7 @@ interface TodayMemberCard {
 
 export default function HomeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [stats, setStats] = useState<Stats>({
     totalMembers: 0, todayLessons: 0, unpaidMembers: 0, expiringMembers: 0,
   });
@@ -572,10 +574,10 @@ export default function HomeScreen() {
         }
       >
         {/* Header */}
-        <View style={styles.headerCard}>
+        <View style={[styles.headerCard, { paddingTop: insets.top + 12 }]}>
           <View style={styles.headerTop}>
             <View>
-              <Text style={styles.greeting}>안녕하세요 👋</Text>
+              <Text style={styles.greeting}>안녕하세요</Text>
               <Text style={styles.email}>{coachEmail}</Text>
             </View>
             <View style={styles.headerActions}>
@@ -948,7 +950,7 @@ export default function HomeScreen() {
                       <Ionicons name="layers-outline" size={12} color={card.remainingCredits <= 1 ? Colors.destructive : Colors.mutedFg} />
                       <Text style={[styles.creditsText, { color: card.remainingCredits <= 1 ? Colors.destructive : Colors.mutedFg }]}>
                         잔여 {card.remainingCredits}회
-                        {card.remainingCredits <= 1 && ' ⚠️'}
+
                       </Text>
                       {card.isAbsent && card.deductionType && (
                         <View style={styles.deductionBadge}>
@@ -999,7 +1001,7 @@ export default function HomeScreen() {
         <View style={styles.chatHintBubble}>
           <View style={{ flex: 1 }}>
             <Text style={styles.chatHintText}>앱 사용법 외에도 드릴·테니스 이론 등</Text>
-            <Text style={styles.chatHintText}>무엇이든 물어보세요 🎾</Text>
+            <Text style={styles.chatHintText}>무엇이든 물어보세요</Text>
           </View>
           <TouchableOpacity onPress={dismissChatHint} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="close" size={16} color="#5B21B6" />
@@ -1189,7 +1191,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
 
   headerCard: {
-    backgroundColor: Colors.background, paddingHorizontal: 16, paddingTop: 20, paddingBottom: 4,
+    backgroundColor: Colors.background, paddingHorizontal: 16, paddingTop: 20, paddingBottom: 8,
     marginBottom: 16,
   },
   headerTop: {

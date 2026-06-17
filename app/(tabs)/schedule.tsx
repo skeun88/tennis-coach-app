@@ -7,6 +7,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import * as Notifications from 'expo-notifications';
 import { Lesson } from '../../types';
@@ -91,6 +92,7 @@ function yToMinutes(y: number): number {
 
 export default function ScheduleScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<ViewTab>('일일');
   const [lessons, setLessons] = useState<LessonWithMembers[]>([]);
   const [weekData, setWeekData] = useState<WeekLesson[]>([]);
@@ -985,7 +987,7 @@ ${rejectMsg.trim()}`
   return (
     <View style={styles.container}>
       {/* 탭 */}
-      <View style={styles.tabRow}>
+      <View style={[styles.tabRow, { paddingTop: insets.top + 8 }]}>
         {(['일일', '주간', '월간'] as ViewTab[]).map(tab => (
           <TouchableOpacity key={tab} style={[styles.tabBtn, activeTab === tab && styles.tabBtnActive]} onPress={() => {
             setActiveTab(tab);
@@ -1178,7 +1180,7 @@ ${rejectMsg.trim()}`
                 <View style={styles.requestBtnRow}>
                   <TouchableOpacity style={[styles.requestBtn, styles.requestBtnReject]}
                     onPress={() => handleRejectRequest(selectedRequest)}>
-                    <Ionicons name="close-circle-outline" size={18} color={Colors.destructive} />
+                    <Ionicons name="close-circle-outline" size={18} color={Colors.foreground} />
                     <Text style={[styles.requestBtnText, { color: Colors.destructive }]}>거절</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[styles.requestBtn, styles.requestBtnAccept]}
@@ -1417,18 +1419,18 @@ const styles = StyleSheet.create({
 
   requestBanner: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: Colors.destructive, marginHorizontal: 12, marginTop: 8,
+    backgroundColor: Colors.foreground, marginHorizontal: 12, marginTop: 8,
     borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10,
-    shadowColor: Colors.destructive, shadowOpacity: 0.4, shadowRadius: 6,
+    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 }, elevation: 4,
   },
   requestBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   requestBannerText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   requestBannerBadge: {
-    backgroundColor: '#fff', borderRadius: 12, minWidth: 24, height: 24,
+    backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12, minWidth: 24, height: 24,
     justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6,
   },
-  requestBannerBadgeText: { color: Colors.destructive, fontWeight: '900', fontSize: 13 },
+  requestBannerBadgeText: { color: '#fff', fontWeight: '900', fontSize: 13 },
   requestInfoCard: { backgroundColor: Colors.background, borderRadius: 12, padding: 16, marginBottom: 16 },
   requestMemberName: { fontSize: 18, fontWeight: '900', color: Colors.navy, marginBottom: 4 },
   requestDateTime: { fontSize: 14, color: Colors.primary, fontWeight: '700', marginBottom: 8 },
@@ -1438,7 +1440,7 @@ const styles = StyleSheet.create({
   requestMore: { fontSize: 14, color: Colors.mutedFg, textAlign: 'center', marginBottom: 12 },
   requestBtnRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
   requestBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, paddingVertical: 14 },
-  requestBtnReject: { backgroundColor: Colors.destructive + '12', borderWidth: 1.5, borderColor: Colors.destructive },
+  requestBtnReject: { backgroundColor: 'rgba(45,51,64,0.08)', borderWidth: 1.5, borderColor: Colors.border },
   requestBtnAccept: { backgroundColor: Colors.primary },
   requestBtnText: { fontSize: 16, fontWeight: '800' },
 });
