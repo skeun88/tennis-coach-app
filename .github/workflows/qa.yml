@@ -44,7 +44,7 @@ jobs:
     name: 📦 EAS Preview Build
     needs: qa
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[release]')
     steps:
       - uses: actions/checkout@v4
 
