@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { Payment, PaymentStatus } from '../../types';
@@ -21,12 +21,18 @@ interface ActionMember {
   phone: string;
   type: 'low_credit' | 'unpaid';
   remainingCredits?: number;
-  packageTitle?: string;
-  packagePrice?: number;
   paymentId?: string;
   unpaidAmount?: number;
   dueDate?: string;
-  packageTotalCredits?: number;
+}
+
+interface LessonPackage {
+  id: string;
+  title: string;
+  price: number;
+  total_credits: number;
+  duration_minutes: number;
+  days: number[];
 }
 
 const METHOD_ICONS: Record<PaymentMethod, string> = {
@@ -37,6 +43,7 @@ const METHOD_ICONS: Record<PaymentMethod, string> = {
 
 export default function PaymentsScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [filtered, setFiltered] = useState<Payment[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -48,6 +55,10 @@ export default function PaymentsScreen() {
   const [payTarget, setPayTarget] = useState<ActionMember | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // 레슨권 선택
+  const [packages, setPackages] = useState<LessonPackage[]>([]);
+  const [selectedPackage, setSelectedPackage] = useState<LessonPackage | null>(null);
 
   // 수정 모달
   const [editModal, setEditModal] = useState(false);
@@ -107,9 +118,6 @@ export default function PaymentsScreen() {
           phone: m.phone,
           type: 'low_credit',
           remainingCredits: m.remaining_credits,
-          packageTitle: pkg?.title ?? null,
-          packagePrice: pkg?.price ?? null,
-          packageTotalCredits: pkg?.total_credits ?? null,
         });
       }
     }
@@ -131,11 +139,17 @@ export default function PaymentsScreen() {
     .filter(p => p.status === '납부완료' && p.paid_date?.startsWith(thisMonth))
     .reduce((s, p) => s + p.paid_amount, 0);
 
-  function openPayModal(member: ActionMember) {
-    if (member.type === 'low_credit' && !member.packagePrice) {
-      Alert.alert('레슨권 미배정', `${member.name}님에게 등록된 레슨권이 없습니다.`);
-      return;
-    }
+  async function openPayModal(member: ActionMember) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data: pkgs } = await supabase
+      .from('lesson_packages')
+      .select('id, title, price, total_credits, duration_minutes, days')
+      .eq('coach_id', user.id)
+      .eq('is_active', true)
+      .order('price');
+    setPackages(pkgs ?? []);
+    setSelectedPackage(null);
     setPayTarget(member);
     setSelectedMethod(null);
     setPayModal(true);
@@ -143,9 +157,12 @@ export default function PaymentsScreen() {
 
   async function confirmPayment() {
     if (!payTarget || !selectedMethod) return;
+    if (payTarget.type === 'low_credit' && !selectedPackage) return;
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSaving(false); return; }
+
+    const memberId = payTarget.memberId;
 
     if (payTarget.type === 'unpaid' && payTarget.paymentId) {
       await supabase.from('payments').update({
@@ -153,32 +170,39 @@ export default function PaymentsScreen() {
         paid_amount: (payTarget.unpaidAmount ?? 0) + (payments.find(p => p.id === payTarget.paymentId)?.paid_amount ?? 0),
         paid_date: new Date().toISOString().split('T')[0],
         payment_method: selectedMethod,
+        ...(selectedPackage ? { description: `${selectedPackage.title} 결제`, lesson_package_id: selectedPackage.id } : {}),
       }).eq('id', payTarget.paymentId);
-    } else if (payTarget.type === 'low_credit' && payTarget.packagePrice) {
+      if (selectedPackage) {
+        await supabase.from('members').update({
+          remaining_credits: (payTarget.remainingCredits ?? 0) + selectedPackage.total_credits,
+          lesson_package_id: selectedPackage.id,
+        }).eq('id', memberId);
+      }
+    } else if (payTarget.type === 'low_credit' && selectedPackage) {
       const today = new Date().toISOString().split('T')[0];
       await supabase.from('payments').insert({
         coach_id: user.id,
-        member_id: payTarget.memberId,
-        amount: payTarget.packagePrice,
-        paid_amount: payTarget.packagePrice,
+        member_id: memberId,
+        amount: selectedPackage.price,
+        paid_amount: selectedPackage.price,
         status: '납부완료',
-        description: `${payTarget.packageTitle ?? '레슨권'} 결제`,
+        description: `${selectedPackage.title} 결제`,
         due_date: today,
         paid_date: today,
         payment_method: selectedMethod,
+        lesson_package_id: selectedPackage.id,
       });
-      if (payTarget.packageTotalCredits) {
-        await supabase.from('members').update({
-          remaining_credits: (payTarget.remainingCredits ?? 0) + payTarget.packageTotalCredits,
-        }).eq('id', payTarget.memberId);
-      }
+      await supabase.from('members').update({
+        remaining_credits: (payTarget.remainingCredits ?? 0) + selectedPackage.total_credits,
+        lesson_package_id: selectedPackage.id,
+      }).eq('id', memberId);
     }
 
     setSaving(false);
     setPayModal(false);
     setPayTarget(null);
-    Alert.alert('납부 완료', `${payTarget.name}님 납부 처리됐습니다 (${selectedMethod})`);
     loadData();
+    router.push(`/members/${memberId}`);
   }
 
   function openEditModal(payment: Payment) {
@@ -326,7 +350,7 @@ export default function PaymentsScreen() {
                 const isUnpaid = m.type === 'unpaid';
                 const subLabel = isUnpaid
                   ? `미납 ${(m.unpaidAmount ?? 0).toLocaleString()}원${m.dueDate ? ` · 기한 ${m.dueDate}` : ''}`
-                  : `잔여 ${m.remainingCredits}회${m.packageTitle ? ` · ${m.packageTitle}` : ''}${m.packagePrice ? ` · ${m.packagePrice.toLocaleString()}원` : ' · 레슨권 미배정'}`;
+                  : `잔여 ${m.remainingCredits}회`;
                 return (
                   <View key={m.key} style={styles.alertRow}>
                     <View style={styles.alertDot} />
@@ -359,21 +383,54 @@ export default function PaymentsScreen() {
             <Text style={styles.modalTitle}>납부 처리</Text>
             {payTarget && (
               <>
-                <View style={{ margin: 16, backgroundColor: Colors.background, borderRadius: 12, padding: 14, gap: 10 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Ionicons name="person-outline" size={16} color={Colors.mutedFg} />
-                    <Text style={{ fontSize: 13, color: Colors.mutedFg, width: 60 }}>회원</Text>
-                    <Text style={{ flex: 1, fontSize: 15, color: Colors.foreground, fontWeight: '600' }}>{payTarget.name}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Ionicons name="cash-outline" size={16} color={Colors.mutedFg} />
-                    <Text style={{ fontSize: 13, color: Colors.mutedFg, width: 60 }}>금액</Text>
-                    <Text style={{ flex: 1, fontSize: 15, color: Colors.foreground, fontWeight: '800' }}>
-                      {(payTarget.type === 'unpaid' ? payTarget.unpaidAmount ?? 0 : payTarget.packagePrice ?? 0).toLocaleString()}원
-                    </Text>
-                  </View>
+                {/* 회원 정보 */}
+                <View style={{ marginHorizontal: 16, marginBottom: 16, backgroundColor: Colors.background, borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="person-outline" size={16} color={Colors.mutedFg} />
+                  <Text style={{ fontSize: 13, color: Colors.mutedFg, width: 52 }}>회원</Text>
+                  <Text style={{ flex: 1, fontSize: 15, color: Colors.foreground, fontWeight: '600' }}>{payTarget.name}</Text>
+                  {payTarget.type === 'unpaid' && (
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: Colors.foreground }}>{(payTarget.unpaidAmount ?? 0).toLocaleString()}원</Text>
+                  )}
                 </View>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginHorizontal: 16, marginBottom: 10 }}>납부 방법</Text>
+
+                {/* 레슨권 선택 */}
+                <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginHorizontal: 16, marginBottom: 8 }}>
+                  레슨권 선택{payTarget.type === 'unpaid' ? ' (선택사항)' : ''}
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 4 }} contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
+                  {packages.length === 0 ? (
+                    <Text style={{ fontSize: 13, color: Colors.placeholder, paddingVertical: 12 }}>등록된 레슨권이 없습니다</Text>
+                  ) : (
+                    packages.map(pkg => {
+                      const isSelected = selectedPackage?.id === pkg.id;
+                      return (
+                        <TouchableOpacity
+                          key={pkg.id}
+                          onPress={() => setSelectedPackage(isSelected ? null : pkg)}
+                          style={{
+                            borderWidth: 1.5,
+                            borderColor: isSelected ? Colors.foreground : Colors.border,
+                            borderRadius: 10,
+                            padding: 12,
+                            minWidth: 130,
+                            backgroundColor: isSelected ? Colors.foreground : Colors.card,
+                          }}
+                        >
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: isSelected ? '#fff' : Colors.foreground, marginBottom: 4 }}>{pkg.title}</Text>
+                          <Text style={{ fontSize: 12, color: isSelected ? 'rgba(255,255,255,0.7)' : Colors.mutedFg }}>{pkg.total_credits}회 · {pkg.price.toLocaleString()}원</Text>
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
+                </ScrollView>
+                {selectedPackage && (
+                  <Text style={{ fontSize: 12, color: Colors.mutedFg, marginHorizontal: 16, marginTop: 4, marginBottom: 4 }}>
+                    결제 금액: <Text style={{ fontWeight: '800', color: Colors.foreground }}>{selectedPackage.price.toLocaleString()}원</Text> · {selectedPackage.total_credits}회 추가
+                  </Text>
+                )}
+
+                {/* 납부 방법 */}
+                <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginHorizontal: 16, marginTop: 12, marginBottom: 10 }}>납부 방법</Text>
                 <View style={{ flexDirection: 'row', gap: 10, marginHorizontal: 16, marginBottom: 16 }}>
                   {METHODS.map(m => (
                     <TouchableOpacity
@@ -387,12 +444,12 @@ export default function PaymentsScreen() {
                   ))}
                 </View>
                 <TouchableOpacity
-                  style={[styles.confirmBtn, (!selectedMethod || saving) && { backgroundColor: Colors.placeholder }]}
+                  style={[styles.confirmBtn, (saving || !selectedMethod || (payTarget.type === 'low_credit' && !selectedPackage)) && { backgroundColor: Colors.placeholder }]}
                   onPress={confirmPayment}
-                  disabled={!selectedMethod || saving}
+                  disabled={saving || !selectedMethod || (payTarget.type === 'low_credit' && !selectedPackage)}
                 >
                   <Text style={styles.confirmBtnText}>
-                    {saving ? '처리 중...' : selectedMethod ? `${selectedMethod}으로 납부 완료` : '납부 방법을 선택하세요'}
+                    {saving ? '처리 중...' : !selectedMethod ? '납부 방법을 선택하세요' : (payTarget.type === 'low_credit' && !selectedPackage) ? '레슨권을 선택하세요' : `${selectedMethod}으로 납부 완료`}
                   </Text>
                 </TouchableOpacity>
               </>
