@@ -577,8 +577,9 @@ export default function HomeScreen() {
         <View style={[styles.headerCard, { paddingTop: insets.top + 12 }]}>
           <View style={styles.headerTop}>
             <View>
-              <Text style={styles.greeting}>안녕하세요</Text>
-              <Text style={styles.email}>{coachEmail}</Text>
+              <Text style={styles.greeting}>
+                {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
+              </Text>
             </View>
             <View style={styles.headerActions}>
               {/* QR 초대 버튼 */}
@@ -601,9 +602,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
           </View>
-          <Text style={styles.dateText}>
-            {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
-          </Text>
+
         </View>
 
         {/* Stats Grid (2x2) — 전체회원 / 오늘레슨 / 미납회원 / 만료예정 */}
