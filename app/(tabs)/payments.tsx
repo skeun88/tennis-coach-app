@@ -5,8 +5,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
+
 import { supabase } from '../../lib/supabase';
 import { Payment, PaymentStatus } from '../../types';
 import { Colors, Radius } from '../../lib/theme';
@@ -36,7 +35,6 @@ const METHOD_ICONS: Record<PaymentMethod, string> = {
 };
 
 export default function PaymentsScreen() {
-  const insets = useSafeAreaInsets();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [filtered, setFiltered] = useState<Payment[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -273,20 +271,6 @@ export default function PaymentsScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar style="light" />
-
-      {/* Summary Banner */}
-      <View style={[styles.summaryBanner, { paddingTop: insets.top + 20 }]}>
-        <View style={styles.sumItem}>
-          <Text style={styles.sumLabel}>전체 미납</Text>
-          <Text style={styles.sumValue}>{totalUnpaid > 0 ? `${totalUnpaid.toLocaleString()}원` : '없음'}</Text>
-        </View>
-        <View style={styles.sumDivider} />
-        <View style={styles.sumItem}>
-          <Text style={styles.sumLabel}>이번 달 완납</Text>
-          <Text style={styles.sumValue}>{thisMonthPaid.toLocaleString()}원</Text>
-        </View>
-      </View>
 
       {/* Filter Chips */}
       <View style={styles.filterChips}>

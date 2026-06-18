@@ -408,39 +408,6 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadProfile(); setRefreshing(false); }} tintColor={Colors.mint} />}
       >
-        {/* ── Hero ── */}
-        <View style={styles.hero}>
-          <View style={styles.heroTop}>
-            <View style={{ flex: 1 }} />
-            <TouchableOpacity onPress={handleSignOut} style={styles.logoutBtn}>
-              <Ionicons name="log-out-outline" size={20} color="rgba(255,255,255,0.7)" />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.heroProfileRow}>
-            <TouchableOpacity style={styles.avatarRing} onPress={() => { setEditProfile({ ...profile }); setProfileModal(true); }}>
-              {profile.avatar_url
-                ? <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} />
-                : <View style={styles.avatar}><Text style={styles.avatarText}>{initial}</Text></View>}
-              <View style={styles.cameraPin}><Ionicons name="camera" size={11} color="#fff" /></View>
-            </TouchableOpacity>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.heroName}>{profile.name} 코치</Text>
-              <Text style={styles.heroBio}>{email}</Text>
-              {isActive && (
-                <View style={styles.planBadge}>
-                  <Text style={styles.planBadgeText}>{isTrial ? 'TRIAL' : 'PRO'}</Text>
-                </View>
-              )}
-            </View>
-          </View>
-          {(regionLabel || profile.center_name) ? (
-              <View style={styles.metaRow}>
-                {regionLabel ? <View style={styles.metaItem}><Ionicons name="location-outline" size={12} color="rgba(255,255,255,.6)" /><Text style={styles.metaText}>{regionLabel}</Text></View> : null}
-                {profile.center_name ? <View style={styles.metaItem}><Ionicons name="business-outline" size={12} color="rgba(255,255,255,.6)" /><Text style={styles.metaText}>{profile.center_name}</Text></View> : null}
-              </View>
-            ) : null}
-        </View>
-
         <View style={styles.body}>
 
           {/* ══ KERRI 코칭 실적 ══ */}
