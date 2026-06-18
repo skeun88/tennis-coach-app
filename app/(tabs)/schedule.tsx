@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import * as Notifications from 'expo-notifications';
 import { Lesson } from '../../types';
-import { Colors } from '../../lib/theme';
+import { Colors, Radius } from '../../lib/theme';
 
 type ViewTab = '일일' | '주간' | '월간';
 
@@ -602,9 +602,10 @@ ${rejectMsg.trim()}`
       <TouchableOpacity
         style={styles.requestBanner}
         onPress={() => { setSelectedRequest(pendingRequests[0]); setRequestModal(true); }}
+        activeOpacity={0.85}
       >
         <View style={styles.requestBannerLeft}>
-          <Ionicons name="calendar" size={18} color="#fff" />
+          <Ionicons name="calendar-outline" size={18} color={Colors.foreground} />
           <Text style={styles.requestBannerText}>
             레슨 예약 요청 {pendingRequests.length}건 대기 중
           </Text>
@@ -1292,11 +1293,11 @@ function DraggableLesson({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  tabRow: { flexDirection: 'row', backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border, paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-  tabBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center', backgroundColor: Colors.mutedBg },
-  tabBtnActive: { backgroundColor: Colors.primary },
-  tabText: { fontSize: 14, fontWeight: '700', color: Colors.mutedFg },
-  tabTextActive: { color: '#fff' },
+  tabRow: { flexDirection: 'row', backgroundColor: Colors.background, borderBottomWidth: 1, borderBottomColor: Colors.border, paddingHorizontal: 16, paddingBottom: 12, gap: 8 },
+  tabBtn: { flex: 1, paddingVertical: 8, borderRadius: Radius.md, alignItems: 'center', backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border },
+  tabBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  tabText: { fontSize: 14, fontWeight: '600', color: Colors.mutedFg },
+  tabTextActive: { color: '#fff', fontWeight: '700' },
   weekStrip: { flexDirection: 'row', backgroundColor: Colors.card, paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: Colors.border, gap: 4 },
   dayBtn: { flex: 1, alignItems: 'center', paddingVertical: 6, borderRadius: 10, backgroundColor: Colors.mutedBg },
   daySelected: { backgroundColor: Colors.primary },
@@ -1304,7 +1305,7 @@ const styles = StyleSheet.create({
   dayNum: { fontSize: 15, fontWeight: '700', color: Colors.foreground },
   dayTextSelected: { color: '#fff' },
   dayToday: { color: Colors.navy },
-  dateHeader: { fontSize: 20, fontWeight: '700', color: Colors.foreground, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: Colors.border },
+  dateHeader: { fontSize: 20, fontWeight: '700', color: Colors.foreground, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4, backgroundColor: Colors.background, borderBottomWidth: 1, borderBottomColor: Colors.border },
   // 그리드
   hourRow: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center' },
   hourLabel: { width: 48, fontSize: 14, color: Colors.placeholder, fontWeight: '600', textAlign: 'right', paddingRight: 8 },
@@ -1417,18 +1418,18 @@ const styles = StyleSheet.create({
 
   requestBanner: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: Colors.foreground, marginHorizontal: 12, marginTop: 8,
+    backgroundColor: Colors.card, marginHorizontal: 12, marginTop: 8,
     borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10,
-    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 }, elevation: 4,
+    borderWidth: 1, borderColor: Colors.border,
+    borderLeftWidth: 3, borderLeftColor: Colors.foreground,
   },
   requestBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  requestBannerText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  requestBannerText: { color: Colors.foreground, fontWeight: '700', fontSize: 14 },
   requestBannerBadge: {
-    backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12, minWidth: 24, height: 24,
+    backgroundColor: Colors.mutedBg, borderRadius: 12, minWidth: 24, height: 24,
     justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6,
   },
-  requestBannerBadgeText: { color: '#fff', fontWeight: '900', fontSize: 13 },
+  requestBannerBadgeText: { color: Colors.foreground, fontWeight: '900', fontSize: 13 },
   requestInfoCard: { backgroundColor: Colors.background, borderRadius: 12, padding: 16, marginBottom: 16 },
   requestMemberName: { fontSize: 18, fontWeight: '900', color: Colors.navy, marginBottom: 4 },
   requestDateTime: { fontSize: 14, color: Colors.primary, fontWeight: '700', marginBottom: 8 },
