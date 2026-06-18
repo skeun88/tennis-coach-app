@@ -123,7 +123,7 @@ function InfoRow({ icon, label, value, multiline, last }: { icon: string; label:
     <View style={[styles.infoRow, !last && styles.infoRowBorder]}>
       <View style={styles.infoIcon}><Ionicons name={icon as any} size={15} color={Colors.mutedFg} /></View>
       <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={[styles.infoValue, multiline && { flex: 1, textAlign: 'right' }]} numberOfLines={multiline ? 2 : 1}>{value || '-'}</Text>
+      <Text style={[styles.infoValue, multiline && { flex: 1 }]} numberOfLines={multiline ? 2 : 1}>{value || '-'}</Text>
     </View>
   );
 }
