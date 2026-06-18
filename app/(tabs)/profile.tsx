@@ -32,10 +32,10 @@ const GRADE_REQS: Record<GradeKey, { lessons: number; reports: number; retention
 };
 
 const GRADE_META: Record<GradeKey, { color: string; icon: string }> = {
-  Diamond: { color: '#60A5FA', icon: 'diamond' },
-  Gold:    { color: '#F59E0B', icon: 'trophy' },
-  Silver:  { color: '#94A3B8', icon: 'medal' },
-  Bronze:  { color: '#CD7F32', icon: 'ribbon' },
+  Diamond: { color: '#60A5FA', icon: 'diamond-outline' },
+  Gold:    { color: '#F59E0B', icon: 'trophy-outline' },
+  Silver:  { color: '#94A3B8', icon: 'medal-outline' },
+  Bronze:  { color: '#CD7F32', icon: 'ribbon-outline' },
 };
 
 const GRADE_ORDER: GradeKey[] = ['Diamond', 'Gold', 'Silver', 'Bronze'];
@@ -128,12 +128,10 @@ function InfoRow({ icon, label, value, multiline, last }: { icon: string; label:
   );
 }
 
-function MetricCard({ icon, label, value, sub, color }: { icon: string; label: string; value: string; sub?: string; color?: string }) {
+function MetricCard({ icon, label, value, sub }: { icon: string; label: string; value: string; sub?: string; color?: string }) {
   return (
     <View style={metric.card}>
-      <View style={[metric.iconWrap, { backgroundColor: (color ?? Colors.navy) + '15' }]}>
-        <Ionicons name={icon as any} size={18} color={color ?? Colors.navy} />
-      </View>
+      <Ionicons name={(icon + '-outline') as any} size={20} color={Colors.mutedFg} style={{ marginBottom: 4 }} />
       <Text style={metric.value}>{value}</Text>
       <Text style={metric.label}>{label}</Text>
       {sub ? <Text style={metric.sub}>{sub}</Text> : null}
@@ -471,9 +469,9 @@ export default function ProfileScreen() {
               <Text style={styles.sectionSub}>KERRI 검증 · 조작 불가</Text>
             </View>
             <View style={metric.grid}>
-              <MetricCard icon="flash"         label="총 진행 레슨"    value={`${perf.totalLessons}회`}  sub="출석 기준"      color={Colors.navy} />
-              <MetricCard icon="document-text" label="AI 레포트 발송"  value={`${perf.totalReports}개`}  sub="누적 총합"      color="#8B5CF6" />
-              <MetricCard icon="people"        label="회원 유지율"     value={perf.totalMembers > 0 ? `${perf.reregistrationRate}%` : '-'} sub="월평균 유지율" color="#10B981" />
+              <MetricCard icon="flash"         label="총 진행 레슨"    value={`${perf.totalLessons}회`}  sub="출석 기준" />
+              <MetricCard icon="document-text" label="AI 레포트 발송"  value={`${perf.totalReports}개`}  sub="누적 총합" />
+              <MetricCard icon="people"        label="회원 유지율"     value={perf.totalMembers > 0 ? `${perf.reregistrationRate}%` : '-'} sub="월평균 유지율" />
             </View>
           </View>
 
