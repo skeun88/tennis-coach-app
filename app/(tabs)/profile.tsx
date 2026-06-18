@@ -797,12 +797,6 @@ export default function ProfileScreen() {
         </View>
       </ScrollView>
 
-      <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.previewBtn}>
-          <Ionicons name="eye-outline" size={18} color="#fff" />
-          <Text style={styles.previewBtnText}>내 프로필 미리보기</Text>
-        </TouchableOpacity>
-      </View>
 
       {/* ══ 모달: 기본 프로필 ══ */}
       <Modal visible={profileModal} transparent animationType="slide" onRequestClose={() => setProfileModal(false)}>
@@ -972,9 +966,6 @@ const styles = StyleSheet.create({
   qrInlineBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: Colors.white, borderRadius: Radius.md, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: Colors.primary + '50', marginLeft: 10 },
   qrInlineBtnText: { fontSize: 13, fontWeight: '700', color: Colors.primary },
   emailHint: { fontSize: 11, color: Colors.placeholder, marginTop: 6, textAlign: 'center' },
-  bottomBar: { paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: Colors.white, paddingBottom: 28 },
-  previewBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 48, borderRadius: Radius.lg, backgroundColor: Colors.navy },
-  previewBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,.4)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 48 },
   handle: { width: 40, height: 4, backgroundColor: Colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
