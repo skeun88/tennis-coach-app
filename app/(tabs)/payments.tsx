@@ -274,8 +274,27 @@ export default function PaymentsScreen() {
   return (
     <View style={styles.container}>
 
+      {/* Header */}
+      <View style={[styles.headerCard, { paddingTop: insets.top + 14 }]}>
+        <View style={styles.headerTop}>
+          <Text style={styles.headerTitle}>결제 관리</Text>
+        </View>
+        {/* 요약 카드 */}
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryValue}>{totalUnpaid > 0 ? totalUnpaid.toLocaleString() + '원' : '없음'}</Text>
+            <Text style={styles.summaryLabel}>미수금</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryValue}>{thisMonthPaid > 0 ? thisMonthPaid.toLocaleString() + '원' : '-'}</Text>
+            <Text style={styles.summaryLabel}>이번 달 수입</Text>
+          </View>
+        </View>
+      </View>
+
       {/* Filter Chips */}
-      <View style={[styles.filterChips, { paddingTop: insets.top + 12 }]}>
+      <View style={[styles.filterChips, { paddingTop: 4 }]}>
         {FILTERS.map(f => (
           <TouchableOpacity
             key={f.key}
@@ -430,15 +449,26 @@ export default function PaymentsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  summaryBanner: {
-    backgroundColor: Colors.foreground,
-    paddingHorizontal: 20, paddingBottom: 20,
-    flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center',
+  // 헤더
+  headerCard: {
+    backgroundColor: Colors.background,
+    paddingHorizontal: 16, paddingBottom: 12,
+    marginBottom: 0,
   },
-  sumItem: { alignItems: 'center' },
-  sumDivider: { width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.2)' },
-  sumLabel: { fontSize: 12, color: 'rgba(255,255,255,0.6)', fontWeight: '500', marginBottom: 4 },
-  sumValue: { fontSize: 22, fontWeight: '800', color: '#FFFFFF' },
+  headerTop: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: 12,
+  },
+  headerTitle: { fontSize: 22, fontWeight: '700', color: Colors.foreground },
+  summaryRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: Colors.card, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.border, padding: 16, gap: 0,
+  },
+  summaryItem: { flex: 1, alignItems: 'center' },
+  summaryDivider: { width: 1, height: 36, backgroundColor: Colors.border },
+  summaryValue: { fontSize: 18, fontWeight: '800', color: Colors.foreground, marginBottom: 4 },
+  summaryLabel: { fontSize: 12, color: Colors.mutedFg, fontWeight: '500' },
   filterChips: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 12 },
   fchip: { paddingVertical: 6, paddingHorizontal: 14, borderRadius: 20, backgroundColor: Colors.mutedBg },
   fchipOn: { backgroundColor: Colors.primary },
