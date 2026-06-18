@@ -515,15 +515,22 @@ export default function ProfileScreen() {
             </View>
             <View style={styles.knowledgeMetaRow}>
               <Text style={styles.knowledgeCount}>코칭 스타일 {knowledgeCount}개 등록됨</Text>
-              <Text style={[
-                styles.knowledgeVoiceLimit,
-                voiceUsedSeconds >= VOICE_MONTHLY_LIMIT && { color: '#DC2626' },
-              ]}>
-                {voiceUsedSeconds >= VOICE_MONTHLY_LIMIT
-                  ? '🎙 음성 한도 마소'
-                  : `🎙 음성 ${Math.floor((VOICE_MONTHLY_LIMIT - voiceUsedSeconds) / 60)}분 ${(VOICE_MONTHLY_LIMIT - voiceUsedSeconds) % 60}초 남음`
-                }
-              </Text>
+              <View style={styles.voiceLimitRow}>
+                <Ionicons
+                  name="mic"
+                  size={12}
+                  color={voiceUsedSeconds >= VOICE_MONTHLY_LIMIT ? '#DC2626' : '#8B5CF6'}
+                />
+                <Text style={[
+                  styles.knowledgeVoiceLimit,
+                  voiceUsedSeconds >= VOICE_MONTHLY_LIMIT && { color: '#DC2626' },
+                ]}>
+                  {voiceUsedSeconds >= VOICE_MONTHLY_LIMIT
+                    ? '음성 한도 초과'
+                    : `음성 ${Math.floor((VOICE_MONTHLY_LIMIT - voiceUsedSeconds) / 60)}분 ${(VOICE_MONTHLY_LIMIT - voiceUsedSeconds) % 60}초 남음`
+                  }
+                </Text>
+              </View>
             </View>
             {knowledgeList.slice(0, 5).map((k) => (
               <View key={k.id} style={styles.knowledgeItem}>
@@ -1000,6 +1007,7 @@ const styles = StyleSheet.create({
   knowledgeMetaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   knowledgeCount: { fontSize: 12, color: Colors.mutedFg },
   knowledgeVoiceLimit: { fontSize: 11, color: '#8B5CF6', fontWeight: '600' },
+  voiceLimitRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   knowledgeAddBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#8B5CF6', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
   knowledgeAddText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   knowledgeItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: 1, borderTopColor: Colors.border },
