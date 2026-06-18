@@ -7,6 +7,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:  # 수동 트리거 (빌드할 때만 GitHub Actions에서 버튼 클릭)
 
 jobs:
   qa:
@@ -44,7 +45,7 @@ jobs:
     name: 📦 EAS Preview Build
     needs: qa
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[release]')
+    if: github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
 
@@ -71,7 +72,7 @@ jobs:
         with:
           payload: |
             {
-              "text": "✅ *코치앱 빌드 완료* (preview)\n브랜치: ${{ github.ref_name }}\n커밋: ${{ github.event.head_commit.message }}"
+              "text": "✅ *코치앱 빌드 완료* (preview)\n브랜치: ${{ github.ref_name }}"
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -91,7 +92,7 @@ jobs:
     name: 🚀 EAS Production Build
     needs: qa
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[release]')
+    if: github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
 
