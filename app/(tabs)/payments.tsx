@@ -6,6 +6,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { Payment, PaymentStatus } from '../../types';
 import { Colors, Radius } from '../../lib/theme';
@@ -35,6 +36,7 @@ const METHOD_ICONS: Record<PaymentMethod, string> = {
 };
 
 export default function PaymentsScreen() {
+  const insets = useSafeAreaInsets();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [filtered, setFiltered] = useState<Payment[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -273,7 +275,7 @@ export default function PaymentsScreen() {
     <View style={styles.container}>
 
       {/* Filter Chips */}
-      <View style={styles.filterChips}>
+      <View style={[styles.filterChips, { paddingTop: insets.top + 12 }]}>
         {FILTERS.map(f => (
           <TouchableOpacity
             key={f.key}

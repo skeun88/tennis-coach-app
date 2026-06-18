@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, RefreshControl, Modal, TextInput, ActivityIndicator,
@@ -175,6 +176,7 @@ function CancelBtn({ onPress }: { onPress: () => void }) {
 export default function ProfileScreen() {
   const { subscription, isActive, isTrial, trialDaysLeft, canUse } = useSubscription();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   // ── AI 코칭 모델 상태 ──
   const [knowledgeList, setKnowledgeList] = useState<any[]>([]);
@@ -408,7 +410,7 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadProfile(); setRefreshing(false); }} tintColor={Colors.mint} />}
       >
-        <View style={styles.body}>
+        <View style={[styles.body, { paddingTop: insets.top + 16 }]}>
 
           {/* ══ KERRI 코칭 실적 ══ */}
           <View style={styles.section}>
@@ -927,6 +929,7 @@ const styles = StyleSheet.create({
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   metaText: { fontSize: 12, color: 'rgba(255,255,255,0.6)' },
   body: { paddingHorizontal: 16, paddingTop: 20 },
+  // insets applied inline via style prop
   subCard: {
     flexDirection: 'row',
     alignItems: 'center',
