@@ -65,11 +65,11 @@ function getNextProgress(lessons: number, reports: number, retention: number, ne
 
 // ─── 타입 ─────────────────────────────────
 interface Performance {
-  totalLessons: number;
-  totalReports: number;   // AI 레포트 발송수 (lesson_plans 절대값)
-  feedbackRate: number;   // 피드백 기록률 % (표시용)
-  reregistrationRate: number;
-  totalMembers: number;
+  totalLessons: number;          // 출석 체크 '출석' 누적
+  avgRetentionMonths: number | null;  // 이탈 회원 평균 유지기간(개월), 5명 미만 null
+  satisfactionAvg: number | null;    // 만족도 단순 평균
+  satisfactionCount: number;         // 리뷰 작성 회원 수
+  totalReports: number;              // 발송 완료 리포트 누적
 }
 
 interface ProfileInfo {
@@ -206,7 +206,7 @@ export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
-  const [perf, setPerf] = useState<Performance>({ totalLessons: 0, totalReports: 0, feedbackRate: 0, reregistrationRate: 0, totalMembers: 0 });
+  const [perf, setPerf] = useState<Performance>({ totalLessons: 0, avgRetentionMonths: null, satisfactionAvg: null, satisfactionCount: 0, totalReports: 0 });
 
   const [profile, setProfile] = useState<ProfileInfo>({ name: '', avatar_url: '', sport: '테니스', region_city: '', region_district: '', center_name: '', bio: '' });
   const [profileModal, setProfileModal] = useState(false);
@@ -225,24 +225,30 @@ export default function ProfileScreen() {
     setEmail(user.email ?? '');
     setCoachId(user.id);
 
-    const [membersRes, allLessonsRes, plansRes, profileRes] = await Promise.all([
-      supabase.from('members').select('*', { count: 'exact', head: true }).eq('coach_id', user.id),
+    const [allLessonsRes, plansRes, profileRes, reviewsRes] = await Promise.all([
       supabase.from('lessons').select('id, date').eq('coach_id', user.id),
-      supabase.from('lesson_plans').select('*', { count: 'exact', head: true }).eq('coach_id', user.id),
+      supabase.from('lesson_plans').select('*', { count: 'exact', head: true }).eq('coach_id', user.id).eq('status', 'sent'),
       supabase.from('coach_profiles').select('*').eq('coach_id', user.id).maybeSingle(),
+      supabase.from('coach_reviews').select('rating').eq('coach_id', user.id),
     ]);
 
-    const totalMembers = membersRes.count ?? 0;
+    // ① 리포트 수: sent 상태만
     const totalReports = plansRes.count ?? 0;
     const allLessons = allLessonsRes.data ?? [];
     const allLessonIds = allLessons.map((l: any) => l.id);
 
-    // lesson_id → date 맵
-    const lessonDateMap = new Map<string, string>();
-    allLessons.forEach((l: any) => lessonDateMap.set(l.id, l.date));
+    // ② 만족도
+    const reviews = reviewsRes.data ?? [];
+    const satisfactionCount = reviews.length;
+    const satisfactionAvg = satisfactionCount > 0
+      ? Math.round((reviews.reduce((s: number, r: any) => s + r.rating, 0) / satisfactionCount) * 10) / 10
+      : null;
 
+    // ③ 누적 레슨 수 (출석 체크 '출석')
     let totalLessons = 0;
-    let reregistrationRate = 0;
+
+    // ④ 평균 유지기간: 이탈 회원 5명 기준
+    let avgRetentionMonths: number | null = null;
 
     if (allLessonIds.length > 0) {
       const { data: allAttended } = await supabase
@@ -252,40 +258,42 @@ export default function ProfileScreen() {
         .eq('status', '출석');
 
       const attended = allAttended ?? [];
-
-      // 총 진행 레슨 수 (distinct lesson_id)
       totalLessons = new Set(attended.map((r: any) => r.lesson_id)).size;
 
-      // 월별 출석 회원 집합 구성
-      // { 'YYYY-MM': Set<member_id> }
-      const monthMemberMap = new Map<string, Set<string>>();
+      // 회원별 첫출석일 / 마지막출석일 계산
+      const lessonDateMap = new Map<string, string>();
+      allLessons.forEach((l: any) => lessonDateMap.set(l.id, l.date));
+
+      const memberFirstDate = new Map<string, string>();
+      const memberLastDate  = new Map<string, string>();
       attended.forEach((r: any) => {
         const date = lessonDateMap.get(r.lesson_id);
         if (!date) return;
-        const month = date.slice(0, 7);
-        if (!monthMemberMap.has(month)) monthMemberMap.set(month, new Set());
-        monthMemberMap.get(month)!.add(r.member_id);
+        const mid = r.member_id;
+        if (!memberFirstDate.has(mid) || date < memberFirstDate.get(mid)!) memberFirstDate.set(mid, date);
+        if (!memberLastDate.has(mid)  || date > memberLastDate.get(mid)!)  memberLastDate.set(mid, date);
       });
 
-      // 연속 월 retention 계산 후 평균
-      // (이전달+이번달 모두 출석한 회원 / 이전달 출석 회원) × 100
-      const months = Array.from(monthMemberMap.keys()).sort();
-      const rates: number[] = [];
-      for (let i = 1; i < months.length; i++) {
-        const prev = monthMemberMap.get(months[i - 1])!;
-        const curr = monthMemberMap.get(months[i])!;
-        if (prev.size === 0) continue;
-        const retained = Array.from(prev).filter(m => curr.has(m)).length;
-        rates.push((retained / prev.size) * 100);
+      // 이탈 판정: 마지막 출석 + 30일 이상 경과
+      const today = new Date();
+      const churnedDurations: number[] = [];
+      memberLastDate.forEach((lastDate, mid) => {
+        const last = new Date(lastDate + 'T00:00:00');
+        const diffDays = (today.getTime() - last.getTime()) / 86400000;
+        if (diffDays >= 30) {
+          const first = new Date((memberFirstDate.get(mid) ?? lastDate) + 'T00:00:00');
+          const months = (last.getTime() - first.getTime()) / (1000 * 60 * 60 * 24 * 30.44);
+          churnedDurations.push(months);
+        }
+      });
+
+      if (churnedDurations.length >= 5) {
+        const avg = churnedDurations.reduce((a, b) => a + b, 0) / churnedDurations.length;
+        avgRetentionMonths = Math.round(avg * 10) / 10;
       }
-      reregistrationRate = rates.length > 0
-        ? Math.round(rates.reduce((a, b) => a + b, 0) / rates.length)
-        : 0;
     }
 
-    const feedbackRate = totalLessons > 0 ? Math.round((totalReports / totalLessons) * 100) : 0;
-
-    setPerf({ totalLessons, totalReports, feedbackRate, reregistrationRate, totalMembers });
+    setPerf({ totalLessons, avgRetentionMonths, satisfactionAvg, satisfactionCount, totalReports });
 
     const p = profileRes.data;
     setProfile({
@@ -331,14 +339,7 @@ export default function ProfileScreen() {
   const initial = (profile.name || '코').slice(0, 1).toUpperCase();
   const regionLabel = [profile.region_city, profile.region_district].filter(Boolean).join(' ');
 
-  // 등급 계산
-  const gradeKey = getGrade(perf.totalLessons, perf.totalReports, perf.reregistrationRate);
-  const gradeMeta = GRADE_META[gradeKey];
-  const nextGradeKey = getNextGrade(gradeKey);
-  const nextProgress = nextGradeKey
-    ? getNextProgress(perf.totalLessons, perf.totalReports, perf.reregistrationRate, nextGradeKey)
-    : null;
-  const nextGradeMeta = nextGradeKey ? GRADE_META[nextGradeKey] : null;
+  // KERRI 등급 계산은 숨김 처리 (등급 기준 미확정) — 추후 활성화
 
   async function handlePickAvatar() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -410,68 +411,42 @@ export default function ProfileScreen() {
       >
         <View style={[styles.body, { paddingTop: insets.top + 16 }]}>
 
-          {/* ══ KERRI 코칭 실적 ══ */}
+          {/* ══ 코칭 실적 지표 ══ */}
           <View style={styles.section}>
-
-            {/* 등급 카드 */}
-            <View style={[gradeStyle.card, { borderColor: gradeMeta.color + '50' }]}>
-              {/* 헤더 */}
-              <View style={gradeStyle.header}>
-                <View style={[gradeStyle.iconWrap, { backgroundColor: gradeMeta.color + '20' }]}>
-                  <Ionicons name={gradeMeta.icon as any} size={24} color={gradeMeta.color} />
-                </View>
-                <View>
-                  <Text style={gradeStyle.gradeLabel}>KERRI 등급</Text>
-                  <Text style={[gradeStyle.gradeName, { color: gradeMeta.color }]}>{gradeKey}</Text>
-                </View>
-                {gradeKey === 'Diamond' && (
-                  <View style={gradeStyle.maxBadge}><Text style={gradeStyle.maxBadgeText}>최고 등급 🎉</Text></View>
-                )}
-              </View>
-
-              {/* 3대 지표 진행 바 */}
-              {nextGradeKey && nextProgress && nextGradeMeta ? (
-                <>
-                  <View style={gradeStyle.divider} />
-                  <Text style={gradeStyle.nextLabel}>
-                    <Text style={{ color: nextGradeMeta.color, fontWeight: '800' }}>{nextGradeKey}</Text>
-                    {' '}달성 조건
-                  </Text>
-                  <GradeProgressRow
-                    icon="flash"
-                    label="레슨 누적수"
-                    value={`${perf.totalLessons} / ${GRADE_REQS[nextGradeKey].lessons}회`}
-                    pct={nextProgress.lessons.pct}
-                    color={nextGradeMeta.color}
-                  />
-                  <GradeProgressRow
-                    icon="document-text"
-                    label="AI 레포트 발송"
-                    value={`${perf.totalReports} / ${GRADE_REQS[nextGradeKey].reports}개`}
-                    pct={nextProgress.reports.pct}
-                    color={nextGradeMeta.color}
-                  />
-                  <GradeProgressRow
-                    icon="people"
-                    label="회원 유지율"
-                    value={`${perf.reregistrationRate} / ${GRADE_REQS[nextGradeKey].retention}%`}
-                    pct={nextProgress.retention.pct}
-                    color={nextGradeMeta.color}
-                  />
-                </>
-              ) : null}
-            </View>
-
-            {/* 3대 지표 요약 카드 */}
             <View style={styles.sectionHeaderRow}>
               <Ionicons name="bar-chart-outline" size={15} color={Colors.navy} />
               <Text style={styles.sectionTitle}>코칭 실적</Text>
               <Text style={styles.sectionSub}>KERRI 검증 · 조작 불가</Text>
             </View>
             <View style={metric.grid}>
-              <MetricCard icon="flash"         label="총 진행 레슨"    value={`${perf.totalLessons}회`}  sub="출석 기준" />
-              <MetricCard icon="document-text" label="AI 레포트 발송"  value={`${perf.totalReports}개`}  sub="누적 총합" />
-              <MetricCard icon="people"        label="회원 유지율"     value={perf.totalMembers > 0 ? `${perf.reregistrationRate}%` : '-'} sub="월평균 유지율" />
+              {/* ① 누적 레슨 수 */}
+              <MetricCard
+                icon="flash"
+                label="누적 레슨"
+                value={`${perf.totalLessons.toLocaleString()}회`}
+                sub="출석 체크 기준"
+              />
+              {/* ② 평균 유지 기간 */}
+              <MetricCard
+                icon="time-outline"
+                label="평균 유지"
+                value={perf.avgRetentionMonths !== null ? `${perf.avgRetentionMonths}개월` : '-'}
+                sub={perf.avgRetentionMonths !== null ? '이탈 회원 기준' : '데이터 쌓는 중'}
+              />
+              {/* ③ 만족도 */}
+              <MetricCard
+                icon="star"
+                label="만족도"
+                value={perf.satisfactionAvg !== null ? `${perf.satisfactionAvg}` : '-'}
+                sub={perf.satisfactionCount > 0 ? `${perf.satisfactionCount}명 평가` : '리뷰 없음'}
+              />
+              {/* ④ 레슨 리포트 */}
+              <MetricCard
+                icon="document-text"
+                label="레슨 리포트"
+                value={`${perf.totalReports}개`}
+                sub="발송 완료 기준"
+              />
             </View>
           </View>
 
