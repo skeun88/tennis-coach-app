@@ -202,7 +202,25 @@ export default function PaymentsScreen() {
     setPayModal(false);
     setPayTarget(null);
     loadData();
-    router.push(`/members/${memberId}`);
+
+    // 레슨권 충전 정보를 params로 전달해 회원상세에서 완료 모달 표시
+    const prevCredits = payTarget.remainingCredits ?? 0;
+    const addedCredits = selectedPackage?.total_credits ?? 0;
+    const newCredits = prevCredits + addedCredits;
+    if (selectedPackage) {
+      router.push({
+        pathname: `/members/${memberId}`,
+        params: {
+          paymentDone: '1',
+          prevCredits: String(prevCredits),
+          addedCredits: String(addedCredits),
+          newCredits: String(newCredits),
+          packageTitle: selectedPackage.title,
+        },
+      });
+    } else {
+      router.push(`/members/${memberId}`);
+    }
   }
 
   function openEditModal(payment: Payment) {

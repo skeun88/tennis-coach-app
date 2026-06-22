@@ -162,11 +162,27 @@ function formatAttendanceDate(dateStr?: string, startTime?: string, endTime?: st
 }
 
 export default function MemberDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, paymentDone, prevCredits, addedCredits, newCredits, packageTitle } = useLocalSearchParams<{
+    id: string;
+    paymentDone?: string;
+    prevCredits?: string;
+    addedCredits?: string;
+    newCredits?: string;
+    packageTitle?: string;
+  }>();
   const router = useRouter();
   const [member, setMember] = useState<Member | null>(null);
   const [tab, setTab] = useState<Tab>('info');
   const [loading, setLoading] = useState(true);
+
+  // 결제 완료 모달
+  const [payDoneModal, setPayDoneModal] = useState(false);
+
+  useEffect(() => {
+    if (paymentDone === '1') {
+      setPayDoneModal(true);
+    }
+  }, [paymentDone]);
 
   // 메시지 탭
   const [messages, setMessages] = useState<{id:string;sender_type:'coach'|'member';content:string;created_at:string}[]>([]);
@@ -1653,6 +1669,89 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         featureTitle="반복 이슈 태그"
         featureDesc="애이가 최근 5회 레슨에서 반복되는 이슈를 자동으로 추출해드려요.\nPro 플랜으로 업그레이드하고 모든 기능을 활용해보세요!"
       />
+
+      {/* 결제 완료 모달 */}
+      <Modal
+        visible={payDoneModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPayDoneModal(false)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingHorizontal: 32,
+        }}>
+          <View style={{
+            backgroundColor: '#fff',
+            borderRadius: 20,
+            padding: 28,
+            width: '100%',
+            alignItems: 'center',
+          }}>
+            {/* 체크 아이콘 */}
+            <View style={{
+              width: 64, height: 64, borderRadius: 32,
+              backgroundColor: Colors.success + '20',
+              justifyContent: 'center', alignItems: 'center',
+              marginBottom: 16,
+            }}>
+              <Ionicons name="checkmark-circle" size={40} color={Colors.success} />
+            </View>
+
+            <Text style={{ fontSize: 18, fontWeight: '800', color: Colors.foreground, marginBottom: 6 }}>
+              결제 완료
+            </Text>
+            {packageTitle ? (
+              <Text style={{ fontSize: 14, color: Colors.mutedFg, marginBottom: 20, textAlign: 'center' }}>
+                {packageTitle}
+              </Text>
+            ) : null}
+
+            {/* 잔여 크레딧 변화 */}
+            <View style={{
+              flexDirection: 'row', alignItems: 'center', gap: 10,
+              backgroundColor: Colors.background, borderRadius: 12,
+              paddingVertical: 16, paddingHorizontal: 20,
+              width: '100%', justifyContent: 'center', marginBottom: 24,
+            }}>
+              {/* 이전 */}
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 26, fontWeight: '800', color: Colors.mutedFg }}>
+                  {prevCredits ?? 0}
+                </Text>
+                <Text style={{ fontSize: 12, color: Colors.placeholder }}>이전 잔여</Text>
+              </View>
+              {/* 화살표 + 추가 */}
+              <View style={{ alignItems: 'center', gap: 2 }}>
+                <Ionicons name="arrow-forward" size={18} color={Colors.mutedFg} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.success }}>
+                  +{addedCredits ?? 0}회
+                </Text>
+              </View>
+              {/* 신규 */}
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 26, fontWeight: '800', color: Colors.foreground }}>
+                  {newCredits ?? 0}
+                </Text>
+                <Text style={{ fontSize: 12, color: Colors.placeholder }}>현재 잔여</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={{
+                backgroundColor: Colors.primary, borderRadius: 12,
+                paddingVertical: 13, paddingHorizontal: 40,
+              }}
+              onPress={() => setPayDoneModal(false)}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>확인</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
