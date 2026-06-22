@@ -411,6 +411,29 @@ export default function ProfileScreen() {
       >
         <View style={[styles.body, { paddingTop: insets.top + 16 }]}>
 
+          {/* ══ 프로필 헤더 카드 ══ */}
+          <View style={styles.profileHeaderCard}>
+            <View style={styles.profileHeaderAvatar}>
+              {profile.avatar_url ? (
+                <Image source={{ uri: profile.avatar_url }} style={styles.profileHeaderAvatarImg} />
+              ) : (
+                <Text style={styles.profileHeaderAvatarText}>{initial}</Text>
+              )}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.profileHeaderName}>{profile.name || '코치'}</Text>
+              <Text style={styles.profileHeaderSub}>
+                {[profile.sport, profile.center_name || regionLabel].filter(Boolean).join(' · ')}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.profileHeaderEditBtn}
+              onPress={() => { setEditProfile({ ...profile }); setProfileModal(true); }}
+            >
+              <Ionicons name="create-outline" size={16} color="rgba(255,255,255,0.8)" />
+            </TouchableOpacity>
+          </View>
+
           {/* ══ 코칭 실적 지표 ══ */}
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
@@ -890,6 +913,25 @@ const styles = StyleSheet.create({
   logoutBtn: { padding: 4 },
   heroProfileRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 12 },
   avatarSection: { alignItems: 'center', paddingTop: 8, paddingBottom: 20 },
+  profileHeaderCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    backgroundColor: Colors.primary,
+    borderRadius: 16, padding: 16, marginBottom: 16,
+  },
+  profileHeaderAvatar: {
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    justifyContent: 'center', alignItems: 'center', overflow: 'hidden',
+  },
+  profileHeaderAvatarImg: { width: 56, height: 56, borderRadius: 28 },
+  profileHeaderAvatarText: { fontSize: 24, fontWeight: '800', color: '#fff' },
+  profileHeaderName: { fontSize: 18, fontWeight: '800', color: '#fff', marginBottom: 4 },
+  profileHeaderSub: { fontSize: 13, color: 'rgba(255,255,255,0.75)', fontWeight: '500' },
+  profileHeaderEditBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center', alignItems: 'center',
+  },
   avatarRing: { width: 72, height: 72, borderRadius: 36, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', position: 'relative' },
   avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center' },
   avatarImage: { width: 72, height: 72, borderRadius: 36 },
