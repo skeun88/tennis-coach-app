@@ -900,7 +900,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                     })()}
                   />
                 )}
-                <InfoRow icon="layers-outline" label="레슨권 잔여" value={`${(member as any).remaining_credits ?? 0}회 / 총 ${(member as any).total_credits ?? 0}회`} />
+                <InfoRow icon="layers-outline" label="레슨권 잔여" value={`${(member as any).remaining_credits ?? 0}회`} />
                 <View style={styles.packageBanner}>
                   {lessonPackage ? (
                     <>
