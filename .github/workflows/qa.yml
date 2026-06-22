@@ -1,12 +1,6 @@
 name: QA & Deploy — Coach App
 
 on:
-  schedule:
-    - cron: '0 0 * * *'  # 매일 09:00 KST
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:  # 수동 트리거 (빌드할 때만 GitHub Actions에서 버튼 클릭)
 
 jobs:
