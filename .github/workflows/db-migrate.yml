@@ -1,11 +1,7 @@
 name: 🗄️ DB Migration — Apply Supabase Migrations
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'supabase/migrations/**'
-  workflow_dispatch:
+  workflow_dispatch:  # 수동 트리거만 (migration 배포할 때만 GitHub Actions에서 버튼 클릭)
 
 jobs:
   migrate:
