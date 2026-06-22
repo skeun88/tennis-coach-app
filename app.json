@@ -2,6 +2,7 @@
   "expo": {
     "name": "테니스 코치",
     "slug": "tennis-coach-app",
+    "owner": "skeun-2",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
