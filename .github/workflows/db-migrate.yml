@@ -19,7 +19,7 @@ jobs:
         run: |
           for file in supabase/migrations/*.sql; do
             echo "▶ Applying: $file"
-            psql "$DATABASE_URL" -f "$file" && echo "✅ Done: $file" || echo "⚠️ Already applied: $file"
+            psql "$DATABASE_URL" -f "$file" && echo "✅ Done: $file" || echo "⚠️ Already applied or skipped: $file"
           done
         env:
           DATABASE_URL: postgresql://postgres:${{ secrets.SUPABASE_DB_PASSWORD }}@db.luhuiwyhewofjxnbzbdt.supabase.co:5432/postgres?sslmode=require
