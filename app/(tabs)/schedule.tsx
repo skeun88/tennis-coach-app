@@ -863,9 +863,14 @@ ${rejectMsg.trim()}`
                         activeOpacity={0.8}
                       >
                         <Text style={[styles.weekBlockName, isPast && { color: Colors.mutedFg }]}
-                          numberOfLines={2}>
+                          numberOfLines={1}>
                           {lesson.memberNames.length > 0 ? lesson.memberNames.join(',') : lesson.title.replace(/ 레슨$/, '')}
                         </Text>
+                        {height >= 36 && (
+                          <Text style={[styles.weekBlockTime, isPast && { color: Colors.placeholder }]} numberOfLines={1}>
+                            {lesson.start_time.slice(0, 5)}
+                          </Text>
+                        )}
                       </TouchableOpacity>
                     );
                   })}
@@ -1396,6 +1401,7 @@ const styles = StyleSheet.create({
   weekNowLine: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', zIndex: 10 },
   weekLessonBlock: { position: 'absolute', borderRadius: 4, paddingHorizontal: 3, paddingVertical: 2, overflow: 'hidden' },
   weekBlockName: { fontSize: 12, fontWeight: '700', color: Colors.white, lineHeight: 13 },
+  weekBlockTime: { fontSize: 10, fontWeight: '600', color: 'rgba(255,220,210,0.9)', lineHeight: 12, marginTop: 1 },
   // 월간 뷰
   monthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border },
   monthNavBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.mutedBg, justifyContent: 'center', alignItems: 'center' },
