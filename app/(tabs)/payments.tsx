@@ -174,7 +174,7 @@ export default function PaymentsScreen() {
           paid_amount: (payTarget.unpaidAmount ?? 0) + (payments.find(p => p.id === payTarget.paymentId)?.paid_amount ?? 0),
           paid_date: today,
           payment_method: selectedMethod,
-          ...(selectedPackage ? { description: `${selectedPackage.title} 결제`, lesson_package_id: selectedPackage.id } : {}),
+          ...(selectedPackage ? { description: `${selectedPackage.title} 결제` } : {}),
         }).eq('id', payTarget.paymentId);
         if (error) { Alert.alert('오류', '결제 저장에 실패했어요.\n' + error.message); setSaving(false); return; }
       } else {
@@ -190,7 +190,7 @@ export default function PaymentsScreen() {
           due_date: today,
           paid_date: today,
           payment_method: selectedMethod,
-          ...(pkg ? { lesson_package_id: pkg.id } : {}),
+
         });
         if (error) { Alert.alert('오류', '결제 저장에 실패했어요.\n' + error.message); setSaving(false); return; }
       }
@@ -211,7 +211,6 @@ export default function PaymentsScreen() {
         due_date: today,
         paid_date: today,
         payment_method: selectedMethod,
-        lesson_package_id: selectedPackage.id,
       });
       if (error) { Alert.alert('오류', '결제 저장에 실패했어요.\n' + error.message); setSaving(false); return; }
       await supabase.from('members').update({
