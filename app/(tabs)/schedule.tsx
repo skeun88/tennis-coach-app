@@ -838,7 +838,7 @@ ${rejectMsg.trim()}`
                   {/* 현재 시간선 */}
                   {isToday && nowLineY !== null && (
                     <View style={[styles.weekNowLine, { top: nowLineY }]}>
-                      <View style={styles.nowDot} />
+                      <View style={styles.weekNowDot} />
                       <View style={styles.nowLineBar} />
                     </View>
                   )}
@@ -1399,6 +1399,7 @@ const styles = StyleSheet.create({
   weekDayColGrid: { position: 'relative', borderLeftWidth: 1, borderLeftColor: Colors.border },
   weekHourLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: Colors.border },
   weekNowLine: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', zIndex: 10 },
+  weekNowDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.destructive },
   weekLessonBlock: { position: 'absolute', borderRadius: 4, paddingHorizontal: 3, paddingVertical: 2, overflow: 'hidden', justifyContent: 'space-between' },
   weekBlockName: { fontSize: 12, fontWeight: '700', color: Colors.white, lineHeight: 13 },
   weekBlockTime: { fontSize: 13, fontWeight: '700', color: 'rgba(255,220,210,0.9)', lineHeight: 14, textAlign: 'right' },
