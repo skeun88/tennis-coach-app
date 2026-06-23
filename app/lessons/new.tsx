@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, FlatList,
+  ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,13 +9,21 @@ import { supabase } from '../../lib/supabase';
 import { Member } from '../../types';
 import { Colors } from '../../lib/theme';
 
+const HOURS = Array.from({ length: 17 }, (_, i) => String(i + 6).padStart(2, '0'));
+const MINUTES = ['00', '10', '15', '20', '30', '40', '45', '50'];
+
 export default function NewLessonScreen() {
   const router = useRouter();
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [startTime, setStartTime] = useState('10:00');
-  const [endTime, setEndTime] = useState('11:00');
-  const [location, setLocation] = useState('');
+  const [startHour, setStartHour] = useState('10');
+  const [startMinute, setStartMinute] = useState('00');
+  const [endHour, setEndHour] = useState('11');
+  const [endMinute, setEndMinute] = useState('00');
+  const [startHourOpen, setStartHourOpen] = useState(false);
+  const [startMinOpen, setStartMinOpen] = useState(false);
+  const [endHourOpen, setEndHourOpen] = useState(false);
+  const [endMinOpen, setEndMinOpen] = useState(false);
   const [notes, setNotes] = useState('');
   const [members, setMembers] = useState<Member[]>([]);
   const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
@@ -41,8 +49,10 @@ export default function NewLessonScreen() {
   }
 
   async function handleSave() {
+    const startTime = `${startHour.padStart(2,'0')}:${startMinute}`;
+    const endTime = `${endHour.padStart(2,'0')}:${endMinute}`;
     if (!title.trim()) { Alert.alert('입력 오류', '레슨 제목을 입력해주세요.'); return; }
-    if (!date || !startTime || !endTime) { Alert.alert('입력 오류', '날짜와 시간을 입력해주세요.'); return; }
+    if (!date) { Alert.alert('입력 오류', '날짜를 입력해주세요.'); return; }
 
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -54,7 +64,6 @@ export default function NewLessonScreen() {
       date,
       start_time: startTime + ':00',
       end_time: endTime + ':00',
-      location: location.trim() || null,
       notes: notes.trim() || null,
     }).select().single();
 
@@ -108,20 +117,69 @@ export default function NewLessonScreen() {
           <Text style={styles.label}>날짜 *</Text>
           <TextInput style={styles.input} placeholder="YYYY-MM-DD" value={date} onChangeText={setDate} />
 
+          {/* 시작 시간 스피너 */}
+          <Text style={styles.label}>시작 시간 *</Text>
           <View style={styles.timeRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.label}>시작 시간 *</Text>
-              <TextInput style={styles.input} placeholder="HH:MM" value={startTime} onChangeText={setStartTime} />
-            </View>
-            <View style={styles.timeSep}><Text style={styles.timeSepText}>~</Text></View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.label}>종료 시간 *</Text>
-              <TextInput style={styles.input} placeholder="HH:MM" value={endTime} onChangeText={setEndTime} />
-            </View>
+            <TouchableOpacity style={styles.spinnerBtn} onPress={() => { setStartHourOpen(v => !v); setStartMinOpen(false); setEndHourOpen(false); setEndMinOpen(false); }}>
+              <Text style={styles.spinnerLabel}>시</Text>
+              <Text style={styles.spinnerValue}>{startHour.padStart(2,'0')}</Text>
+            </TouchableOpacity>
+            <Text style={styles.colonText}>:</Text>
+            <TouchableOpacity style={styles.spinnerBtn} onPress={() => { setStartMinOpen(v => !v); setStartHourOpen(false); setEndHourOpen(false); setEndMinOpen(false); }}>
+              <Text style={styles.spinnerLabel}>분</Text>
+              <Text style={styles.spinnerValue}>{startMinute}</Text>
+            </TouchableOpacity>
           </View>
+          {startHourOpen && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pickerRow}>
+              {HOURS.map(h => (
+                <TouchableOpacity key={h} style={[styles.pickerItem, startHour === h && styles.pickerItemActive]} onPress={() => { setStartHour(h); setStartHourOpen(false); }}>
+                  <Text style={[styles.pickerText, startHour === h && styles.pickerTextActive]}>{h}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+          {startMinOpen && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pickerRow}>
+              {MINUTES.map(m => (
+                <TouchableOpacity key={m} style={[styles.pickerItem, startMinute === m && styles.pickerItemActive]} onPress={() => { setStartMinute(m); setStartMinOpen(false); }}>
+                  <Text style={[styles.pickerText, startMinute === m && styles.pickerTextActive]}>{m}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
 
-          <Text style={styles.label}>장소</Text>
-          <TextInput style={styles.input} placeholder="코트 이름 또는 주소" value={location} onChangeText={setLocation} />
+          {/* 종료 시간 스피너 */}
+          <Text style={[styles.label, { marginTop: 4 }]}>종료 시간 *</Text>
+          <View style={styles.timeRow}>
+            <TouchableOpacity style={styles.spinnerBtn} onPress={() => { setEndHourOpen(v => !v); setStartHourOpen(false); setStartMinOpen(false); setEndMinOpen(false); }}>
+              <Text style={styles.spinnerLabel}>시</Text>
+              <Text style={styles.spinnerValue}>{endHour.padStart(2,'0')}</Text>
+            </TouchableOpacity>
+            <Text style={styles.colonText}>:</Text>
+            <TouchableOpacity style={styles.spinnerBtn} onPress={() => { setEndMinOpen(v => !v); setStartHourOpen(false); setStartMinOpen(false); setEndHourOpen(false); }}>
+              <Text style={styles.spinnerLabel}>분</Text>
+              <Text style={styles.spinnerValue}>{endMinute}</Text>
+            </TouchableOpacity>
+          </View>
+          {endHourOpen && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pickerRow}>
+              {HOURS.map(h => (
+                <TouchableOpacity key={h} style={[styles.pickerItem, endHour === h && styles.pickerItemActive]} onPress={() => { setEndHour(h); setEndHourOpen(false); }}>
+                  <Text style={[styles.pickerText, endHour === h && styles.pickerTextActive]}>{h}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+          {endMinOpen && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pickerRow}>
+              {MINUTES.map(m => (
+                <TouchableOpacity key={m} style={[styles.pickerItem, endMinute === m && styles.pickerItemActive]} onPress={() => { setEndMinute(m); setEndMinOpen(false); }}>
+                  <Text style={[styles.pickerText, endMinute === m && styles.pickerTextActive]}>{m}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
 
           <Text style={styles.label}>메모</Text>
           <TextInput style={[styles.input, styles.textArea]} placeholder="특이사항..." value={notes} onChangeText={setNotes} multiline numberOfLines={3} textAlignVertical="top" />
@@ -181,9 +239,16 @@ const styles = StyleSheet.create({
     fontSize: 15, color: Colors.foreground, marginBottom: 12, borderWidth: 1, borderColor: Colors.border,
   },
   textArea: { minHeight: 80, paddingTop: 10 },
-  timeRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  timeSep: { paddingTop: 30 },
-  timeSepText: { fontSize: 18, color: Colors.mutedFg },
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  colonText: { fontSize: 20, fontWeight: '800', color: Colors.mutedFg },
+  spinnerBtn: { flex: 1, backgroundColor: Colors.mutedBg, borderRadius: 10, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: Colors.border },
+  spinnerLabel: { fontSize: 12, color: Colors.placeholder, fontWeight: '600', marginBottom: 2 },
+  spinnerValue: { fontSize: 22, fontWeight: '800', color: Colors.primary },
+  pickerRow: { marginBottom: 8 },
+  pickerItem: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, marginRight: 6, backgroundColor: Colors.mutedBg, borderWidth: 1, borderColor: Colors.border },
+  pickerItemActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  pickerText: { fontSize: 15, fontWeight: '600', color: Colors.mutedFg },
+  pickerTextActive: { color: '#fff', fontWeight: '800' },
   noMember: { fontSize: 14, color: Colors.placeholder, textAlign: 'center', paddingVertical: 20 },
   searchRow: {
     flexDirection: 'row', alignItems: 'center',
