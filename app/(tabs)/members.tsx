@@ -123,8 +123,8 @@ export default function MembersScreen() {
         <View style={styles.cardInfo}>
           <View style={styles.cardTop}>
             <Text style={styles.name}>{item.name}</Text>
-            <View style={styles.levelBadge}>
-              <Text style={styles.levelText}>{item.level}</Text>
+            <View style={[styles.levelBadge, { backgroundColor: (LEVEL_COLORS[item.level as MemberLevel] ?? Colors.level.입문) + '22' }]}>
+              <Text style={[styles.levelText, { color: LEVEL_COLORS[item.level as MemberLevel] ?? Colors.level.입문 }]}>{item.level}</Text>
             </View>
             {hasUnread && (
               <View style={styles.newMsgBadge}>
@@ -303,8 +303,8 @@ const styles = StyleSheet.create({
   cardInfo: { flex: 1 },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' },
   name: { fontSize: 15, fontWeight: '600', color: Colors.foreground },
-  levelBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: 'rgba(45,51,64,0.08)' },
-  levelText: { fontSize: 11, fontWeight: '500', color: Colors.foreground },
+  levelBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: Colors.primaryLight },
+  levelText: { fontSize: 11, fontWeight: '600', color: Colors.primary },
   phone: { fontSize: 13, color: Colors.mutedFg },
   inactive: { fontSize: 13, color: Colors.destructive, marginTop: 2 },
 
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
 
   // FAB
   fab: {
-    position: 'absolute', bottom: 28, right: 20,
+    position: 'absolute', bottom: 16, right: 20,
     width: 56, height: 56, borderRadius: 28,
     backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center',
     shadowColor: Colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 5,

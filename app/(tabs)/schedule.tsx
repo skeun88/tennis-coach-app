@@ -644,7 +644,7 @@ ${rejectMsg.trim()}`
           {/* 시간 라인들 */}
           {HOURS.map(h => (
             <View key={h} style={[styles.hourRow, { top: (h - START_HOUR) * HOUR_HEIGHT }]}>
-              <Text style={styles.hourLabel} numberOfLines={1}>{String(h).padStart(2, '0')}:00</Text>
+              <Text style={styles.hourLabel} numberOfLines={1} adjustsFontSizeToFit={false}>{String(h).padStart(2, '0')}:00</Text>
               <View style={styles.hourLine} />
             </View>
           ))}
@@ -818,7 +818,7 @@ ${rejectMsg.trim()}`
             <View style={{ width: TIME_COL }}>
               {HOURS.map(h => (
                 <View key={h} style={[styles.weekHourLabel, { top: (h - START_HOUR) * HOUR_HEIGHT }]}>
-                  <Text style={styles.hourLabel}>{String(h).padStart(2, '0')}</Text>
+                  <Text style={styles.hourLabel} numberOfLines={1}>{String(h).padStart(2, '0')}</Text>
                 </View>
               ))}
             </View>
@@ -1308,7 +1308,7 @@ const styles = StyleSheet.create({
   dateHeader: { fontSize: 20, fontWeight: '700', color: Colors.foreground, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4, backgroundColor: Colors.background, borderBottomWidth: 1, borderBottomColor: Colors.border },
   // 그리드
   hourRow: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center' },
-  hourLabel: { width: 52, fontSize: 13, color: Colors.placeholder, fontWeight: '600', textAlign: 'right', paddingRight: 8 },
+  hourLabel: { width: 52, fontSize: 12, color: Colors.placeholder, fontWeight: '600', textAlign: 'right', paddingRight: 6 },
   hourLine: { flex: 1, height: 1, backgroundColor: Colors.border },
   gridTapOverlay: { position: 'absolute', left: 52, right: 0, top: 0 },
   // 레슨 카드 (그리드)
