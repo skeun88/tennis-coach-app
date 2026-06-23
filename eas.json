@@ -18,7 +18,8 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "serendipity567@naver.com"
+        "appleId": "serendipity567@naver.com",
+        "ascAppId": "6783224934"
       }
     }
   }
