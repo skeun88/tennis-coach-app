@@ -40,15 +40,7 @@ jobs:
           fi
 
           # 개별 결제 실패 건수 체크
-          FAIL_COUNT=$(echo "$HTTP_BODY" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    failed = [r for r in data.get('results', []) if not r.get('success', True)]
-    print(len(failed))
-except:
-    print(0)
-")
+          FAIL_COUNT=$(echo "$HTTP_BODY" | python3 -c 'import sys,json; data=json.load(sys.stdin); print(len([r for r in data.get("results",[]) if not r.get("success",True)]))' 2>/dev/null || echo 0)
           echo "fail_count=$FAIL_COUNT" >> $GITHUB_OUTPUT
 
           if [ "$FAIL_COUNT" -gt "0" ]; then
