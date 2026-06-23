@@ -3,7 +3,7 @@
     "name": "테니스 코치",
     "slug": "tennis-coach-app",
     "owner": "skeun-2",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -13,6 +13,7 @@
       "resizeMode": "contain",
       "backgroundColor": "#1a7a4a"
     },
+    "privacyPolicyUrl": "https://skeun88.github.io/tennis-coach-app/privacy-policy.html",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.kerri.tenniscoach",
