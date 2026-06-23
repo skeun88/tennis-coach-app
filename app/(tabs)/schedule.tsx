@@ -868,7 +868,7 @@ ${rejectMsg.trim()}`
                         </Text>
                         {height >= 36 && (
                           <Text style={[styles.weekBlockTime, isPast && { color: Colors.placeholder }]} numberOfLines={1}>
-                            {lesson.start_time.slice(0, 5)}
+                            {lesson.start_time.slice(3, 5) !== '00' ? lesson.start_time.slice(3, 5) + '분' : ''}
                           </Text>
                         )}
                       </TouchableOpacity>
@@ -1399,9 +1399,9 @@ const styles = StyleSheet.create({
   weekDayColGrid: { position: 'relative', borderLeftWidth: 1, borderLeftColor: Colors.border },
   weekHourLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: Colors.border },
   weekNowLine: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', zIndex: 10 },
-  weekLessonBlock: { position: 'absolute', borderRadius: 4, paddingHorizontal: 3, paddingVertical: 2, overflow: 'hidden' },
+  weekLessonBlock: { position: 'absolute', borderRadius: 4, paddingHorizontal: 3, paddingVertical: 2, overflow: 'hidden', justifyContent: 'space-between' },
   weekBlockName: { fontSize: 12, fontWeight: '700', color: Colors.white, lineHeight: 13 },
-  weekBlockTime: { fontSize: 10, fontWeight: '600', color: 'rgba(255,220,210,0.9)', lineHeight: 12, marginTop: 1 },
+  weekBlockTime: { fontSize: 11, fontWeight: '700', color: 'rgba(255,220,210,0.9)', lineHeight: 12, textAlign: 'right' },
   // 월간 뷰
   monthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border },
   monthNavBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.mutedBg, justifyContent: 'center', alignItems: 'center' },
