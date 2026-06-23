@@ -1401,7 +1401,7 @@ const styles = StyleSheet.create({
   weekNowLine: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', zIndex: 10 },
   weekLessonBlock: { position: 'absolute', borderRadius: 4, paddingHorizontal: 3, paddingVertical: 2, overflow: 'hidden', justifyContent: 'space-between' },
   weekBlockName: { fontSize: 12, fontWeight: '700', color: Colors.white, lineHeight: 13 },
-  weekBlockTime: { fontSize: 11, fontWeight: '700', color: 'rgba(255,220,210,0.9)', lineHeight: 12, textAlign: 'right' },
+  weekBlockTime: { fontSize: 13, fontWeight: '700', color: 'rgba(255,220,210,0.9)', lineHeight: 14, textAlign: 'right' },
   // 월간 뷰
   monthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border },
   monthNavBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.mutedBg, justifyContent: 'center', alignItems: 'center' },
