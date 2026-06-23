@@ -93,7 +93,7 @@ function yToMinutes(y: number): number {
 export default function ScheduleScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [activeTab, setActiveTab] = useState<ViewTab>('일일');
+  const [activeTab, setActiveTab] = useState<ViewTab>('주간');
   const [lessons, setLessons] = useState<LessonWithMembers[]>([]);
   const [weekData, setWeekData] = useState<WeekLesson[]>([]);
   const [monthLessons, setMonthLessons] = useState<Map<string, LessonWithMembers[]>>(new Map());
@@ -739,7 +739,7 @@ ${rejectMsg.trim()}`
   // ── 주간 뷰 (타임그리드) ─────────────────────────────────────
   function renderWeekGrid() {
     const { width: SCREEN_W } = Dimensions.get('window');
-    const TIME_COL = 52;
+    const TIME_COL = 56;
     const COL_W = Math.floor((SCREEN_W - TIME_COL) / 7);
     const displayDates = getOffsetWeekDates(weekOffset);
     const gridHeight = (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT;
@@ -818,7 +818,7 @@ ${rejectMsg.trim()}`
             <View style={{ width: TIME_COL }}>
               {HOURS.map(h => (
                 <View key={h} style={[styles.weekHourLabel, { top: (h - START_HOUR) * HOUR_HEIGHT }]}>
-                  <Text style={styles.hourLabel} numberOfLines={1}>{String(h).padStart(2, '0')}</Text>
+                  <Text style={styles.hourLabel} numberOfLines={1} ellipsizeMode="clip">{String(h).padStart(2, '0')}:00</Text>
                 </View>
               ))}
             </View>
@@ -1308,9 +1308,9 @@ const styles = StyleSheet.create({
   dateHeader: { fontSize: 20, fontWeight: '700', color: Colors.foreground, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4, backgroundColor: Colors.background, borderBottomWidth: 1, borderBottomColor: Colors.border },
   // 그리드
   hourRow: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center' },
-  hourLabel: { width: 52, fontSize: 12, color: Colors.placeholder, fontWeight: '600', textAlign: 'right', paddingRight: 6, flexShrink: 0 },
+  hourLabel: { width: 56, fontSize: 11, color: Colors.placeholder, fontWeight: '600', textAlign: 'right', paddingRight: 6, flexShrink: 0 },
   hourLine: { flex: 1, height: 1, backgroundColor: Colors.border },
-  gridTapOverlay: { position: 'absolute', left: 52, right: 0, top: 0 },
+  gridTapOverlay: { position: 'absolute', left: 56, right: 0, top: 0 },
   // 레슨 카드 (그리드)
   lessonCard: {
     position: 'absolute',
