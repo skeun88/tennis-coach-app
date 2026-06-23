@@ -164,14 +164,36 @@ export default function PaymentsScreen() {
 
     const memberId = payTarget.memberId;
 
-    if (payTarget.type === 'unpaid' && payTarget.paymentId) {
-      await supabase.from('payments').update({
-        status: '납부완료',
-        paid_amount: (payTarget.unpaidAmount ?? 0) + (payments.find(p => p.id === payTarget.paymentId)?.paid_amount ?? 0),
-        paid_date: new Date().toISOString().split('T')[0],
-        payment_method: selectedMethod,
-        ...(selectedPackage ? { description: `${selectedPackage.title} 결제`, lesson_package_id: selectedPackage.id } : {}),
-      }).eq('id', payTarget.paymentId);
+    const today = new Date().toISOString().split('T')[0];
+
+    if (payTarget.type === 'unpaid') {
+      if (payTarget.paymentId) {
+        // 기존 미납 row 업데이트
+        const { error } = await supabase.from('payments').update({
+          status: '납부완료',
+          paid_amount: (payTarget.unpaidAmount ?? 0) + (payments.find(p => p.id === payTarget.paymentId)?.paid_amount ?? 0),
+          paid_date: today,
+          payment_method: selectedMethod,
+          ...(selectedPackage ? { description: `${selectedPackage.title} 결제`, lesson_package_id: selectedPackage.id } : {}),
+        }).eq('id', payTarget.paymentId);
+        if (error) { Alert.alert('오류', '결제 저장에 실패했어요.\n' + error.message); setSaving(false); return; }
+      } else {
+        // 미납 row 없는 경우 새로 insert
+        const pkg = selectedPackage;
+        const { error } = await supabase.from('payments').insert({
+          coach_id: user.id,
+          member_id: memberId,
+          amount: pkg ? pkg.price : (payTarget.unpaidAmount ?? 0),
+          paid_amount: pkg ? pkg.price : (payTarget.unpaidAmount ?? 0),
+          status: '납부완료',
+          description: pkg ? `${pkg.title} 결제` : '결제',
+          due_date: today,
+          paid_date: today,
+          payment_method: selectedMethod,
+          ...(pkg ? { lesson_package_id: pkg.id } : {}),
+        });
+        if (error) { Alert.alert('오류', '결제 저장에 실패했어요.\n' + error.message); setSaving(false); return; }
+      }
       if (selectedPackage) {
         await supabase.from('members').update({
           remaining_credits: (payTarget.remainingCredits ?? 0) + selectedPackage.total_credits,
@@ -179,8 +201,7 @@ export default function PaymentsScreen() {
         }).eq('id', memberId);
       }
     } else if (payTarget.type === 'low_credit' && selectedPackage) {
-      const today = new Date().toISOString().split('T')[0];
-      await supabase.from('payments').insert({
+      const { error } = await supabase.from('payments').insert({
         coach_id: user.id,
         member_id: memberId,
         amount: selectedPackage.price,
@@ -192,6 +213,7 @@ export default function PaymentsScreen() {
         payment_method: selectedMethod,
         lesson_package_id: selectedPackage.id,
       });
+      if (error) { Alert.alert('오류', '결제 저장에 실패했어요.\n' + error.message); setSaving(false); return; }
       await supabase.from('members').update({
         remaining_credits: (payTarget.remainingCredits ?? 0) + selectedPackage.total_credits,
         lesson_package_id: selectedPackage.id,
