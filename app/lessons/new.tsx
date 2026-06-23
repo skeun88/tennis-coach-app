@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
+  ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Modal,
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +23,9 @@ export default function NewLessonScreen() {
   const [startHourOpen, setStartHourOpen] = useState(false);
   const [startMinOpen, setStartMinOpen] = useState(false);
   const [endHourOpen, setEndHourOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [calYear, setCalYear] = useState(new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [endMinOpen, setEndMinOpen] = useState(false);
   const [notes, setNotes] = useState('');
   const [members, setMembers] = useState<Member[]>([]);
@@ -115,7 +118,10 @@ export default function NewLessonScreen() {
           <TextInput style={styles.input} placeholder="예: 오전 기초반" value={title} onChangeText={setTitle} />
 
           <Text style={styles.label}>날짜 *</Text>
-          <TextInput style={styles.input} placeholder="YYYY-MM-DD" value={date} onChangeText={setDate} />
+          <TouchableOpacity style={[styles.input, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]} onPress={() => setCalendarOpen(true)}>
+            <Text style={{ fontSize: 15, color: date ? Colors.foreground : Colors.placeholder }}>{date || 'YYYY-MM-DD'}</Text>
+            <Ionicons name="calendar-outline" size={18} color={Colors.mutedFg} />
+          </TouchableOpacity>
 
           {/* 시작 시간 스피너 */}
           <Text style={styles.label}>시작 시간 *</Text>
@@ -225,9 +231,72 @@ export default function NewLessonScreen() {
           {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>레슨 추가</Text>}
         </TouchableOpacity>
       </ScrollView>
+
+      {/* 캘린더 모달 */}
+      <Modal visible={calendarOpen} transparent animationType="fade" onRequestClose={() => setCalendarOpen(false)}>
+        <TouchableOpacity style={calStyles.overlay} activeOpacity={1} onPress={() => setCalendarOpen(false)}>
+          <TouchableOpacity activeOpacity={1} style={calStyles.sheet} onPress={e => e.stopPropagation()}>
+            {/* 월 헤더 */}
+            <View style={calStyles.header}>
+              <TouchableOpacity onPress={() => { const d = calMonth === 0 ? { y: calYear-1, m: 11 } : { y: calYear, m: calMonth-1 }; setCalYear(d.y); setCalMonth(d.m); }}>
+                <Ionicons name="chevron-back" size={22} color={Colors.primary} />
+              </TouchableOpacity>
+              <Text style={calStyles.headerTitle}>{calYear}년 {calMonth+1}월</Text>
+              <TouchableOpacity onPress={() => { const d = calMonth === 11 ? { y: calYear+1, m: 0 } : { y: calYear, m: calMonth+1 }; setCalYear(d.y); setCalMonth(d.m); }}>
+                <Ionicons name="chevron-forward" size={22} color={Colors.primary} />
+              </TouchableOpacity>
+            </View>
+            {/* 요일 헤더 */}
+            <View style={calStyles.weekRow}>
+              {['일','월','화','수','목','금','토'].map((d,i) => (
+                <Text key={i} style={[calStyles.weekDay, i===0&&{color:Colors.destructive}, i===6&&{color:Colors.accentWarm}]}>{d}</Text>
+              ))}
+            </View>
+            {/* 날짜 그리드 */}
+            {(() => {
+              const firstDow = new Date(calYear, calMonth, 1).getDay();
+              const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+              const cells: (number|null)[] = [...Array(firstDow).fill(null), ...Array.from({length:daysInMonth},(_,i)=>i+1)];
+              while (cells.length % 7 !== 0) cells.push(null);
+              const rows: (number|null)[][] = [];
+              for (let i = 0; i < cells.length; i+=7) rows.push(cells.slice(i,i+7));
+              const today = new Date().toISOString().split('T')[0];
+              return rows.map((row, ri) => (
+                <View key={ri} style={calStyles.weekRow}>
+                  {row.map((day, ci) => {
+                    if (!day) return <View key={ci} style={calStyles.dayCell} />;
+                    const ds = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                    const selected = date === ds;
+                    const isToday = today === ds;
+                    return (
+                      <TouchableOpacity key={ci} style={[calStyles.dayCell, selected && calStyles.dayCellSelected, isToday && !selected && calStyles.dayCellToday]}
+                        onPress={() => { setDate(ds); setCalendarOpen(false); }}>
+                        <Text style={[calStyles.dayText, ci===0&&{color:Colors.destructive}, ci===6&&{color:Colors.accentWarm}, selected&&{color:'#fff'}, isToday&&!selected&&{color:Colors.primary}]}>{day}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ));
+            })()}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
+
+const calStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+  sheet: { backgroundColor: '#fff', borderRadius: 16, padding: 16, width: 320, shadowColor: '#000', shadowOffset: {width:0,height:4}, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  headerTitle: { fontSize: 16, fontWeight: '800', color: Colors.foreground },
+  weekRow: { flexDirection: 'row', marginBottom: 2 },
+  weekDay: { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '700', color: Colors.mutedFg, paddingVertical: 4 },
+  dayCell: { flex: 1, aspectRatio: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 20, margin: 1 },
+  dayCellSelected: { backgroundColor: Colors.primary },
+  dayCellToday: { borderWidth: 1.5, borderColor: Colors.primary },
+  dayText: { fontSize: 14, fontWeight: '600', color: Colors.foreground },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
