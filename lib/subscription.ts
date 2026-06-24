@@ -1,20 +1,33 @@
 import { supabase } from './supabase';
 
-export type PlanId = 'basic' | 'pro';
-export type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'cancelled' | 'blocked';
+export type PlanId = 'free' | 'basic' | 'pro';
+export type SubscriptionStatus = 'free' | 'trial' | 'active' | 'past_due' | 'cancelled' | 'blocked';
 
 export interface PlanFeatures {
+  // 공통 (Free 포함)
   member_management: boolean;
-  ai_analysis: boolean;
-  reports: boolean;
-  profile: boolean;
-  tagging: boolean;
+  schedule: boolean;
+  attendance: boolean;
+  payment: boolean;
+  basic_profile: boolean;
+  // Basic+
+  operations_management: boolean;  // 미납/만료/이탈/재등록 관리
+  member_notifications: boolean;   // 레슨 리마인드, 재등록 알림 등
+  ai_analysis: boolean;            // AI 레슨 분석 (Basic: 월5회, Pro: 월100회)
+  coaching_stats_collect: boolean; // 4대 지표 데이터 수집 (베이직: 블라인드)
+  // Pro only
+  ai_coaching_model: boolean;      // AI 코칭 모델 (음성 기반 학습)
+  coaching_stats_public: boolean;  // 4대 지표 공개 + KERRI 검증 노출
+  tagging: boolean;                // 반복 이슈 태그 / 기술별 패턴 분석
 }
 
 export interface SubscriptionPlan {
   id: PlanId;
   name: string;
-  price: number;
+  price: number;          // 얼리버드가
+  regularPrice: number;   // 정식가
+  memberLimit: number | null; // null = 무제한
+  aiAnalysisMonthlyLimit: number; // 0 = 없음
   features: PlanFeatures;
 }
 
@@ -36,16 +49,50 @@ export interface Subscription {
   updated_at: string;
 }
 
+export const FREE_MEMBER_LIMIT = 3;
+
 export const PLANS: Record<PlanId, SubscriptionPlan> = {
+  free: {
+    id: 'free',
+    name: 'Free',
+    price: 0,
+    regularPrice: 0,
+    memberLimit: FREE_MEMBER_LIMIT,
+    aiAnalysisMonthlyLimit: 0,
+    features: {
+      member_management: true,
+      schedule: true,
+      attendance: true,
+      payment: true,
+      basic_profile: true,
+      operations_management: false,
+      member_notifications: false,
+      ai_analysis: false,
+      coaching_stats_collect: false,
+      ai_coaching_model: false,
+      coaching_stats_public: false,
+      tagging: false,
+    },
+  },
   basic: {
     id: 'basic',
     name: 'Basic',
     price: 29000,
+    regularPrice: 35000,
+    memberLimit: null,
+    aiAnalysisMonthlyLimit: 5,
     features: {
       member_management: true,
-      ai_analysis: false,
-      reports: false,
-      profile: false,
+      schedule: true,
+      attendance: true,
+      payment: true,
+      basic_profile: true,
+      operations_management: true,
+      member_notifications: true,
+      ai_analysis: true,
+      coaching_stats_collect: true, // 수집되지만 블라인드
+      ai_coaching_model: false,
+      coaching_stats_public: false, // 블라인드 상태
       tagging: false,
     },
   },
@@ -53,22 +100,39 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
     id: 'pro',
     name: 'Pro',
     price: 49000,
+    regularPrice: 65000,
+    memberLimit: null,
+    aiAnalysisMonthlyLimit: 100,
     features: {
       member_management: true,
+      schedule: true,
+      attendance: true,
+      payment: true,
+      basic_profile: true,
+      operations_management: true,
+      member_notifications: true,
       ai_analysis: true,
-      reports: true,
-      profile: true,
+      coaching_stats_collect: true,
+      ai_coaching_model: true,
+      coaching_stats_public: true, // 공개 + KERRI 검증 배지
       tagging: true,
     },
   },
 };
 
 export const PLAN_FEATURES_LABELS: Record<keyof PlanFeatures, string> = {
-  member_management: '회원 운영 관리',
-  ai_analysis: 'AI 음성 분석',
-  reports: '리포트 생성 및 회원 제공',
-  profile: '프로필 관리',
-  tagging: '레슨 스타일/기술 데이터 태깅',
+  member_management: '회원 관리',
+  schedule: '일간·주간·월간 캘린더',
+  attendance: '출석 · 잔여횟수 관리',
+  payment: '결제 관리',
+  basic_profile: '기본 프로필',
+  operations_management: '운영 관리 (미납·이탈·재등록)',
+  member_notifications: '회원 알림 (리마인드·재등록)',
+  ai_analysis: 'AI 레슨 분석',
+  coaching_stats_collect: '코칭 실적 (4대 지표)',
+  ai_coaching_model: 'AI 코칭 모델 (음성 기반 학습)',
+  coaching_stats_public: '코칭 실적 공개 + KERRI 검증',
+  tagging: '코칭 데이터 분석 (태그·패턴·추적)',
 };
 
 /** 구독 상태 조회 */
@@ -95,14 +159,19 @@ export function canUseFeature(
   return plan.features[feature] === true;
 }
 
-/** 구독이 활성 상태인지 (trial 또는 active) */
+/** 구독이 활성 상태인지 (trial 또는 active 또는 free) */
 export function isSubscriptionActive(subscription: Subscription | null): boolean {
   if (!subscription) return false;
-  return subscription.status === 'trial' || subscription.status === 'active';
+  return (
+    subscription.status === 'trial' ||
+    subscription.status === 'active' ||
+    subscription.status === 'free'
+  );
 }
 
 /** Trial 남은 일수 */
 export function getTrialDaysLeft(subscription: Subscription): number {
+  if (subscription.status !== 'trial') return 0;
   const now = new Date();
   const trialEnd = new Date(subscription.trial_ends_at);
   const diff = trialEnd.getTime() - now.getTime();
@@ -148,7 +217,6 @@ export async function createTrialSubscription(
   const trialEndsAt = new Date();
   trialEndsAt.setDate(trialEndsAt.getDate() + 30);
 
-  // 이미 구독이 있으면 업데이트 (upsert)
   const { data, error } = await supabase
     .from('subscriptions')
     .upsert({
@@ -169,13 +237,46 @@ export async function createTrialSubscription(
     return { subscription: null, error: error.message };
   }
 
-  // 로그 기록 (실패해도 구독은 성공으로 처리)
   try {
     await supabase.from('subscription_logs').insert({
       subscription_id: data.id,
       coach_id: coachId,
       event_type: 'trial_started',
       plan_id: planId,
+    });
+  } catch (e) {
+    console.warn('Log insert failed:', e);
+  }
+
+  return { subscription: data as Subscription, error: null };
+}
+
+/** Free 구독 생성 (신규 코치 등록 시) */
+export async function createFreeSubscription(
+  coachId: string
+): Promise<{ subscription: Subscription | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .upsert({
+      coach_id: coachId,
+      plan_id: 'free',
+      status: 'free',
+      trial_starts_at: new Date().toISOString(),
+      trial_ends_at: new Date().toISOString(), // free는 trial 없음
+    }, { onConflict: 'coach_id' })
+    .select()
+    .single();
+
+  if (error) {
+    return { subscription: null, error: error.message };
+  }
+
+  try {
+    await supabase.from('subscription_logs').insert({
+      subscription_id: data.id,
+      coach_id: coachId,
+      event_type: 'free_started',
+      plan_id: 'free',
     });
   } catch (e) {
     console.warn('Log insert failed:', e);
@@ -193,10 +294,25 @@ export async function getMemberCount(coachId: string): Promise<number> {
   return count ?? 0;
 }
 
-/** 구독 없이 회원 추가 가능한지 체크 (2명까지는 무료) */
-export const FREE_MEMBER_LIMIT = 2;
-
+/** 구독 없이 회원 추가 가능한지 체크 (Free: 3명까지) */
 export async function canAddMemberWithoutSubscription(coachId: string): Promise<boolean> {
   const count = await getMemberCount(coachId);
   return count < FREE_MEMBER_LIMIT;
+}
+
+/** 현재 플랜에서 회원 추가 가능한지 체크 */
+export async function canAddMember(
+  coachId: string,
+  subscription: Subscription | null
+): Promise<boolean> {
+  if (!subscription) {
+    const count = await getMemberCount(coachId);
+    return count < FREE_MEMBER_LIMIT;
+  }
+
+  const plan = PLANS[subscription.plan_id];
+  if (plan.memberLimit === null) return true; // 무제한
+
+  const count = await getMemberCount(coachId);
+  return count < plan.memberLimit;
 }
