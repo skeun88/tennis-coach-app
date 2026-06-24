@@ -10,7 +10,7 @@ import { Lesson, AttendanceStatus } from '../../types';
 import { Colors } from '../../lib/theme';
 import { useSubscription } from '../../hooks/useSubscription';
 import LessonBriefingModal from '../../components/LessonBriefingModal';
-import ProUpsellModal from '../../components/ProUpsellModal';
+import PlanUpsellModal from '../../components/PlanUpsellModal';
 
 const STATUS_OPTIONS: AttendanceStatus[] = ['출석', '결석'];
 const ABSENCE_REASONS = ['개인사정', '부상', '일정충돌', '무단결석', '기타'] as const;
@@ -64,7 +64,7 @@ export default function LessonDetailScreen() {
   // ② 레슨 브리핑 모달 상태
   const [briefingVisible, setBriefingVisible] = useState(false);
   const [showProModal, setShowProModal] = useState(false);
-  const { canUse } = useSubscription();
+  const { canUse, subscription } = useSubscription();
 
   // 결석 처리 모달
   const [absenceModal, setAbsenceModal] = useState(false);
@@ -597,12 +597,12 @@ export default function LessonDetailScreen() {
         memberIds={attendance.map(a => a.member_id)}
       />
 
-      {/* Pro 업셀 모달 */}
-      <ProUpsellModal
+      {/* Plan Upsell 모달 */}
+      <PlanUpsellModal
         visible={showProModal}
         onClose={() => setShowProModal(false)}
-        featureTitle="레슨 브리핑 카드"
-        featureDesc="레슨 전 지난 레슨 핵심 포인트, 반복 이슈 태그, 집중 포인트를 한눈에 확인할 수 있어요.\nPro 플랜으로 업그레이드하고 모든 기능을 활용해보세요!"
+        context="tagging"
+        currentPlanId={subscription?.plan_id ?? 'free'}
       />
     </View>
   );

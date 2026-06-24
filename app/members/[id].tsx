@@ -11,7 +11,7 @@ import { Member, MemberLevel, Attendance, Payment, MemberNote } from '../../type
 import { Colors } from '../../lib/theme';
 import { useSubscription } from '../../hooks/useSubscription';
 import MemberIssueTags from '../../components/MemberIssueTags';
-import ProUpsellModal from '../../components/ProUpsellModal';
+import PlanUpsellModal from '../../components/PlanUpsellModal';
 
 type DayTimes = Record<number, string[]>;
 
@@ -217,7 +217,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   const [memberNotes, setMemberNotes] = useState<MemberNote[]>([]);
   const [newNote, setNewNote] = useState('');
   const [showProModal, setShowProModal] = useState(false);
-  const { canUse } = useSubscription();
+  const { canUse, subscription } = useSubscription();
   const [sendingReregister, setSendingReregister] = useState(false);
   const [convertingTrial, setConvertingTrial] = useState(false);
   const [timePickerVisible, setTimePickerVisible] = useState(false);
@@ -1662,12 +1662,12 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         </View>
       </Modal>
 
-      {/* Pro 업셀 모달 */}
-      <ProUpsellModal
+      {/* Plan Upsell 모달 */}
+      <PlanUpsellModal
         visible={showProModal}
         onClose={() => setShowProModal(false)}
-        featureTitle="반복 이슈 태그"
-        featureDesc="애이가 최근 5회 레슨에서 반복되는 이슈를 자동으로 추출해드려요.\nPro 플랜으로 업그레이드하고 모든 기능을 활용해보세요!"
+        context="tagging"
+        currentPlanId={subscription?.plan_id ?? 'free'}
       />
 
       {/* 결제 완료 모달 */}

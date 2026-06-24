@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import ProUpsellModal from '../../components/ProUpsellModal';
+import PlanUpsellModal from '../../components/PlanUpsellModal';
 import * as DocumentPicker from 'expo-document-picker';
 import { Audio } from 'expo-av';
 import { supabase } from '../../lib/supabase';
@@ -555,12 +555,12 @@ export default function ProfileScreen() {
             )}
           </View>
 
-          {/* Pro Upsell 모달 */}
-          <ProUpsellModal
+          {/* Plan Upsell 모달 */}
+          <PlanUpsellModal
             visible={upsellVisible}
             onClose={() => setUpsellVisible(false)}
-            featureTitle="AI 코칭 모델"
-            featureDesc={`나만의 AI 코칭 모델을 개발하는 기능은 Pro 플랜 전용이에요.\n음성, 텍스트, 파일로 코칭 스타일을 학습시킬 수 있어요.`}
+            context="ai_coaching_model"
+            currentPlanId={subscription?.plan_id ?? 'free'}
           />
 
           {/* 코치 초대 QR 모달 */}

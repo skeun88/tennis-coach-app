@@ -10,7 +10,8 @@ import { supabase } from '../../lib/supabase';
 import { LessonPlan, DrillSuggestion } from '../../types';
 import { Colors } from '../../lib/theme';
 import { useSubscription } from '../../hooks/useSubscription';
-import ProUpsellModal from '../../components/ProUpsellModal';
+import { checkAiAnalysisLimit, incrementAiAnalysisUsage } from '../../lib/subscription';
+import PlanUpsellModal, { UpsellContext } from '../../components/PlanUpsellModal';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -30,7 +31,9 @@ export default function AIAnalysisScreen() {
     memberLevel: string;
   }>();
   const router = useRouter();
-  const { canUse, loading: subLoading } = useSubscription();
+  const { canUse, subscription, loading: subLoading } = useSubscription();
+  const [upsellContext, setUpsellContext] = useState<UpsellContext | null>(null);
+  const [usageInfo, setUsageInfo] = useState<{ used: number; limit: number } | undefined>(undefined);
 
   const audioRecorder = useAudioRecorder({
     ...RecordingPresets.HIGH_QUALITY,
@@ -212,6 +215,18 @@ export default function AIAnalysisScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('로그인이 필요합니다.');
 
+      // ── 월별 한도 체크 ──
+      const limitCheck = await checkAiAnalysisLimit(user.id, subscription);
+      if (!limitCheck.allowed) {
+        setIsAnalyzing(false);
+        setAnalysisStep(0);
+        setUsageInfo({ used: limitCheck.used, limit: limitCheck.limit });
+        setUpsellContext(
+          limitCheck.planId === 'basic' ? 'ai_analysis_limit' : 'ai_analysis_free'
+        );
+        return;
+      }
+
       const formData = new FormData();
       formData.append('audio', { uri, type: 'audio/m4a', name: 'lesson.m4a' } as any);
       formData.append('member_id', memberId);
@@ -244,6 +259,9 @@ export default function AIAnalysisScreen() {
       } finally {
         clearInterval(stepTimer);
       }
+
+      // 사용량 1회 증가
+      await incrementAiAnalysisUsage(user.id);
 
       await loadPlans();
       if (finalResult.plan?.id) setExpandedPlan(finalResult.plan.id);
@@ -400,12 +418,16 @@ export default function AIAnalysisScreen() {
 
   // ── 구독 권한 체크 ──
   if (!subLoading && !canUse('ai_analysis')) {
+    const ctx: UpsellContext =
+      subscription?.plan_id === 'free' || !subscription
+        ? 'ai_analysis_free'
+        : 'generic_pro';
     return (
-      <ProUpsellModal
+      <PlanUpsellModal
         visible={true}
         onClose={() => router.back()}
-        featureTitle="AI 레슨 분석"
-        featureDesc={`AI 음성 레슨 분석은 Pro 플랜 전용 기능이에요.\n업그레이드하고 ${memberName} 회원의 레슨 분석을 시작해보세요!`}
+        context={ctx}
+        currentPlanId={subscription?.plan_id ?? 'free'}
       />
     );
   }
@@ -652,6 +674,17 @@ export default function AIAnalysisScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* 플랜 업셀 모달 (AI 한도 초과 / 권한 없음) */}
+      {upsellContext && (
+        <PlanUpsellModal
+          visible={true}
+          onClose={() => setUpsellContext(null)}
+          context={upsellContext}
+          currentPlanId={subscription?.plan_id ?? 'free'}
+          usageInfo={usageInfo}
+        />
+      )}
     </View>
   );
 }

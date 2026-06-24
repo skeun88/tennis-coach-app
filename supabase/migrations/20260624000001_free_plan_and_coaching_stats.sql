@@ -122,3 +122,21 @@ ALTER TABLE ai_analysis_usage ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "coach own ai usage" ON ai_analysis_usage;
 CREATE POLICY "coach own ai usage" ON ai_analysis_usage
   FOR ALL USING (auth.uid() = coach_id);
+
+-- 6. AI 분석 사용량 증가 RPC 함수
+CREATE OR REPLACE FUNCTION increment_ai_analysis_usage(
+  p_coach_id uuid,
+  p_year_month text
+) RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  INSERT INTO ai_analysis_usage (coach_id, year_month, count)
+  VALUES (p_coach_id, p_year_month, 1)
+  ON CONFLICT (coach_id, year_month)
+  DO UPDATE SET
+    count = ai_analysis_usage.count + 1,
+    updated_at = now();
+END;
+$$;

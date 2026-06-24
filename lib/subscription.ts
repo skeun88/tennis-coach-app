@@ -316,3 +316,49 @@ export async function canAddMember(
   const count = await getMemberCount(coachId);
   return count < plan.memberLimit;
 }
+
+/** 이번 달 AI 레슨 분석 사용 횟수 조회 */
+export async function getAiAnalysisUsageThisMonth(coachId: string): Promise<number> {
+  const now = new Date();
+  const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  const { data } = await supabase
+    .from('ai_analysis_usage')
+    .select('count')
+    .eq('coach_id', coachId)
+    .eq('year_month', yearMonth)
+    .maybeSingle();
+
+  return data?.count ?? 0;
+}
+
+/** AI 분석 사용 가능 여부 체크 — 한도 포함 */
+export async function checkAiAnalysisLimit(
+  coachId: string,
+  subscription: Subscription | null
+): Promise<{ allowed: boolean; used: number; limit: number; planId: PlanId | null }> {
+  if (!subscription || subscription.status === 'blocked' || subscription.status === 'cancelled') {
+    return { allowed: false, used: 0, limit: 0, planId: null };
+  }
+
+  const plan = PLANS[subscription.plan_id];
+  const limit = plan.aiAnalysisMonthlyLimit;
+
+  if (limit === 0) {
+    return { allowed: false, used: 0, limit: 0, planId: subscription.plan_id };
+  }
+
+  const used = await getAiAnalysisUsageThisMonth(coachId);
+  return { allowed: used < limit, used, limit, planId: subscription.plan_id };
+}
+
+/** AI 분석 1회 사용 기록 (upsert) */
+export async function incrementAiAnalysisUsage(coachId: string): Promise<void> {
+  const now = new Date();
+  const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  await supabase.rpc('increment_ai_analysis_usage', {
+    p_coach_id: coachId,
+    p_year_month: yearMonth,
+  });
+}

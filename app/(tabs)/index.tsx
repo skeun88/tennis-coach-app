@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Colors, Radius, Shadow } from '../../lib/theme';
 import { useSubscription } from '../../hooks/useSubscription';
-import ProUpsellModal from '../../components/ProUpsellModal';
+import PlanUpsellModal from "../../components/PlanUpsellModal";
 import CoachQRModal from '../../components/CoachQRModal';
 
 const ABSENCE_REASONS = ['개인사정', '부상', '일정충돌', '무단결석', '기타'] as const;
@@ -62,7 +62,7 @@ export default function HomeScreen() {
   const [knowledgeCount, setKnowledgeCount] = useState(0);
   const [homeUpsellVisible, setHomeUpsellVisible] = useState(false);
   const [showChatHint, setShowChatHint] = useState(false);
-  const { canUse } = useSubscription();
+  const { canUse, subscription } = useSubscription();
 
   // today를 state로 관리: 자정이 지나면 자동 갱신
   const [today, setToday] = useState(() => new Date().toISOString().split('T')[0]);
@@ -716,12 +716,12 @@ export default function HomeScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* Pro Upsell 모달 (홈) */}
-        <ProUpsellModal
+        {/* Plan Upsell 모달 (홈) */}
+        <PlanUpsellModal
           visible={homeUpsellVisible}
           onClose={() => setHomeUpsellVisible(false)}
-          featureTitle="AI 코칭 모델"
-          featureDesc={`나만의 AI 코칭 모델을 개발하는 기능은\nPro 플랜 전용이에요.`}
+          context="ai_coaching_model"
+          currentPlanId={subscription?.plan_id ?? 'free'}
         />
 
         {/* QR 초대 모달 */}
