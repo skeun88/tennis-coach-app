@@ -439,38 +439,71 @@ export default function ProfileScreen() {
             <View style={styles.sectionHeaderRow}>
               <Ionicons name="bar-chart-outline" size={15} color={Colors.navy} />
               <Text style={styles.sectionTitle}>코칭 실적</Text>
-              <Text style={styles.sectionSub}>KERRI 검증 · 조작 불가</Text>
+              {canUse('coaching_stats_public')
+                ? <Text style={styles.sectionSub}>KERRI 검증 · 조작 불가</Text>
+                : <View style={styles.blindBadge}><Text style={styles.blindBadgeText}>블라인드</Text></View>
+              }
             </View>
-            <View style={metric.grid}>
-              {/* ① 누적 레슨 수 */}
-              <MetricCard
-                icon="flash"
-                label="누적 레슨"
-                value={`${perf.totalLessons.toLocaleString()}회`}
-                sub="출석 체크 기준"
-              />
-              {/* ② 평균 유지 기간 */}
-              <MetricCard
-                icon="time-outline"
-                label="평균 유지"
-                value={perf.avgRetentionMonths !== null ? `${perf.avgRetentionMonths}개월` : '-'}
-                sub={perf.avgRetentionMonths !== null ? '이탈 회원 기준' : '데이터 쌓는 중'}
-              />
-              {/* ③ 만족도 */}
-              <MetricCard
-                icon="star"
-                label="만족도"
-                value={perf.satisfactionAvg !== null ? `${perf.satisfactionAvg}` : '-'}
-                sub={perf.satisfactionCount > 0 ? `${perf.satisfactionCount}명 평가` : '리뷰 없음'}
-              />
-              {/* ④ 레슨 리포트 */}
-              <MetricCard
-                icon="document-text"
-                label="레슨 리포트"
-                value={`${perf.totalReports}개`}
-                sub="발송 완료 기준"
-              />
-            </View>
+
+            {/* 블라인드 상태 — Basic 이하 */}
+            {!canUse('coaching_stats_public') && (
+              <View style={styles.blindOverlayWrap}>
+                {/* 흐린 지표 (배경으로만 보임) */}
+                <View style={[metric.grid, styles.blindGrid]}>
+                  <MetricCard icon="flash"         label="누적 레슨"   value="●●●회"  sub="" />
+                  <MetricCard icon="time-outline"   label="평균 유지"   value="●●개월" sub="" />
+                  <MetricCard icon="star"           label="만족도"      value="●.●"   sub="" />
+                  <MetricCard icon="document-text"  label="레슨 리포트" value="●●개"  sub="" />
+                </View>
+                {/* 잠금 오버레이 */}
+                <View style={styles.blindOverlay}>
+                  <View style={styles.blindLockCircle}>
+                    <Ionicons name="lock-closed" size={22} color="#8B5CF6" />
+                  </View>
+                  <Text style={styles.blindOverlayTitle}>Pro 공개 기능</Text>
+                  <Text style={styles.blindOverlayDesc}>
+                    {"데이터는 지금도 쌓이고 있어요.\nPro로 업그레이드하면 내 코칭 실적이 공개됩니다."}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.blindUpgradeBtn}
+                    onPress={() => setUpsellVisible(true)}
+                  >
+                    <Ionicons name="star" size={14} color="#fff" />
+                    <Text style={styles.blindUpgradeBtnText}>Pro로 공개하기</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* 실제 지표 — Pro만 보임 */}
+            {canUse('coaching_stats_public') && (
+              <View style={metric.grid}>
+                <MetricCard
+                  icon="flash"
+                  label="누적 레슨"
+                  value={`${perf.totalLessons.toLocaleString()}회`}
+                  sub="출석 체크 기준"
+                />
+                <MetricCard
+                  icon="time-outline"
+                  label="평균 유지"
+                  value={perf.avgRetentionMonths !== null ? `${perf.avgRetentionMonths}개월` : '-'}
+                  sub={perf.avgRetentionMonths !== null ? '이탈 회원 기준' : '데이터 쌓는 중'}
+                />
+                <MetricCard
+                  icon="star"
+                  label="만족도"
+                  value={perf.satisfactionAvg !== null ? `${perf.satisfactionAvg}` : '-'}
+                  sub={perf.satisfactionCount > 0 ? `${perf.satisfactionCount}명 평가` : '리뷰 없음'}
+                />
+                <MetricCard
+                  icon="document-text"
+                  label="레슨 리포트"
+                  value={`${perf.totalReports}개`}
+                  sub="발송 완료 기준"
+                />
+              </View>
+            )}
           </View>
 
           {/* ── 1. 기본 프로필 ── */}
@@ -559,7 +592,7 @@ export default function ProfileScreen() {
           <PlanUpsellModal
             visible={upsellVisible}
             onClose={() => setUpsellVisible(false)}
-            context="ai_coaching_model"
+            context={canUse('coaching_stats_collect') ? 'coaching_stats_public' : 'generic_pro'}
             currentPlanId={subscription?.plan_id ?? 'free'}
           />
 
@@ -965,6 +998,30 @@ const styles = StyleSheet.create({
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
   sectionTitle: { fontSize: 15, fontWeight: '800', color: Colors.navy },
   sectionSub: { fontSize: 11, color: Colors.placeholder, marginLeft: 4 },
+  blindBadge: { marginLeft: 6, backgroundColor: '#F3E8FF', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 },
+  blindBadgeText: { fontSize: 10, fontWeight: '700', color: '#8B5CF6' },
+  blindOverlayWrap: { position: 'relative', marginBottom: 4 },
+  blindGrid: { opacity: 0.18 },
+  blindOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(255,255,255,0.82)',
+    borderRadius: 12,
+    justifyContent: 'center', alignItems: 'center',
+    paddingVertical: 20, gap: 8,
+  },
+  blindLockCircle: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: '#F3E8FF',
+    justifyContent: 'center', alignItems: 'center', marginBottom: 2,
+  },
+  blindOverlayTitle: { fontSize: 15, fontWeight: '800', color: '#5B21B6' },
+  blindOverlayDesc: { fontSize: 12, color: '#888', textAlign: 'center', lineHeight: 18, paddingHorizontal: 16 },
+  blindUpgradeBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#8B5CF6', borderRadius: 20,
+    paddingHorizontal: 18, paddingVertical: 9, marginTop: 4,
+  },
+  blindUpgradeBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   editBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 'auto', backgroundColor: Colors.navy + '10', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
   editBtnText: { fontSize: 12, fontWeight: '700', color: Colors.navy },
   card: { backgroundColor: Colors.white, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border, padding: 16, marginBottom: 4 },
