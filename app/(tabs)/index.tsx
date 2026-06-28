@@ -181,8 +181,7 @@ export default function HomeScreen() {
       const { data: lastAttData } = await supabase
         .from('attendance')
         .select('member_id, lessons!inner(date)')
-        .in('member_id', atRisk.map(m => m.id))
-        .order('lessons.date' as any, { ascending: false });
+        .in('member_id', atRisk.map(m => m.id));
 
       const lastAttMap: Record<string, string> = {};
       for (const row of lastAttData ?? []) {
