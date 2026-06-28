@@ -225,12 +225,12 @@ export default function ProfileScreen() {
     setEmail(user.email ?? '');
     setCoachId(user.id);
 
-    const [allLessonsRes, plansRes, profileRes, reviewsRes] = await Promise.all([
+    const [allLessonsRes, plansRes, profileRes] = await Promise.all([
       supabase.from('lessons').select('id, date').eq('coach_id', user.id),
       supabase.from('lesson_plans').select('*', { count: 'exact', head: true }).eq('coach_id', user.id),
       supabase.from('coach_profiles').select('*').eq('coach_id', user.id).maybeSingle(),
-      supabase.from('coach_reviews').select('rating').eq('coach_id', user.id),
     ]);
+    const reviewsRes = { data: [] as any[] };
 
     // ① 리포트 수: sent 상태만
     const totalReports = plansRes.count ?? 0;
