@@ -227,7 +227,7 @@ export default function ProfileScreen() {
 
     const [allLessonsRes, plansRes, profileRes, reviewsRes] = await Promise.all([
       supabase.from('lessons').select('id, date').eq('coach_id', user.id),
-      supabase.from('lesson_plans').select('*', { count: 'exact', head: true }).eq('coach_id', user.id).eq('status', 'sent'),
+      supabase.from('lesson_plans').select('*', { count: 'exact', head: true }).eq('coach_id', user.id),
       supabase.from('coach_profiles').select('*').eq('coach_id', user.id).maybeSingle(),
       supabase.from('coach_reviews').select('rating').eq('coach_id', user.id),
     ]);
