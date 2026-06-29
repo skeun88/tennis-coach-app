@@ -59,7 +59,7 @@
           "icon": "./assets/images/notification-icon.png",
           "color": "#1B4332",
           "sounds": [],
-          "mode": "production"
+          "mode": "development"
         }
       ],
       "expo-font",
