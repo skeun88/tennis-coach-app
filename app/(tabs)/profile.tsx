@@ -6,7 +6,7 @@ import {
   Image, Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import PlanUpsellModal from '../../components/PlanUpsellModal';

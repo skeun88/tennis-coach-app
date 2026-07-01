@@ -4,7 +4,7 @@ import {
   Alert, RefreshControl, ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Colors } from '../../lib/theme';
