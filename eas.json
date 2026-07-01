@@ -12,7 +12,10 @@
       "distribution": "internal"
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      }
     }
   },
   "submit": {
@@ -20,7 +23,8 @@
       "ios": {
         "appleId": "serendipity567@naver.com",
         "ascAppId": "6783224934"
-      }
+      },
+      "android": {}
     }
   }
 }

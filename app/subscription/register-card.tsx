@@ -8,7 +8,8 @@ import {
   Alert,
   TouchableOpacity,
 } from 'react-native';
-import { WebView, WebViewNavigation } from 'react-native-webview';
+import WebViewComponent, { WebViewNavigation } from 'react-native-webview';
+const WebView = WebViewComponent;
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { PlanId, createTrialSubscription } from '../../lib/subscription';
@@ -21,7 +22,7 @@ export default function RegisterCardScreen() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const processingRef = useRef(false);
-  const webViewRef = useRef<WebView>(null);
+  const webViewRef = useRef<React.ElementRef<typeof WebView>>(null);
 
   // 빌링키 발급 HTML (토스 SDK 사용)
   const getBillingHtml = (customerKey: string) => `
@@ -194,7 +195,11 @@ const styles = StyleSheet.create({
   processingView: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16 },
   processingText: { fontSize: 16, color: '#555' },
   loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.8)',
