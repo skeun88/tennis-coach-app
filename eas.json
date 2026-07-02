@@ -20,6 +20,9 @@
       "ios": {
         "appleId": "serendipity567@naver.com",
         "ascAppId": "6783224934"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-service-account.json"
       }
     }
   }
