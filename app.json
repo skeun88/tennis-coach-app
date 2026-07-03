@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "테니스 코치",
+    "name": "Kerri",
     "slug": "tennis-coach-app",
     "owner": "skeun-2",
     "version": "1.1.0",
@@ -18,12 +18,12 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.kerri.tenniscoach",
       "infoPlist": {
+        "CFBundleDisplayName": "Kerri",
         "ITSAppUsesNonExemptEncryption": false,
-        "UIBackgroundModes": [
-          "audio"
-        ],
-        "NSMicrophoneUsageDescription": "레슨 피드백 녹음을 위해 마이크 접근이 필요합니다.",
-        "NSUserNotificationUsageDescription": "레슨 출석 체크 알림을 위해 알림 권한이 필요합니다."
+        "NSMicrophoneUsageDescription": "레슨 피드백을 녹음하고 AI 코칭 모델에 업로드하기 위해 마이크 접근이 필요합니다.",
+        "NSUserNotificationUsageDescription": "레슨 출석 체크 알림을 위해 알림 권한이 필요합니다.",
+        "NSPhotoLibraryUsageDescription": "코치 프로필 사진을 등록하거나 변경할 때 사진 라이브러리에 접근합니다. 예: 프로필 화면에서 사진 선택 시 사용됩니다.",
+        "NSTrackingUsageDescription": "맞춤형 광고 및 서비스 개선을 위해 사용됩니다. 추적을 원하지 않으시면 거부하실 수 있습니다."
       }
     },
     "android": {
@@ -50,7 +50,7 @@
         "expo-audio",
         {
           "microphonePermission": "레슨 피드백 녹음을 위해 마이크 접근이 필요합니다.",
-          "enableBackgroundRecording": true
+          "enableBackgroundRecording": false
         }
       ],
       [
@@ -63,7 +63,13 @@
         }
       ],
       "expo-font",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-tracking-transparency",
+        {
+          "userTrackingPermission": "맞춤형 광고 및 서비스 개선을 위해 사용됩니다. 추적을 원하지 않으시면 거부하실 수 있습니다."
+        }
+      ]
     ],
     "extra": {
       "router": {},

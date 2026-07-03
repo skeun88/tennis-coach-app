@@ -403,6 +403,45 @@ export default function ProfileScreen() {
     ]);
   }
 
+  async function handleDeleteAccount() {
+    Alert.alert(
+      '계정 삭제',
+      '계정을 삭제하면 모든 데이터(회원, 레슨, 리포트)가 영구적으로 삭제됩니다. 이 작업은 되돌릴 수 없습니다.',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '삭제 확인',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { data: { user } } = await supabase.auth.getUser();
+              if (!user) return;
+              // Edge Function으로 계정 완전 삭제 (RLS 우회용 서버사이드 처리)
+              const { data: { session } } = await supabase.auth.getSession();
+              const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+              const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-account`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${session?.access_token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ user_id: user.id }),
+              });
+              const result = await res.json();
+              if (result.success) {
+                await supabase.auth.signOut();
+              } else {
+                Alert.alert('오류', result.error || '계정 삭제에 실패했습니다. 고객센터에 문의해주세요.');
+              }
+            } catch {
+              Alert.alert('오류', '계정 삭제 중 오류가 발생했습니다. 다시 시도해주세요.');
+            }
+          },
+        },
+      ]
+    );
+  }
+
   return (
     <View style={styles.screen}>
       <ScrollView
@@ -822,6 +861,10 @@ export default function ProfileScreen() {
               <Text style={styles.logoutRowText}>로그아웃</Text>
             </TouchableOpacity>
             <Text style={styles.emailHint}>{email}</Text>
+            <TouchableOpacity style={styles.deleteAccountRow} onPress={handleDeleteAccount}>
+              <Ionicons name="trash-outline" size={14} color={Colors.mutedFg} />
+              <Text style={styles.deleteAccountText}>계정 삭제</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={{ height: 60 }} />
@@ -1040,6 +1083,8 @@ const styles = StyleSheet.create({
   qrInlineBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: Colors.white, borderRadius: Radius.md, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: Colors.primary + '50', marginLeft: 10 },
   qrInlineBtnText: { fontSize: 13, fontWeight: '700', color: Colors.primary },
   emailHint: { fontSize: 11, color: Colors.placeholder, marginTop: 6, textAlign: 'center' },
+  deleteAccountRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 16, paddingVertical: 8 },
+  deleteAccountText: { fontSize: 12, color: Colors.mutedFg, textDecorationLine: 'underline' },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,.4)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 48 },
   handle: { width: 40, height: 4, backgroundColor: Colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
