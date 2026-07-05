@@ -5,10 +5,12 @@ import { supabase } from '../lib/supabase';
 import { View, ActivityIndicator, Platform } from 'react-native';
 import { Colors } from '../lib/theme';
 import * as TrackingTransparency from 'expo-tracking-transparency';
+import { getCurrentSubscription } from '../lib/subscription';
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [subscriptionChecked, setSubscriptionChecked] = useState(false);
   const router = useRouter();
   const segments = useSegments();
 
@@ -36,11 +38,30 @@ export default function RootLayout() {
     if (loading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const inSubscriptionGroup = segments[0] === 'subscription';
 
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/login');
-    } else if (session && inAuthGroup) {
+      return;
+    }
+
+    if (session && inAuthGroup) {
       router.replace('/(tabs)');
+      return;
+    }
+
+    // 로그인 상태에서 구독 상태 체크 (인증/구독 화면 제외)
+    if (session && !inAuthGroup && !inSubscriptionGroup) {
+      getCurrentSubscription().then((sub) => {
+        setSubscriptionChecked(true);
+        if (sub && (sub.status === 'blocked' || sub.status === 'cancelled')) {
+          router.replace('/subscription/blocked');
+        }
+      }).catch(() => {
+        setSubscriptionChecked(true);
+      });
+    } else {
+      setSubscriptionChecked(true);
     }
   }, [session, loading, segments]);
 
