@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import { View, ActivityIndicator, Platform } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 import { Colors } from '../lib/theme';
-import * as TrackingTransparency from 'expo-tracking-transparency';
 import { getCurrentSubscription } from '../lib/subscription';
 
 export default function RootLayout() {
@@ -15,13 +14,6 @@ export default function RootLayout() {
   const segments = useSegments();
 
   useEffect(() => {
-    // ATT (App Tracking Transparency) - iOS 14.5+
-    if (Platform.OS === 'ios') {
-      TrackingTransparency.requestTrackingPermissionsAsync().catch(() => {
-        // 권한 요청 실패해도 앱 동작에 영향 없음
-      });
-    }
-
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
