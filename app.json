@@ -17,6 +17,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.kerri.tenniscoach",
+      "icon": "./assets/icon.png",
       "infoPlist": {
         "CFBundleDisplayName": "Kerri",
         "ITSAppUsesNonExemptEncryption": false,
