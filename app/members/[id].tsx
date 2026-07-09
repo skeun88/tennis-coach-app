@@ -625,33 +625,9 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
 
     // ── Branch.io 딥링크 생성 ──────────────────────────────────
     // ⚠️  아래 두 값을 Branch 대시보드에서 발급받은 키로 교체하세요
-    const BRANCH_KEY = 'BRANCH_LIVE_KEY_HERE';           // key_live_xxxxxxxx
-    const TESTFLIGHT_URL = 'https://testflight.apple.com/join/TESTFLIGHT_CODE_HERE';
+    const APP_STORE_URL = 'https://apps.apple.com/kr/app/kerri-member/id6783235236';
 
-    let inviteLink = TESTFLIGHT_URL; // Branch 키 미설정 시 폴백
-
-    if (!BRANCH_KEY.includes('HERE')) {
-      try {
-        const res = await fetch('https://api2.branch.io/v1/url', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            branch_key: BRANCH_KEY,
-            data: {
-              member_id: member.id,
-              coach_id: (member as any).coach_id,
-              // 앱 미설치 시 TestFlight로 이동
-              '$fallback_url': TESTFLIGHT_URL,
-              '$ios_url': TESTFLIGHT_URL,
-            },
-          }),
-        });
-        const json = await res.json();
-        if (json.url) inviteLink = json.url;
-      } catch (e) {
-        console.warn('Branch link 생성 실패, 폴백 사용');
-      }
-    }
+    let inviteLink = APP_STORE_URL;
 
     // 초대 코드도 함께 생성 (폴백용)
     let code = (member as any).invite_code as string | null;
