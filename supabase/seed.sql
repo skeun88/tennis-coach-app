@@ -120,7 +120,7 @@ BEGIN
     -- Join date: between 3 years ago and today
     join_offset := floor(random() * 1095)::int;
 
-    INSERT INTO members (id, coach_id, name, phone, email, level, join_date, is_active, notes)
+    INSERT INTO members (id, coach_id, name, phone, email, level, join_date, is_active, notes, invite_code)
     VALUES (
       m[i],
       coach_id,
@@ -130,7 +130,8 @@ BEGIN
       rand_level,
       current_date - join_offset,
       CASE WHEN random() > 0.08 THEN true ELSE false END, -- 92% 활성
-      CASE WHEN random() > 0.5 THEN note_contents[floor(random()*array_length(note_contents,1)+1)::int] ELSE NULL END
+      CASE WHEN random() > 0.5 THEN note_contents[floor(random()*array_length(note_contents,1)+1)::int] ELSE NULL END,
+      upper(substring(md5(random()::text || i::text) from 1 for 6)) -- 초대코드 자동 생성
     );
   END LOOP;
 
