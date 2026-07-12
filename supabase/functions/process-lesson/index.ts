@@ -145,12 +145,19 @@ serve(async (req) => {
     const TRANSCRIPT_SUMMARY_PROMPT = `다음은 테니스 레슨 녹음의 전문입니다. 앞/중간/뒷부분이 모두 포함되어 있습니다.
 레슨 전체를 균등하게 반영하여 핵심 내용을 추출해주세요. 특정 시간대에 치우치지 말 것.
 
+중요 지침:
+- 레슨과 무관한 사적 대화(날씨, 일상, 식사, 잡담 등)는 완전히 무시하고 분석에서 제외하세요.
+- 레슨 기술/피드백/지시사항만 추출하세요.
+- 사적 대화가 있더라도 레슨 내용이 60% 이상이면 정상 분석하세요.
+- lesson_content_ratio: 전체 중 레슨 관련 비율(0~1)을 함께 출력하세요.
+
 출력 형식 (JSON):
 {
   "key_techniques": ["언급된 기술 1", "기술 2"],
   "main_issues": ["주요 문제점 1", "문제점 2"],
-  "lesson_flow": "레슨 전체 흐름 요약 - 시작/중반/후반 모두 포함 (4-5문장)",
-  "coach_instructions": ["코치가 준 주요 지시사항 1", "지시사항 2"]
+  "lesson_flow": "레슨 전체 흐름 요약 - 시작/중반/후반 모두 포함, 사적 대화 제외 (4-5문장)",
+  "coach_instructions": ["코치가 준 주요 지시사항 1", "지시사항 2"],
+  "lesson_content_ratio": 0.8
 }
 
 레슨 녹음:
@@ -192,6 +199,15 @@ ${sampledTranscript}`
 
     const transcriptRow = transcriptInsert.data
     const recentPlans = historyRes.data
+    const lessonRatio = transcriptSummary.lesson_content_ratio ?? 1.0
+
+    // 레슨 비율이 너무 낙으면 경고 (30% 미만이면 분석 거부)
+    if (lessonRatio < 0.3) {
+      return new Response(JSON.stringify({
+        error: `레슨 내용이 너무 적습니다 (레슨 비율 ${Math.round(lessonRatio * 100)}%). 레슨 중 녹음된 음성을 사용해주세요.`,
+        lesson_content_ratio: lessonRatio,
+      }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
 
     // ── Step 3: RAG 검색 ──
     const ragQuery = [
@@ -284,7 +300,11 @@ ${historyContext || '(이전 레슨 기록 없음)'}
 ## 관련 교육 자료
 ${knowledgeContext || '(없음)'}
 
-중요: drill_suggestions는 정확히 2개만 작성하세요. JSON만 출력하고 다른 텍스트는 포함하지 마세요.`
+중요:
+- drill_suggestions는 정확히 2개만 작성하세요.
+- 레슨 내용(기술/피드백/지시사항)만 반영하세요. 사적 대화(날씨, 일상, 식사, 잡담)는 완전히 제외하세요.
+- 레슨 내용 비율: ${Math.round(lessonRatio * 100)}% (이 비율에 맞게 확인된 레슨 내용만 분석)
+- JSON만 출력하고 다른 텍스트는 포함하지 마세요.`
 
     const claudeRes = await fetchClaude({
       model: 'claude-sonnet-4-5',
