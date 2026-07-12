@@ -3,14 +3,19 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   Alert, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
 } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import * as AuthSession from 'expo-auth-session';
 import { supabase } from '../../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../lib/theme';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [snsLoading, setSnsLoading] = useState<'google' | 'apple' | null>(null);
   const [isSignUp, setIsSignUp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -29,6 +34,46 @@ export default function LoginScreen() {
       if (error) Alert.alert('로그인 오류', '이메일 또는 비밀번호가 올바르지 않습니다.');
     }
     setLoading(false);
+  }
+
+  async function handleSNSLogin(provider: 'google' | 'apple') {
+    setSnsLoading(provider);
+    try {
+      const redirectTo = AuthSession.makeRedirectUri({ scheme: 'tenniscoach', path: 'auth/callback' });
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+        },
+      });
+      if (error) throw error;
+      if (!data.url) throw new Error('No OAuth URL');
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      if (result.type === 'success' && result.url) {
+        const url = new URL(result.url);
+        const accessToken = url.searchParams.get('access_token') ?? url.hash.match(/access_token=([^&]+)/)?.[1];
+        const refreshToken = url.searchParams.get('refresh_token') ?? url.hash.match(/refresh_token=([^&]+)/)?.[1];
+        if (accessToken && refreshToken) {
+          await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+        } else {
+          // hash fragment 방식 처리
+          const params = new URLSearchParams(url.hash.replace('#', ''));
+          const at = params.get('access_token');
+          const rt = params.get('refresh_token');
+          if (at && rt) {
+            await supabase.auth.setSession({ access_token: at, refresh_token: rt });
+          }
+        }
+      }
+    } catch (e: any) {
+      if (e.message !== 'User cancelled') {
+        Alert.alert('로그인 오류', e.message ?? 'SNS 로그인 중 오류가 발생했습니다.');
+      }
+    } finally {
+      setSnsLoading(null);
+    }
   }
 
   return (
@@ -96,6 +141,45 @@ export default function LoginScreen() {
               <Text style={styles.switchLink}>{isSignUp ? '로그인' : '회원가입'}</Text>
             </Text>
           </TouchableOpacity>
+
+          {/* 구분선 */}
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>또는</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Google 로그인 */}
+          <TouchableOpacity
+            style={styles.snsButton}
+            onPress={() => handleSNSLogin('google')}
+            disabled={snsLoading !== null}
+          >
+            {snsLoading === 'google'
+              ? <ActivityIndicator color={Colors.foreground} size="small" />
+              : <>
+                  <Ionicons name="logo-google" size={20} color="#DB4437" />
+                  <Text style={styles.snsButtonText}>Google로 계속하기</Text>
+                </>
+            }
+          </TouchableOpacity>
+
+          {/* Apple 로그인 (iOS만) */}
+          {Platform.OS === 'ios' && (
+            <TouchableOpacity
+              style={[styles.snsButton, styles.appleButton]}
+              onPress={() => handleSNSLogin('apple')}
+              disabled={snsLoading !== null}
+            >
+              {snsLoading === 'apple'
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <>
+                    <Ionicons name="logo-apple" size={20} color="#fff" />
+                    <Text style={[styles.snsButtonText, { color: '#fff' }]}>Apple로 계속하기</Text>
+                  </>
+              }
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -137,4 +221,19 @@ const styles = StyleSheet.create({
   switchBtn: { marginTop: 16, alignItems: 'center' },
   switchText: { fontSize: 14, color: Colors.mutedFg },
   switchLink: { color: Colors.navy, fontWeight: '700' },
+
+  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 20, gap: 10 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
+  dividerText: { fontSize: 13, color: Colors.placeholder, fontWeight: '500' },
+
+  snsButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 10, borderRadius: 12, paddingVertical: 13,
+    borderWidth: 1.5, borderColor: Colors.border,
+    backgroundColor: '#fff', marginBottom: 10,
+  },
+  appleButton: {
+    backgroundColor: '#000', borderColor: '#000', marginBottom: 0,
+  },
+  snsButtonText: { fontSize: 15, fontWeight: '600', color: Colors.foreground },
 });
