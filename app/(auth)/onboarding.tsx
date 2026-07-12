@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  Alert, ActivityIndicator, Animated, TextInput,
+  Alert, ActivityIndicator, TextInput,
   KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -9,37 +9,32 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Colors, Radius, Shadow } from '../../lib/theme';
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 3;
 
-const COURT_TYPES = ['상가미니', '하프코트', '풀코트실내', '풀코트야외', '멀티코트'];
-const LEVELS = ['입문', '초급', '중급', '상급', '선수'];
-const CITIES = ['서울', '부산', '인천', '대구', '대전', '광주', '울산', '세종', '수원', '성남', '고양', '용인', '기타'];
+const CITIES = ['서울', '부산', '인천', '대구', '대전', '광주', '울산', '세종', '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'];
+
+// 나중에 확장용 — 지금은 테니스 고정
+const SPORTS = ['테니스'];
 
 export default function OnboardingScreen() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
-  // 퀴즈 답변
+  // Step 1: 이름
   const [displayName, setDisplayName] = useState('');
-  const [coachingYears, setCoachingYears] = useState('');
-  const [courtType, setCourtType] = useState('');
-  const [mainLevels, setMainLevels] = useState<string[]>([]);
-  const [regionCity, setRegionCity] = useState('');
-  const [centerName, setCenterName] = useState('');
 
-  function toggleLevel(level: string) {
-    setMainLevels(prev =>
-      prev.includes(level) ? prev.filter(l => l !== level) : [...prev, level]
-    );
-  }
+  // Step 2: 지역
+  const [regionCity, setRegionCity] = useState('');
+  const [regionDistrict, setRegionDistrict] = useState('');
+
+  // Step 3: 종목 (지금은 테니스 고정)
+  const [sport, setSport] = useState('테니스');
 
   function canNext() {
     if (step === 1) return displayName.trim().length > 0;
-    if (step === 2) return coachingYears.length > 0;
-    if (step === 3) return courtType.length > 0;
-    if (step === 4) return mainLevels.length > 0;
-    if (step === 5) return regionCity.length > 0 && centerName.trim().length > 0;
+    if (step === 2) return regionCity.length > 0;
+    if (step === 3) return sport.length > 0;
     return false;
   }
 
@@ -53,11 +48,9 @@ export default function OnboardingScreen() {
       const { error } = await supabase.from('coach_profiles').upsert({
         coach_id: user.id,
         display_name: displayName.trim(),
-        coaching_years: coachingYears ? parseInt(coachingYears, 10) : null,
-        default_court_type: courtType || null,
-        specialties: mainLevels.length > 0 ? mainLevels : null,
-        region_city: regionCity || null,
-        center_name: centerName.trim() || null,
+        region_city: regionCity,
+        region_district: regionDistrict.trim() || null,
+        sport: sport,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'coach_id' });
 
@@ -78,7 +71,7 @@ export default function OnboardingScreen() {
     }
   }
 
-  const progressWidth = `${(step / TOTAL_STEPS) * 100}%`;
+  const progressPct = `${(step / TOTAL_STEPS) * 100}%`;
 
   return (
     <KeyboardAvoidingView
@@ -91,15 +84,15 @@ export default function OnboardingScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* 진행바 */}
-        <View style={styles.progressBarBg}>
-          <View style={[styles.progressBarFill, { width: progressWidth as any }]} />
+        <View style={styles.progressBg}>
+          <View style={[styles.progressFill, { width: progressPct as any }]} />
         </View>
-        <Text style={styles.stepIndicator}>{step} / {TOTAL_STEPS}</Text>
+        <Text style={styles.stepLabel}>{step} / {TOTAL_STEPS}</Text>
 
-        {/* Step 1: 이름 */}
+        {/* ── Step 1: 이름 ── */}
         {step === 1 && (
-          <View style={styles.stepContainer}>
-            <View style={styles.emojiWrap}><Text style={styles.emoji}>👋</Text></View>
+          <View style={styles.stepWrap}>
+            <Text style={styles.emoji}>👋</Text>
             <Text style={styles.question}>코치님 이름이 뭔가요?</Text>
             <Text style={styles.hint}>회원들에게 표시되는 이름이에요</Text>
             <TextInput
@@ -115,98 +108,63 @@ export default function OnboardingScreen() {
           </View>
         )}
 
-        {/* Step 2: 경력 */}
+        {/* ── Step 2: 지역 ── */}
         {step === 2 && (
-          <View style={styles.stepContainer}>
-            <View style={styles.emojiWrap}><Text style={styles.emoji}>🏆</Text></View>
-            <Text style={styles.question}>코칭 경력이 얼마나 되셨나요?</Text>
-            <Text style={styles.hint}>대략적인 연수로 알려주세요</Text>
-            <View style={styles.yearsRow}>
-              {['1', '2', '3', '5', '7', '10', '15', '20+'].map(y => (
-                <TouchableOpacity
-                  key={y}
-                  style={[styles.chip, coachingYears === y && styles.chipActive]}
-                  onPress={() => setCoachingYears(y)}
-                >
-                  <Text style={[styles.chipText, coachingYears === y && styles.chipTextActive]}>
-                    {y === '20+' ? '20년+' : `${y}년`}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
+          <View style={styles.stepWrap}>
+            <Text style={styles.emoji}>📍</Text>
+            <Text style={styles.question}>어느 지역에서 레슨하세요?</Text>
+            <Text style={styles.hint}>시/도를 먼저 선택해주세요</Text>
 
-        {/* Step 3: 코트 타입 */}
-        {step === 3 && (
-          <View style={styles.stepContainer}>
-            <View style={styles.emojiWrap}><Text style={styles.emoji}>🎾</Text></View>
-            <Text style={styles.question}>주로 어떤 코트에서 레슨하세요?</Text>
-            <Text style={styles.hint}>가장 자주 사용하는 코트 한 개를 선택해주세요</Text>
-            <View style={styles.optionList}>
-              {COURT_TYPES.map(ct => (
-                <TouchableOpacity
-                  key={ct}
-                  style={[styles.optionRow, courtType === ct && styles.optionRowActive]}
-                  onPress={() => setCourtType(ct)}
-                >
-                  <Text style={[styles.optionText, courtType === ct && styles.optionTextActive]}>{ct}</Text>
-                  {courtType === ct && <Ionicons name="checkmark-circle" size={22} color="#fff" />}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Step 4: 주요 레벨 */}
-        {step === 4 && (
-          <View style={styles.stepContainer}>
-            <View style={styles.emojiWrap}><Text style={styles.emoji}>📊</Text></View>
-            <Text style={styles.question}>주로 어떤 수준의 회원을 지도하세요?</Text>
-            <Text style={styles.hint}>복수 선택 가능해요</Text>
-            <View style={styles.chipWrap}>
-              {LEVELS.map(lv => (
-                <TouchableOpacity
-                  key={lv}
-                  style={[styles.chip, mainLevels.includes(lv) && styles.chipActive]}
-                  onPress={() => toggleLevel(lv)}
-                >
-                  <Text style={[styles.chipText, mainLevels.includes(lv) && styles.chipTextActive]}>{lv}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* Step 5: 지역 + 센터 */}
-        {step === 5 && (
-          <View style={styles.stepContainer}>
-            <View style={styles.emojiWrap}><Text style={styles.emoji}>📍</Text></View>
-            <Text style={styles.question}>어디서 레슨하세요?</Text>
-            <Text style={styles.hint}>지역과 테니스장/센터 이름을 알려주세요</Text>
-
-            <Text style={styles.subLabel}>지역</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cityScroll}>
+            <View style={styles.chipGrid}>
               {CITIES.map(city => (
                 <TouchableOpacity
                   key={city}
-                  style={[styles.chip, regionCity === city && styles.chipActive, { marginBottom: 0 }]}
+                  style={[styles.chip, regionCity === city && styles.chipActive]}
                   onPress={() => setRegionCity(city)}
                 >
                   <Text style={[styles.chipText, regionCity === city && styles.chipTextActive]}>{city}</Text>
                 </TouchableOpacity>
               ))}
-            </ScrollView>
+            </View>
 
-            <Text style={[styles.subLabel, { marginTop: 20 }]}>테니스장 / 센터 이름</Text>
+            <Text style={[styles.hint, { marginTop: 24, marginBottom: 8 }]}>구/군 (선택)</Text>
             <TextInput
               style={styles.textInput}
-              placeholder="예: 한강 테니스장"
+              placeholder="예: 마포구"
               placeholderTextColor={Colors.placeholder}
-              value={centerName}
-              onChangeText={setCenterName}
+              value={regionDistrict}
+              onChangeText={setRegionDistrict}
               returnKeyType="done"
             />
+          </View>
+        )}
+
+        {/* ── Step 3: 종목 ── */}
+        {step === 3 && (
+          <View style={styles.stepWrap}>
+            <Text style={styles.emoji}>🎾</Text>
+            <Text style={styles.question}>어떤 종목을 가르치세요?</Text>
+            <Text style={styles.hint}>현재는 테니스만 지원해요. 곧 다른 종목도 추가될 예정이에요!</Text>
+
+            <View style={styles.optionList}>
+              {SPORTS.map(s => (
+                <TouchableOpacity
+                  key={s}
+                  style={[styles.optionRow, sport === s && styles.optionRowActive]}
+                  onPress={() => setSport(s)}
+                >
+                  <Text style={[styles.optionText, sport === s && styles.optionTextActive]}>{s}</Text>
+                  {sport === s && <Ionicons name="checkmark-circle" size={22} color="#fff" />}
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.infoBox}>
+              <Ionicons name="information-circle-outline" size={16} color="rgba(255,255,255,0.5)" />
+              <Text style={styles.infoText}>
+                코칭 경력, 아카데미명, 전문 분야 등{'\n'}추가 정보는 가입 후 프로필에서 설정할 수 있어요.
+              </Text>
+            </View>
           </View>
         )}
 
@@ -218,15 +176,17 @@ export default function OnboardingScreen() {
             </TouchableOpacity>
           )}
           <TouchableOpacity
-            style={[styles.nextBtn, !canNext() && styles.nextBtnDisabled, step > 1 && { flex: 1 }]}
+            style={[styles.nextBtn, !canNext() && styles.nextBtnDisabled]}
             onPress={handleNext}
             disabled={!canNext() || loading}
           >
             {loading
-              ? <ActivityIndicator color="#fff" />
+              ? <ActivityIndicator color={Colors.navy} />
               : <>
-                  <Text style={styles.nextBtnText}>{step === TOTAL_STEPS ? '시작하기 🎾' : '다음'}</Text>
-                  {step < TOTAL_STEPS && <Ionicons name="arrow-forward" size={18} color="#fff" />}
+                  <Text style={styles.nextBtnText}>
+                    {step === TOTAL_STEPS ? '시작하기 🎾' : '다음'}
+                  </Text>
+                  {step < TOTAL_STEPS && <Ionicons name="arrow-forward" size={18} color={Colors.navy} />}
                 </>
             }
           </TouchableOpacity>
@@ -238,23 +198,22 @@ export default function OnboardingScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.navy },
-  scroll: { flexGrow: 1, padding: 24, paddingTop: 60, paddingBottom: 40 },
+  scroll: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 60, paddingBottom: 40 },
 
-  progressBarBg: {
+  progressBg: {
     height: 4, backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: 2, marginBottom: 8,
   },
-  progressBarFill: {
+  progressFill: {
     height: 4, backgroundColor: '#fff', borderRadius: 2,
   },
-  stepIndicator: {
+  stepLabel: {
     color: 'rgba(255,255,255,0.5)', fontSize: 13,
-    textAlign: 'right', marginBottom: 40,
+    textAlign: 'right', marginBottom: 44,
   },
 
-  stepContainer: { flex: 1, marginBottom: 32 },
-  emojiWrap: { marginBottom: 16 },
-  emoji: { fontSize: 48 },
+  stepWrap: { flex: 1, marginBottom: 32 },
+  emoji: { fontSize: 48, marginBottom: 16 },
   question: {
     fontSize: 26, fontWeight: '800', color: '#fff',
     lineHeight: 34, marginBottom: 8,
@@ -271,46 +230,43 @@ const styles = StyleSheet.create({
     ...Shadow.sm,
   },
 
-  yearsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
-    paddingHorizontal: 18, paddingVertical: 12,
+    paddingHorizontal: 14, paddingVertical: 10,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.25)',
-    marginBottom: 4,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)',
   },
-  chipActive: {
-    backgroundColor: '#fff', borderColor: '#fff',
-  },
-  chipText: { fontSize: 15, fontWeight: '600', color: 'rgba(255,255,255,0.85)' },
+  chipActive: { backgroundColor: '#fff', borderColor: '#fff' },
+  chipText: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.8)' },
   chipTextActive: { color: Colors.navy },
 
-  optionList: { gap: 10 },
+  optionList: { gap: 10, marginBottom: 24 },
   optionRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: Radius.md, paddingHorizontal: 18, paddingVertical: 16,
+    borderRadius: Radius.md, paddingHorizontal: 18, paddingVertical: 18,
     borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)',
   },
-  optionRowActive: {
-    backgroundColor: Colors.primary, borderColor: Colors.primary,
-  },
-  optionText: { fontSize: 16, fontWeight: '600', color: 'rgba(255,255,255,0.85)' },
+  optionRowActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  optionText: { fontSize: 17, fontWeight: '700', color: 'rgba(255,255,255,0.85)' },
   optionTextActive: { color: '#fff' },
 
-  subLabel: {
-    fontSize: 13, fontWeight: '700',
-    color: 'rgba(255,255,255,0.6)', marginBottom: 10,
+  infoBox: {
+    flexDirection: 'row', gap: 8, alignItems: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: Radius.md, padding: 14,
   },
-  cityScroll: { marginBottom: 4 },
+  infoText: {
+    flex: 1, fontSize: 13, color: 'rgba(255,255,255,0.5)', lineHeight: 20,
+  },
 
   btnRow: { flexDirection: 'row', gap: 10, marginTop: 8 },
   backBtn: {
     width: 52, height: 52, borderRadius: 26,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.25)',
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)',
   },
   nextBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
