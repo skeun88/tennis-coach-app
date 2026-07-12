@@ -10,6 +10,7 @@ export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [subscriptionChecked, setSubscriptionChecked] = useState(false);
+  const [profileChecked, setProfileChecked] = useState(false);
   const router = useRouter();
   const segments = useSegments();
 
@@ -31,30 +32,44 @@ export default function RootLayout() {
 
     const inAuthGroup = segments[0] === '(auth)';
     const inSubscriptionGroup = segments[0] === 'subscription';
+    const inOnboarding = segments[0] === '(auth)' && (segments as string[])[1] === 'onboarding';
 
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/login');
       return;
     }
 
-    if (session && inAuthGroup) {
-      router.replace('/(tabs)');
+    if (session && !inOnboarding && !inSubscriptionGroup) {
+      // 코치 프로필 있는지 확인 → 없으면 온보딩 (인증 후 딥링크 진입 포함)
+      supabase
+        .from('coach_profiles')
+        .select('coach_id')
+        .eq('coach_id', session.user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (!data) {
+            router.replace('/(auth)/onboarding');
+            return;
+          }
+          // 프로필 있으면 로그인 화면이면 탭으로, 아니면 구독 체크
+          if (inAuthGroup) {
+            router.replace('/(tabs)');
+            return;
+          }
+          // 구독 상태 체크
+          getCurrentSubscription().then((sub) => {
+            setSubscriptionChecked(true);
+            if (sub && (sub.status === 'blocked' || sub.status === 'cancelled')) {
+              router.replace('/subscription/blocked');
+            }
+          }).catch(() => {
+            setSubscriptionChecked(true);
+          });
+        });
       return;
     }
 
-    // 로그인 상태에서 구독 상태 체크 (인증/구독 화면 제외)
-    if (session && !inAuthGroup && !inSubscriptionGroup) {
-      getCurrentSubscription().then((sub) => {
-        setSubscriptionChecked(true);
-        if (sub && (sub.status === 'blocked' || sub.status === 'cancelled')) {
-          router.replace('/subscription/blocked');
-        }
-      }).catch(() => {
-        setSubscriptionChecked(true);
-      });
-    } else {
-      setSubscriptionChecked(true);
-    }
+    setSubscriptionChecked(true);
   }, [session, loading, segments]);
 
   if (loading) {
@@ -69,6 +84,7 @@ export default function RootLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="(auth)/onboarding" />
       <Stack.Screen name="members/[id]" options={{ headerShown: true, title: '회원 상세', headerBackTitle: '뒤로' }} />
       <Stack.Screen name="members/new" options={{ headerShown: true, title: '회원 등록', headerBackTitle: '뒤로' }} />
       <Stack.Screen name="lessons/[id]" options={{ headerShown: true, title: '레슨 상세', headerBackTitle: '뒤로' }} />
