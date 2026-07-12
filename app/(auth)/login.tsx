@@ -69,6 +69,7 @@ export default function LoginScreen() {
   async function handleKakaoNaver(provider: 'kakao' | 'naver') {
     setSnsLoading(provider);
     try {
+      // native 빌드(TestFlight 포함)에서는 tenniscoach://auth/callback으로 반환됨
       const redirectTo = AuthSession.makeRedirectUri({ scheme: 'tenniscoach', path: 'auth/callback' });
       const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
@@ -84,7 +85,7 @@ export default function LoginScreen() {
       const authUrl = parsed.url;
       if (!authUrl) throw new Error(`인증 URL을 받지 못했어요. 응답: ${resText}`);
 
-      // 2. 브라우저로 인증
+      // 2. 브라우저로 인증 (콜백 URI 일치 필수)
       const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectTo);
       if (result.type !== 'success') return;
 
@@ -100,14 +101,27 @@ export default function LoginScreen() {
       const tokenData = await tokenRes.json();
       if (tokenData.error) throw new Error(tokenData.error);
 
-      // 4. magic link로 세션 처리
+      // 4. magic link 세션 처리
+      // magicLink를 브라우저로 열면 Supabase가 redirectTo로 복귀하면서 access_token을 보냄
       if (tokenData.magicLink) {
         const magicResult = await WebBrowser.openAuthSessionAsync(tokenData.magicLink, redirectTo);
         if (magicResult.type === 'success' && magicResult.url) {
-          const params = new URLSearchParams(new URL(magicResult.url).hash.replace('#', ''));
+          const resultUrl = new URL(magicResult.url);
+          // fragment(해시) 또는 query에서 토큰 추출 시도
+          const fragment = resultUrl.hash.replace('#', '');
+          const query = resultUrl.search.replace('?', '');
+          const params = new URLSearchParams(fragment || query);
           const at = params.get('access_token');
           const rt = params.get('refresh_token');
-          if (at && rt) await supabase.auth.setSession({ access_token: at, refresh_token: rt });
+          if (at && rt) {
+            await supabase.auth.setSession({ access_token: at, refresh_token: rt });
+          } else {
+            // 토큰이 없으면 리다이렉트 URL을 코드로 토큰으로 교환 시도
+            const exchangeCode = resultUrl.searchParams.get('code');
+            if (exchangeCode) {
+              await supabase.auth.exchangeCodeForSession(exchangeCode);
+            }
+          }
         }
       }
     } catch (e: any) {
