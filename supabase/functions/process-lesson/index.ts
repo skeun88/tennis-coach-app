@@ -46,14 +46,18 @@ const SYSTEM_PROMPT = `당신은 USTA/ITF 자격증을 보유한 전문 테니�
 }
 drill_suggestions는 정확히 2개만 포함할 것.`
 
-// transcript가 길면 앞/중간/뒤를 균등하게 샘플링
+// transcript를 시간 막대 기준 5등분하여 고르게 샘플링
+// (단순 3등분 대비 중간 사적 대화 구간 포함 확률 줄임)
 function sampleTranscript(text: string, maxChars = 6000): string {
   if (text.length <= maxChars) return text
-  const third = Math.floor(maxChars / 3)
-  const start = text.slice(0, third)
-  const mid = text.slice(Math.floor(text.length / 2) - Math.floor(third / 2), Math.floor(text.length / 2) + Math.floor(third / 2))
-  const end = text.slice(text.length - third)
-  return `[앞부분]\n${start}\n\n[중간부분]\n${mid}\n\n[뒷부분]\n${end}`
+  const segments = 5
+  const chunkSize = Math.floor(maxChars / segments)
+  const step = Math.floor(text.length / segments)
+  const parts = Array.from({ length: segments }, (_, i) => {
+    const start = Math.floor(i * step)
+    return text.slice(start, start + chunkSize)
+  })
+  return parts.map((p, i) => `[${i + 1}/${segments} 구간]\n${p}`).join('\n\n')
 }
 
 serve(async (req) => {
@@ -142,20 +146,21 @@ serve(async (req) => {
     // ── Step 2: transcript 균등 샘플링 + 요약 ──
     const sampledTranscript = sampleTranscript(transcript, 8000)
 
-    const TRANSCRIPT_SUMMARY_PROMPT = `다음은 테니스 레슨 녹음의 전문입니다. 앞/중간/뒷부분이 모두 포함되어 있습니다.
-레슨 전체를 균등하게 반영하여 핵심 내용을 추출해주세요. 특정 시간대에 치우치지 말 것.
+    const TRANSCRIPT_SUMMARY_PROMPT = `다음은 테니스 레슨 녹음입니다. 시간 순서대로 5등분하여 샘플링되었습니다.
+레슨 전체를 균등하게 반영하여 핵심 내용을 추출해주세요.
 
 중요 지침:
-- 레슨과 무관한 사적 대화(날씨, 일상, 식사, 잡담 등)는 완전히 무시하고 분석에서 제외하세요.
-- 레슨 기술/피드백/지시사항만 추출하세요.
-- 사적 대화가 있더라도 레슨 내용이 60% 이상이면 정상 분석하세요.
-- lesson_content_ratio: 전체 중 레슨 관련 비율(0~1)을 함께 출력하세요.
+1. 사적 대화(날씨, 일상, 식사, 잡담, 안부 인사 등)는 분석에서 완전히 제외하세요.
+2. 레슨 기술 지도/피드백/지시사항만 추출하세요.
+3. lesson_flow는 레슨의 시작부터 끝까지 전체 흐름을 담아야 하며, 특정 구간에만 치우치지 말 것.
+4. 레슨 내용이 일부 있더라도 lesson_flow에는 사적 대화 내용은 절대 포함하지 마세요.
+5. lesson_content_ratio: 전체 녹음 중 레슨 관련 대화 비율(0~1)을 함께 출력하세요.
 
 출력 형식 (JSON):
 {
   "key_techniques": ["언급된 기술 1", "기술 2"],
   "main_issues": ["주요 문제점 1", "문제점 2"],
-  "lesson_flow": "레슨 전체 흐름 요약 - 시작/중반/후반 모두 포함, 사적 대화 제외 (4-5문장)",
+  "lesson_flow": "사적 대화 제외한 레슨의 시작~끝 전체 흐름 (4-5문장)",
   "coach_instructions": ["코치가 준 주요 지시사항 1", "지시사항 2"],
   "lesson_content_ratio": 0.8
 }
@@ -287,12 +292,13 @@ ${sampledTranscript}`
 ## 코트 환경
 ${effectiveCourtType}
 
-## 오늘 레슨 요약 (전체 균등 반영)
+## 오늘 레슨 요약 (사적 대화 필터링 완료)
 ${transcriptSummary.lesson_flow || '(요약 없음)'}
 
 주요 기술: ${(transcriptSummary.key_techniques || []).join(', ') || '없음'}
 주요 문제: ${(transcriptSummary.main_issues || []).join(', ') || '없음'}
 코치 지시: ${(transcriptSummary.coach_instructions || []).join(' / ') || '없음'}
+레슨 실질 비율: ${Math.round(lessonRatio * 100)}%
 
 ## 이전 레슨 히스토리 (최근 3회)
 ${historyContext || '(이전 레슨 기록 없음)'}
@@ -300,10 +306,11 @@ ${historyContext || '(이전 레슨 기록 없음)'}
 ## 관련 교육 자료
 ${knowledgeContext || '(없음)'}
 
-중요:
+## 지켜야 할 규칙
 - drill_suggestions는 정확히 2개만 작성하세요.
-- 레슨 내용(기술/피드백/지시사항)만 반영하세요. 사적 대화(날씨, 일상, 식사, 잡담)는 완전히 제외하세요.
-- 레슨 내용 비율: ${Math.round(lessonRatio * 100)}% (이 비율에 맞게 확인된 레슨 내용만 분석)
+- 위의 "오늘 레슨 요약"에 포함된 레슨 기술/피드백만 분석하세요.
+- 레슨 요약에 없는 내용(사적 대화, 일상 잡담 등)은 분석에 반영하지 마세요.
+- 레슨 실질 비율이 ${Math.round(lessonRatio * 100)}%이면 분석 철저도도 레슨 확인 내용에 비례하여 작성하세요.
 - JSON만 출력하고 다른 텍스트는 포함하지 마세요.`
 
     const claudeRes = await fetchClaude({

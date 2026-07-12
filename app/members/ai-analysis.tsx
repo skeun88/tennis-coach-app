@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, ActivityIndicator, Platform, Animated, Modal, TextInput, KeyboardAvoidingView,
+  AppState, AppStateStatus,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -65,10 +66,21 @@ export default function AIAnalysisScreen() {
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   useEffect(() => {
     loadPlans();
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    // AppState 감지: 백그라운드 진입 시 진행 중인 분석은 abort하지 않고 계속 유지
+    // iOS는 백그라운드에서도 URLSession 작업이 유지되지만 fetch가 끊길 수 있으므로
+    // 타임아웃을 5분으로 연장하고 AbortController를 상태에서 관리
+    const sub = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      appStateRef.current = nextState;
+    });
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      sub.remove();
+    };
   }, []);
 
   // 충전 연결/해제 등 시스템 오디오 인터럽트 감지 → 자동 재개
@@ -182,7 +194,13 @@ export default function AIAnalysisScreen() {
         Alert.alert('권한 필요', '마이크 권한이 필요합니다.');
         return;
       }
-      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true, shouldPlayInBackground: true });
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+        allowsBackgroundRecording: true,
+        shouldPlayInBackground: true,
+        interruptionMode: 'doNotMix' as const, // 전화 수신 시 일시정지 후 재개
+      });
       await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
       audioRecorder.record();
       setIsRecording(true);
@@ -241,8 +259,10 @@ export default function AIAnalysisScreen() {
 
       let finalResult: any = null;
       try {
+        // 5분 타임아웃 (백그라운드 전환 고려)
         const controller = new AbortController();
-        const fetchTimeout = setTimeout(() => controller.abort(), 3 * 60 * 1000); // 3분 타임아웃
+        abortControllerRef.current = controller;
+        const fetchTimeout = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5분 타임아웃
         let res: Response;
         try {
           res = await fetch(`${SUPABASE_URL}/functions/v1/process-lesson`, {
@@ -253,6 +273,7 @@ export default function AIAnalysisScreen() {
           });
         } finally {
           clearTimeout(fetchTimeout);
+          abortControllerRef.current = null;
         }
         finalResult = await res.json();
         if (!res.ok || finalResult.error) throw new Error(finalResult.error || '분석에 실패했습니다.');
@@ -268,7 +289,15 @@ export default function AIAnalysisScreen() {
       Alert.alert('완료', 'AI 레슨 분석이 완료됐습니다! 🎾');
 
     } catch (e: any) {
-      Alert.alert('오류', e.message || '분석 중 오류가 발생했습니다.');
+      // AbortError = 타임아웃. 백그라운드 전환 후 네트워크 끊김과 구분
+      if (e?.name === 'AbortError') {
+        Alert.alert(
+          '분석 시간 초과',
+          '분석에 시간이 너무 오래 걸렸습니다. 네트워크 상태를 확인하고 다시 시도해주세요.'
+        );
+      } else {
+        Alert.alert('오류', e.message || '분석 중 오류가 발생했습니다.');
+      }
     } finally {
       setIsAnalyzing(false);
       setAnalysisStep(0);
