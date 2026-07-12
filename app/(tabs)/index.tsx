@@ -105,13 +105,16 @@ export default function HomeScreen() {
     setCoachEmail(user.email ?? '');
     setUserId(user.id);
 
-    // 레슨권 없으면 모달 (최초 1회)
-    const { count: pkgCount } = await supabase
-      .from('lesson_packages')
-      .select('id', { count: 'exact', head: true })
-      .eq('coach_id', user.id);
-    if ((pkgCount ?? 0) === 0) {
-      setNoPackageModal(true);
+    // 레슨권 없으면 모달 (최초 1회 — AsyncStorage로 dismissed 기록)
+    const dismissed = await AsyncStorage.getItem(`no_package_modal_dismissed_${user.id}`);
+    if (!dismissed) {
+      const { count: pkgCount } = await supabase
+        .from('lesson_packages')
+        .select('id', { count: 'exact', head: true })
+        .eq('coach_id', user.id);
+      if ((pkgCount ?? 0) === 0) {
+        setNoPackageModal(true);
+      }
     }
 
     const [membersRes, lessonsRes] = await Promise.all([
@@ -776,7 +779,12 @@ export default function HomeScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={{ paddingVertical: 12, alignItems: 'center' }}
-                  onPress={() => setNoPackageModal(false)}
+                  onPress={async () => {
+                    setNoPackageModal(false);
+                    if (userId) {
+                      await AsyncStorage.setItem(`no_package_modal_dismissed_${userId}`, '1');
+                    }
+                  }}
                 >
                   <Text style={{ color: Colors.mutedFg, fontSize: 14 }}>나중에 할게요</Text>
                 </TouchableOpacity>
