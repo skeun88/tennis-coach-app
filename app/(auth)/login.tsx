@@ -75,10 +75,14 @@ export default function LoginScreen() {
       // 1. Edge Function에서 인증 URL 받기
       const res = await fetch(
         `${SOCIAL_AUTH_FN}?provider=${provider}&redirect_uri=${encodeURIComponent(redirectTo)}`,
-        { headers: { apikey: anonKey } },
+        { headers: { apikey: anonKey, 'Content-Type': 'application/json' } },
       );
-      const { url: authUrl, error: urlErr } = await res.json();
-      if (urlErr) throw new Error(urlErr);
+      const resText = await res.text();
+      let parsed: any = {};
+      try { parsed = JSON.parse(resText); } catch { throw new Error(`서버 응답 오류: ${resText}`); }
+      if (parsed.error) throw new Error(parsed.error);
+      const authUrl = parsed.url;
+      if (!authUrl) throw new Error(`인증 URL을 받지 못했어요. 응답: ${resText}`);
 
       // 2. 브라우저로 인증
       const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectTo);
