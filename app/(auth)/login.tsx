@@ -11,11 +11,14 @@ import { Colors } from '../../lib/theme';
 
 WebBrowser.maybeCompleteAuthSession();
 
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+const SOCIAL_AUTH_FN = `${SUPABASE_URL}/functions/v1/social-auth`;
+
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [snsLoading, setSnsLoading] = useState<'google' | 'apple' | null>(null);
+  const [snsLoading, setSnsLoading] = useState<'google' | 'apple' | 'kakao' | 'naver' | null>(null);
   const [isSignUp, setIsSignUp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -36,41 +39,75 @@ export default function LoginScreen() {
     setLoading(false);
   }
 
-  async function handleSNSLogin(provider: 'google' | 'apple') {
+  // Google / Apple (Supabase 기본 OAuth)
+  async function handleOAuth(provider: 'google' | 'apple') {
     setSnsLoading(provider);
     try {
       const redirectTo = AuthSession.makeRedirectUri({ scheme: 'tenniscoach', path: 'auth/callback' });
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
-        options: {
-          redirectTo,
-          skipBrowserRedirect: true,
-        },
+        options: { redirectTo, skipBrowserRedirect: true },
       });
       if (error) throw error;
       if (!data.url) throw new Error('No OAuth URL');
 
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
       if (result.type === 'success' && result.url) {
-        const url = new URL(result.url);
-        const accessToken = url.searchParams.get('access_token') ?? url.hash.match(/access_token=([^&]+)/)?.[1];
-        const refreshToken = url.searchParams.get('refresh_token') ?? url.hash.match(/refresh_token=([^&]+)/)?.[1];
-        if (accessToken && refreshToken) {
-          await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-        } else {
-          // hash fragment 방식 처리
-          const params = new URLSearchParams(url.hash.replace('#', ''));
+        const params = new URLSearchParams(new URL(result.url).hash.replace('#', ''));
+        const at = params.get('access_token');
+        const rt = params.get('refresh_token');
+        if (at && rt) await supabase.auth.setSession({ access_token: at, refresh_token: rt });
+      }
+    } catch (e: any) {
+      if (e.message !== 'User cancelled') Alert.alert('로그인 오류', e.message);
+    } finally {
+      setSnsLoading(null);
+    }
+  }
+
+  // 카카오 / 네이버 (Edge Function 경유)
+  async function handleKakaoNaver(provider: 'kakao' | 'naver') {
+    setSnsLoading(provider);
+    try {
+      const redirectTo = AuthSession.makeRedirectUri({ scheme: 'tenniscoach', path: 'auth/callback' });
+      const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+
+      // 1. Edge Function에서 인증 URL 받기
+      const res = await fetch(
+        `${SOCIAL_AUTH_FN}?provider=${provider}&redirect_uri=${encodeURIComponent(redirectTo)}`,
+        { headers: { apikey: anonKey } },
+      );
+      const { url: authUrl, error: urlErr } = await res.json();
+      if (urlErr) throw new Error(urlErr);
+
+      // 2. 브라우저로 인증
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectTo);
+      if (result.type !== 'success') return;
+
+      // 3. 콜백 URL에서 code 추출 → Edge Function에 전달
+      const callbackUrl = new URL(result.url);
+      const code = callbackUrl.searchParams.get('code');
+      if (!code) throw new Error('인증 코드를 받지 못했어요.');
+
+      const tokenRes = await fetch(
+        `${SOCIAL_AUTH_FN}?provider=${provider}&code=${code}&redirect_uri=${encodeURIComponent(redirectTo)}`,
+        { headers: { apikey: anonKey } },
+      );
+      const tokenData = await tokenRes.json();
+      if (tokenData.error) throw new Error(tokenData.error);
+
+      // 4. magic link로 세션 처리
+      if (tokenData.magicLink) {
+        const magicResult = await WebBrowser.openAuthSessionAsync(tokenData.magicLink, redirectTo);
+        if (magicResult.type === 'success' && magicResult.url) {
+          const params = new URLSearchParams(new URL(magicResult.url).hash.replace('#', ''));
           const at = params.get('access_token');
           const rt = params.get('refresh_token');
-          if (at && rt) {
-            await supabase.auth.setSession({ access_token: at, refresh_token: rt });
-          }
+          if (at && rt) await supabase.auth.setSession({ access_token: at, refresh_token: rt });
         }
       }
     } catch (e: any) {
-      if (e.message !== 'User cancelled') {
-        Alert.alert('로그인 오류', e.message ?? 'SNS 로그인 중 오류가 발생했습니다.');
-      }
+      if (e.message !== 'User cancelled') Alert.alert('로그인 오류', e.message);
     } finally {
       setSnsLoading(null);
     }
@@ -145,36 +182,66 @@ export default function LoginScreen() {
           {/* 구분선 */}
           <View style={styles.dividerRow}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>또는</Text>
+            <Text style={styles.dividerText}>SNS로 계속하기</Text>
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Google 로그인 */}
+          {/* 카카오 */}
+          <TouchableOpacity
+            style={styles.kakaoBtn}
+            onPress={() => handleKakaoNaver('kakao')}
+            disabled={snsLoading !== null}
+          >
+            {snsLoading === 'kakao'
+              ? <ActivityIndicator color="#3C1E1E" size="small" />
+              : <>
+                  <Text style={styles.kakaoBtnIcon}>💬</Text>
+                  <Text style={styles.kakaoBtnText}>카카오로 계속하기</Text>
+                </>
+            }
+          </TouchableOpacity>
+
+          {/* 네이버 */}
+          <TouchableOpacity
+            style={styles.naverBtn}
+            onPress={() => handleKakaoNaver('naver')}
+            disabled={snsLoading !== null}
+          >
+            {snsLoading === 'naver'
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <>
+                  <Text style={styles.naverBtnIcon}>N</Text>
+                  <Text style={styles.naverBtnText}>네이버로 계속하기</Text>
+                </>
+            }
+          </TouchableOpacity>
+
+          {/* 구글 */}
           <TouchableOpacity
             style={styles.snsButton}
-            onPress={() => handleSNSLogin('google')}
+            onPress={() => handleOAuth('google')}
             disabled={snsLoading !== null}
           >
             {snsLoading === 'google'
               ? <ActivityIndicator color={Colors.foreground} size="small" />
               : <>
-                  <Ionicons name="logo-google" size={20} color="#DB4437" />
+                  <Ionicons name="logo-google" size={18} color="#DB4437" />
                   <Text style={styles.snsButtonText}>Google로 계속하기</Text>
                 </>
             }
           </TouchableOpacity>
 
-          {/* Apple 로그인 (iOS만) */}
+          {/* 애플 (iOS만) */}
           {Platform.OS === 'ios' && (
             <TouchableOpacity
               style={[styles.snsButton, styles.appleButton]}
-              onPress={() => handleSNSLogin('apple')}
+              onPress={() => handleOAuth('apple')}
               disabled={snsLoading !== null}
             >
               {snsLoading === 'apple'
                 ? <ActivityIndicator color="#fff" size="small" />
                 : <>
-                    <Ionicons name="logo-apple" size={20} color="#fff" />
+                    <Ionicons name="logo-apple" size={18} color="#fff" />
                     <Text style={[styles.snsButtonText, { color: '#fff' }]}>Apple로 계속하기</Text>
                   </>
               }
@@ -197,6 +264,7 @@ const styles = StyleSheet.create({
   },
   appName: { fontSize: 28, fontWeight: '700', color: '#fff', marginBottom: 4 },
   subtitle: { fontSize: 14, color: 'rgba(255,255,255,0.75)' },
+
   card: {
     backgroundColor: '#fff', borderRadius: 20, padding: 24,
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
@@ -222,18 +290,35 @@ const styles = StyleSheet.create({
   switchText: { fontSize: 14, color: Colors.mutedFg },
   switchLink: { color: Colors.navy, fontWeight: '700' },
 
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 20, gap: 10 },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 20, gap: 8 },
   dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
-  dividerText: { fontSize: 13, color: Colors.placeholder, fontWeight: '500' },
+  dividerText: { fontSize: 12, color: Colors.placeholder, fontWeight: '500' },
 
+  // 카카오
+  kakaoBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, borderRadius: 12, paddingVertical: 13,
+    backgroundColor: '#FEE500', marginBottom: 10,
+  },
+  kakaoBtnIcon: { fontSize: 18 },
+  kakaoBtnText: { fontSize: 15, fontWeight: '700', color: '#3C1E1E' },
+
+  // 네이버
+  naverBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, borderRadius: 12, paddingVertical: 13,
+    backgroundColor: '#03C75A', marginBottom: 10,
+  },
+  naverBtnIcon: { fontSize: 16, fontWeight: '900', color: '#fff', width: 20, textAlign: 'center' },
+  naverBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+
+  // 구글/애플
   snsButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 10, borderRadius: 12, paddingVertical: 13,
     borderWidth: 1.5, borderColor: Colors.border,
     backgroundColor: '#fff', marginBottom: 10,
   },
-  appleButton: {
-    backgroundColor: '#000', borderColor: '#000', marginBottom: 0,
-  },
+  appleButton: { backgroundColor: '#000', borderColor: '#000', marginBottom: 0 },
   snsButtonText: { fontSize: 15, fontWeight: '600', color: Colors.foreground },
 });
