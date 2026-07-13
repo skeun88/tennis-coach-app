@@ -1,2 +1,6 @@
 ios/
 android/
+node_modules/
+.git/
+*.tar.gz
+*.log

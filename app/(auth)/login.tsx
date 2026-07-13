@@ -6,6 +6,7 @@ import {
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import NaverLogin from '@react-native-seoul/naver-login';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { supabase } from '../../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../lib/theme';
@@ -69,8 +70,36 @@ export default function LoginScreen() {
     setLoading(false);
   }
 
-  // Google / Apple (Supabase 기본 OAuth)
-  async function handleOAuth(provider: 'google' | 'apple') {
+  // Apple 로그인 — 네이티브 SDK
+  async function handleAppleLogin() {
+    setSnsLoading('apple');
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      // identityToken으로 Supabase 세션 발급
+      if (!credential.identityToken) throw new Error('Apple identityToken을 받지 못했어요.');
+
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: 'apple',
+        token: credential.identityToken,
+      });
+      if (error) throw error;
+    } catch (e: any) {
+      // 사용자가 취소한 경우
+      if ((e as any).code === 'ERR_REQUEST_CANCELED') return;
+      Alert.alert('Apple 로그인 오류', e.message);
+    } finally {
+      setSnsLoading(null);
+    }
+  }
+
+  // Google (기존 웹 OAuth 유지)
+  async function handleOAuth(provider: 'google') {
     setSnsLoading(provider);
     try {
       const redirectTo = AuthSession.makeRedirectUri({ scheme: 'tenniscoach', path: 'auth/callback' });
@@ -314,7 +343,7 @@ export default function LoginScreen() {
           {Platform.OS === 'ios' && (
             <TouchableOpacity
               style={[styles.snsButton, styles.appleButton]}
-              onPress={() => handleOAuth('apple')}
+              onPress={() => handleAppleLogin()}
               disabled={snsLoading !== null}
             >
               {snsLoading === 'apple'

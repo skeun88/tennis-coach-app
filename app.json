@@ -77,7 +77,8 @@
         {
           "urlScheme": "tenniscoach"
         }
-      ]
+      ],
+      "expo-apple-authentication"
     ],
     "extra": {
       "router": {},
