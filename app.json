@@ -72,7 +72,12 @@
       "expo-font",
       "expo-asset",
       "expo-web-browser",
-      "@react-native-seoul/naver-login"
+      [
+        "@react-native-seoul/naver-login",
+        {
+          "urlScheme": "tenniscoach"
+        }
+      ]
     ],
     "extra": {
       "router": {},
