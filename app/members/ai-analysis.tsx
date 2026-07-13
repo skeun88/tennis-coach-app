@@ -68,6 +68,7 @@ export default function AIAnalysisScreen() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const abortControllerRef = useRef<AbortController | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const backgroundTimeRef = useRef<number | null>(null); // 백그라운드 진입 시간
 
   useEffect(() => {
     loadPlans();
@@ -75,7 +76,25 @@ export default function AIAnalysisScreen() {
     // iOS는 백그라운드에서도 URLSession 작업이 유지되지만 fetch가 끊길 수 있으므로
     // 타임아웃을 5분으로 연장하고 AbortController를 상태에서 관리
     const sub = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      const prevState = appStateRef.current;
       appStateRef.current = nextState;
+
+      if (nextState === 'background' || nextState === 'inactive') {
+        // 백그라운드 진입 시간 기록
+        backgroundTimeRef.current = Date.now();
+        // fetch는 abort하지 않음 — iOS URLSession은 백그라운드에서도 지속됨
+        // AbortController를 abort하지 않으면 요청이 유지됨
+      } else if (nextState === 'active' && prevState !== 'active') {
+        // 포그라운드 복귀
+        const bgMs = backgroundTimeRef.current ? Date.now() - backgroundTimeRef.current : 0;
+        backgroundTimeRef.current = null;
+        // 3분 이상 백그라운드에 있었으면 fetch가 이미 끝났을 가능성 높음
+        // 분석 진행 중이면 사용자에게 알림
+        if (bgMs > 3 * 60 * 1000 && abortControllerRef.current) {
+          // 해당 가능성이 있지만 일단 유지 시도 — 구체적 abort는 하지 않음
+          // 타임아웃 5분 내라면 이미 완료/실패 에러로 처리됨
+        }
+      }
     });
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);

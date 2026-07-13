@@ -15,6 +15,65 @@ const NAVER_CLIENT_SECRET = Deno.env.get('NAVER_CLIENT_SECRET') ?? '';
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
+  // ── POST: 네이브 네이티브 SDK 토큰 직접 처리 (네이버 전용) ──────────────────────
+  if (req.method === 'POST') {
+    try {
+      const body = await req.json();
+      const { provider, naver_access_token } = body;
+
+      if (provider !== 'naver' || !naver_access_token) {
+        return new Response(JSON.stringify({ error: 'naver_access_token 필수' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // 1. 네이버 유저 정보 조회
+      const userRes = await fetch('https://openapi.naver.com/v1/nid/me', {
+        headers: { Authorization: `Bearer ${naver_access_token}` },
+      });
+      const userData = await userRes.json();
+      if (userData.resultcode !== '00') throw new Error('네이버 사용자 정보 조회 실패');
+
+      const email = userData.response?.email ?? '';
+      const name = userData.response?.name ?? userData.response?.nickname ?? '코치';
+
+      if (!email) throw new Error('네이버 이메일을 가져올 수 없어요. 네이버 설정에서 이메일 제공에 동의해주세요.');
+
+      // 2. Supabase 유저 upsert
+      const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+      const { data: { users } } = await admin.auth.admin.listUsers({ perPage: 1000 });
+      let userId = users?.find((u: any) => u.email === email)?.id;
+
+      if (!userId) {
+        const { data: newUser, error: createErr } = await admin.auth.admin.createUser({
+          email,
+          email_confirm: true,
+          user_metadata: { full_name: name, provider: 'naver' },
+        });
+        if (createErr) throw createErr;
+        userId = newUser.user?.id;
+      }
+      if (!userId) throw new Error('유저 생성 실패');
+
+      // 3. 세션 토큰 직접 발급 (magic link 없이)
+      const { data: sessionData, error: sessionErr } = await admin.auth.admin.createSession({ userId });
+      if (sessionErr || !sessionData.session) throw sessionErr ?? new Error('세션 발급 실패');
+
+      return new Response(JSON.stringify({
+        success: true,
+        access_token: sessionData.session.access_token,
+        refresh_token: sessionData.session.refresh_token,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    } catch (e: any) {
+      return new Response(JSON.stringify({ error: e.message }), {
+        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+  }
+
+  // ── GET: 기존 카카오/네이버 웹 OAuth 방식 (카카오 전용으로 유지) ──────────────
   const url = new URL(req.url);
   const provider = url.searchParams.get('provider'); // 'kakao' | 'naver'
   const code = url.searchParams.get('code');

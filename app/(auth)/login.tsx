@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   Alert, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
+import NaverLogin from '@react-native-seoul/naver-login';
 import { supabase } from '../../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../lib/theme';
@@ -14,11 +15,40 @@ WebBrowser.maybeCompleteAuthSession();
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 const SOCIAL_AUTH_FN = `${SUPABASE_URL}/functions/v1/social-auth`;
 
+// 네이버 네이티브 SDK 초기화 (앱 첫 로드 시)
+const NAVER_APP_NAME = 'Kerri';
+const NAVER_CONSUMER_KEY = process.env.EXPO_PUBLIC_NAVER_CLIENT_ID ?? '';
+const NAVER_CONSUMER_SECRET = process.env.EXPO_PUBLIC_NAVER_CLIENT_SECRET ?? '';
+const NAVER_SERVICE_URL_SCHEME_IOS = 'tenniscoach'; // app.json scheme과 동일
+
+// 네이버 SDK 초기화 — 탑레벨에서 호출하면 null 에러 발생 (native module)
+// useEffect 안에서 호출하도록 이동
+function initNaverLogin() {
+  try {
+    if (NaverLogin && typeof NaverLogin.initialize === 'function') {
+      NaverLogin.initialize({
+        appName: NAVER_APP_NAME,
+        consumerKey: NAVER_CONSUMER_KEY,
+        consumerSecret: NAVER_CONSUMER_SECRET,
+        serviceUrlSchemeIOS: NAVER_SERVICE_URL_SCHEME_IOS,
+        disableNaverAppAuthIOS: false,
+      });
+    }
+  } catch (e) {
+    // 개발 환경(Expo Go)에서는 native module 없음 — 무시
+    console.warn('NaverLogin native module not available:', e);
+  }
+}
+
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [snsLoading, setSnsLoading] = useState<'google' | 'apple' | 'kakao' | 'naver' | null>(null);
+
+  useEffect(() => {
+    initNaverLogin();
+  }, []);
   const [isSignUp, setIsSignUp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -65,17 +95,54 @@ export default function LoginScreen() {
     }
   }
 
-  // 카카오 / 네이버 (Edge Function 경유)
-  async function handleKakaoNaver(provider: 'kakao' | 'naver') {
-    setSnsLoading(provider);
+  // 네이버 — 네이티브 SDK (원터치 로그인)
+  async function handleNaverLogin() {
+    setSnsLoading('naver');
     try {
-      // native 빌드(TestFlight 포함)에서는 tenniscoach://auth/callback으로 반환됨
+      // 1. 네이버 네이티브 SDK → 액세스 토큰 직접 획득
+      if (!NaverLogin || typeof NaverLogin.login !== 'function') {
+        throw new Error('EAS 빌드에서만 사용 가능합니다.');
+      }
+      const { failureResponse, successResponse } = await NaverLogin.login();
+      if (failureResponse) throw new Error(failureResponse.message);
+      if (!successResponse?.accessToken) throw new Error('네이버 액세스 토큰을 받지 못했어요.');
+
+      const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+
+      // 2. Edge Function에 네이버 액세스 토큰 전달 → Supabase 세션 발급
+      const res = await fetch(`${SOCIAL_AUTH_FN}`, {
+        method: 'POST',
+        headers: { apikey: anonKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: 'naver', naver_access_token: successResponse.accessToken }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      if (data.access_token && data.refresh_token) {
+        await supabase.auth.setSession({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+        });
+      } else {
+        throw new Error('세션 토큰을 받지 못했어요.');
+      }
+    } catch (e: any) {
+      if (e.message !== 'User cancelled') Alert.alert('네이버 로그인 오류', e.message);
+    } finally {
+      setSnsLoading(null);
+    }
+  }
+
+  // 카카오 (기존 웹 OAuth 방식 유지)
+  async function handleKakaoNaver(provider: 'kakao' | 'naver') {
+    if (provider === 'naver') { handleNaverLogin(); return; }
+    setSnsLoading('kakao');
+    try {
       const redirectTo = AuthSession.makeRedirectUri({ scheme: 'tenniscoach', path: 'auth/callback' });
       const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
-      // 1. Edge Function에서 인증 URL 받기
       const res = await fetch(
-        `${SOCIAL_AUTH_FN}?provider=${provider}&redirect_uri=${encodeURIComponent(redirectTo)}`,
+        `${SOCIAL_AUTH_FN}?provider=kakao&redirect_uri=${encodeURIComponent(redirectTo)}`,
         { headers: { apikey: anonKey, 'Content-Type': 'application/json' } },
       );
       const resText = await res.text();
@@ -83,31 +150,26 @@ export default function LoginScreen() {
       try { parsed = JSON.parse(resText); } catch { throw new Error(`서버 응답 오류: ${resText}`); }
       if (parsed.error) throw new Error(parsed.error);
       const authUrl = parsed.url;
-      if (!authUrl) throw new Error(`인증 URL을 받지 못했어요. 응답: ${resText}`);
+      if (!authUrl) throw new Error(`인증 URL을 받지 못했어요.`);
 
-      // 2. 브라우저로 인증 (콜백 URI 일치 필수)
       const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectTo);
       if (result.type !== 'success') return;
 
-      // 3. 콜백 URL에서 code 추출 → Edge Function에 전달
       const callbackUrl = new URL(result.url);
       const code = callbackUrl.searchParams.get('code');
       if (!code) throw new Error('인증 코드를 받지 못했어요.');
 
       const tokenRes = await fetch(
-        `${SOCIAL_AUTH_FN}?provider=${provider}&code=${code}&redirect_uri=${encodeURIComponent(redirectTo)}`,
+        `${SOCIAL_AUTH_FN}?provider=kakao&code=${code}&redirect_uri=${encodeURIComponent(redirectTo)}`,
         { headers: { apikey: anonKey } },
       );
       const tokenData = await tokenRes.json();
       if (tokenData.error) throw new Error(tokenData.error);
 
-      // 4. magic link 세션 처리
-      // magicLink를 브라우저로 열면 Supabase가 redirectTo로 복귀하면서 access_token을 보냄
       if (tokenData.magicLink) {
         const magicResult = await WebBrowser.openAuthSessionAsync(tokenData.magicLink, redirectTo);
         if (magicResult.type === 'success' && magicResult.url) {
           const resultUrl = new URL(magicResult.url);
-          // fragment(해시) 또는 query에서 토큰 추출 시도
           const fragment = resultUrl.hash.replace('#', '');
           const query = resultUrl.search.replace('?', '');
           const params = new URLSearchParams(fragment || query);
@@ -116,20 +178,19 @@ export default function LoginScreen() {
           if (at && rt) {
             await supabase.auth.setSession({ access_token: at, refresh_token: rt });
           } else {
-            // 토큰이 없으면 리다이렉트 URL을 코드로 토큰으로 교환 시도
             const exchangeCode = resultUrl.searchParams.get('code');
-            if (exchangeCode) {
-              await supabase.auth.exchangeCodeForSession(exchangeCode);
-            }
+            if (exchangeCode) { await supabase.auth.exchangeCodeForSession(exchangeCode); }
           }
         }
       }
     } catch (e: any) {
-      if (e.message !== 'User cancelled') Alert.alert('로그인 오류', e.message);
+      if (e.message !== 'User cancelled') Alert.alert('카카오 로그인 오류', e.message);
     } finally {
       setSnsLoading(null);
     }
   }
+
+
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

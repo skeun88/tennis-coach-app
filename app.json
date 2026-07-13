@@ -26,6 +26,10 @@
         "NSPhotoLibraryUsageDescription": "코치 프로필 사진을 등록하거나 변경할 때 사진 라이브러리에 접근합니다. 예: 프로필 화면에서 사진 선택 시 사용됩니다.",
         "UIBackgroundModes": [
           "audio"
+        ],
+        "LSApplicationQueriesSchemes": [
+          "naversearchapp",
+          "naversearchthirdlogin"
         ]
       }
     },
@@ -67,7 +71,8 @@
       ],
       "expo-font",
       "expo-asset",
-      "expo-web-browser"
+      "expo-web-browser",
+      "@react-native-seoul/naver-login"
     ],
     "extra": {
       "router": {},

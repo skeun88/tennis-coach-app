@@ -41,3 +41,5 @@ yarn-error.*
 /android
 .env.service
 google-service-account.json
+Kerri.app/
+build-*.tar.gz
