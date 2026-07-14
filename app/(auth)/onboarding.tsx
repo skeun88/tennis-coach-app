@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   Alert, ActivityIndicator, TextInput,
@@ -21,8 +21,30 @@ export default function OnboardingScreen() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
-  // Step 1: 이름
+  // Step 1: 이름 (네이버/소셜 로그인 시 user_metadata.full_name 자동 세팅)
   const [displayName, setDisplayName] = useState('');
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      // 네이버/카카오 로그인 시 social-auth가 full_name을 user_metadata에 저장함
+      const name = user.user_metadata?.full_name ?? '';
+      if (name) setDisplayName(name);
+    });
+  }, []);
+
+  // 이메일 (표시용)
+  const [email, setEmail] = useState('');
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      // 네이버: invite_xxx@kerri.app 아니라 실제 네이버 이메일
+      const rawEmail = user.email ?? '';
+      const isSynthetic = rawEmail.startsWith('invite_') && rawEmail.endsWith('@kerri.app');
+      if (!isSynthetic) setEmail(rawEmail);
+    });
+  }, []);
 
   // Step 2: 지역
   const [regionCity, setRegionCity] = useState('');
@@ -94,7 +116,7 @@ export default function OnboardingScreen() {
           <View style={styles.stepWrap}>
             <Text style={styles.emoji}>👋</Text>
             <Text style={styles.question}>코치님 이름이 뭔가요?</Text>
-            <Text style={styles.hint}>회원들에게 표시되는 이름이에요</Text>
+            <Text style={styles.hint}>회원들에게 표시되는 이름이에요 — 수정할 수 있어요</Text>
             <TextInput
               style={styles.textInput}
               placeholder="예: 김민준"
@@ -105,6 +127,12 @@ export default function OnboardingScreen() {
               returnKeyType="done"
               onSubmitEditing={canNext() ? handleNext : undefined}
             />
+            {!!email && (
+              <View style={styles.emailRow}>
+                <Ionicons name="mail-outline" size={14} color="rgba(255,255,255,0.5)" />
+                <Text style={styles.emailText}>{email}</Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -276,4 +304,9 @@ const styles = StyleSheet.create({
   },
   nextBtnDisabled: { opacity: 0.35 },
   nextBtnText: { fontSize: 16, fontWeight: '800', color: Colors.navy },
+  emailRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: 12, opacity: 0.6,
+  },
+  emailText: { fontSize: 13, color: 'rgba(255,255,255,0.7)' },
 });
