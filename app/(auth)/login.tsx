@@ -32,7 +32,7 @@ function initNaverLogin() {
         consumerKey: NAVER_CONSUMER_KEY,
         consumerSecret: NAVER_CONSUMER_SECRET,
         serviceUrlSchemeIOS: NAVER_SERVICE_URL_SCHEME_IOS,
-        disableNaverAppAuthIOS: false,
+        disableNaverAppAuthIOS: true, // 인앱 브라우저 인증으로 전환 (AppDelegate 우회 테스트)
       });
     }
   } catch (e) {
