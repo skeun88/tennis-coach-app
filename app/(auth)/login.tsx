@@ -141,7 +141,7 @@ export default function LoginScreen() {
       // 2. Edge Function에 네이버 액세스 토큰 전달 → Supabase 세션 발급
       const res = await fetch(`${SOCIAL_AUTH_FN}`, {
         method: 'POST',
-        headers: { apikey: anonKey, 'Content-Type': 'application/json' },
+        headers: { apikey: anonKey, 'Authorization': `Bearer ${anonKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ provider: 'naver', naver_access_token: successResponse.accessToken }),
       });
       const data = await res.json();
