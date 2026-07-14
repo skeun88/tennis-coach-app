@@ -39,8 +39,9 @@ public class AppDelegate: ExpoAppDelegate {
     open url: URL,
     options: [UIApplication.OpenURLOptionsKey: Any] = [:]
   ) -> Bool {
-    if (url.scheme == "tenniscoach") {
-      return NaverThirdPartyLoginConnection.getSharedInstance().application(app, open: url, options: options)
+    if (url.scheme == "tenniscoach" && url.host == "thirdPartyLoginResult") {
+      let handled = NaverThirdPartyLoginConnection.getSharedInstance().application(app, open: url, options: options)
+      if handled { return true }
     }
     return super.application(app, open: url, options: options) || RCTLinkingManager.application(app, open: url, options: options)
   }
