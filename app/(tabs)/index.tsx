@@ -476,6 +476,11 @@ export default function HomeScreen() {
           await supabase.from('members')
             .update({ remaining_credits: card.remainingCredits + 1 })
             .eq('id', card.memberId);
+          // 멤버앱 출석 횟수 동기화 (lesson_count -1)
+          const { data: mem } = await supabase.from('members').select('lesson_count').eq('id', card.memberId).maybeSingle();
+          await supabase.from('members')
+            .update({ lesson_count: Math.max(0, (mem?.lesson_count ?? 0) - 1) })
+            .eq('id', card.memberId);
         }
       } else {
         // 출석 처리 (결석→출석 or 미처리→출석)
@@ -494,6 +499,11 @@ export default function HomeScreen() {
             .update({ remaining_credits: Math.max(0, card.remainingCredits - 1) })
             .eq('id', card.memberId);
         }
+        // 멤버앱 출석 횟수 동기화 (lesson_count +1)
+        const { data: mem } = await supabase.from('members').select('lesson_count').eq('id', card.memberId).maybeSingle();
+        await supabase.from('members')
+          .update({ lesson_count: (mem?.lesson_count ?? 0) + 1 })
+          .eq('id', card.memberId);
       }
       await loadTodayCards(userId);
     } catch {
