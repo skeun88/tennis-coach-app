@@ -39,7 +39,7 @@ public class AppDelegate: ExpoAppDelegate {
     open url: URL,
     options: [UIApplication.OpenURLOptionsKey: Any] = [:]
   ) -> Bool {
-    if (url.scheme == "tenniscoach" && url.host == "thirdPartyLoginResult") {
+    if (url.scheme == "tenniscoach" && (url.host == "thirdPartyLoginResult" || url.path.hasPrefix("/thirdPartyLoginResult"))) {
       let handled = NaverThirdPartyLoginConnection.getSharedInstance().application(app, open: url, options: options)
       if handled { return true }
     }
