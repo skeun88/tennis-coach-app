@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import * as Updates from 'expo-updates';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   Alert, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
@@ -357,12 +358,21 @@ export default function LoginScreen() {
           )}
         </View>
       </ScrollView>
+      {/* OTA 적용 확인용 마커 — update ID 끝 4자리 */}
+      <Text style={styles.updateMarker}>
+        {Updates.updateId ? `#${Updates.updateId.slice(-4)}` : 'dev'}
+      </Text>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.navy },
+  updateMarker: {
+    position: 'absolute', bottom: 8, right: 12,
+    fontSize: 10, color: 'rgba(255,255,255,0.25)',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
   scroll: { flexGrow: 1, justifyContent: 'center', padding: 24 },
   header: { alignItems: 'center', marginBottom: 32 },
   iconCircle: {
