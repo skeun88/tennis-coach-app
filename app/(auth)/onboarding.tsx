@@ -21,25 +21,24 @@ export default function OnboardingScreen() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
-  // Step 1: 이름 (네이버/소셜 로그인 시 user_metadata.full_name 자동 세팅)
+  // Step 1: 이름 + 소셜 로그인 여부
   const [displayName, setDisplayName] = useState('');
+  const [email, setEmail] = useState('');
+  const [socialProvider, setSocialProvider] = useState<'naver' | 'kakao' | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
-      // 네이버/카카오 로그인 시 social-auth가 full_name을 user_metadata에 저장함
+      // 소셜 로그인 provider 확인
+      const provider = user.user_metadata?.provider as string | undefined;
+      if (provider === 'naver') setSocialProvider('naver');
+      else if (provider === 'kakao') setSocialProvider('kakao');
+
+      // 이름 pre-fill
       const name = user.user_metadata?.full_name ?? '';
       if (name) setDisplayName(name);
-    });
-  }, []);
 
-  // 이메일 (표시용)
-  const [email, setEmail] = useState('');
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-      // 네이버: invite_xxx@kerri.app 아니라 실제 네이버 이메일
+      // 이메일 표시 (synthetic 아니면)
       const rawEmail = user.email ?? '';
       const isSynthetic = rawEmail.startsWith('invite_') && rawEmail.endsWith('@kerri.app');
       if (!isSynthetic) setEmail(rawEmail);
@@ -117,6 +116,24 @@ export default function OnboardingScreen() {
             <Text style={styles.emoji}>👋</Text>
             <Text style={styles.question}>코치님 이름이 뭔가요?</Text>
             <Text style={styles.hint}>회원들에게 표시되는 이름이에요 — 수정할 수 있어요</Text>
+
+            {/* 소셜 로그인 프로필 사전 입력 오제용 카드 */}
+            {!!socialProvider && !!displayName && (
+              <View style={styles.socialCard}>
+                <View style={styles.socialBadge}>
+                  <Text style={styles.socialBadgeText}>
+                    {socialProvider === 'naver' ? 'N 네이버' : '카카오'}
+                  </Text>
+                </View>
+                <View style={styles.socialInfo}>
+                  <Text style={styles.socialLabel}>연동된 프로필</Text>
+                  <Text style={styles.socialName}>{displayName}</Text>
+                  {!!email && <Text style={styles.socialEmail}>{email}</Text>}
+                </View>
+                <Ionicons name="checkmark-circle" size={20} color="#4ADE80" />
+              </View>
+            )}
+
             <TextInput
               style={styles.textInput}
               placeholder="예: 김민준"
@@ -127,11 +144,10 @@ export default function OnboardingScreen() {
               returnKeyType="done"
               onSubmitEditing={canNext() ? handleNext : undefined}
             />
-            {!!email && (
-              <View style={styles.emailRow}>
-                <Ionicons name="mail-outline" size={14} color="rgba(255,255,255,0.5)" />
-                <Text style={styles.emailText}>{email}</Text>
-              </View>
+            {!!socialProvider && (
+              <Text style={styles.socialHint}>
+                이름을 수정하면 프로필에 바로 반영돼요
+              </Text>
             )}
           </View>
         )}
@@ -309,4 +325,24 @@ const styles = StyleSheet.create({
     marginTop: 12, opacity: 0.6,
   },
   emailText: { fontSize: 13, color: 'rgba(255,255,255,0.7)' },
+  socialCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: Radius.md, padding: 14,
+    marginBottom: 16,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+  },
+  socialBadge: {
+    backgroundColor: '#03C75A', borderRadius: 6,
+    paddingHorizontal: 8, paddingVertical: 4,
+  },
+  socialBadgeText: { fontSize: 12, fontWeight: '800', color: '#fff' },
+  socialInfo: { flex: 1 },
+  socialLabel: { fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 2 },
+  socialName: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  socialEmail: { fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 },
+  socialHint: {
+    fontSize: 12, color: 'rgba(255,255,255,0.45)',
+    marginTop: 8, textAlign: 'center',
+  },
 });
