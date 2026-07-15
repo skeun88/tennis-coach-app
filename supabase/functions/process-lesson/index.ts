@@ -76,14 +76,62 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-    const formData = await req.formData()
-    const audioFile = formData.get('audio') as File | null
-    const memberId = formData.get('member_id') as string
-    const lessonId = formData.get('lesson_id') as string | null
-    const coachId = formData.get('coach_id') as string
-    const courtType = (formData.get('court_type') as string) || null
-    const durationSecondsRaw = formData.get('duration_seconds') as string | null
-    const durationSeconds = durationSecondsRaw ? parseInt(durationSecondsRaw, 10) : null
+    // ── body 파싱: FormData(기존) 또는 JSON(신규 비동기 방식) 지원 ──
+    let audioFile: File | null = null
+    let memberId: string = ''
+    let coachId: string = ''
+    let lessonId: string | null = null
+    let courtType: string | null = null
+    let durationSeconds: number | null = null
+    let lessonPlanId: string | null = null
+    let audioStoragePath: string | null = null
+
+    const contentType = req.headers.get('content-type') || ''
+
+    if (contentType.includes('application/json')) {
+      // 비동기 방식: Storage에서 오디오 다운로드
+      const body = await req.json()
+      lessonPlanId = body.lesson_plan_id ?? null
+      audioStoragePath = body.audio_storage_path ?? null
+      memberId = body.member_id ?? ''
+      coachId = body.coach_id ?? ''
+      durationSeconds = body.duration_seconds ? parseInt(String(body.duration_seconds), 10) : null
+      lessonId = body.lesson_id ?? null
+      courtType = body.court_type ?? null
+
+      if (!audioStoragePath) {
+        return new Response(JSON.stringify({ error: 'audio_storage_path가 없습니다.' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      // Storage에서 오디오 다운로드
+      const { data: audioData, error: downloadError } = await supabase.storage
+        .from('lesson-audio')
+        .download(audioStoragePath)
+
+      if (downloadError || !audioData) {
+        const errMsg = `오디오 다운로드 실패: ${downloadError?.message ?? 'unknown'}`
+        if (lessonPlanId) {
+          await supabase.from('lesson_plans').update({ status: 'failed', error_message: errMsg }).eq('id', lessonPlanId)
+        }
+        return new Response(JSON.stringify({ error: errMsg }), {
+          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      audioFile = new File([audioData], 'audio.m4a', { type: 'audio/m4a' })
+    } else {
+      // 기존 FormData 방식 (하위 호환)
+      const formData = await req.formData()
+      audioFile = formData.get('audio') as File | null
+      memberId = formData.get('member_id') as string
+      lessonId = formData.get('lesson_id') as string | null
+      coachId = formData.get('coach_id') as string
+      courtType = (formData.get('court_type') as string) || null
+      const durationSecondsRaw = formData.get('duration_seconds') as string | null
+      durationSeconds = durationSecondsRaw ? parseInt(durationSecondsRaw, 10) : null
+    }
 
     // ── 필수 파라미터 체크 ──
     if (!memberId || !coachId) {
@@ -103,6 +151,11 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: `녹음 시간이 너무 짧습니다 (${durationSeconds}초). 최소 10초 이상 녹음해 주세요.` }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
+    }
+
+    // ── 비동기 시작: 분석 상태를 processing으로 업데이트 ──
+    if (lessonPlanId) {
+      await supabase.from('lesson_plans').update({ status: 'processing' }).eq('id', lessonPlanId)
     }
 
     // ── Step 1: Whisper STT + 회원/코치 정보 병렬 ──
@@ -369,10 +422,8 @@ ${knowledgeContext || '(없음)'}
       ? parsed.drill_suggestions.slice(0, 2)
       : []
 
-    // ── Step 5: DB 저장 ──
-    const { data: plan } = await supabase.from('lesson_plans').insert({
-      coach_id: coachId,
-      member_id: memberId,
+    // ── Step 5: DB 저장 (비동기: update / 동기: insert) ──
+    const planPayload = {
       transcript_id: transcriptRow?.id,
       court_type: effectiveCourtType,
       summary: parsed.summary || '',
@@ -383,7 +434,26 @@ ${knowledgeContext || '(없음)'}
       duration_minutes: durationSeconds ? Math.round(durationSeconds / 60) : Math.round((audioFile.size / 16000) / 60),
       raw_response: rawResponse,
       transcript_summary: transcriptSummary,
-    }).select().single()
+      status: 'completed',
+    }
+
+    let plan: any = null
+    if (lessonPlanId) {
+      // 비동기 방식: 기존 pending 레코드를 업데이트
+      const { data } = await supabase.from('lesson_plans')
+        .update(planPayload)
+        .eq('id', lessonPlanId)
+        .select().single()
+      plan = data
+    } else {
+      // 동기 방식 (FormData 하위호환): 신규 insert
+      const { data } = await supabase.from('lesson_plans').insert({
+        coach_id: coachId,
+        member_id: memberId,
+        ...planPayload,
+      }).select().single()
+      plan = data
+    }
 
     await supabase.from('members')
       .update({ lesson_count: (member?.lesson_count || 0) + 1 })
@@ -408,6 +478,25 @@ ${knowledgeContext || '(없음)'}
 
   } catch (error: any) {
     console.error('process-lesson error:', error)
+    // 비동기 방식에서 에러 발생 시 lesson_plans status를 failed로 업데이트
+    try {
+      const SUPABASE_URL_ERR = Deno.env.get('SUPABASE_URL')!
+      const SUPABASE_SERVICE_KEY_ERR = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      const supabaseErr = createClient(SUPABASE_URL_ERR, SUPABASE_SERVICE_KEY_ERR)
+      const contentTypeErr = req.headers.get('content-type') || ''
+      if (contentTypeErr.includes('application/json')) {
+        // req.json()은 이미 소비된 경우가 있으므로 body clone이 없음
+        // lessonPlanId는 위에서 선언된 변수를 시펨다 (closure)
+        if (typeof lessonPlanId === 'string' && lessonPlanId) {
+          await supabaseErr.from('lesson_plans').update({
+            status: 'failed',
+            error_message: error.message ?? 'unknown error',
+          }).eq('id', lessonPlanId)
+        }
+      }
+    } catch (updateErr) {
+      console.error('failed status update error:', updateErr)
+    }
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })

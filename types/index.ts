@@ -108,6 +108,9 @@ export interface LessonPlan {
   court_type?: string;
   duration_minutes?: number;
   raw_response?: string;
+  status?: 'pending' | 'processing' | 'completed' | 'failed';
+  audio_storage_path?: string;
+  error_message?: string;
   created_at: string;
   updated_at: string;
 }

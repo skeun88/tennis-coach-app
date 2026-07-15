@@ -264,59 +264,72 @@ export default function AIAnalysisScreen() {
         return;
       }
 
-      const formData = new FormData();
-      formData.append('audio', { uri, type: 'audio/m4a', name: 'lesson.m4a' } as any);
-      formData.append('member_id', memberId);
-      formData.append('coach_id', user.id);
-      formData.append('duration_seconds', String(recordingDuration));
+      // ── Step 1: 오디오 파일을 Supabase Storage에 업로드 ──
+      setAnalysisStep(1);
+      const timestamp = Date.now();
+      const storagePath = `lesson-audio/${user.id}/${timestamp}.m4a`;
 
-      // React Native는 ReadableStream 미지원 → 일반 JSON 요청
-      // 분석 단계는 타이머로 시뮬레이션
-      const stepTimer = setInterval(() => {
-        setAnalysisStep(prev => (prev < ANALYSIS_STEPS.length ? prev + 1 : prev));
-      }, 4000);
+      const fileResponse = await fetch(uri);
+      const audioBlob = await fileResponse.blob();
 
-      let finalResult: any = null;
-      try {
-        // 5분 타임아웃 (백그라운드 전환 고려)
-        const controller = new AbortController();
-        abortControllerRef.current = controller;
-        const fetchTimeout = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5분 타임아웃
-        let res: Response;
-        try {
-          res = await fetch(`${SUPABASE_URL}/functions/v1/process-lesson`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-            body: formData,
-            signal: controller.signal,
-          });
-        } finally {
-          clearTimeout(fetchTimeout);
-          abortControllerRef.current = null;
-        }
-        finalResult = await res.json();
-        if (!res.ok || finalResult.error) throw new Error(finalResult.error || '분석에 실패했습니다.');
-      } finally {
-        clearInterval(stepTimer);
-      }
+      const { error: uploadError } = await supabase.storage
+        .from('lesson-audio')
+        .upload(storagePath, audioBlob, { contentType: 'audio/m4a', upsert: false });
 
-      // 사용량 1회 증가
+      if (uploadError) throw new Error(`오디오 업로드 실패: ${uploadError.message}`);
+
+      // ── Step 2: lesson_plans에 pending 레코드 생성 ──
+      setAnalysisStep(2);
+      const { data: pendingPlan, error: insertError } = await supabase
+        .from('lesson_plans')
+        .insert({
+          coach_id: user.id,
+          member_id: memberId,
+          status: 'pending',
+          audio_storage_path: storagePath,
+          summary: '',
+          improvement_points: [],
+          next_goals: [],
+        })
+        .select()
+        .single();
+
+      if (insertError) throw new Error(`레코드 생성 실패: ${insertError.message}`);
+
+      // 사용량 1회 증가 (분석 시작 시점에 카운트)
       await incrementAiAnalysisUsage(user.id);
 
+      // ── Step 3: Edge Function fire-and-forget 호출 ──
+      // await 하지 않음 — 앱은 즉시 자유로워짐
+      fetch(`${SUPABASE_URL}/functions/v1/process-lesson`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          lesson_plan_id: pendingPlan.id,
+          audio_storage_path: storagePath,
+          member_id: memberId,
+          coach_id: user.id,
+          duration_seconds: recordingDuration,
+        }),
+      }).catch((e: any) => {
+        console.warn('process-lesson fire-and-forget error (ignored):', e?.message);
+      });
+
+      // ── 완료: 앱 즉시 해방 ──
+      setIsAnalyzing(false);
+      setAnalysisStep(0);
       await loadPlans();
-      if (finalResult.plan?.id) setExpandedPlan(finalResult.plan.id);
-      Alert.alert('완료', 'AI 레슨 분석이 완료됐습니다! 🎾');
+      Alert.alert(
+        '분석 시작! 🎾',
+        '분석이 시작됐어요! 완료되면 여기서 확인하세요.\n백그라운드에서 계속 진행됩니다.',
+        [{ text: '확인' }]
+      );
 
     } catch (e: any) {
-      // AbortError = 타임아웃. 백그라운드 전환 후 네트워크 끊김과 구분
-      if (e?.name === 'AbortError') {
-        Alert.alert(
-          '분석 시간 초과',
-          '분석에 시간이 너무 오래 걸렸습니다. 네트워크 상태를 확인하고 다시 시도해주세요.'
-        );
-      } else {
-        Alert.alert('오류', e.message || '분석 중 오류가 발생했습니다.');
-      }
+      Alert.alert('오류', e.message || '분석 중 오류가 발생했습니다.');
     } finally {
       setIsAnalyzing(false);
       setAnalysisStep(0);
@@ -660,12 +673,15 @@ export default function AIAnalysisScreen() {
             </View>
           )}
 
-          {plans.map(plan => (
+          {plans.map(plan => {
+            const isPending = plan.status === 'pending' || plan.status === 'processing';
+            const isFailed = plan.status === 'failed';
+            return (
             <TouchableOpacity
               key={plan.id}
               style={styles.planCard}
-              onPress={() => setExpandedPlan(expandedPlan === plan.id ? null : plan.id)}
-              activeOpacity={0.8}
+              onPress={() => !isPending && setExpandedPlan(expandedPlan === plan.id ? null : plan.id)}
+              activeOpacity={isPending ? 1 : 0.8}
             >
               {/* 카드 헤더 */}
               <View style={styles.planHeader}>
@@ -680,20 +696,37 @@ export default function AIAnalysisScreen() {
                     {plan.duration_minutes ? (
                       <Text style={styles.planDuration}>{plan.duration_minutes}분</Text>
                     ) : null}
+                    {isPending && (
+                      <View style={styles.analysisBadge}>
+                        <ActivityIndicator size="small" color={Colors.primary} style={{ transform: [{ scale: 0.6 }] }} />
+                        <Text style={styles.analysisBadgeText}>분석 중...</Text>
+                      </View>
+                    )}
+                    {isFailed && (
+                      <View style={styles.failedBadge}>
+                        <Text style={styles.failedBadgeText}>분석 실패</Text>
+                      </View>
+                    )}
                   </View>
                   <Text style={styles.planPreview} numberOfLines={2}>
-                    {shortSummary(plan.summary) || '분석 결과를 확인하세요'}
+                    {isPending
+                      ? '🔄 AI가 분석 중이에요. 잠시 후 확인해주세요.'
+                      : isFailed
+                      ? `⚠️ 분석에 실패했습니다.${plan.error_message ? ' ' + plan.error_message : ''}`
+                      : shortSummary(plan.summary) || '분석 결과를 확인하세요'}
                   </Text>
                 </View>
-                <Ionicons
-                  name={expandedPlan === plan.id ? 'chevron-up' : 'chevron-down'}
-                  size={20}
-                  color={Colors.mutedFg}
-                />
+                {!isPending && (
+                  <Ionicons
+                    name={expandedPlan === plan.id ? 'chevron-up' : 'chevron-down'}
+                    size={20}
+                    color={Colors.mutedFg}
+                  />
+                )}
               </View>
 
-              {/* 확장 상세 */}
-              {expandedPlan === plan.id && (
+              {/* 확장 상세 (완료된 분석만 표시) */}
+              {!isPending && expandedPlan === plan.id && (
                 <View style={styles.planDetail}>
                   <View style={styles.divider} />
 
@@ -717,7 +750,8 @@ export default function AIAnalysisScreen() {
                 </View>
               )}
             </TouchableOpacity>
-          ))}
+            );
+          })}
         </View>
 
         <View style={{ height: 40 }} />
@@ -864,6 +898,15 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryLight, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
   },
   courtBadgeText: { fontSize: 11, color: Colors.navy, fontWeight: '700' },
+  analysisBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 2,
+    backgroundColor: '#EFF6FF', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
+  },
+  analysisBadgeText: { fontSize: 11, color: '#2563EB', fontWeight: '700' },
+  failedBadge: {
+    backgroundColor: '#FEF2F2', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
+  },
+  failedBadgeText: { fontSize: 11, color: '#DC2626', fontWeight: '700' },
   planPreview: { fontSize: 14, color: Colors.foreground, lineHeight: 20 },
   planDetail: { marginTop: 4 },
   divider: { height: 1, backgroundColor: Colors.mutedBg, marginVertical: 12 },
