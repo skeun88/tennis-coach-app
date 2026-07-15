@@ -51,19 +51,8 @@ const SYSTEM_PROMPT = `당신은 USTA/ITF 자격증을 보유한 전문 테니�
 }
 drill_suggestions는 정확히 2개만 포함할 것.`
 
-// transcript를 시간 막대 기준 5등분하여 고르게 샘플링
-// (단순 3등분 대비 중간 사적 대화 구간 포함 확률 줄임)
-function sampleTranscript(text: string, maxChars = 6000): string {
-  if (text.length <= maxChars) return text
-  const segments = 5
-  const chunkSize = Math.floor(maxChars / segments)
-  const step = Math.floor(text.length / segments)
-  const parts = Array.from({ length: segments }, (_, i) => {
-    const start = Math.floor(i * step)
-    return text.slice(start, start + chunkSize)
-  })
-  return parts.map((p, i) => `[${i + 1}/${segments} 구간]\n${p}`).join('\n\n')
-}
+// 전사 전체를 그대로 사용 (샘플링 제거)
+// 한국어 1시간 레슨 전사 = ~8,000 토큰 수준, 비용 차이 미미하고 샘플링이 오히려 품질 저하
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -202,17 +191,14 @@ serve(async (req) => {
     const effectiveCourtType = courtType || member?.court_type || coachProfile?.default_court_type || '풀코트야외'
 
     // ── Step 2: transcript 균등 샘플링 + 요약 ──
-    const sampledTranscript = sampleTranscript(transcript, 8000)
+    const TRANSCRIPT_SUMMARY_PROMPT = `다음은 테니스 레슨 녹음 전체 전사입니다. 내용을 빠짐없이 분석해주세요.
 
-    const TRANSCRIPT_SUMMARY_PROMPT = `다음은 테니스 레슨 녹음입니다. 시간 순서대로 5등분하여 샘플링되었습니다.
-레슨 전체를 균등하게 반영하여 핵심 내용을 추출해주세요.
-
-중요 지침:
+지침:
 1. 레슨 기술 지도/피드백/지시사항을 빠짐없이 모두 추출하세요.
-2. 사적 대화(날씨, 일상, 식사, 잡담, 안부 인사 등)는 lesson_flow에 포함하지 마세요. 단, 레슨 내용이 적더라도 있는 내용은 전부 살려서 작성하세요.
+2. 사적 대화(날씨, 일상, 식사, 잡담, 안부 인사 등)는 lesson_flow에 포함하지 마세요.
+   단, 레슨 내용이 짧거나 적어도 있는 레슨 내용은 전부 살려서 상세히 작성하세요.
 3. lesson_flow는 레슨의 시작부터 끝까지 전체 흐름을 담아야 하며, 특정 구간에만 치우치지 말 것.
-4. 레슨 내용이 짧거나 적어도 축약하거나 생략하지 말고 있는 그대로 상세히 기술하세요.
-5. lesson_content_ratio: 전체 녹음 중 레슨 관련 대화 비율(0~1)을 함께 출력하세요.
+4. lesson_content_ratio: 전체 녹음 중 레슨 관련 대화 비율(0~1).
 
 출력 형식 (JSON):
 {
@@ -223,8 +209,8 @@ serve(async (req) => {
   "lesson_content_ratio": 0.8
 }
 
-레슨 녹음:
-${sampledTranscript}`
+레슨 전사:
+${transcript}`
 
     const [summaryRes, transcriptInsert, historyRes] = await Promise.all([
       fetch('https://api.openai.com/v1/chat/completions', {

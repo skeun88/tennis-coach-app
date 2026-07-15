@@ -13,11 +13,13 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { PlanId, createTrialSubscription } from '../../lib/subscription';
 
+type BillingType = 'monthly' | 'biannual';
+
 const TOSS_CLIENT_KEY = 'test_ck_XZYkKL4MrjOxJb6G74A180zJwlEW';
 
 export default function RegisterCardScreen() {
   const router = useRouter();
-  const { planId } = useLocalSearchParams<{ planId: PlanId }>();
+  const { planId, billingType } = useLocalSearchParams<{ planId: PlanId; billingType?: BillingType }>();
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const processingRef = useRef(false);
@@ -142,6 +144,7 @@ export default function RegisterCardScreen() {
         <Text style={styles.infoText}>
           💳 카드를 등록하면 1달 무료 체험이 시작됩니다.{'\n'}
           체험 기간 중 언제든지 취소할 수 있습니다.
+          {billingType === 'biannual' ? '\n🎁 6개월 선결제 — 클립형 녹음기 무상 제공 예정' : ''}
         </Text>
       </View>
 

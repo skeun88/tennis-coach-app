@@ -54,7 +54,7 @@ const CONTEXT_CONFIG: Record<UpsellContext, {
     featureName: 'AI 레슨 분석',
     targetPlan: 'basic',
     features: [
-      { icon: 'mic', label: 'AI 음성 레슨 분석 (Basic: 월 5회)' },
+      { icon: 'mic', label: 'AI 레슨 분석 (Free: 월 3회, Basic: 월 10회, Pro: 월 100회)' },
       { icon: 'document-text', label: '범용 AI 리포트' },
       { icon: 'people', label: '회원 알림 · 운영 관리' },
     ],
@@ -113,7 +113,7 @@ const CONTEXT_CONFIG: Record<UpsellContext, {
     features: [
       { icon: 'grid', label: '미납 · 만료 · 이탈 위험 · 재등록 관리' },
       { icon: 'notifications', label: '레슨 리마인드 · 재등록 알림' },
-      { icon: 'mic', label: 'AI 레슨 분석 월 5회' },
+      { icon: 'mic', label: 'AI 레슨 분석 월 10회' },
     ],
   },
   member_limit: {
@@ -124,7 +124,7 @@ const CONTEXT_CONFIG: Record<UpsellContext, {
     features: [
       { icon: 'people', label: '회원 무제한 등록' },
       { icon: 'grid', label: '운영 관리 · 회원 알림' },
-      { icon: 'mic', label: 'AI 레슨 분석 월 5회' },
+      { icon: 'mic', label: 'AI 레슨 분석 월 10회' },
     ],
   },
   generic_pro: {
@@ -162,7 +162,7 @@ export default function PlanUpsellModal({
 
   const defaultDesc = () => {
     if (context === 'ai_analysis_limit' && usageInfo) {
-      return `이번 달 AI 분석을 ${usageInfo.used}/${usageInfo.limit}회 사용했어요.\nPro로 업그레이드하면 월 100회까지 사용할 수 있어요.`;
+      return `이번 달 AI 분석을 ${usageInfo.used}/${usageInfo.limit}회 사용했어요.\nBasic 10회 초과 시 Pro로 업그레이드하면 월 100회까지 사용할 수 있어요.`;
     }
     if (context === 'member_limit') {
       return `Free 플랜은 회원 3명까지 등록할 수 있어요.\nBasic 이상으로 업그레이드하면 무제한 등록이 가능해요.`;

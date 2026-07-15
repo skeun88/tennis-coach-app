@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   SafeAreaView, Alert, ActivityIndicator
@@ -6,7 +6,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSubscription } from '../../hooks/useSubscription';
-import { PLANS, PlanId } from '../../lib/subscription';
+import { PLANS, PlanId, getAiAnalysisUsageThisMonth } from '../../lib/subscription';
 import { supabase } from '../../lib/supabase';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -29,6 +29,16 @@ export default function ManageSubscriptionScreen() {
   const router = useRouter();
   const { subscription, loading, isTrial, trialDaysLeft, refresh } = useSubscription();
   const [cancelling, setCancelling] = useState(false);
+  const [reportUsed, setReportUsed] = useState(0);
+
+  useEffect(() => {
+    const loadUsage = async () => {
+      if (!subscription) return;
+      const used = await getAiAnalysisUsageThisMonth(subscription.coach_id);
+      setReportUsed(used);
+    };
+    loadUsage();
+  }, [subscription]);
 
   const handleCancel = () => {
     Alert.alert(
@@ -132,6 +142,28 @@ export default function ManageSubscriptionScreen() {
             </View>
           )}
 
+          {/* 리포트 잔여 횟수 */}
+          {(() => {
+            const planLimit = PLANS[subscription.plan_id]?.reportMonthlyLimit ?? 0;
+            const remaining = Math.max(0, planLimit - reportUsed);
+            const isLow = remaining <= 3 && planLimit > 0;
+            return planLimit > 0 ? (
+              <View style={[styles.reportRow, isLow && styles.reportRowLow]}>
+                <Ionicons
+                  name="document-text-outline"
+                  size={16}
+                  color={isLow ? '#e74c3c' : '#4A90D9'}
+                />
+                <Text style={[styles.reportText, isLow && styles.reportTextLow]}>
+                  이번 달 리포트 잔여{' '}
+                  <Text style={{ fontWeight: '700' }}>{remaining}회</Text>
+                  {' '}/ {planLimit}회
+                  {isLow ? ' — 소진 임박' : ''}
+                </Text>
+              </View>
+            ) : null;
+          })()}
+
           <View style={styles.divider} />
 
           <View style={styles.infoRow}>
@@ -228,8 +260,16 @@ const styles = StyleSheet.create({
   statusBadge: { borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
   statusText: { fontSize: 12, fontWeight: '600' },
   planPrice: { fontSize: 24, fontWeight: '800', color: '#4A90D9', marginBottom: 12 },
-  trialRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+  trialRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   trialText: { fontSize: 14, color: '#f39c12', fontWeight: '600' },
+  reportRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#EBF4FF', borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 7, marginBottom: 12,
+  },
+  reportRowLow: { backgroundColor: '#fef0f0' },
+  reportText: { fontSize: 13, color: '#4A90D9' },
+  reportTextLow: { color: '#e74c3c' },
   divider: { height: 1, backgroundColor: '#f0f0f0', marginVertical: 12 },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between' },
   infoLabel: { fontSize: 14, color: '#888' },

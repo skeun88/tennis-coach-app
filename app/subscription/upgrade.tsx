@@ -71,26 +71,30 @@ export default function UpgradeScreen() {
         <View style={styles.costCard}>
           <Text style={styles.costLabel}>오늘 결제 금액 (잔여 기간 차액)</Text>
           <Text style={styles.costAmount}>{cost.toLocaleString()}원</Text>
-          <Text style={styles.costNote}>다음 달부터 49,000원/월 자동 결제</Text>
+          <Text style={styles.costNote}>다음 달부터 19,000원/월 자동 결제</Text>
         </View>
 
         <View style={styles.featureCard}>
           <Text style={styles.featureTitle}>Pro에서 추가되는 기능</Text>
           <View style={styles.featureRow}>
-            <Ionicons name="mic" size={20} color="#4A90D9" />
-            <Text style={styles.featureText}>AI 음성 분석 무제한</Text>
-          </View>
-          <View style={styles.featureRow}>
             <Ionicons name="document-text" size={20} color="#4A90D9" />
-            <Text style={styles.featureText}>레슨 리포트 생성 및 회원 제공</Text>
+            <Text style={styles.featureText}>리포트 월 50회 무료 발송 (미사용분 입막당 소멸)</Text>
           </View>
           <View style={styles.featureRow}>
-            <Ionicons name="person-circle" size={20} color="#4A90D9" />
-            <Text style={styles.featureText}>프로필 관리</Text>
+            <Ionicons name="mic" size={20} color="#4A90D9" />
+            <Text style={styles.featureText}>AI 코칭 모델 (음성 기반 학습)</Text>
+          </View>
+          <View style={styles.featureRow}>
+            <Ionicons name="hardware-chip" size={20} color="#4A90D9" />
+            <Text style={styles.featureText}>클립형 녹음기 포함 (3만원 상당)</Text>
+          </View>
+          <View style={styles.featureRow}>
+            <Ionicons name="stats-chart" size={20} color="#4A90D9" />
+            <Text style={styles.featureText}>코칭 실적 공개 + KERRI 검증</Text>
           </View>
           <View style={styles.featureRow}>
             <Ionicons name="pricetag" size={20} color="#4A90D9" />
-            <Text style={styles.featureText}>레슨 스타일 및 기술 태깅</Text>
+            <Text style={styles.featureText}>코칭 데이터 분석 (태그·패턴·추적)</Text>
           </View>
         </View>
 

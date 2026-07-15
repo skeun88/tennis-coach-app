@@ -27,7 +27,8 @@ export interface SubscriptionPlan {
   price: number;          // 얼리버드가
   regularPrice: number;   // 정식가
   memberLimit: number | null; // null = 무제한
-  aiAnalysisMonthlyLimit: number; // 0 = 없음
+  reportMonthlyLimit: number; // 무료 리포트 발송 횟수 (코치 무료분)
+  aiAnalysisMonthlyLimit: number; // AI 분석 월 한도 (Free: 3, Basic: 10, Pro: 100)
   features: PlanFeatures;
 }
 
@@ -58,7 +59,8 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
     price: 0,
     regularPrice: 0,
     memberLimit: FREE_MEMBER_LIMIT,
-    aiAnalysisMonthlyLimit: 0,
+    reportMonthlyLimit: 3,
+    aiAnalysisMonthlyLimit: 3,
     features: {
       member_management: true,
       schedule: true,
@@ -67,7 +69,7 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
       basic_profile: true,
       operations_management: false,
       member_notifications: false,
-      ai_analysis: false,
+      ai_analysis: true,
       coaching_stats_collect: false,
       ai_coaching_model: false,
       coaching_stats_public: false,
@@ -77,10 +79,11 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
   basic: {
     id: 'basic',
     name: 'Basic',
-    price: 29000,
-    regularPrice: 35000,
+    price: 9900,
+    regularPrice: 9900,
     memberLimit: null,
-    aiAnalysisMonthlyLimit: 5,
+    reportMonthlyLimit: 10,
+    aiAnalysisMonthlyLimit: 10,
     features: {
       member_management: true,
       schedule: true,
@@ -99,9 +102,10 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
   pro: {
     id: 'pro',
     name: 'Pro',
-    price: 49000,
-    regularPrice: 65000,
+    price: 19000,
+    regularPrice: 19000,
     memberLimit: null,
+    reportMonthlyLimit: 100,
     aiAnalysisMonthlyLimit: 100,
     features: {
       member_management: true,
@@ -342,7 +346,7 @@ export async function checkAiAnalysisLimit(
   }
 
   const plan = PLANS[subscription.plan_id];
-  const limit = plan.aiAnalysisMonthlyLimit;
+  const limit = plan.reportMonthlyLimit;
 
   if (limit === 0) {
     return { allowed: false, used: 0, limit: 0, planId: subscription.plan_id };
@@ -351,6 +355,55 @@ export async function checkAiAnalysisLimit(
   const used = await getAiAnalysisUsageThisMonth(coachId);
   return { allowed: used < limit, used, limit, planId: subscription.plan_id };
 }
+
+/** 리포트 발송 가능 여부 체크 — 코치 무료 한도 + 회원 크레딧 포함 */
+export async function checkReportSendLimit(
+  coachId: string,
+  subscription: Subscription | null
+): Promise<{ allowed: boolean; freeUsed: number; freeLimit: number; needsMemberCredit: boolean }> {
+  if (!subscription || subscription.status === 'blocked' || subscription.status === 'cancelled') {
+    return { allowed: false, freeUsed: 0, freeLimit: 0, needsMemberCredit: false };
+  }
+
+  const plan = PLANS[subscription.plan_id];
+  const freeLimit = plan.reportMonthlyLimit;
+  const freeUsed = await getAiAnalysisUsageThisMonth(coachId);
+
+  if (freeUsed < freeLimit) {
+    return { allowed: true, freeUsed, freeLimit, needsMemberCredit: false };
+  }
+
+  // 무료 한도 소진 → 회원이 크레딧 보유 시 발송 가능
+  return { allowed: true, freeUsed, freeLimit, needsMemberCredit: true };
+}
+
+// -------------------------------------------------------
+// 충전권
+// -------------------------------------------------------
+
+export interface CreditBundle {
+  count: number;
+  price: number;
+  pricePerUnit: number;
+  isPopular?: boolean;
+}
+
+export const CREDIT_BUNDLES: CreditBundle[] = [
+  { count: 10, price: 5000, pricePerUnit: 500 },
+  { count: 30, price: 12000, pricePerUnit: 400 },
+  { count: 50, price: 15000, pricePerUnit: 300, isPopular: true },
+];
+
+// -------------------------------------------------------
+// Pro 6개월 선결제
+// -------------------------------------------------------
+
+export const PRO_BIANNUAL = {
+  price: 99000,
+  monthlyEquivalent: 16500,
+  discountPct: 13,
+  includesRecorder: true,
+};
 
 /** AI 분석 1회 사용 기록 (upsert) */
 export async function incrementAiAnalysisUsage(coachId: string): Promise<void> {
