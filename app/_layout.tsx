@@ -39,7 +39,12 @@ export default function RootLayout() {
       return;
     }
 
-    if (session && !inOnboarding && !inSubscriptionGroup) {
+    // 이미 온보딩 중이면 아무것도 하지 않음
+    if (inOnboarding) {
+      return;
+    }
+
+    if (session && !inSubscriptionGroup) {
       // 코치 프로필 있는지 확인 → 없으면 온보딩 (인증 후 딥링크 진입 포함)
       supabase
         .from('coach_profiles')
@@ -48,6 +53,7 @@ export default function RootLayout() {
         .maybeSingle()
         .then(({ data }) => {
           if (!data) {
+            // 프로필 없음 → 무조건 온보딩 (inAuthGroup 여부 관계없이)
             router.replace('/(auth)/onboarding');
             return;
           }
