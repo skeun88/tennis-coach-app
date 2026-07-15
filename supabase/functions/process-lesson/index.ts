@@ -155,17 +155,17 @@ serve(async (req) => {
 레슨 전체를 균등하게 반영하여 핵심 내용을 추출해주세요.
 
 중요 지침:
-1. 사적 대화(날씨, 일상, 식사, 잡담, 안부 인사 등)는 분석에서 완전히 제외하세요.
-2. 레슨 기술 지도/피드백/지시사항만 추출하세요.
+1. 레슨 기술 지도/피드백/지시사항을 빠짐없이 모두 추출하세요.
+2. 사적 대화(날씨, 일상, 식사, 잡담, 안부 인사 등)는 lesson_flow에 포함하지 마세요. 단, 레슨 내용이 적더라도 있는 내용은 전부 살려서 작성하세요.
 3. lesson_flow는 레슨의 시작부터 끝까지 전체 흐름을 담아야 하며, 특정 구간에만 치우치지 말 것.
-4. 레슨 내용이 일부 있더라도 lesson_flow에는 사적 대화 내용은 절대 포함하지 마세요.
+4. 레슨 내용이 짧거나 적어도 축약하거나 생략하지 말고 있는 그대로 상세히 기술하세요.
 5. lesson_content_ratio: 전체 녹음 중 레슨 관련 대화 비율(0~1)을 함께 출력하세요.
 
 출력 형식 (JSON):
 {
   "key_techniques": ["언급된 기술 1", "기술 2"],
   "main_issues": ["주요 문제점 1", "문제점 2"],
-  "lesson_flow": "사적 대화 제외한 레슨의 시작~끝 전체 흐름 (4-5문장)",
+  "lesson_flow": "레슨의 시작~끝 전체 흐름 (있는 내용 전부, 생략 없이)",
   "coach_instructions": ["코치가 준 주요 지시사항 1", "지시사항 2"],
   "lesson_content_ratio": 0.8
 }
@@ -211,13 +211,7 @@ ${sampledTranscript}`
     const recentPlans = historyRes.data
     const lessonRatio = transcriptSummary.lesson_content_ratio ?? 1.0
 
-    // 레슨 비율이 너무 낙으면 경고 (30% 미만이면 분석 거부)
-    if (lessonRatio < 0.3) {
-      return new Response(JSON.stringify({
-        error: `레슨 내용이 너무 적습니다 (레슨 비율 ${Math.round(lessonRatio * 100)}%). 레슨 중 녹음된 음성을 사용해주세요.`,
-        lesson_content_ratio: lessonRatio,
-      }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-    }
+    // lessonRatio는 참고용으로만 사용 — 비율이 낮아도 분석 진행 (있는 레슨 내용은 그대로 반영)
 
     // ── Step 3: RAG 검색 ──
     const ragQuery = [
@@ -316,7 +310,7 @@ ${knowledgeContext || '(없음)'}
 - 위의 "오늘 레슨 요약"에 포함된 레슨 기술/피드백만 분석하세요.
 - 레슨 요약에 없는 내용(사적 대화, 일상 잡담, 날씨, 식사 등)은 분석에 절대 반영하지 마세요.
 - 레슨 요약 명시된 기술과 피드백만을 대상으로 하세요. 불확실하면 추정하지 말고 레슨 요약에 기반해 작성하세요.
-- 레슨 실질 비율이 ${Math.round(lessonRatio * 100)}%이면 분석 철저도도 레슨 확인 내용에 비례하여 작성하세요.
+- 레슨 내용이 짧거나 적어도 있는 내용을 최대한 상세하고 구체적으로 분석하세요. 내용을 줄이거나 심플하게 만들지 마세요.
 - JSON만 출력하고 다른 텍스트는 포함하지 마세요.`
 
     const claudeRes = await fetchClaude({
