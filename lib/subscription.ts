@@ -105,8 +105,8 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
     price: 19000,
     regularPrice: 19000,
     memberLimit: null,
-    reportMonthlyLimit: 100,
-    aiAnalysisMonthlyLimit: 100,
+    reportMonthlyLimit: 50,
+    aiAnalysisMonthlyLimit: 50,
     features: {
       member_management: true,
       schedule: true,
