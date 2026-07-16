@@ -162,8 +162,7 @@ export default function LoginScreen() {
       if (!NaverLogin || typeof NaverLogin.login !== 'function') {
         throw new Error('EAS 빌드에서만 사용 가능합니다.');
       }
-      // 이전 캐시 세션 제거 — 항상 계정 선택 화면이 뜨도록
-      try { await NaverLogin.logout(); } catch { /* ignore */ }
+      // 이전 캐시 토큰 제거 (logout은 SDK 내부 상태 파괴 문제 있어서 deleteToken만 사용)
       try {
         if (typeof NaverLogin.deleteToken === 'function') await NaverLogin.deleteToken();
       } catch { /* ignore */ }
