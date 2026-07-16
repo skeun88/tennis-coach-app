@@ -144,10 +144,6 @@ export default function AIAnalysisScreen() {
   }
 
   async function polishManualReport() {
-    if (!manualSummary.trim()) {
-      Alert.alert('오류', '오늘 레슨 요약은 필수입니다.');
-      return;
-    }
     setPolishing(true);
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/polish-manual-report`, {
@@ -233,9 +229,9 @@ export default function AIAnalysisScreen() {
   async function stopAndAnalyze() {
     if (!isRecording) return;
 
-    // 최소 30초 미만 녹음 시 분석 거부
-    if (recordingDuration < 30) {
-      Alert.alert('녹음 시간 부족', '최소 30초 이상 녹음해야 분석이 가능합니다.\n현재: ' + recordingDuration + '초');
+    // 최소 10초 미만 녹음 시 분석 거부
+    if (recordingDuration < 10) {
+      Alert.alert('녹음 시간 부족', '최소 10초 이상 녹음해야 분석이 가능합니다.\n현재: ' + recordingDuration + '초');
       return;
     }
 
@@ -566,7 +562,7 @@ export default function AIAnalysisScreen() {
                       <Text style={styles.manualFormHint}>각 항목에 간단히 메모하면 AI가 회원용 리포트로 다듬어드려요.</Text>
 
                       {[
-                        { label: 'a. 오늘 레슨 요약 *', value: manualSummary, onChange: setManualSummary, placeholder: '예) 포핸드 스윙 교정 집중, 토스 연습...' },
+                        { label: 'a. 오늘 레슨 요약', value: manualSummary, onChange: setManualSummary, placeholder: '예) 포핸드 스윙 교정 집중, 토스 연습...' },
                         { label: 'b. 오늘의 중요 성과', value: manualAchievements, onChange: setManualAchievements, placeholder: '예) 백핸드 안정성 향상, 서브 속도 개선...' },
                         { label: 'c. 개선 및 보완 포인트', value: manualImprovement, onChange: setManualImprovement, placeholder: '예) 풋워크 더 빠르게, 라켓 그립 조정...' },
                         { label: 'd. 맞춤 개인 연습 플랜', value: manualPracticePlan, onChange: setManualPracticePlan, placeholder: '예) 벽 치기 30분/일, 그립 교정 반복...' },
