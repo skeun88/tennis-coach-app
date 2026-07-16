@@ -162,6 +162,11 @@ export default function LoginScreen() {
       if (!NaverLogin || typeof NaverLogin.login !== 'function') {
         throw new Error('EAS 빌드에서만 사용 가능합니다.');
       }
+      // 이전 캐시 세션 제거 — 항상 계정 선택 화면이 뜨도록
+      try { await NaverLogin.logout(); } catch { /* ignore */ }
+      try {
+        if (typeof NaverLogin.deleteToken === 'function') await NaverLogin.deleteToken();
+      } catch { /* ignore */ }
       const { failureResponse, successResponse } = await NaverLogin.login();
       if (failureResponse) throw new Error(failureResponse.message);
       if (!successResponse?.accessToken) throw new Error('네이버 액세스 토큰을 받지 못했어요.');
