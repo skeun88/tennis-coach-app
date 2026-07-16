@@ -54,6 +54,23 @@ export default function LoginScreen() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  async function handleForgotPassword() {
+    if (!email.trim()) {
+      Alert.alert('이메일 입력', '비밀번호를 찾을 이메일을 먼저 입력해주세요.');
+      return;
+    }
+    setLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: 'tenniscoach://reset-password',
+    });
+    setLoading(false);
+    if (error) {
+      Alert.alert('오류', error.message);
+    } else {
+      Alert.alert('비밀번호 재설정', `${email.trim()}로 재설정 링크를 보냈어요.\n메일함을 확인해주세요.`);
+    }
+  }
+
   async function handleAuth() {
     if (!email || !password) {
       Alert.alert('입력 오류', '이메일과 비밀번호를 입력해주세요.');
@@ -61,9 +78,21 @@ export default function LoginScreen() {
     }
     setLoading(true);
     if (isSignUp) {
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) Alert.alert('회원가입 오류', error.message);
-      else Alert.alert('확인', '이메일을 확인해주세요. 인증 후 로그인할 수 있습니다.');
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) {
+        Alert.alert('회원가입 오류', error.message);
+      } else if (data.user?.identities?.length === 0) {
+        Alert.alert(
+          '이미 가입된 계정입니다',
+          '해당 이메일로 이미 가입된 계정이 있어요.\n비밀번호를 잊으셨다면 비밀번호 찾기를 이용해주세요.',
+          [
+            { text: '취소', style: 'cancel' },
+            { text: '비밀번호 찾기', onPress: handleForgotPassword },
+          ]
+        );
+      } else {
+        Alert.alert('확인', '이메일을 확인해주세요. 인증 후 로그인할 수 있습니다.');
+      }
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) Alert.alert('로그인 오류', '이메일 또는 비밀번호가 올바르지 않습니다.');
@@ -287,6 +316,14 @@ export default function LoginScreen() {
               <Text style={styles.switchLink}>{isSignUp ? '로그인' : '회원가입'}</Text>
             </Text>
           </TouchableOpacity>
+
+          {!isSignUp && (
+            <TouchableOpacity style={styles.switchBtn} onPress={handleForgotPassword} disabled={loading}>
+              <Text style={styles.switchText}>
+                비밀번호를 잊으셨나요? <Text style={styles.switchLink}>비밀번호 찾기</Text>
+              </Text>
+            </TouchableOpacity>
+          )}
 
           {/* 구분선 */}
           <View style={styles.dividerRow}>
