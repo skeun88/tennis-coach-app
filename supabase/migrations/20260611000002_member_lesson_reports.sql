@@ -23,10 +23,12 @@ CREATE INDEX IF NOT EXISTS idx_member_lesson_reports_coach
 ALTER TABLE member_lesson_reports ENABLE ROW LEVEL SECURITY;
 
 -- 코치: 자신이 만든 리포트 전체 접근
+DROP POLICY IF EXISTS "reports_coach" ON member_lesson_reports;
 CREATE POLICY "reports_coach" ON member_lesson_reports
   FOR ALL USING (coach_id = auth.uid());
 
 -- 회원: 자신의 리포트만 읽기
+DROP POLICY IF EXISTS "reports_member_read" ON member_lesson_reports;
 CREATE POLICY "reports_member_read" ON member_lesson_reports
   FOR SELECT USING (
     member_id IN (
@@ -35,6 +37,7 @@ CREATE POLICY "reports_member_read" ON member_lesson_reports
   );
 
 -- 회원: 자신의 리포트 읽음 처리(update)
+DROP POLICY IF EXISTS "reports_member_update" ON member_lesson_reports;
 CREATE POLICY "reports_member_update" ON member_lesson_reports
   FOR UPDATE USING (
     member_id IN (

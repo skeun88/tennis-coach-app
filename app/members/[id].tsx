@@ -21,7 +21,6 @@ const LEVEL_COLORS: Record<MemberLevel, string> = {
   '초급': Colors.level.초급,
   '중급': Colors.level.중급,
   '상급': Colors.level.상급,
-  '고급': Colors.level.고급,
   '선수': Colors.level.선수,
 };
 

@@ -17,8 +17,9 @@ serve(async (req) => {
   const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')!
   const { memberName, memberLevel, lessonDate, raw } = await req.json().catch(() => ({}))
 
-  if (!raw?.summary) {
-    return new Response(JSON.stringify({ error: '레슨 요약은 필수입니다.' }), {
+  // summary가 없으면 빈 문자열로 처리 (수동 리포트에서는 optional)
+  if (!raw) {
+    return new Response(JSON.stringify({ error: '레슨 메모 데이터가 필요합니다.' }), {
       status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   }
@@ -30,7 +31,7 @@ serve(async (req) => {
     `이름: ${memberName} / 레벨: ${memberLevel ?? '미설정'} / 날짜: ${lessonDate ?? '오늘'}`,
     '',
     '[코치 메모]',
-    `a. 오늘 레슨 요약: ${raw.summary}`,
+    `a. 오늘 레슨 요약: ${raw.summary || '(미입력)'}`,
     `b. 중요 성과: ${raw.achievements || '(미입력)'}`,
     `c. 개선 포인트: ${raw.improvementPoints || '(미입력)'}`,
     `d. 연습 플랜: ${raw.practicePlan || '(미입력)'}`,
