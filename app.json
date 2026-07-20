@@ -29,7 +29,9 @@
         ],
         "LSApplicationQueriesSchemes": [
           "naversearchapp",
-          "naversearchthirdlogin"
+          "naversearchthirdlogin",
+          "kakaokompassauth",
+          "kakaolink"
         ]
       }
     },
@@ -52,6 +54,13 @@
     },
     "scheme": "tenniscoach",
     "plugins": [
+      [
+        "@react-native-seoul/kakao-login",
+        {
+          "kakaoAppKey": "e077b6e6a148e52717ff8fd871f95878",
+          "kotlinVersion": "1.9.0"
+        }
+      ],
       "expo-router",
       [
         "expo-audio",
