@@ -472,14 +472,13 @@ export default function HomeScreen() {
         // 출석 되돌리기
         if (card.attendanceId) {
           await supabase.from('attendance').delete().eq('id', card.attendanceId);
-          // 크레딧 복구 (출석은 항상 차감했으므로)
+          // 크레딧 복구 — DB 현재 값 기준으로 +1 (0회에서 체크→-1이 된 경우도 정확히 복구)
+          const { data: currMem } = await supabase.from('members').select('remaining_credits, lesson_count').eq('id', card.memberId).maybeSingle();
           await supabase.from('members')
-            .update({ remaining_credits: card.remainingCredits + 1 })
-            .eq('id', card.memberId);
-          // 멤버앱 출석 횟수 동기화 (lesson_count -1)
-          const { data: mem } = await supabase.from('members').select('lesson_count').eq('id', card.memberId).maybeSingle();
-          await supabase.from('members')
-            .update({ lesson_count: Math.max(0, (mem?.lesson_count ?? 0) - 1) })
+            .update({
+              remaining_credits: (currMem?.remaining_credits ?? 0) + 1,
+              lesson_count: Math.max(0, (currMem?.lesson_count ?? 0) - 1),
+            })
             .eq('id', card.memberId);
         }
       } else {
@@ -493,11 +492,14 @@ export default function HomeScreen() {
           absence_reason: null,
           deduction_type: null,
         }, { onConflict: 'lesson_id,member_id' });
-        // 이전에 차감 안 됐을 때만 차감
+        // 이전에 차감 안 됐을 때만 차감 (0회도 -1로 차감하여 정확한 복구 가능하게)
         if (!wasDeducted) {
           await supabase.from('members')
-            .update({ remaining_credits: Math.max(0, card.remainingCredits - 1) })
+            .update({ remaining_credits: card.remainingCredits - 1 })
             .eq('id', card.memberId);
+          if (card.remainingCredits === 0) {
+            Alert.alert('잔여 레슨 횟수가 없습니다.', '이 회원의 레슨 횟수가 없습니다.\n충전이 필요합니다.');
+          }
         }
         // 멤버앱 출석 횟수 동기화 (lesson_count +1)
         const { data: mem } = await supabase.from('members').select('lesson_count').eq('id', card.memberId).maybeSingle();

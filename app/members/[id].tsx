@@ -44,6 +44,19 @@ function kstToday(): Date {
   return new Date(dateStr + 'T00:00:00+09:00');
 }
 
+function formatPhone(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (digits.startsWith('02')) {
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 5) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+    if (digits.length <= 9) return `${digits.slice(0, 2)}-${digits.slice(2, 5)}-${digits.slice(5)}`;
+    return `${digits.slice(0, 2)}-${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+}
+
 
 
 
@@ -545,13 +558,15 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     let scheduledCount = 0;
     if (allDaysHaveTimes3 && credits > 0) {
       if (scheduleChanged) {
-        // 스케줄 변경 시: startDate 이후 레슨 삭제 후 재생성
+        // 스케줄 변경 시: 오늘 이후 레슨 삭제 후 재생성 (과거 레슨은 항상 보호)
+        const todayStr2 = toKSTDateStr(new Date());
+        const deleteFrom = startDate > todayStr2 ? startDate : todayStr2;
         const { data: futureLMrows } = await supabase
           .from('lesson_members')
           .select('lesson_id, lesson:lessons(id, date, coach_id)')
           .eq('member_id', id!);
         const futureLessonIds = (futureLMrows ?? [])
-          .filter((r: any) => r.lesson?.date >= startDate && r.lesson?.coach_id === userId)
+          .filter((r: any) => r.lesson?.date >= deleteFrom && r.lesson?.coach_id === userId)
           .map((r: any) => r.lesson_id as string);
         if (futureLessonIds.length > 0) {
           // 다른 회원이 함께 있는 레슨 확인
@@ -980,7 +995,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                 <Text style={styles.editLabel}>이름</Text>
                 <TextInput style={styles.editInput} value={name} onChangeText={setName} />
                 <Text style={styles.editLabel}>전화번호</Text>
-                <TextInput style={styles.editInput} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+                <TextInput style={styles.editInput} value={phone} onChangeText={v => setPhone(formatPhone(v))} keyboardType="phone-pad" />
                 <Text style={styles.editLabel}>이메일</Text>
                 <TextInput style={styles.editInput} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
                 <Text style={styles.editLabel}>레벨</Text>
