@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { Session } from '@supabase/supabase-js';
+import * as Linking from 'expo-linking';
 import { supabase } from '../lib/supabase';
 import { View, ActivityIndicator } from 'react-native';
 import { Colors } from '../lib/theme';
@@ -11,10 +12,30 @@ export default function RootLayout() {
   const [loading, setLoading] = useState(true);
   const [subscriptionChecked, setSubscriptionChecked] = useState(false);
   const [profileChecked, setProfileChecked] = useState(false);
+  const [processingDeepLink, setProcessingDeepLink] = useState(false);
   const router = useRouter();
   const segments = useSegments();
 
   useEffect(() => {
+    // 딥링크 URL에서 Supabase 토큰 추출 후 세션 설정
+    const handleDeepLinkUrl = async (url: string) => {
+      const fragment = url.split('#')[1] ?? '';
+      const params = Object.fromEntries(new URLSearchParams(fragment));
+      if (params.access_token && params.refresh_token) {
+        setProcessingDeepLink(true);
+        await supabase.auth.setSession({
+          access_token: params.access_token,
+          refresh_token: params.refresh_token,
+        });
+        setProcessingDeepLink(false);
+      }
+    };
+
+    // 앱이 딥링크로 최초 실행된 경우
+    Linking.getInitialURL().then(url => { if (url) handleDeepLinkUrl(url); });
+    // 앱이 이미 실행 중일 때 딥링크 수신
+    const linkSub = Linking.addEventListener('url', ({ url }) => handleDeepLinkUrl(url));
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
@@ -27,7 +48,10 @@ export default function RootLayout() {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      linkSub.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -38,7 +62,7 @@ export default function RootLayout() {
     const inOnboarding = segments[0] === '(auth)' && (segments as string[])[1] === 'onboarding';
 
     if (!session && !inAuthGroup) {
-      router.replace('/(auth)/login');
+      if (!processingDeepLink) router.replace('/(auth)/login');
       return;
     }
 
@@ -79,7 +103,7 @@ export default function RootLayout() {
     }
 
     setSubscriptionChecked(true);
-  }, [session, loading, segments]);
+  }, [session, loading, segments, processingDeepLink]);
 
   if (loading) {
     return (
@@ -93,7 +117,6 @@ export default function RootLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="(auth)/onboarding" />
       <Stack.Screen name="members/[id]" options={{ headerShown: true, title: '회원 상세', headerBackTitle: '뒤로' }} />
       <Stack.Screen name="members/new" options={{ headerShown: true, title: '회원 등록', headerBackTitle: '뒤로' }} />
       <Stack.Screen name="lessons/[id]" options={{ headerShown: true, title: '레슨 상세', headerBackTitle: '뒤로' }} />
