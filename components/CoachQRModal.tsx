@@ -37,7 +37,7 @@ export default function CoachQRModal({
   coachId,
   coachName,
 }: CoachQRModalProps) {
-  const qrValue = `kerri://join?coach_id=${coachId}`;
+  const qrValue = `kerri-member://qr-onboarding?coach_id=${coachId}`;
   const viewShotRef = useRef<any>(null);
   const [saving, setSaving] = useState(false);
 
@@ -106,6 +106,7 @@ export default function CoachQRModal({
     await Sharing.shareAsync(uri, {
       mimeType: 'image/png',
       dialogTitle: `${coachName ?? '코치'} 초대 QR 코드`,
+      UTI: 'public.png',
     });
     setSaving(false);
   }
@@ -151,7 +152,7 @@ export default function CoachQRModal({
               {coachName ? (
                 <Text style={styles.qrCoachName}>{coachName} 코치</Text>
               ) : null}
-              <Text style={styles.qrHint}>kerri://join</Text>
+              <Text style={styles.qrHint}>KERRI Member</Text>
             </View>
           </ViewShot>
 
