@@ -12,22 +12,19 @@ export default function RootLayout() {
   const [loading, setLoading] = useState(true);
   const [subscriptionChecked, setSubscriptionChecked] = useState(false);
   const [profileChecked, setProfileChecked] = useState(false);
-  const [processingDeepLink, setProcessingDeepLink] = useState(false);
   const router = useRouter();
   const segments = useSegments();
 
   useEffect(() => {
-    // 딥링크 URL에서 Supabase 토큰 추출 후 세션 설정
+    // 딥링크 URL에서 Supabase 토큰 추출 후 세션 설정 (비밀번호 재설정 등)
     const handleDeepLinkUrl = async (url: string) => {
       const fragment = url.split('#')[1] ?? '';
       const params = Object.fromEntries(new URLSearchParams(fragment));
       if (params.access_token && params.refresh_token) {
-        setProcessingDeepLink(true);
         await supabase.auth.setSession({
           access_token: params.access_token,
           refresh_token: params.refresh_token,
         });
-        setProcessingDeepLink(false);
       }
     };
 
@@ -60,9 +57,11 @@ export default function RootLayout() {
     const inAuthGroup = segments[0] === '(auth)';
     const inSubscriptionGroup = segments[0] === 'subscription';
     const inOnboarding = segments[0] === '(auth)' && (segments as string[])[1] === 'onboarding';
+    // 비밀번호 재설정 딥링크 경로 — 세션 없어도 redirect 금지
+    const inResetPassword = (segments as string[])[0] === 'reset-password';
 
-    if (!session && !inAuthGroup) {
-      if (!processingDeepLink) router.replace('/(auth)/login');
+    if (!session && !inAuthGroup && !inResetPassword) {
+      router.replace('/(auth)/login');
       return;
     }
 
@@ -103,7 +102,7 @@ export default function RootLayout() {
     }
 
     setSubscriptionChecked(true);
-  }, [session, loading, segments, processingDeepLink]);
+  }, [session, loading, segments]);
 
   if (loading) {
     return (
