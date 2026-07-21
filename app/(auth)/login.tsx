@@ -7,6 +7,7 @@ import {
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
 import NaverLogin from '@react-native-seoul/naver-login';
+import { login as kakaoLogin, loginWithKakaoAccount } from '@react-native-seoul/kakao-login';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { supabase } from '../../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
@@ -33,7 +34,7 @@ function initNaverLogin() {
         consumerKey: NAVER_CONSUMER_KEY,
         consumerSecret: NAVER_CONSUMER_SECRET,
         serviceUrlSchemeIOS: NAVER_SERVICE_URL_SCHEME_IOS,
-        disableNaverAppAuthIOS: true, // 인앱 브라우저 인증으로 전환 (AppDelegate 우회 테스트)
+        disableNaverAppAuthIOS: false, // 네이버앱 → 없으면 외부 브라우저 (in-app 브라우저 충돌 방지)
       });
     }
   } catch (e) {
@@ -162,9 +163,14 @@ export default function LoginScreen() {
       if (!NaverLogin || typeof NaverLogin.login !== 'function') {
         throw new Error('EAS 빌드에서만 사용 가능합니다.');
       }
-      // 이전 캐시 토큰 제거 (logout은 SDK 내부 상태 파괴 문제 있어서 deleteToken만 사용)
+      // 이전 캐시 토큰 제거 — 3초 타임아웃 (SDK 내부 상태 꼬임 방지)
       try {
-        if (typeof NaverLogin.deleteToken === 'function') await NaverLogin.deleteToken();
+        if (typeof NaverLogin.deleteToken === 'function') {
+          await Promise.race([
+            NaverLogin.deleteToken(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+          ]);
+        }
       } catch { /* ignore */ }
       const { failureResponse, successResponse } = await NaverLogin.login();
       if (failureResponse) throw new Error(failureResponse.message);
@@ -196,58 +202,40 @@ export default function LoginScreen() {
     }
   }
 
-  // 카카오 (기존 웹 OAuth 방식 유지)
+  // 카카오 — 네이티브 SDK (카카오톡 앱 우선 → 카카오계정 폴백)
   async function handleKakaoNaver(provider: 'kakao' | 'naver') {
     if (provider === 'naver') { handleNaverLogin(); return; }
     setSnsLoading('kakao');
     try {
-      const redirectTo = AuthSession.makeRedirectUri({ scheme: 'tenniscoach', path: 'auth/callback' });
+      // 1. 카카오톡 앱 로그인 시도 → 실패 시 카카오계정 웹뷰 폴백
+      let token: { accessToken: string } | null = null;
+      try {
+        token = await kakaoLogin();
+      } catch {
+        token = await loginWithKakaoAccount();
+      }
+      if (!token?.accessToken) throw new Error('카카오 액세스 토큰을 받지 못했어요.');
+
+      // 2. Edge Function에 카카오 액세스 토큰 전달 → Supabase 세션 발급
       const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+      const res = await fetch(SOCIAL_AUTH_FN, {
+        method: 'POST',
+        headers: { apikey: anonKey, 'Authorization': `Bearer ${anonKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: 'kakao', kakao_access_token: token.accessToken }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
 
-      const res = await fetch(
-        `${SOCIAL_AUTH_FN}?provider=kakao&redirect_uri=${encodeURIComponent(redirectTo)}`,
-        { headers: { apikey: anonKey, 'Content-Type': 'application/json' } },
-      );
-      const resText = await res.text();
-      let parsed: any = {};
-      try { parsed = JSON.parse(resText); } catch { throw new Error(`서버 응답 오류: ${resText}`); }
-      if (parsed.error) throw new Error(parsed.error);
-      const authUrl = parsed.url;
-      if (!authUrl) throw new Error(`인증 URL을 받지 못했어요.`);
-
-      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectTo);
-      if (result.type !== 'success') return;
-
-      const callbackUrl = new URL(result.url);
-      const code = callbackUrl.searchParams.get('code');
-      if (!code) throw new Error('인증 코드를 받지 못했어요.');
-
-      const tokenRes = await fetch(
-        `${SOCIAL_AUTH_FN}?provider=kakao&code=${code}&redirect_uri=${encodeURIComponent(redirectTo)}`,
-        { headers: { apikey: anonKey } },
-      );
-      const tokenData = await tokenRes.json();
-      if (tokenData.error) throw new Error(tokenData.error);
-
-      if (tokenData.magicLink) {
-        const magicResult = await WebBrowser.openAuthSessionAsync(tokenData.magicLink, redirectTo);
-        if (magicResult.type === 'success' && magicResult.url) {
-          const resultUrl = new URL(magicResult.url);
-          const fragment = resultUrl.hash.replace('#', '');
-          const query = resultUrl.search.replace('?', '');
-          const params = new URLSearchParams(fragment || query);
-          const at = params.get('access_token');
-          const rt = params.get('refresh_token');
-          if (at && rt) {
-            await supabase.auth.setSession({ access_token: at, refresh_token: rt });
-          } else {
-            const exchangeCode = resultUrl.searchParams.get('code');
-            if (exchangeCode) { await supabase.auth.exchangeCodeForSession(exchangeCode); }
-          }
-        }
+      if (data.access_token && data.refresh_token) {
+        await supabase.auth.setSession({ access_token: data.access_token, refresh_token: data.refresh_token });
+      } else {
+        throw new Error('세션 토큰을 받지 못했어요.');
       }
     } catch (e: any) {
-      if (e.message !== 'User cancelled') Alert.alert('카카오 로그인 오류', e.message);
+      const msg = e.message ?? '';
+      if (!msg.includes('cancel') && !msg.includes('Cancel') && msg !== 'User cancelled') {
+        Alert.alert('카카오 로그인 오류', msg);
+      }
     } finally {
       setSnsLoading(null);
     }
