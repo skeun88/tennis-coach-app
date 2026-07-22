@@ -87,7 +87,8 @@
           "urlScheme": "tenniscoach"
         }
       ],
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      "./plugins/withNaverUrlFix"
     ],
     "extra": {
       "router": {},
