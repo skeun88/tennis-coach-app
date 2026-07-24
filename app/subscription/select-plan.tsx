@@ -55,7 +55,8 @@ export default function SelectPlanScreen() {
 
   const handleNext = () => {
     if (selectedPlan === 'pro') {
-      setShowBillingOptions(true);
+      // 녹음기 혜택 모달을 먼저 보여줘서 6개월 선결제 전환율 높이기
+      setShowRecorderModal(true);
     } else {
       router.push({
         pathname: '/subscription/register-card',
@@ -66,14 +67,10 @@ export default function SelectPlanScreen() {
 
   const handleBillingSelect = (type: BillingType) => {
     setShowBillingOptions(false);
-    if (type === 'biannual') {
-      setShowRecorderModal(true);
-    } else {
-      router.push({
-        pathname: '/subscription/register-card',
-        params: { planId: 'pro', billingType: 'monthly' },
-      });
-    }
+    router.push({
+      pathname: '/subscription/register-card',
+      params: { planId: 'pro', billingType: type },
+    });
   };
 
   const handleRecorderModalConfirm = () => {
@@ -82,6 +79,11 @@ export default function SelectPlanScreen() {
       pathname: '/subscription/register-card',
       params: { planId: 'pro', billingType: 'biannual' },
     });
+  };
+
+  const handleRecorderModalClose = () => {
+    setShowRecorderModal(false);
+    setShowBillingOptions(true);
   };
 
   return (
@@ -130,7 +132,7 @@ export default function SelectPlanScreen() {
       {/* 클립형 녹음기 안내 모달 */}
       <ClipRecorderModal
         visible={showRecorderModal}
-        onClose={() => setShowRecorderModal(false)}
+        onClose={handleRecorderModalClose}
         onConfirm={handleRecorderModalConfirm}
       />
 
@@ -142,9 +144,17 @@ export default function SelectPlanScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>플랜을 선택하세요</Text>
-        <Text style={styles.subtitle}>
-          가입 즉시 1개월 프로 체험 — 체험 후 선택한 플랜으로 전환됩니다
-        </Text>
+
+        {/* 1개월 프로 체험 강조 배너 */}
+        <View style={styles.trialHighlight}>
+          <View style={styles.trialHighlightBadge}>
+            <Text style={styles.trialHighlightBadgeText}>🎁 무료</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.trialHighlightTitle}>지금 가입하면 1개월 프로 체험!</Text>
+            <Text style={styles.trialHighlightSub}>체험 후 선택한 플랜으로 자동 전환</Text>
+          </View>
+        </View>
 
         {/* 플랜 카드 2개 */}
         <View style={styles.planRow}>
@@ -181,21 +191,16 @@ export default function SelectPlanScreen() {
             {/* 녹음기 혜택 배너 */}
             <View style={styles.recorderBanner}>
               <Ionicons name="mic" size={13} color="#9b59b6" />
-              <Text style={styles.recorderBannerText}>6개월 선결제 시 녹음기 무상</Text>
+              <Text style={styles.recorderBannerText} numberOfLines={1}>🎁 녹음기 무상 제공</Text>
             </View>
-            {selectedPlan === 'pro' && (
-              <View style={[styles.selectedDot, styles.selectedDotPro]} />
-            )}
           </TouchableOpacity>
         </View>
 
-        {/* 리포트 결제 안내 */}
+        {/* 회원 리포트 열람 안내 */}
         <View style={styles.creditInfoBanner}>
           <Ionicons name="information-circle-outline" size={16} color="#4A90D9" />
           <Text style={styles.creditInfoText}>
-            무료 횟수 소진 후 추가 리포트는{' '}
-            <Text style={{ fontWeight: '700' }}>회원이 크레딧을 충전</Text>
-            해서 열람합니다. (만원 단위 충전 · 건당 1,000원)
+            회원은 <Text style={{ fontWeight: '700' }}>처음 1회 무료</Text> 열람 후 크레딧으로 열람합니다. (만원 단위 충전 · 건당 700원)
           </Text>
         </View>
 
@@ -266,8 +271,22 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 8 },
   closeBtn: { padding: 8 },
   scroll: { padding: 20, paddingBottom: 48 },
-  title: { fontSize: 24, fontWeight: '700', color: '#1a1a2e', marginBottom: 8 },
+  title: { fontSize: 24, fontWeight: '700', color: '#1a1a2e', marginBottom: 12 },
   subtitle: { fontSize: 14, color: '#666', marginBottom: 24, lineHeight: 20 },
+  trialHighlight: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#FFF8E1',
+    borderRadius: 14, padding: 14,
+    marginBottom: 20,
+    borderWidth: 1.5, borderColor: '#F59E0B',
+  },
+  trialHighlightBadge: {
+    backgroundColor: '#F59E0B', borderRadius: 10,
+    paddingHorizontal: 10, paddingVertical: 6,
+  },
+  trialHighlightBadgeText: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  trialHighlightTitle: { fontSize: 16, fontWeight: '800', color: '#92400E', marginBottom: 2 },
+  trialHighlightSub: { fontSize: 12, color: '#B45309' },
 
   planRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
   planCard: {

@@ -129,6 +129,54 @@ serve(async (req) => {
       })
     }
 
+    // ── 서버사이드 quota 체크 (원자적 처리) ──
+    {
+      const now = new Date()
+      const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+
+      // 구독 + 이번 달 사용량 병렬 조회
+      const [subRes, usageRes] = await Promise.all([
+        supabase.from('subscriptions')
+          .select('plan_id, status, extra_report_credits')
+          .eq('coach_id', coachId)
+          .single(),
+        supabase.from('ai_analysis_usage')
+          .select('count')
+          .eq('coach_id', coachId)
+          .eq('year_month', yearMonth)
+          .maybeSingle(),
+      ])
+
+      const sub = subRes.data
+      const monthlyUsed: number = usageRes.data?.count ?? 0
+
+      const PLAN_LIMITS: Record<string, number> = { free: 3, basic: 10, pro: 50 }
+      const limit = sub ? (PLAN_LIMITS[sub.plan_id] ?? 0) : 0
+
+      if (sub && (sub.status === 'blocked' || sub.status === 'cancelled')) {
+        return new Response(JSON.stringify({ error: '구독이 차단되었습니다.', code: 'SUBSCRIPTION_BLOCKED' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      if (monthlyUsed >= limit) {
+        // 월 한도 초과 → 추가 크레딧 시도
+        const { data: deducted } = await supabase.rpc('deduct_extra_report_credit', { p_coach_id: coachId })
+        if (!deducted) {
+          return new Response(JSON.stringify({
+            error: '이번 달 AI 리포트 할당량을 모두 사용했습니다.',
+            code: 'REPORT_QUOTA_EXCEEDED',
+            used: monthlyUsed,
+            limit,
+            extra_credits: sub?.extra_report_credits ?? 0,
+          }), {
+            status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          })
+        }
+        // 추가 크레딧 차감 성공 → 계속 진행 (monthly count는 증가하지 않음)
+      }
+    }
+
     // ── 녹음 데이터 없으면 분석 거부 ──
     if (!audioFile || audioFile.size < 5000) {
       return new Response(JSON.stringify({ error: '녹음 파일이 너무 짧거나 없습니다. 최소 10초 이상 레슨을 녹음한 후 분석을 시작하세요.' }), {
@@ -456,6 +504,20 @@ ${knowledgeContext || '(없음)'}
     } catch (e) {
       // 회원 리포트 실패해도 코치 응답은 정상 반환
       console.error('member_report_error:', e)
+    }
+
+    // ── Step 7: 오디오 파일 삭제 (파이프라인 완료 후, 재시도 가능성 위해 성공 시에만) ──
+    if (audioStoragePath) {
+      try {
+        const { error: deleteError } = await supabase.storage
+          .from('lesson-audio')
+          .remove([audioStoragePath])
+        if (deleteError) {
+          console.error('audio_delete_error:', deleteError.message)
+        }
+      } catch (e) {
+        console.error('audio_delete_exception:', e)
+      }
     }
 
     return new Response(JSON.stringify({ success: true, plan, transcript, court_type: effectiveCourtType }), {

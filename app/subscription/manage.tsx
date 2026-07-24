@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  SafeAreaView, Alert, ActivityIndicator
+  SafeAreaView, Alert, ActivityIndicator, Switch
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSubscription } from '../../hooks/useSubscription';
-import { PLANS, PlanId, getAiAnalysisUsageThisMonth } from '../../lib/subscription';
+import {
+  PLANS, getAiAnalysisUsageThisMonth,
+  TOPUP_PRODUCTS, TopupProductId, updateAutoTopup,
+} from '../../lib/subscription';
 import { supabase } from '../../lib/supabase';
+import ReportQuotaBar from '../../components/ReportQuotaBar';
+import ReportTopupModal from '../../components/ReportTopupModal';
 
 const STATUS_LABELS: Record<string, string> = {
   trial: '무료 체험 중',
@@ -30,6 +35,9 @@ export default function ManageSubscriptionScreen() {
   const { subscription, loading, isTrial, trialDaysLeft, refresh } = useSubscription();
   const [cancelling, setCancelling] = useState(false);
   const [reportUsed, setReportUsed] = useState(0);
+  const [topupModalVisible, setTopupModalVisible] = useState(false);
+  const [authToken, setAuthToken] = useState('');
+  const [autoTopupUpdating, setAutoTopupUpdating] = useState(false);
 
   useEffect(() => {
     const loadUsage = async () => {
@@ -39,6 +47,40 @@ export default function ManageSubscriptionScreen() {
     };
     loadUsage();
   }, [subscription]);
+
+  async function openTopupModal() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    setAuthToken(session.access_token);
+    setTopupModalVisible(true);
+  }
+
+  async function handleAutoTopupToggle(enabled: boolean) {
+    if (!subscription) return;
+    setAutoTopupUpdating(true);
+    try {
+      const productId = enabled ? (subscription.auto_topup_product ?? '30') : null;
+      await updateAutoTopup(subscription.coach_id, enabled, productId as TopupProductId | null);
+      await refresh();
+    } catch {
+      Alert.alert('오류', '자동 충전 설정 변경에 실패했습니다.');
+    } finally {
+      setAutoTopupUpdating(false);
+    }
+  }
+
+  async function handleAutoTopupProductChange(productId: TopupProductId) {
+    if (!subscription) return;
+    setAutoTopupUpdating(true);
+    try {
+      await updateAutoTopup(subscription.coach_id, true, productId);
+      await refresh();
+    } catch {
+      Alert.alert('오류', '자동 충전 상품 변경에 실패했습니다.');
+    } finally {
+      setAutoTopupUpdating(false);
+    }
+  }
 
   const handleCancel = () => {
     Alert.alert(
@@ -142,27 +184,29 @@ export default function ManageSubscriptionScreen() {
             </View>
           )}
 
-          {/* 리포트 잔여 횟수 */}
-          {(() => {
-            const planLimit = PLANS[subscription.plan_id]?.reportMonthlyLimit ?? 0;
-            const remaining = Math.max(0, planLimit - reportUsed);
-            const isLow = remaining <= 3 && planLimit > 0;
-            return planLimit > 0 ? (
-              <View style={[styles.reportRow, isLow && styles.reportRowLow]}>
-                <Ionicons
-                  name="document-text-outline"
-                  size={16}
-                  color={isLow ? '#e74c3c' : '#4A90D9'}
-                />
-                <Text style={[styles.reportText, isLow && styles.reportTextLow]}>
-                  이번 달 리포트 잔여{' '}
-                  <Text style={{ fontWeight: '700' }}>{remaining}회</Text>
-                  {' '}/ {planLimit}회
-                  {isLow ? ' — 소진 임박' : ''}
-                </Text>
+          {/* 리포트 사용량 + 추가 충전 */}
+          {PLANS[subscription.plan_id]?.reportMonthlyLimit > 0 && (
+            <View style={styles.quotaSection}>
+              <View style={styles.quotaHeader}>
+                <Text style={styles.quotaLabel}>이번 달 AI 리포트</Text>
+                {(subscription.extra_report_credits ?? 0) > 0 && (
+                  <Text style={styles.extraCreditsText}>
+                    추가 크레딧 +{subscription.extra_report_credits}개
+                  </Text>
+                )}
               </View>
-            ) : null;
-          })()}
+              <ReportQuotaBar
+                used={reportUsed}
+                limit={PLANS[subscription.plan_id].reportMonthlyLimit}
+                extraCredits={subscription.extra_report_credits ?? 0}
+                onTopupPress={openTopupModal}
+              />
+              <TouchableOpacity style={styles.topupBtn} onPress={openTopupModal} activeOpacity={0.8}>
+                <Ionicons name="add-circle-outline" size={16} color="#4A90D9" />
+                <Text style={styles.topupBtnText}>AI 리포트 추가 충전</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           <View style={styles.divider} />
 
@@ -223,6 +267,56 @@ export default function ManageSubscriptionScreen() {
           </View>
         )}
 
+        {/* 자동 충전 설정 */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>자동 충전 설정</Text>
+          <View style={styles.autoTopupRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.autoTopupLabel}>자동 충전</Text>
+              <Text style={styles.autoTopupDesc}>
+                리포트가 모두 소진되면 자동으로 충전합니다
+              </Text>
+            </View>
+            {autoTopupUpdating
+              ? <ActivityIndicator size="small" color="#4A90D9" />
+              : (
+                <Switch
+                  value={subscription.auto_topup_enabled ?? false}
+                  onValueChange={handleAutoTopupToggle}
+                  trackColor={{ false: '#e9ecef', true: '#4A90D9' }}
+                  thumbColor="#fff"
+                />
+              )
+            }
+          </View>
+          {subscription.auto_topup_enabled && (
+            <View style={styles.autoTopupProducts}>
+              <Text style={styles.autoTopupProductLabel}>충전 상품 선택</Text>
+              {TOPUP_PRODUCTS.map(product => (
+                <TouchableOpacity
+                  key={product.id}
+                  style={[
+                    styles.autoTopupProductRow,
+                    subscription.auto_topup_product === product.id && styles.autoTopupProductRowSelected,
+                  ]}
+                  onPress={() => handleAutoTopupProductChange(product.id)}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.autoTopupProductRadio}>
+                    {subscription.auto_topup_product === product.id && (
+                      <View style={styles.autoTopupProductRadioDot} />
+                    )}
+                  </View>
+                  <Text style={styles.autoTopupProductText}>
+                    +{product.credits}개 / {product.price.toLocaleString()}원
+                    {product.isRecommended ? '  ⭐ 추천' : ''}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+
         {/* 취소 */}
         {subscription.status === 'active' || subscription.status === 'trial' ? (
           <TouchableOpacity
@@ -238,6 +332,26 @@ export default function ManageSubscriptionScreen() {
           </TouchableOpacity>
         ) : null}
       </ScrollView>
+
+      {/* AI 리포트 추가 충전 모달 */}
+      {topupModalVisible && authToken && (
+        <ReportTopupModal
+          visible={topupModalVisible}
+          onClose={() => setTopupModalVisible(false)}
+          onTopupSuccess={async () => {
+            setTopupModalVisible(false);
+            await refresh();
+            const used = await getAiAnalysisUsageThisMonth(subscription.coach_id);
+            setReportUsed(used);
+          }}
+          onUpgradePress={() => {
+            setTopupModalVisible(false);
+            router.push({ pathname: '/subscription/upgrade', params: { targetPlan: 'pro' } });
+          }}
+          currentPlanId={subscription.plan_id}
+          authToken={authToken}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -296,4 +410,41 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 16, color: '#888' },
   primaryButton: { backgroundColor: '#4A90D9', borderRadius: 14, padding: 18, width: '100%', alignItems: 'center' },
   primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  // 사용량 + 충전
+  quotaSection: { marginBottom: 4, gap: 8 },
+  quotaHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  quotaLabel: { fontSize: 13, color: '#888', fontWeight: '600' },
+  extraCreditsText: { fontSize: 12, color: '#4A90D9', fontWeight: '700' },
+  topupBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: 10,
+    backgroundColor: '#EBF4FF', borderRadius: 8,
+  },
+  topupBtnText: { fontSize: 13, color: '#4A90D9', fontWeight: '600' },
+  // 자동 충전
+  autoTopupRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 4,
+  },
+  autoTopupLabel: { fontSize: 15, color: '#1a1a2e', fontWeight: '600' },
+  autoTopupDesc: { fontSize: 12, color: '#888', marginTop: 2 },
+  autoTopupProducts: { marginTop: 12, gap: 8 },
+  autoTopupProductLabel: { fontSize: 13, color: '#888', marginBottom: 4 },
+  autoTopupProductRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 10, paddingHorizontal: 12,
+    borderWidth: 1, borderColor: '#e9ecef', borderRadius: 10,
+  },
+  autoTopupProductRowSelected: {
+    borderColor: '#4A90D9', backgroundColor: '#EBF4FF',
+  },
+  autoTopupProductRadio: {
+    width: 18, height: 18, borderRadius: 9,
+    borderWidth: 2, borderColor: '#4A90D9',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  autoTopupProductRadioDot: {
+    width: 8, height: 8, borderRadius: 4, backgroundColor: '#4A90D9',
+  },
+  autoTopupProductText: { fontSize: 14, color: '#1a1a2e' },
 });

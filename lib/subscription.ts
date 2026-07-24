@@ -46,6 +46,9 @@ export interface Subscription {
   toss_customer_key: string | null;
   pending_plan_id: PlanId | null;
   downgrade_at: string | null;
+  extra_report_credits: number;
+  auto_topup_enabled: boolean;
+  auto_topup_product: '10' | '30' | '50' | null;
   created_at: string;
   updated_at: string;
 }
@@ -336,24 +339,45 @@ export async function getAiAnalysisUsageThisMonth(coachId: string): Promise<numb
   return data?.count ?? 0;
 }
 
-/** AI 분석 사용 가능 여부 체크 — 한도 포함 */
+/** AI 분석 사용 가능 여부 체크 — 월 한도 + 추가 크레딧 포함 */
 export async function checkAiAnalysisLimit(
   coachId: string,
   subscription: Subscription | null
-): Promise<{ allowed: boolean; used: number; limit: number; planId: PlanId | null }> {
+): Promise<{
+  allowed: boolean;
+  used: number;
+  limit: number;
+  planId: PlanId | null;
+  extraCredits: number;
+  needsExtraCredit: boolean;
+}> {
   if (!subscription || subscription.status === 'blocked' || subscription.status === 'cancelled') {
-    return { allowed: false, used: 0, limit: 0, planId: null };
+    return { allowed: false, used: 0, limit: 0, planId: null, extraCredits: 0, needsExtraCredit: false };
   }
 
   const plan = PLANS[subscription.plan_id];
   const limit = plan.reportMonthlyLimit;
+  const extraCredits = subscription.extra_report_credits ?? 0;
 
   if (limit === 0) {
-    return { allowed: false, used: 0, limit: 0, planId: subscription.plan_id };
+    return { allowed: extraCredits > 0, used: 0, limit: 0, planId: subscription.plan_id, extraCredits, needsExtraCredit: extraCredits > 0 };
   }
 
   const used = await getAiAnalysisUsageThisMonth(coachId);
-  return { allowed: used < limit, used, limit, planId: subscription.plan_id };
+
+  if (used < limit) {
+    return { allowed: true, used, limit, planId: subscription.plan_id, extraCredits, needsExtraCredit: false };
+  }
+
+  // 월 한도 초과 → 추가 크레딧 확인
+  return {
+    allowed: extraCredits > 0,
+    used,
+    limit,
+    planId: subscription.plan_id,
+    extraCredits,
+    needsExtraCredit: true,
+  };
 }
 
 /** 리포트 발송 가능 여부 체크 — 코치 무료 한도 + 회원 크레딧 포함 */
@@ -378,7 +402,7 @@ export async function checkReportSendLimit(
 }
 
 // -------------------------------------------------------
-// 충전권
+// 충전권 (회원 리포트 열람용 — 회원이 구매)
 // -------------------------------------------------------
 
 export interface CreditBundle {
@@ -395,13 +419,58 @@ export const CREDIT_BUNDLES: CreditBundle[] = [
 ];
 
 // -------------------------------------------------------
+// AI 리포트 추가 충전 (코치용 — 월 할당량 소진 후 추가)
+// -------------------------------------------------------
+
+export type TopupProductId = '10' | '30' | '50';
+
+export interface TopupProduct {
+  id: TopupProductId;
+  credits: number;
+  price: number;        // KRW
+  pricePerUnit: number;
+  isRecommended?: boolean;
+}
+
+export const TOPUP_PRODUCTS: TopupProduct[] = [
+  { id: '10', credits: 10, price: 4900, pricePerUnit: 490 },
+  { id: '30', credits: 30, price: 11900, pricePerUnit: 397, isRecommended: true },
+  { id: '50', credits: 50, price: 17900, pricePerUnit: 358 },
+];
+
+/** 코치의 추가 크레딧 잔액 조회 */
+export async function getExtraReportCredits(coachId: string): Promise<number> {
+  const { data } = await supabase
+    .from('subscriptions')
+    .select('extra_report_credits')
+    .eq('coach_id', coachId)
+    .single();
+  return data?.extra_report_credits ?? 0;
+}
+
+/** 자동 충전 설정 업데이트 */
+export async function updateAutoTopup(
+  coachId: string,
+  enabled: boolean,
+  productId: TopupProductId | null
+): Promise<void> {
+  await supabase
+    .from('subscriptions')
+    .update({
+      auto_topup_enabled: enabled,
+      auto_topup_product: enabled ? productId : null,
+    })
+    .eq('coach_id', coachId);
+}
+
+// -------------------------------------------------------
 // Pro 6개월 선결제
 // -------------------------------------------------------
 
 export const PRO_BIANNUAL = {
   price: 99000,
   monthlyEquivalent: 16500,
-  discountPct: 13,
+  discountPct: 17,
   includesRecorder: true,
 };
 

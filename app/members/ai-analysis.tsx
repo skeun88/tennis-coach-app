@@ -13,6 +13,8 @@ import { Colors } from '../../lib/theme';
 import { useSubscription } from '../../hooks/useSubscription';
 import { checkAiAnalysisLimit, incrementAiAnalysisUsage } from '../../lib/subscription';
 import PlanUpsellModal, { UpsellContext } from '../../components/PlanUpsellModal';
+import ReportQuotaBar from '../../components/ReportQuotaBar';
+import ReportTopupModal from '../../components/ReportTopupModal';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -33,8 +35,17 @@ export default function AIAnalysisScreen() {
   }>();
   const router = useRouter();
   const { canUse, subscription, loading: subLoading } = useSubscription();
+
+  useEffect(() => {
+    if (subscription) loadUsageInfo();
+  }, [subscription]);
   const [upsellContext, setUpsellContext] = useState<UpsellContext | null>(null);
   const [usageInfo, setUsageInfo] = useState<{ used: number; limit: number } | undefined>(undefined);
+  const [topupModalVisible, setTopupModalVisible] = useState(false);
+  const [pendingAnalysis, setPendingAnalysis] = useState<{
+    uri: string; userId: string; duration: number;
+  } | null>(null);
+  const [authToken, setAuthToken] = useState<string>('');
 
   const audioRecorder = useAudioRecorder({
     ...RecordingPresets.HIGH_QUALITY,
@@ -132,6 +143,14 @@ export default function AIAnalysisScreen() {
     }
   }, [isRecording]);
 
+  async function loadUsageInfo() {
+    if (!subscription) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const result = await checkAiAnalysisLimit(user.id, subscription);
+    setUsageInfo({ used: result.used, limit: result.limit });
+  }
+
   async function loadPlans() {
     const { data } = await supabase
       .from('lesson_plans')
@@ -226,10 +245,76 @@ export default function AIAnalysisScreen() {
     }
   }
 
+  async function runAnalysis(uri: string, userId: string, duration: number, token: string, skipMonthlyIncrement = false) {
+    setIsAnalyzing(true);
+    setAnalysisStep(1);
+
+    const formData = new FormData();
+    formData.append('audio', { uri, type: 'audio/m4a', name: 'lesson.m4a' } as any);
+    formData.append('member_id', memberId);
+    formData.append('coach_id', userId);
+    formData.append('duration_seconds', String(duration));
+
+    const stepTimer = setInterval(() => {
+      setAnalysisStep(prev => (prev < ANALYSIS_STEPS.length ? prev + 1 : prev));
+    }, 4000);
+
+    let finalResult: any = null;
+    try {
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      const fetchTimeout = setTimeout(() => controller.abort(), 5 * 60 * 1000);
+      let res: Response;
+      try {
+        res = await fetch(`${SUPABASE_URL}/functions/v1/process-lesson`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData,
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(fetchTimeout);
+        abortControllerRef.current = null;
+      }
+      finalResult = await res.json();
+
+      // quota 초과 에러 처리
+      if (res.status === 409 && finalResult.code === 'REPORT_QUOTA_EXCEEDED') {
+        setIsAnalyzing(false);
+        setAnalysisStep(0);
+        setUsageInfo({ used: finalResult.used, limit: finalResult.limit });
+        setPendingAnalysis({ uri, userId, duration });
+        setAuthToken(token);
+        setTopupModalVisible(true);
+        return;
+      }
+
+      if (!res.ok || finalResult.error) throw new Error(finalResult.error || '분석에 실패했습니다.');
+
+      // extra credit 사용 시 monthly counter 증가하지 않음 (서버가 이미 처리)
+      if (!skipMonthlyIncrement) {
+        await incrementAiAnalysisUsage(userId);
+      }
+
+      await loadPlans();
+      if (finalResult.plan?.id) setExpandedPlan(finalResult.plan.id);
+      Alert.alert('완료', 'AI 레슨 분석이 완료됐습니다! 🎾');
+    } catch (e: any) {
+      if (e?.name === 'AbortError') {
+        Alert.alert('분석 시간 초과', '분석에 시간이 너무 오래 걸렸습니다. 네트워크 상태를 확인하고 다시 시도해주세요.');
+      } else {
+        Alert.alert('오류', e.message || '분석 중 오류가 발생했습니다.');
+      }
+    } finally {
+      clearInterval(stepTimer);
+      setIsAnalyzing(false);
+      setAnalysisStep(0);
+    }
+  }
+
   async function stopAndAnalyze() {
     if (!isRecording) return;
 
-    // 최소 10초 미만 녹음 시 분석 거부
     if (recordingDuration < 10) {
       Alert.alert('녹음 시간 부족', '최소 10초 이상 녹음해야 분석이 가능합니다.\n현재: ' + recordingDuration + '초');
       return;
@@ -237,86 +322,52 @@ export default function AIAnalysisScreen() {
 
     if (timerRef.current) clearInterval(timerRef.current);
     setIsRecording(false);
-    setIsAnalyzing(true);
-    setAnalysisStep(1);
 
     try {
       await audioRecorder.stop();
       const uri = audioRecorder.uri;
       if (!uri) throw new Error('녹음 파일을 찾을 수 없습니다.');
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('로그인이 필요합니다.');
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) throw new Error('로그인이 필요합니다.');
 
-      // ── 월별 한도 체크 ──
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token ?? SUPABASE_ANON_KEY;
+
+      // ── 월별 한도 체크 (로컬 사전 체크 — extra credit 없을 때만 모달 즉시 표시) ──
       const limitCheck = await checkAiAnalysisLimit(user.id, subscription);
-      if (!limitCheck.allowed) {
-        setIsAnalyzing(false);
-        setAnalysisStep(0);
+      if (!limitCheck.allowed && !limitCheck.needsExtraCredit) {
+        // 구독 자체 차단
         setUsageInfo({ used: limitCheck.used, limit: limitCheck.limit });
-        setUpsellContext(
-          limitCheck.planId === 'basic' ? 'ai_analysis_limit' : 'ai_analysis_free'
-        );
+        setUpsellContext(limitCheck.planId === 'basic' ? 'ai_analysis_limit' : 'ai_analysis_free');
         return;
       }
 
-      const formData = new FormData();
-      formData.append('audio', { uri, type: 'audio/m4a', name: 'lesson.m4a' } as any);
-      formData.append('member_id', memberId);
-      formData.append('coach_id', user.id);
-      formData.append('duration_seconds', String(recordingDuration));
-
-      // React Native는 ReadableStream 미지원 → 일반 JSON 요청
-      // 분석 단계는 타이머로 시뮬레이션
-      const stepTimer = setInterval(() => {
-        setAnalysisStep(prev => (prev < ANALYSIS_STEPS.length ? prev + 1 : prev));
-      }, 4000);
-
-      let finalResult: any = null;
-      try {
-        // 5분 타임아웃 (백그라운드 전환 고려)
-        const controller = new AbortController();
-        abortControllerRef.current = controller;
-        const fetchTimeout = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5분 타임아웃
-        let res: Response;
-        try {
-          res = await fetch(`${SUPABASE_URL}/functions/v1/process-lesson`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-            body: formData,
-            signal: controller.signal,
-          });
-        } finally {
-          clearTimeout(fetchTimeout);
-          abortControllerRef.current = null;
-        }
-        finalResult = await res.json();
-        if (!res.ok || finalResult.error) throw new Error(finalResult.error || '분석에 실패했습니다.');
-      } finally {
-        clearInterval(stepTimer);
+      if (!limitCheck.allowed && limitCheck.needsExtraCredit && limitCheck.extraCredits === 0) {
+        // 월 한도 초과 + 추가 크레딧 없음 → 즉시 충전 모달
+        setUsageInfo({ used: limitCheck.used, limit: limitCheck.limit });
+        setPendingAnalysis({ uri, userId: user.id, duration: recordingDuration });
+        setAuthToken(token);
+        setTopupModalVisible(true);
+        return;
       }
 
-      // 사용량 1회 증가
-      await incrementAiAnalysisUsage(user.id);
-
-      await loadPlans();
-      if (finalResult.plan?.id) setExpandedPlan(finalResult.plan.id);
-      Alert.alert('완료', 'AI 레슨 분석이 완료됐습니다! 🎾');
+      // 정상 진행 (월 한도 내 or 추가 크레딧 있음 — 서버가 처리)
+      const usingExtraCredit = limitCheck.needsExtraCredit && limitCheck.extraCredits > 0;
+      await runAnalysis(uri, user.id, recordingDuration, token, usingExtraCredit);
 
     } catch (e: any) {
-      // AbortError = 타임아웃. 백그라운드 전환 후 네트워크 끊김과 구분
-      if (e?.name === 'AbortError') {
-        Alert.alert(
-          '분석 시간 초과',
-          '분석에 시간이 너무 오래 걸렸습니다. 네트워크 상태를 확인하고 다시 시도해주세요.'
-        );
-      } else {
-        Alert.alert('오류', e.message || '분석 중 오류가 발생했습니다.');
-      }
-    } finally {
-      setIsAnalyzing(false);
-      setAnalysisStep(0);
+      Alert.alert('오류', e.message || '분석 시작 중 오류가 발생했습니다.');
     }
+  }
+
+  async function handleTopupSuccess(newBalance: number) {
+    setTopupModalVisible(false);
+    if (!pendingAnalysis) return;
+    const { uri, userId, duration } = pendingAnalysis;
+    setPendingAnalysis(null);
+    // 충전 완료 후 자동으로 분석 재시도 (extra credit 사용)
+    await runAnalysis(uri, userId, duration, authToken, true);
   }
 
   // ── 유틸 ──
@@ -497,6 +548,18 @@ export default function AIAnalysisScreen() {
           <Text style={styles.recordDesc}>
             레슨 중 코치 음성을 녹음하면{'\n'}AI가 자동으로 분석하고 다음 레슨 계획을 만들어드려요
           </Text>
+
+          {/* 사용량 표시 */}
+          {usageInfo && (
+            <View style={{ marginBottom: 12 }}>
+              <ReportQuotaBar
+                used={usageInfo.used}
+                limit={usageInfo.limit}
+                extraCredits={subscription?.extra_report_credits ?? 0}
+                onTopupPress={() => setTopupModalVisible(true)}
+              />
+            </View>
+          )}
 
           {isAnalyzing ? (
             <AnalyzingView />
@@ -719,7 +782,7 @@ export default function AIAnalysisScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* 플랜 업셀 모달 (AI 한도 초과 / 권한 없음) */}
+      {/* 플랜 업셀 모달 (구독 차단 / 권한 없음) */}
       {upsellContext && (
         <PlanUpsellModal
           visible={true}
@@ -727,6 +790,24 @@ export default function AIAnalysisScreen() {
           context={upsellContext}
           currentPlanId={subscription?.plan_id ?? 'free'}
           usageInfo={usageInfo}
+        />
+      )}
+
+      {/* AI 리포트 추가 충전 모달 (월 할당량 소진 시) */}
+      {topupModalVisible && authToken && (
+        <ReportTopupModal
+          visible={topupModalVisible}
+          onClose={() => {
+            setTopupModalVisible(false);
+            setPendingAnalysis(null);
+          }}
+          onTopupSuccess={handleTopupSuccess}
+          onUpgradePress={() => {
+            setTopupModalVisible(false);
+            router.push('/subscription/upgrade' as any);
+          }}
+          currentPlanId={subscription?.plan_id ?? 'free'}
+          authToken={authToken}
         />
       )}
     </View>
