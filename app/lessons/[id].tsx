@@ -142,13 +142,11 @@ export default function LessonDetailScreen() {
         if (row.id) {
           await supabase.from('attendance').delete().eq('id', row.id);
           if (row.deduct_credit) {
-            await supabase.from('members').update({
-              remaining_credits: row.member.remaining_credits + 1,
-            }).eq('id', row.member_id);
+            await supabase.rpc('adjust_remaining_credits', { p_member_id: row.member_id, p_delta: 1 });
           }
         }
-        setUpdating(null);
         await loadAttendance();
+        setUpdating(null);
         return;
       }
       // 결석 모달 오픈
@@ -229,12 +227,10 @@ export default function LessonDetailScreen() {
       }).eq('id', row.id);
     }
     if (creditDelta !== 0) {
-      await supabase.from('members').update({
-        remaining_credits: Math.max(0, row.member.remaining_credits + creditDelta),
-      }).eq('id', row.member_id);
+      await supabase.rpc('adjust_remaining_credits', { p_member_id: row.member_id, p_delta: creditDelta });
     }
-    setUpdating(null);
     await loadAttendance();
+    setUpdating(null);
   }
 
   async function deleteLesson() {
@@ -245,9 +241,7 @@ export default function LessonDetailScreen() {
           // 차감됐던 크레딧 복구
           for (const a of attendance) {
             if (a.deduct_credit) {
-              await supabase.from('members').update({
-                remaining_credits: a.member.remaining_credits + 1,
-              }).eq('id', a.member_id);
+              await supabase.rpc('adjust_remaining_credits', { p_member_id: a.member_id, p_delta: 1 });
             }
           }
           await supabase.from('lessons').delete().eq('id', id!);

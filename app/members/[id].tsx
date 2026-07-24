@@ -270,9 +270,9 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       deduction_type: newDeductionType,
     }).eq('id', attId);
     if (willDeduct && !currentDeductCredit) {
-      await supabase.from('members').update({ remaining_credits: Math.max(0, currentRemaining - 1) }).eq('id', memberId2);
+      await supabase.rpc('adjust_remaining_credits', { p_member_id: memberId2, p_delta: -1 });
     } else if (!willDeduct && currentDeductCredit) {
-      await supabase.from('members').update({ remaining_credits: currentRemaining + 1 }).eq('id', memberId2);
+      await supabase.rpc('adjust_remaining_credits', { p_member_id: memberId2, p_delta: 1 });
     }
     setSavingAtt(false);
     setEditingAttId(null);
@@ -298,9 +298,9 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       deduction_type: deductionT,
     }).eq('id', attId);
     if (willDeduct && !currentDeductCredit) {
-      await supabase.from('members').update({ remaining_credits: Math.max(0, currentRemaining - 1) }).eq('id', memberId2);
+      await supabase.rpc('adjust_remaining_credits', { p_member_id: memberId2, p_delta: -1 });
     } else if (!willDeduct && currentDeductCredit) {
-      await supabase.from('members').update({ remaining_credits: currentRemaining + 1 }).eq('id', memberId2);
+      await supabase.rpc('adjust_remaining_credits', { p_member_id: memberId2, p_delta: 1 });
     }
     setSavingAtt(false);
     setEditingAttId(null);
