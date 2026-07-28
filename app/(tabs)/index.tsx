@@ -13,6 +13,7 @@ import { Colors, Radius, Shadow } from '../../lib/theme';
 import { useSubscription } from '../../hooks/useSubscription';
 import PlanUpsellModal from "../../components/PlanUpsellModal";
 import CoachQRModal from '../../components/CoachQRModal';
+import OnboardingModal from '../../components/OnboardingModal';
 
 const ABSENCE_REASONS = ['개인사정', '부상', '일정충돌', '무단결석', '기타'] as const;
 const DEDUCTION_TYPES = ['정상차감', '미차감', '보강예정'] as const;
@@ -472,13 +473,13 @@ export default function HomeScreen() {
         // 출석 되돌리기
         if (card.attendanceId) {
           await supabase.from('attendance').delete().eq('id', card.attendanceId);
-          // 크레딧 복구 — DB 현재 값 기준으로 +1 (0회에서 체크→-1이 된 경우도 정확히 복구)
-          const { data: currMem } = await supabase.from('members').select('remaining_credits, lesson_count').eq('id', card.memberId).maybeSingle();
+          // deduct_credit이 true였을 때만 +1 복구 (atomic RPC 사용 — stale read 방지)
+          if (card.deductCredit) {
+            await supabase.rpc('adjust_remaining_credits', { p_member_id: card.memberId, p_delta: 1 });
+          }
+          const { data: currMem } = await supabase.from('members').select('lesson_count').eq('id', card.memberId).maybeSingle();
           await supabase.from('members')
-            .update({
-              remaining_credits: (currMem?.remaining_credits ?? 0) + 1,
-              lesson_count: Math.max(0, (currMem?.lesson_count ?? 0) - 1),
-            })
+            .update({ lesson_count: Math.max(0, (currMem?.lesson_count ?? 0) - 1) })
             .eq('id', card.memberId);
         }
       } else {
@@ -492,11 +493,9 @@ export default function HomeScreen() {
           absence_reason: null,
           deduction_type: null,
         }, { onConflict: 'lesson_id,member_id' });
-        // 이전에 차감 안 됐을 때만 차감 (0회도 -1로 차감하여 정확한 복구 가능하게)
+        // 이전에 차감 안 됐을 때만 차감 (atomic RPC 사용 — stale read 방지)
         if (!wasDeducted) {
-          await supabase.from('members')
-            .update({ remaining_credits: card.remainingCredits - 1 })
-            .eq('id', card.memberId);
+          await supabase.rpc('adjust_remaining_credits', { p_member_id: card.memberId, p_delta: -1 });
           if (card.remainingCredits === 0) {
             Alert.alert('잔여 레슨 횟수가 없습니다.', '이 회원의 레슨 횟수가 없습니다.\n충전이 필요합니다.');
           }
@@ -525,9 +524,7 @@ export default function HomeScreen() {
       try {
         await supabase.from('attendance').delete().eq('id', card.attendanceId);
         if (card.deductCredit) {
-          await supabase.from('members')
-            .update({ remaining_credits: card.remainingCredits + 1 })
-            .eq('id', card.memberId);
+          await supabase.rpc('adjust_remaining_credits', { p_member_id: card.memberId, p_delta: 1 });
         }
         await loadTodayCards(userId);
       } finally {
@@ -561,15 +558,11 @@ export default function HomeScreen() {
         deduction_type: selectedDeduction,
       }, { onConflict: 'lesson_id,member_id' });
 
-      // 크레딧 조정
+      // 크레딧 조정 (atomic RPC — stale read 방지)
       if (willDeduct && !wasDeducted) {
-        await supabase.from('members')
-          .update({ remaining_credits: Math.max(0, card.remainingCredits - 1) })
-          .eq('id', card.memberId);
+        await supabase.rpc('adjust_remaining_credits', { p_member_id: card.memberId, p_delta: -1 });
       } else if (!willDeduct && wasDeducted) {
-        await supabase.from('members')
-          .update({ remaining_credits: card.remainingCredits + 1 })
-          .eq('id', card.memberId);
+        await supabase.rpc('adjust_remaining_credits', { p_member_id: card.memberId, p_delta: 1 });
       }
 
       setAbsenceModal(false);
@@ -750,60 +743,17 @@ export default function HomeScreen() {
           currentPlanId={subscription?.plan_id ?? 'free'}
         />
 
-        {/* 레슨권 없음 유도 모달 */}
-        <Modal visible={noPackageModal} transparent animationType="fade" onRequestClose={() => setNoPackageModal(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalSheet, { borderRadius: 24, marginHorizontal: 20, paddingBottom: 28 }]}>
-              <View style={{ alignItems: 'center', paddingTop: 28, paddingHorizontal: 24 }}>
-                <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-                  <Ionicons name="ticket-outline" size={32} color={Colors.primary} />
-                </View>
-                <Text style={{ fontSize: 18, fontWeight: '800', color: Colors.foreground, marginBottom: 8, textAlign: 'center' }}>레슨권을 먼저 등록해주세요</Text>
-                <Text style={{ fontSize: 14, color: Colors.mutedFg, textAlign: 'center', lineHeight: 22, marginBottom: 8 }}>
-                  회원 등록 및 출석 관리를 위해{`\n`}레슨권이 필요해요.
-                </Text>
-                {/* 예시 */}
-                <View style={{ width: '100%', backgroundColor: Colors.background, borderRadius: 12, padding: 14, marginTop: 8, gap: 8 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 2 }}>예시</Text>
-                  {[
-                    { icon: 'tennisball-outline', label: '10회 레슨권', sub: '300,000원 · 60분' },
-                    { icon: 'tennisball-outline', label: '20회 레슨권', sub: '550,000원 · 60분' },
-                    { icon: 'tennisball-outline', label: '체험 레슨', sub: '30,000원 · 30분' },
-                  ].map((item, i) => (
-                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                      <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center' }}>
-                        <Ionicons name={item.icon as any} size={16} color={Colors.primary} />
-                      </View>
-                      <View>
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: Colors.foreground }}>{item.label}</Text>
-                        <Text style={{ fontSize: 12, color: Colors.mutedFg }}>{item.sub}</Text>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              </View>
-              <View style={{ paddingHorizontal: 20, marginTop: 20, gap: 10 }}>
-                <TouchableOpacity
-                  style={{ backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center' }}
-                  onPress={() => { setNoPackageModal(false); router.push('/lesson-packages/new'); }}
-                >
-                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>레슨권 등록하기</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={{ paddingVertical: 12, alignItems: 'center' }}
-                  onPress={async () => {
-                    setNoPackageModal(false);
-                    if (userId) {
-                      await AsyncStorage.setItem(`no_package_modal_dismissed_${userId}`, '1');
-                    }
-                  }}
-                >
-                  <Text style={{ color: Colors.mutedFg, fontSize: 14 }}>나중에 할게요</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
+        {/* 레슨권 없음 유도 + 온보딩 모달 */}
+        <OnboardingModal
+          visible={noPackageModal}
+          onRegister={() => { setNoPackageModal(false); router.push('/lesson-packages/new'); }}
+          onDismiss={async () => {
+            setNoPackageModal(false);
+            if (userId) {
+              await AsyncStorage.setItem(`no_package_modal_dismissed_${userId}`, '1');
+            }
+          }}
+        />
 
         {/* QR 초대 모달 */}
         {userId ? (

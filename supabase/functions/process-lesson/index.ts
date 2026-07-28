@@ -10,6 +10,22 @@ const corsHeaders = {
 const SYSTEM_PROMPT = `당신은 USTA/ITF 자격증을 보유한 전문 테니스 코치 어시스턴트입니다.
 코치가 레슨 후 회원별 맞춤 리포트를 작성할 수 있도록 분석을 제공합니다.
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  최우선 원칙 — 다른 모든 지침보다 반드시 우선 적용
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+■ "summary" · "session_goals" · "improvement_points" · "next_goals" 파트:
+  코치가 레슨 중 실제로 말한 단어와 표현만 사용할 것.
+  코치가 언급하지 않은 기술·개념·드릴은 절대 추가하지 말 것.
+■ "summary" 파트: 코치가 말하지 않은 드릴/기술은 절대 포함 금지
+■ 코치의 원래 용어와 표현을 그대로 살릴 것 — 임의 재해석·일반화 금지
+■ 불확실한 내용은 추론하지 말고 해당 항목을 비워 둘 것
+■ "drill_suggestions" 파트 (예외 허용):
+  오늘 레슨 요약의 기술·문제점을 기반으로 "관련 교육 자료(RAG)"에서
+  적합한 드릴을 선택·추천하세요. 코치가 레슨 중 명시적으로 언급하지
+  않은 드릴도 RAG 자료에 근거가 있다면 추천 가능합니다.
+  단, 반드시 오늘 레슨 요약 내용과 연관된 드릴만 선택할 것.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 ## 분석 원칙
 1. 레슨에서 구체적으로 언급된 기술/상황을 중심으로 분석
 2. 회원 레벨과 목표에 맞는 피드백 제공
@@ -241,8 +257,10 @@ serve(async (req) => {
     // ── Step 2: transcript 균등 샘플링 + 요약 ──
     const TRANSCRIPT_SUMMARY_PROMPT = `다음은 테니스 레슨 녹음 전체 전사입니다. 내용을 빠짐없이 분석해주세요.
 
+⚠️ 최우선 원칙: 코치가 실제로 말한 단어·표현만 추출할 것. 전사에 없는 기술·드릴·개념을 절대 추가하거나 추론하지 마세요. 코치의 원래 용어를 그대로 사용할 것.
+
 지침:
-1. 레슨 기술 지도/피드백/지시사항을 빠짐없이 모두 추출하세요.
+1. 레슨 기술 지도/피드백/지시사항을 빠짐없이 모두 추출하세요. 단, 전사에 실제로 나온 것만.
 2. 사적 대화(날씨, 일상, 식사, 잡담, 안부 인사 등)는 lesson_flow에 포함하지 마세요.
    단, 레슨 내용이 짧거나 적어도 있는 레슨 내용은 전부 살려서 상세히 작성하세요.
 3. lesson_flow는 레슨의 시작부터 끝까지 전체 흐름을 담아야 하며, 특정 구간에만 치우치지 말 것.
@@ -394,9 +412,10 @@ ${knowledgeContext || '(없음)'}
 
 ## 지켜야 할 규칙
 - drill_suggestions는 정확히 2개만 작성하세요.
-- 위의 "오늘 레슨 요약"에 포함된 레슨 기술/피드백만 분석하세요.
+- summary, session_goals, improvement_points, next_goals: "오늘 레슨 요약"에 포함된 기술/피드백만 분석하세요. 코치가 언급하지 않은 내용 추가 금지.
+- drill_suggestions (예외): 오늘 레슨 요약의 기술·문제점을 기반으로 위의 "관련 교육 자료"에서 적합한 드릴을 선택해 추천하세요. 코치가 레슨 중 명시하지 않은 드릴도 RAG 자료에 있다면 추천 가능합니다.
 - 레슨 요약에 없는 내용(사적 대화, 일상 잡담, 날씨, 식사 등)은 분석에 절대 반영하지 마세요.
-- 레슨 요약 명시된 기술과 피드백만을 대상으로 하세요. 불확실하면 추정하지 말고 레슨 요약에 기반해 작성하세요.
+- 불확실하면 추정하지 말고 레슨 요약에 기반해 작성하세요.
 - 레슨 내용이 짧거나 적어도 있는 내용을 최대한 상세하고 구체적으로 분석하세요. 내용을 줄이거나 심플하게 만들지 마세요.
 - JSON만 출력하고 다른 텍스트는 포함하지 마세요.`
 
@@ -611,6 +630,11 @@ practice_plan은 2-3개 작성. JSON 외 텍스트 절대 포함 금지.`
   })
 
   const data = await res.json()
+
+  if (data.error || !data.content) {
+    console.error('member_report_claude_error:', JSON.stringify(data))
+  }
+
   const rawText = data.content?.[0]?.text || ''
 
   let memberParsed: any = {}
@@ -622,7 +646,16 @@ practice_plan은 2-3개 작성. JSON 외 텍스트 절대 포함 금지.`
     if (m) { try { memberParsed = JSON.parse(m[0]) } catch { /* 무시 */ } }
   }
 
-  if (!memberParsed.summary) return // 파싱 실패 시 스킵
+  if (!memberParsed.summary) {
+    console.error('member_report_parse_failed: no summary', { rawText: rawText.slice(0, 200) })
+    // fallback: 코치 분석 데이터로 기본 리포트 생성
+    memberParsed = {
+      summary: parsed.summary || '오늘 레슨을 완료했습니다.',
+      achievements: Array.isArray(parsed.achievements) ? parsed.achievements : [],
+      improvement_points: Array.isArray(parsed.improvement_points) ? parsed.improvement_points : [],
+      practice_plan: [],
+    }
+  }
 
   await supabase.from('member_lesson_reports').insert({
     coach_id: coachId,
