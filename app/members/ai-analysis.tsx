@@ -20,6 +20,7 @@ const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
 const ANALYSIS_STEPS = [
+  { step: 0, icon: '⬆️', label: '오디오 업로드 중...' },
   { step: 1, icon: '🎙', label: '음성 변환 중...' },
   { step: 2, icon: '📝', label: '레슨 내용 요약 중...' },
   { step: 3, icon: '🔍', label: '관련 교육 자료 검색 중...' },
@@ -44,6 +45,7 @@ export default function AIAnalysisScreen() {
   const [topupModalVisible, setTopupModalVisible] = useState(false);
   const [pendingAnalysis, setPendingAnalysis] = useState<{
     uri: string; userId: string; duration: number;
+    storagePath?: string; planId?: string;
   } | null>(null);
   const [authToken, setAuthToken] = useState<string>('');
 
@@ -151,6 +153,32 @@ export default function AIAnalysisScreen() {
     setUsageInfo({ used: result.used, limit: result.limit });
   }
 
+  async function pollForPlan(planId: string): Promise<any> {
+    const MAX_ATTEMPTS = 70; // 약 6분 (5초 간격)
+    let step = 2;
+    for (let i = 0; i < MAX_ATTEMPTS; i++) {
+      await new Promise(r => setTimeout(r, 5000));
+      // 화면잠금·백그라운드 전환 시 네트워크 에러가 발생해도 폴링을 계속 유지
+      let pollData: any = null;
+      try {
+        const { data, error } = await supabase
+          .from('lesson_plans')
+          .select('id, status, error_message')
+          .eq('id', planId)
+          .single();
+        if (!error) pollData = data;
+      } catch { /* 네트워크 에러 — 다음 폴링으로 넘어감 */ }
+      if (!pollData) continue;
+      if (pollData.status === 'processing') {
+        step = Math.min(step + 1, ANALYSIS_STEPS.length - 1);
+        setAnalysisStep(step);
+      }
+      if (pollData.status === 'completed') return pollData;
+      if (pollData.status === 'failed') throw new Error(pollData.error_message || '분석 실패');
+    }
+    throw new Error('POLL_TIMEOUT');
+  }
+
   async function loadPlans() {
     const { data } = await supabase
       .from('lesson_plans')
@@ -160,6 +188,17 @@ export default function AIAnalysisScreen() {
       .limit(10);
     setPlans(data ?? []);
     setLoading(false);
+
+    // 앱 복귀 시 진행 중인 분석 자동 재개
+    const inProgress = (data ?? []).find((p: any) => p.status === 'pending' || p.status === 'processing');
+    if (inProgress && !isAnalyzing) {
+      setIsAnalyzing(true);
+      setAnalysisStep(2);
+      pollForPlan(inProgress.id)
+        .then(async () => { await loadPlans(); })
+        .catch(() => { loadPlans(); })
+        .finally(() => { setIsAnalyzing(false); setAnalysisStep(0); });
+    }
   }
 
   async function polishManualReport() {
@@ -245,68 +284,88 @@ export default function AIAnalysisScreen() {
     }
   }
 
-  async function runAnalysis(uri: string, userId: string, duration: number, token: string, skipMonthlyIncrement = false) {
+  async function runAnalysis(
+    uri: string, userId: string, duration: number, token: string,
+    skipMonthlyIncrement = false,
+    reuseStoragePath?: string, reusePlanId?: string,
+  ) {
     setIsAnalyzing(true);
-    setAnalysisStep(1);
 
-    const formData = new FormData();
-    formData.append('audio', { uri, type: 'audio/m4a', name: 'lesson.m4a' } as any);
-    formData.append('member_id', memberId);
-    formData.append('coach_id', userId);
-    formData.append('duration_seconds', String(duration));
-
-    const stepTimer = setInterval(() => {
-      setAnalysisStep(prev => (prev < ANALYSIS_STEPS.length ? prev + 1 : prev));
-    }, 4000);
-
-    let finalResult: any = null;
     try {
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
-      const fetchTimeout = setTimeout(() => controller.abort(), 5 * 60 * 1000);
-      let res: Response;
-      try {
-        res = await fetch(`${SUPABASE_URL}/functions/v1/process-lesson`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: formData,
-          signal: controller.signal,
-        });
-      } finally {
-        clearTimeout(fetchTimeout);
-        abortControllerRef.current = null;
-      }
-      finalResult = await res.json();
+      let storagePath = reuseStoragePath;
+      let planId = reusePlanId;
 
-      // quota 초과 에러 처리
-      if (res.status === 409 && finalResult.code === 'REPORT_QUOTA_EXCEEDED') {
+      // ── Step 0: 오디오 업로드 (재시도가 아닐 때만) ──
+      if (!storagePath) {
+        setAnalysisStep(0);
+        storagePath = `${userId}/${Date.now()}_lesson.m4a`;
+        const fileRes = await fetch(uri);
+        const blob = await fileRes.blob();
+        const { error: uploadError } = await supabase.storage
+          .from('lesson-audio')
+          .upload(storagePath, blob, { contentType: 'audio/m4a', upsert: false });
+        if (uploadError) throw new Error(`오디오 업로드 실패: ${uploadError.message}`);
+      }
+
+      // ── Step 1: lesson_plans 행 생성 (재시도가 아닐 때만) ──
+      if (!planId) {
+        setAnalysisStep(1);
+        const { data: pending, error: planError } = await supabase
+          .from('lesson_plans')
+          .insert({ coach_id: userId, member_id: memberId, status: 'pending', audio_storage_path: storagePath })
+          .select('id')
+          .single();
+        if (planError || !pending) throw new Error('분석 초기화 실패');
+        planId = pending.id;
+      }
+
+      // ── Step 2: Edge Function 트리거 (fire-and-forget) ──
+      // 앱이 백그라운드로 전환돼도 서버에서 분석 계속 진행
+      fetch(`${SUPABASE_URL}/functions/v1/process-lesson`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({
+          lesson_plan_id: planId,
+          audio_storage_path: storagePath,
+          member_id: memberId,
+          coach_id: userId,
+          duration_seconds: duration,
+        }),
+      }).catch(() => {
+        // 연결 끊겨도 서버에서 계속 처리됨
+      });
+
+      setAnalysisStep(2);
+
+      // ── Step 3: 완료까지 폴링 ──
+      const completed = await pollForPlan(planId!);
+
+      // quota 초과 시 충전 모달
+      if (completed.error_message?.includes('REPORT_QUOTA_EXCEEDED') ||
+          completed.error_message?.includes('할당량')) {
         setIsAnalyzing(false);
         setAnalysisStep(0);
-        setUsageInfo({ used: finalResult.used, limit: finalResult.limit });
-        setPendingAnalysis({ uri, userId, duration });
+        setPendingAnalysis({ uri, userId, duration, storagePath, planId });
         setAuthToken(token);
         setTopupModalVisible(true);
         return;
       }
 
-      if (!res.ok || finalResult.error) throw new Error(finalResult.error || '분석에 실패했습니다.');
-
-      // extra credit 사용 시 monthly counter 증가하지 않음 (서버가 이미 처리)
-      if (!skipMonthlyIncrement) {
-        await incrementAiAnalysisUsage(userId);
-      }
-
+      if (!skipMonthlyIncrement) await incrementAiAnalysisUsage(userId);
       await loadPlans();
-      if (finalResult.plan?.id) setExpandedPlan(finalResult.plan.id);
+      setExpandedPlan(completed.id);
       Alert.alert('완료', 'AI 레슨 분석이 완료됐습니다! 🎾');
+
     } catch (e: any) {
-      if (e?.name === 'AbortError') {
-        Alert.alert('분석 시간 초과', '분석에 시간이 너무 오래 걸렸습니다. 네트워크 상태를 확인하고 다시 시도해주세요.');
+      if (e?.message === 'POLL_TIMEOUT') {
+        Alert.alert(
+          '분석 진행 중',
+          '분석이 서버에서 계속 진행 중입니다.\n잠시 후 이 화면으로 돌아오면 결과를 확인할 수 있습니다.',
+        );
       } else {
         Alert.alert('오류', e.message || '분석 중 오류가 발생했습니다.');
       }
     } finally {
-      clearInterval(stepTimer);
       setIsAnalyzing(false);
       setAnalysisStep(0);
     }
@@ -364,10 +423,10 @@ export default function AIAnalysisScreen() {
   async function handleTopupSuccess(newBalance: number) {
     setTopupModalVisible(false);
     if (!pendingAnalysis) return;
-    const { uri, userId, duration } = pendingAnalysis;
+    const { uri, userId, duration, storagePath, planId } = pendingAnalysis;
     setPendingAnalysis(null);
-    // 충전 완료 후 자동으로 분석 재시도 (extra credit 사용)
-    await runAnalysis(uri, userId, duration, authToken, true);
+    // 충전 완료 후 재시도 — 기존 업로드된 파일 재사용, 새 plan 행 생성
+    await runAnalysis(uri, userId, duration, authToken, true, storagePath, undefined);
   }
 
   // ── 유틸 ──
