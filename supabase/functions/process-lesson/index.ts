@@ -41,27 +41,34 @@ const SYSTEM_PROMPT = `당신은 USTA/ITF 자격증을 보유한 전문 테니�
 - 레슨 요약에 명시된 레슨 기술/피드백/지시사항만을 분석 대상으로 하세요
 
 ## 출력 형식
-반드시 아래 JSON 형식으로만 응답하세요 (한국어). JSON 외 텍스트 절대 포함 금지:
+반드시 아래 JSON 형식으로만 응답하세요 (한국어). JSON 외 텍스트 절대 포함 금지.
+
+━━ 분량 상한 (엄수) ━━
+• summary: 2문장 이내
+• session_goals: 1문장 이내
+• improvement_points: 정확히 2항목, 각 1문장 (원인→교정법 핵심만)
+• next_goals: 정확히 2항목, 각 1문장
+• drill method/court_adaptation: 각 1문장 이내
+• 전체 출력 900토큰 이내
+
 {
-  "summary": "오늘 레슨 전체 흐름 요약 (4-6문장, 시작~끝 균등 반영)",
-  "session_goals": "이번 레슨에서 달성하려 했던 핵심 목표 1-2가지",
+  "summary": "오늘 레슨 흐름 요약 (2문장 이내)",
+  "session_goals": "이번 레슨 핵심 목표 (1문장)",
   "improvement_points": [
-    "개선 포인트 1 (원인 → 교정법)",
-    "개선 포인트 2",
-    "개선 포인트 3"
+    "개선 포인트 1: 원인 → 교정법 (1문장)",
+    "개선 포인트 2: 원인 → 교정법 (1문장)"
   ],
   "next_goals": [
-    "다음 레슨 목표 1 (구체적 드릴 포함)",
-    "다음 레슨 목표 2",
-    "다음 레슨 목표 3"
+    "다음 레슨 목표 1 (1문장)",
+    "다음 레슨 목표 2 (1문장)"
   ],
   "drill_suggestions": [
     {
       "name": "드릴 이름",
-      "purpose": "목적",
-      "method": "실행 방법 (구체적)",
+      "purpose": "목적 (1문장)",
+      "method": "실행 방법 (1문장)",
       "reps": "횟수/시간",
-      "court_adaptation": "코트 유형에 맞는 변형 방법"
+      "court_adaptation": "코트 변형 (1문장)"
     }
   ]
 }
@@ -206,6 +213,9 @@ serve(async (req) => {
       })
     }
 
+    // ── 타이밍 계측 시작 ──
+    const T = { start: Date.now(), stt: 0, summary: 0, rag: 0, claude: 0, save: 0, member_report: 0 }
+
     // ── 비동기 시작: 분석 상태를 processing으로 업데이트 ──
     if (lessonPlanId) {
       await supabase.from('lesson_plans').update({ status: 'processing' }).eq('id', lessonPlanId)
@@ -236,6 +246,7 @@ serve(async (req) => {
     ])
 
     const whisperData = await whisperRes.json()
+    T.stt = Date.now()
     const transcript = (whisperData.text || '').trim()
     if (!transcript) throw new Error(`음성 변환 실패: ${JSON.stringify(whisperData)}`)
 
@@ -305,6 +316,7 @@ ${transcript}`
     ])
 
     const summaryData = await summaryRes.json()
+    T.summary = Date.now()
     let transcriptSummary: any = {}
     try {
       transcriptSummary = JSON.parse(summaryData.choices?.[0]?.message?.content || '{}')
@@ -364,6 +376,7 @@ ${transcript}`
         })
         .join('\n\n---\n\n')
     }
+    T.rag = Date.now()
 
     // ── Step 4: Claude 분석 ──
     async function fetchClaude(body: object, retries = 3): Promise<Response> {
@@ -422,11 +435,13 @@ ${knowledgeContext || '(없음)'}
     const claudeRes = await fetchClaude({
       model: 'claude-sonnet-4-5',
       max_tokens: 3500,
-      system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+      system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral', ttl: '1h' } }],
       messages: [{ role: 'user', content: userPrompt }],
     })
 
     const claudeData = await claudeRes.json()
+    T.claude = Date.now()
+    console.log('[TOKENS] coach', JSON.stringify(claudeData.usage))
     if (!claudeData.content?.[0]?.text) {
       throw new Error(`Claude 응답 오류: ${JSON.stringify(claudeData)}`)
     }
@@ -508,38 +523,103 @@ ${knowledgeContext || '(없음)'}
       plan = data
     }
 
+    T.save = Date.now()
+
     await supabase.from('members')
       .update({ lesson_count: (member?.lesson_count || 0) + 1 })
       .eq('id', memberId)
 
-    // ── Step 6: 회원용 리포트 생성 (await - Edge Function은 Response 반환 후 런타임 종료됨) ──
-    try {
-      await generateMemberReport({
-        supabase, fetchClaude,
-        coachId, memberId,
-        plan, parsed, member, effectiveCourtType,
-        durationSeconds: durationSeconds ?? null,
-      })
-    } catch (e) {
-      // 회원 리포트 실패해도 코치 응답은 정상 반환
-      console.error('member_report_error:', e)
+    // ── 코치 응답용 타이밍 (save까지만) ──
+    const timingPartial = {
+      stt_ms:     T.stt     - T.start,
+      summary_ms: T.summary - T.stt,
+      rag_ms:     T.rag     - T.summary,
+      claude_ms:  T.claude  - T.rag,
+      save_ms:    T.save    - T.claude,
     }
 
-    // ── Step 7: 오디오 파일 삭제 (파이프라인 완료 후, 재시도 가능성 위해 성공 시에만) ──
-    if (audioStoragePath) {
+    // ── Step 6: 회원 리포트 + 오디오 삭제를 백그라운드로 분리 ──
+    // pending은 응답 반환 전 동기 구간에서 설정 (태스크 시작 전 죽어도 상태가 남음)
+    if (plan?.id) {
+      const { error: pendingErr } = await supabase.from('lesson_plans')
+        .update({ member_report_status: 'pending' })
+        .eq('id', plan.id)
+      if (pendingErr) console.error('member_report_status_pending_error:', pendingErr)
+    } else {
+      console.error('member_report_status_skip: no plan id')
+    }
+
+    // save 완료 후 즉시 코치 응답 반환, 나머지는 EdgeRuntime.waitUntil()로 처리
+    const bgTask = (async () => {
       try {
-        const { error: deleteError } = await supabase.storage
-          .from('lesson-audio')
-          .remove([audioStoragePath])
-        if (deleteError) {
-          console.error('audio_delete_error:', deleteError.message)
-        }
-      } catch (e) {
-        console.error('audio_delete_exception:', e)
-      }
-    }
+        await generateMemberReport({
+          supabase, fetchClaude,
+          coachId, memberId,
+          plan, parsed, member, effectiveCourtType,
+          durationSeconds: durationSeconds ?? null,
+        })
 
-    return new Response(JSON.stringify({ success: true, plan, transcript, court_type: effectiveCourtType }), {
+        // 성공: completed 표시
+        if (plan?.id) {
+          const { error: completedErr } = await supabase.from('lesson_plans')
+            .update({ member_report_status: 'completed' })
+            .eq('id', plan.id)
+          if (completedErr) console.error('member_report_status_completed_error:', completedErr)
+        } else {
+          console.error('member_report_status_skip: no plan id')
+        }
+
+        // PN-07: 회원에게 AI 리포트 도착 알림
+        const { data: coachProfile } = await supabase
+          .from('coach_profiles').select('name').eq('coach_id', coachId).maybeSingle()
+        const coachName = coachProfile?.name ?? '코치'
+        await fetch(`${SUPABASE_URL}/functions/v1/send-push`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}` },
+          body: JSON.stringify({
+            recipient_type: 'member', recipient_id: memberId,
+            title: 'AI 레슨 리포트 도착',
+            body: `${coachName} 코치의 레슨 리포트가 도착했습니다.`,
+            data: { screen: 'report', plan_id: plan?.id },
+            notif_id: 'PN-07',
+          }),
+        }).catch((e: any) => console.error('pn07_error:', e))
+      } catch (e: any) {
+        console.error('member_report_error:', e)
+        // 실패: failed + 에러 메시지 기록
+        if (plan?.id) {
+          const { error: failedErr } = await supabase.from('lesson_plans')
+            .update({ member_report_status: 'failed', member_report_error: e?.message ?? 'unknown' })
+            .eq('id', plan.id)
+          if (failedErr) console.error('member_report_status_failed_error:', failedErr)
+        } else {
+          console.error('member_report_status_skip: no plan id')
+        }
+      }
+
+      T.member_report = Date.now()
+      console.log('[TIMING]', JSON.stringify({
+        ...timingPartial,
+        member_report_ms: T.member_report - T.save,
+        total_ms:         T.member_report - T.start,
+      }))
+
+      // ── Step 7: 오디오 파일 삭제 ──
+      if (audioStoragePath) {
+        try {
+          const { error: deleteError } = await supabase.storage
+            .from('lesson-audio').remove([audioStoragePath])
+          if (deleteError) console.error('audio_delete_error:', deleteError.message)
+        } catch (e) {
+          console.error('audio_delete_exception:', e)
+        }
+      }
+    })()
+
+    // @ts-ignore EdgeRuntime is available in Supabase/Deno runtime
+    EdgeRuntime.waitUntil(bgTask)
+
+    return new Response(JSON.stringify({ success: true, plan, transcript, court_type: effectiveCourtType, timing: timingPartial }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
 
@@ -630,6 +710,7 @@ practice_plan은 2-3개 작성. JSON 외 텍스트 절대 포함 금지.`
   })
 
   const data = await res.json()
+  console.log('[TOKENS] member', JSON.stringify(data.usage))
 
   if (data.error || !data.content) {
     console.error('member_report_claude_error:', JSON.stringify(data))
