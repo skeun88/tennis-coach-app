@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
@@ -11,7 +11,7 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import PlanUpsellModal from '../../components/PlanUpsellModal';
 import * as DocumentPicker from 'expo-document-picker';
-import { Audio } from 'expo-av';
+import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from 'expo-audio';
 import { supabase } from '../../lib/supabase';
 import { useSubscription } from '../../hooks/useSubscription';
 import { PLANS } from '../../lib/subscription';
@@ -84,23 +84,6 @@ interface CareerInfo {
 }
 
 // ─── 서브 컴포넌트 ────────────────────────
-async function startRecording(setRec: (r: Audio.Recording) => void, setIsRec: (b: boolean) => void) {
-  try {
-    await Audio.requestPermissionsAsync();
-    await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-    const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-    setRec(recording);
-    setIsRec(true);
-  } catch (e) { Alert.alert('오류', '녹음을 시작할 수 없어요.'); }
-}
-
-async function stopRecording(recording: Audio.Recording | null, setRec: (r: null) => void, setIsRec: (b: boolean) => void): Promise<string | null> {
-  if (!recording) return null;
-  await recording.stopAndUnloadAsync();
-  setRec(null);
-  setIsRec(false);
-  return recording.getURI() || null;
-}
 
 function SectionCard({ icon, title, onEdit, children }: { icon: string; title: string; onEdit: () => void; children: React.ReactNode }) {
   return (
@@ -185,8 +168,10 @@ export default function ProfileScreen() {
   const [knowledgeText, setKnowledgeText] = useState('');
   const [knowledgeFileUploading, setKnowledgeFileUploading] = useState(false);
   const [upsellVisible, setUpsellVisible] = useState(false);
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const audioRecorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: false });
+  const voiceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [voiceRecordingDuration, setVoiceRecordingDuration] = useState(0);
   const [voiceUsedSeconds, setVoiceUsedSeconds] = useState(0);
   const VOICE_MONTHLY_LIMIT = 1800; // 30분
   const planLabel = subscription ? PLANS[subscription.plan_id]?.name ?? subscription.plan_id : null;
@@ -673,16 +658,23 @@ export default function ProfileScreen() {
                   style={[styles.uploadBtn, isRecording && styles.uploadBtnActive]}
                   onPress={async () => {
                     if (!isRecording) {
-                      await startRecording(
-                        (r) => setRecording(r),
-                        setIsRecording
-                      );
+                      try {
+                        const status = await AudioModule.requestRecordingPermissionsAsync();
+                        if (!status.granted) { Alert.alert('오류', '녹음을 시작할 수 없어요.'); return; }
+                        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+                        await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
+                        audioRecorder.record();
+                        setVoiceRecordingDuration(0);
+                        voiceTimerRef.current = setInterval(() => setVoiceRecordingDuration(d => d + 1), 1000);
+                        setIsRecording(true);
+                      } catch (e) { Alert.alert('오류', '녹음을 시작할 수 없어요.'); }
                     } else {
                       setKnowledgeUploading(true);
-                      // 녹음 시간 측정
-                      const durationMs = recording ? (await recording.getStatusAsync()).durationMillis ?? 0 : 0;
-                      const durationSeconds = Math.round(durationMs / 1000);
-                      const uri = await stopRecording(recording, () => setRecording(null), setIsRecording);
+                      if (voiceTimerRef.current) clearInterval(voiceTimerRef.current);
+                      const durationSeconds = voiceRecordingDuration;
+                      setIsRecording(false);
+                      await audioRecorder.stop();
+                      const uri = audioRecorder.uri;
                       if (uri) {
                         try {
                           const { data: { user } } = await supabase.auth.getUser();
