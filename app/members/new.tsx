@@ -392,7 +392,9 @@ export default function NewMemberScreen() {
     const genCount = genResult?.successCount ?? 0;
     const genErrors = genResult?.errors ?? [];
 
-    if (allDaysHaveTimes && credits === 0) {
+    const showingLessonPkgPrompt = allDaysHaveTimes && !credits && !isTrial;
+
+    if (showingLessonPkgPrompt) {
       // 고정스케줄 있는데 레슨권 없음 → 레슨권 등록 유도 팝업
       Alert.alert(
         '레슨권을 등록해주세요',
@@ -416,8 +418,8 @@ export default function NewMemberScreen() {
       Alert.alert('완료', msg, [{ text: '확인', onPress: () => router.back() }]);
     }
 
-    // 회원 2명 이상 & 가용시간 미설정 → 팝업 (최초 1회)
-    {
+    // 회원 2명 이상 & 가용시간 미설정 → 팝업 (최초 1회, 레슨권 팝업 표시 중엔 스킵)
+    if (!showingLessonPkgPrompt) {
       const { data: { user: u } } = await supabase.auth.getUser();
       if (u) {
         const POPUP_KEY = `@kerri_availability_popup_shown_${u.id}`;
@@ -427,13 +429,12 @@ export default function NewMemberScreen() {
           AsyncStorage.getItem(POPUP_KEY),
         ]);
         if ((memberCount ?? 0) >= 2 && !avail && !alreadyShown) {
-          await AsyncStorage.setItem(POPUP_KEY, '1');
           Alert.alert(
             '레슨 가능 시간 설정',
             '회원이 2명 이상입니다.\n회원이 레슨을 신청할 수 있는 가능 시간대를 설정해보세요.',
             [
-              { text: '나중에', style: 'cancel' },
-              { text: '지금 설정', onPress: () => router.push('/settings/availability') },
+              { text: '나중에', style: 'cancel', onPress: async () => { await AsyncStorage.setItem(POPUP_KEY, '1'); router.back(); } },
+              { text: '지금 설정', onPress: async () => { await AsyncStorage.setItem(POPUP_KEY, '1'); router.push('/settings/availability'); } },
             ]
           );
         }
