@@ -615,7 +615,18 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     }
     setEditing(false);
     loadMember();
-    if (scheduledCount > 0) Alert.alert('저장 완료', scheduledCount + '개 레슨이 스케줄에 추가되었습니다.');
+    if (allDaysHaveTimes3 && !credits) {
+      Alert.alert(
+        '레슨권을 등록해주세요',
+        '고정 스케줄이 설정됐지만 레슨권이 없어서 스케줄이 생성되지 않았습니다.\n레슨권을 먼저 등록해주세요.',
+        [
+          { text: '나중에', style: 'cancel' },
+          { text: '레슨권 등록', onPress: () => router.push('/lesson-packages/new') },
+        ]
+      );
+    } else if (scheduledCount > 0) {
+      Alert.alert('저장 완료', scheduledCount + '개 레슨이 스케줄에 추가되었습니다.');
+    }
 
     // 고정스케줄이 있는 회원이 2명 이상 & 코치 가용시간 미설정 & 팝업 미노출 → 팝업
     if (scheduleDays.length > 0) {
