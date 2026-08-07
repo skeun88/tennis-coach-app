@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
   TextInput, ActivityIndicator, KeyboardAvoidingView, Platform,
@@ -12,6 +13,7 @@ import { Colors } from '../../lib/theme';
 import { useSubscription } from '../../hooks/useSubscription';
 import MemberIssueTags from '../../components/MemberIssueTags';
 import PlanUpsellModal from '../../components/PlanUpsellModal';
+import { notifyMemberMessage } from '../../lib/notifications';
 
 type DayTimes = Record<number, string[]>;
 
@@ -25,9 +27,9 @@ const LEVEL_COLORS: Record<MemberLevel, string> = {
 };
 
 const TIME_OPTIONS: string[] = [];
-for (let h = 6; h <= 22; h++) {
+for (let h = 6; h <= 23; h++) {
   for (let m = 0; m < 60; m += 10) {
-    if (h === 22 && m > 0) break;
+    if (h === 23 && m > 0) break;
     TIME_OPTIONS.push(String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'));
   }
 }
@@ -129,13 +131,15 @@ async function generateScheduleLessons(
   totalCredits: number,
   startDate: string,
 ): Promise<number> {
-  if (scheduleDays.length === 0 || totalCredits <= 0) return 0;
+  if (scheduleDays.length === 0) return 0;
   const cursor = new Date(startDate + 'T00:00:00+09:00');
   const todayKST2 = kstToday();
   if (cursor < todayKST2) cursor.setTime(todayKST2.getTime());
   const dates: { date: string; time: string }[] = [];
+  // 크레딧 0이면 기본 12회 생성
+  const limit = totalCredits > 0 ? totalCredits : 12;
   let iter = 0;
-  while (dates.length < totalCredits && iter < totalCredits * 14) {
+  while (dates.length < limit && iter < limit * 14) {
     const dow = cursor.getDay();
     if (scheduleDays.includes(dow) && dayTimes[dow] && dayTimes[dow].length > 0) {
       for (const t of dayTimes[dow]) {
@@ -423,11 +427,11 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       .eq('date', dateStr);
     const dur = parseInt(lessonDuration) || 60;
     const slots: { time: string; available: boolean }[] = [];
-    for (let h = 6; h < 22; h++) {
+    for (let h = 6; h < 23; h++) {
       for (const m of [0, 30]) {
         const startMin = h * 60 + m;
         const endMin = startMin + dur;
-        if (endMin > 22 * 60) continue;
+        if (endMin > 23 * 60) continue;
         const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
         const hasConflict = (existingLessons ?? []).some((l: any) => {
           const [lh, lm] = l.start_time.slice(0,5).split(':').map(Number);
@@ -590,16 +594,17 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
             await supabase.from('lessons').delete().in('id', soloIds);
           }
         }
-        // 새 스케줄로 재생성 (startDate부터)
+        // 새 스케줄로 재생성 (startDate부터, 크레딧 0이면 기본 12회)
         scheduledCount = await generateScheduleLessons(
-          supabase, userId, id!, name, scheduleDays, dayTimes, duration, credits, startDate,
+          supabase, userId, id!, name, scheduleDays, dayTimes, duration, credits > 0 ? credits : 12, startDate,
         );
       } else {
-        // 스케줄 미변경: 부족한 레슨만 추가
+        // 스케줄 미변경: 부족한 레슨만 추가 (크레딧 0이면 기본 12회 기준)
         const todayForElse = toKSTDateStr(new Date());
         const { data: futureL } = await supabase.from('lesson_members').select('lesson:lessons(date)').eq('member_id', id!);
         const futureLessons = (futureL ?? []).filter((r: any) => r.lesson?.date >= todayForElse);
-        const needed = credits - futureLessons.length;
+        const effectiveCredits = credits > 0 ? credits : 12;
+        const needed = effectiveCredits - futureLessons.length;
         if (needed > 0 && futureLessons.length === 0) {
           const joinDate = (oldMember as any)?.join_date ?? todayForElse;
           scheduledCount = await generateScheduleLessons(
@@ -611,6 +616,33 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     setEditing(false);
     loadMember();
     if (scheduledCount > 0) Alert.alert('저장 완료', scheduledCount + '개 레슨이 스케줄에 추가되었습니다.');
+
+    // 고정스케줄이 있는 회원이 2명 이상 & 코치 가용시간 미설정 & 팝업 미노출 → 팝업
+    if (scheduleDays.length > 0) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const POPUP_KEY = `@kerri_availability_popup_shown_${user.id}`;
+        const [{ data: membersData }, { data: availability }, alreadyShown] = await Promise.all([
+          supabase.from('members').select('id, fixed_schedule_days').eq('coach_id', user.id).not('fixed_schedule_days', 'is', null),
+          supabase.from('coach_availability').select('id').eq('coach_id', user.id).maybeSingle(),
+          AsyncStorage.getItem(POPUP_KEY),
+        ]);
+        const count = (membersData ?? []).filter((m: any) =>
+          Array.isArray(m.fixed_schedule_days) && m.fixed_schedule_days.length > 0
+        ).length;
+        if (count >= 2 && !availability && !alreadyShown) {
+          await AsyncStorage.setItem(POPUP_KEY, '1');
+          Alert.alert(
+            '레슨 가능 시간 설정',
+            '고정 스케줄 회원이 2명 이상입니다.\n회원이 레슨을 신청할 수 있는 가능 시간대를 설정하면 신청 가능한 시간을 정확히 안내할 수 있어요.',
+            [
+              { text: '나중에', style: 'cancel' },
+              { text: '지금 설정', onPress: () => router.push('/settings/availability') },
+            ]
+          );
+        }
+      }
+    }
   }
 
   async function handleToggleActive() {
@@ -811,6 +843,8 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         coach_id: user.id, member_id: id, sender_type: 'coach', content: text,
       });
       loadMessages();
+      // PN-08: 회원에게 코치 메시지 알림
+      notifyMemberMessage(id as string, member?.name ?? '코치').catch(() => {});
     }
     setSendingMsg(false);
   }

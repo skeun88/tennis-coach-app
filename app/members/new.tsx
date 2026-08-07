@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
@@ -13,7 +14,7 @@ import { getCurrentSubscription, FREE_MEMBER_LIMIT, getMemberCount, isSubscripti
 
 const LEVELS: MemberLevel[] = ['입문', '초급', '중급', '상급', '선수'];
 const DAYS_KR = ['일', '월', '화', '수', '목', '금', '토'];
-const HOURS = Array.from({ length: 17 }, (_, i) => String(i + 6).padStart(2, '0')); // 06~22
+const HOURS = Array.from({ length: 18 }, (_, i) => String(i + 6).padStart(2, '0')); // 06~23
 const MINUTES = ['00', '10', '20', '30', '40', '50'];
 
 function timeToMinutes(t: string): number {
@@ -105,15 +106,15 @@ async function generateScheduleLessons(params: {
     lessonDuration, totalCredits, joinDate,
     repeatType = 'weekly', repeatInterval = 1,
   } = params;
-  if (!scheduleDays.length || totalCredits <= 0) return;
+  if (!scheduleDays.length) return;
 
   const startDate = new Date(joinDate + 'T00:00:00+09:00');
   const todayForGen = kstToday();
   const cursor = new Date(startDate);
   if (cursor < todayForGen) cursor.setTime(todayForGen.getTime());
 
-  // '안 함': 첫 번째 매칭 날짜/시간 1개만
-  const limit = repeatType === 'none' ? 1 : totalCredits;
+  // '안 함': 첫 번째 매칭 날짜/시간 1개만. 크레딧 0이면 기본 12회 생성
+  const limit = repeatType === 'none' ? 1 : (totalCredits > 0 ? totalCredits : 12);
   const interval = repeatType === 'custom' ? Math.max(1, repeatInterval) : 1;
 
   const dates: { date: string; time: string }[] = [];
@@ -188,6 +189,8 @@ export default function NewMemberScreen() {
   const [level, setLevel] = useState<MemberLevel>('초급');
   const [joinDate, setJoinDate] = useState(toKSTDateStr(new Date()));
   const [lessonStartDate, setLessonStartDate] = useState(toKSTDateStr(new Date()));
+  const [startDateModalVisible, setStartDateModalVisible] = useState(false);
+  const [startCalMonth, setStartCalMonth] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() });
   const [notes, setNotes] = useState('');
   // 체험 회원 토글
   const [isTrial, setIsTrial] = useState(false);
@@ -257,11 +260,11 @@ export default function NewMemberScreen() {
     const dur = selectedPkg?.duration_minutes ?? (parseInt(lessonDuration) || 60);
 
     const slots: { time: string; available: boolean }[] = [];
-    for (let h = 6; h < 22; h++) {
+    for (let h = 6; h < 23; h++) {
       for (const m of [0, 30]) {
         const startMin = h * 60 + m;
         const endMin = startMin + dur;
-        if (endMin > 22 * 60) continue;
+        if (endMin > 23 * 60) continue;
         const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
         const hasConflict = (existingLessons ?? []).some((l: any) => {
           const ls = timeToMinutes(l.start_time);
@@ -388,15 +391,54 @@ export default function NewMemberScreen() {
 
     const genCount = genResult?.successCount ?? 0;
     const genErrors = genResult?.errors ?? [];
-    let msg = '회원이 등록됐습니다.';
-    if (allDaysHaveTimes && credits > 0) {
-      if (genCount > 0) {
-        msg = `${genCount}개 레슨이 스케줄에 추가됐습니다. (${duration}분 레슨)`;
-      } else {
-        msg = `회원 등록 완료. 레슨 스케줄 생성 실패${genErrors.length ? ': ' + genErrors[0] : ''}`;
+
+    if (allDaysHaveTimes && credits === 0) {
+      // 고정스케줄 있는데 레슨권 없음 → 레슨권 등록 유도 팝업
+      Alert.alert(
+        '레슨권을 등록해주세요',
+        '고정 스케줄이 설정됐지만 레슨권이 없어서 스케줄이 생성되지 않았습니다.\n레슨권을 먼저 등록해주세요.',
+        [
+          { text: '나중에', style: 'cancel', onPress: () => router.back() },
+          { text: '레슨권 등록', onPress: () => router.push('/lesson-packages/new') },
+        ]
+      );
+    } else {
+      let msg = '회원이 등록됐습니다.';
+      if (scheduleDays.length > 0 && !allDaysHaveTimes) {
+        msg = '회원 등록 완료. 고정스케줄을 저장하려면 각 요일별 시간을 설정해야 합니다.';
+      } else if (allDaysHaveTimes && credits > 0) {
+        if (genCount > 0) {
+          msg = `${genCount}개 레슨이 스케줄에 추가됐습니다. (${duration}분 레슨)`;
+        } else {
+          msg = `회원 등록 완료. 레슨 스케줄 생성 실패${genErrors.length ? ': ' + genErrors[0] : ''}`;
+        }
+      }
+      Alert.alert('완료', msg, [{ text: '확인', onPress: () => router.back() }]);
+    }
+
+    // 회원 2명 이상 & 가용시간 미설정 → 팝업 (최초 1회)
+    {
+      const { data: { user: u } } = await supabase.auth.getUser();
+      if (u) {
+        const POPUP_KEY = `@kerri_availability_popup_shown_${u.id}`;
+        const [{ count: memberCount }, { data: avail }, alreadyShown] = await Promise.all([
+          supabase.from('members').select('id', { count: 'exact', head: true }).eq('coach_id', u.id).eq('is_active', true),
+          supabase.from('coach_availability').select('id').eq('coach_id', u.id).maybeSingle(),
+          AsyncStorage.getItem(POPUP_KEY),
+        ]);
+        if ((memberCount ?? 0) >= 2 && !avail && !alreadyShown) {
+          await AsyncStorage.setItem(POPUP_KEY, '1');
+          Alert.alert(
+            '레슨 가능 시간 설정',
+            '회원이 2명 이상입니다.\n회원이 레슨을 신청할 수 있는 가능 시간대를 설정해보세요.',
+            [
+              { text: '나중에', style: 'cancel' },
+              { text: '지금 설정', onPress: () => router.push('/settings/availability') },
+            ]
+          );
+        }
       }
     }
-    Alert.alert('완료', msg, [{ text: '확인', onPress: () => router.back() }]);
   }
 
   async function handleSave() {
@@ -510,12 +552,18 @@ export default function NewMemberScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>레슨 스케줄</Text>
           <Text style={styles.label}>레슨 시작일</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="YYYY-MM-DD"
-            value={lessonStartDate}
-            onChangeText={v => setLessonStartDate(formatDate(v))}
-          />
+          <TouchableOpacity style={styles.datePickerBtn} onPress={() => setStartDateModalVisible(true)}>
+            <Ionicons name="calendar-outline" size={18} color={Colors.primary} />
+            <Text style={styles.datePickerText}>
+              {lessonStartDate ? (() => {
+                const d = new Date(lessonStartDate + 'T00:00:00');
+                return d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+              })() : '날짜 선택'}
+            </Text>
+            {lessonStartDate === toKSTDateStr(new Date()) && (
+              <View style={styles.todayTag}><Text style={styles.todayTagText}>오늘</Text></View>
+            )}
+          </TouchableOpacity>
           <Text style={styles.label}>레슨 요일</Text>
           <View style={styles.dayRow}>
             {DAYS_KR.map((d, i) => (
@@ -634,6 +682,98 @@ export default function NewMemberScreen() {
           {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>회원 등록</Text>}
         </TouchableOpacity>
       </ScrollView>
+
+      {/* 레슨 시작일 캘린더 모달 */}
+      <Modal visible={startDateModalVisible} transparent animationType="slide" onRequestClose={() => setStartDateModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>언제부터 레슨날짜 반영할까요?</Text>
+              <TouchableOpacity onPress={() => setStartDateModalVisible(false)}>
+                <Ionicons name="close" size={22} color={Colors.foreground} />
+              </TouchableOpacity>
+            </View>
+            {/* 선택된 날짜 표시 */}
+            <View style={{ marginHorizontal: 16, marginTop: 12, marginBottom: 8, backgroundColor: Colors.primary + '12', borderRadius: 10, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="calendar" size={18} color={Colors.primary} />
+              <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.primary }}>
+                {lessonStartDate ? (() => {
+                  const d = new Date(lessonStartDate + 'T00:00:00');
+                  return d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+                })() : '날짜를 선택하세요'}
+              </Text>
+              {lessonStartDate === toKSTDateStr(new Date()) && (
+                <View style={{ marginLeft: 'auto', backgroundColor: Colors.primary, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}>
+                  <Text style={{ fontSize: 13, color: '#fff', fontWeight: '700' }}>오늘</Text>
+                </View>
+              )}
+            </View>
+            {/* 인라인 캘린더 */}
+            <ScrollView style={{ maxHeight: 360 }}>
+              {(() => {
+                const { year, month } = startCalMonth;
+                const todayStr = toKSTDateStr(new Date());
+                const firstDow = new Date(year, month, 1).getDay();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const cells: (number | null)[] = [];
+                for (let i = 0; i < firstDow; i++) cells.push(null);
+                for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+                while (cells.length % 7 !== 0) cells.push(null);
+                const MONTHS_KR = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+                const DAYS_LABEL = ['일','월','화','수','목','금','토'];
+                return (
+                  <View style={{ paddingHorizontal: 12, paddingBottom: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <TouchableOpacity style={{ padding: 8 }} onPress={() => setStartCalMonth(p => { const m = p.month - 1; return m < 0 ? { year: p.year - 1, month: 11 } : { year: p.year, month: m }; })}>
+                        <Ionicons name="chevron-back" size={20} color={Colors.primary} />
+                      </TouchableOpacity>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.primary }}>{year}년 {MONTHS_KR[month]}</Text>
+                      <TouchableOpacity style={{ padding: 8 }} onPress={() => setStartCalMonth(p => { const m = p.month + 1; return m > 11 ? { year: p.year + 1, month: 0 } : { year: p.year, month: m }; })}>
+                        <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
+                      </TouchableOpacity>
+                    </View>
+                    <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+                      {DAYS_LABEL.map((dl, di) => (
+                        <Text key={di} style={{ flex: 1, textAlign: 'center', fontSize: 14, fontWeight: '700',
+                          color: di === 0 ? Colors.destructive : di === 6 ? Colors.accentWarm : Colors.mutedFg,
+                          paddingVertical: 4 }}>{dl}</Text>
+                      ))}
+                    </View>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                      {cells.map((day, ci) => {
+                        if (!day) return <View key={ci} style={{ width: '14.28%', paddingVertical: 3 }} />;
+                        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                        const isSelected = dateStr === lessonStartDate;
+                        const isToday = dateStr === todayStr;
+                        const dow = ci % 7;
+                        return (
+                          <TouchableOpacity key={ci} style={{ width: '14.28%', alignItems: 'center', paddingVertical: 3 }} onPress={() => setLessonStartDate(dateStr)}>
+                            <View style={{ width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center',
+                              backgroundColor: isSelected ? Colors.primary : isToday ? Colors.primary + '18' : 'transparent' }}>
+                              <Text style={{ fontSize: 14, fontWeight: isSelected || isToday ? '800' : '400',
+                                color: isSelected ? '#fff' : dow === 0 ? Colors.destructive : dow === 6 ? Colors.accentWarm : Colors.foreground,
+                              }}>{day}</Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                );
+              })()}
+            </ScrollView>
+            {/* 버튼 */}
+            <View style={{ flexDirection: 'row', gap: 8, margin: 16, marginTop: 8 }}>
+              <TouchableOpacity style={{ flex: 1, borderRadius: 10, paddingVertical: 13, alignItems: 'center', backgroundColor: Colors.mutedBg }} onPress={() => setStartDateModalVisible(false)}>
+                <Text style={{ fontWeight: '700', fontSize: 14, color: Colors.primary }}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={{ flex: 2, borderRadius: 10, paddingVertical: 13, alignItems: 'center', backgroundColor: Colors.primary }} onPress={() => setStartDateModalVisible(false)}>
+                <Text style={{ fontWeight: '700', fontSize: 14, color: '#fff' }}>선택 완료</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* 반복 설정 모달 */}
       <Modal visible={repeatModalVisible} transparent animationType="slide" onRequestClose={() => setRepeatModalVisible(false)}>
@@ -888,6 +1028,10 @@ const styles = StyleSheet.create({
   noPackageSubText: { fontSize: 14, color: Colors.iconMuted },
   creditPreview: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.primaryLight, borderRadius: 8, padding: 10, marginTop: 8 },
   creditPreviewText: { fontSize: 14, color: Colors.navy, fontWeight: '600' },
+  datePickerBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.mutedBg, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 12, borderWidth: 1, borderColor: Colors.border },
+  datePickerText: { flex: 1, fontSize: 15, color: Colors.foreground },
+  todayTag: { backgroundColor: Colors.primary, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
+  todayTagText: { fontSize: 12, color: '#fff', fontWeight: '700' },
   saveBtn: { backgroundColor: Colors.primary, margin: 16, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },

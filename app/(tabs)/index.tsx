@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Colors, Radius, Shadow } from '../../lib/theme';
 import { useSubscription } from '../../hooks/useSubscription';
+import { notifyReregister, notifyLessonCountUpdate } from '../../lib/notifications';
 import PlanUpsellModal from "../../components/PlanUpsellModal";
 import CoachQRModal from '../../components/CoachQRModal';
 import OnboardingModal from '../../components/OnboardingModal';
@@ -498,6 +499,15 @@ export default function HomeScreen() {
           await supabase.rpc('adjust_remaining_credits', { p_member_id: card.memberId, p_delta: -1 });
           if (card.remainingCredits === 0) {
             Alert.alert('잔여 레슨 횟수가 없습니다.', '이 회원의 레슨 횟수가 없습니다.\n충전이 필요합니다.');
+          }
+
+          // PN-11: 회원에게 레슨 횟수 안내
+          const newRemaining = Math.max(0, card.remainingCredits - 1);
+          notifyLessonCountUpdate(card.memberId, newRemaining).catch(() => {});
+
+          // PN-04: 잔여 1회 시 코치에게 재등록 알림
+          if (newRemaining === 1 && userId) {
+            notifyReregister(userId, card.memberName, card.memberId).catch(() => {});
           }
         }
         // 멤버앱 출석 횟수 동기화 (lesson_count +1)

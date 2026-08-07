@@ -3,7 +3,7 @@
     "name": "Kerri",
     "slug": "tennis-coach-app",
     "owner": "skeun-2",
-    "version": "1.1.2",
+    "version": "1.1.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -58,7 +58,7 @@
         "@react-native-seoul/kakao-login",
         {
           "kakaoAppKey": "e077b6e6a148e52717ff8fd871f95878",
-          "kotlinVersion": "1.9.0"
+          "kotlinVersion": "2.1.20"
         }
       ],
       "expo-router",

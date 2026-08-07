@@ -27,9 +27,9 @@ interface WeekLesson {
 const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const HOUR_HEIGHT = 100; // px per hour
 const START_HOUR = 6;
-const END_HOUR = 22;
+const END_HOUR = 23;
 const HOURS = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => i + START_HOUR);
-const SPINNER_HOURS = Array.from({ length: 17 }, (_, i) => String(i + 6).padStart(2, '0')); // 06~22
+const SPINNER_HOURS = Array.from({ length: 18 }, (_, i) => String(i + 6).padStart(2, '0')); // 06~23
 const SPINNER_MINUTES = ['00', '10', '20', '30', '40', '50'];
 const DURATION_OPTIONS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
 

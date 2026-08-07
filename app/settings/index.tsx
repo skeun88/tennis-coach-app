@@ -126,6 +126,11 @@ export default function SettingsScreen() {
             onPress={() => router.push('/subscription/manage')}
           />
           <MenuItem
+            icon="time-outline"
+            label="레슨 가능 시간"
+            onPress={() => router.push('/settings/availability')}
+          />
+          <MenuItem
             icon="notifications-outline"
             label="알림 설정"
             onPress={() => router.push('/settings/notifications')}

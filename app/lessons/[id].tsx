@@ -9,6 +9,7 @@ import { supabase } from '../../lib/supabase';
 import { Lesson, AttendanceStatus } from '../../types';
 import { Colors } from '../../lib/theme';
 import { useSubscription } from '../../hooks/useSubscription';
+import { notifyScheduleChange, notifyLessonCancel } from '../../lib/notifications';
 import LessonBriefingModal from '../../components/LessonBriefingModal';
 import PlanUpsellModal from '../../components/PlanUpsellModal';
 
@@ -53,6 +54,7 @@ export default function LessonDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
   const [editModal, setEditModal] = useState(false);
+  const [editDate, setEditDate] = useState('');
   const [editHour, setEditHour] = useState('');
   const [editMinute, setEditMinute] = useState('00');
   const [editDuration, setEditDuration] = useState(60);
@@ -60,6 +62,9 @@ export default function LessonDetailScreen() {
   const [hourPickerOpen, setHourPickerOpen] = useState(false);
   const [minutePickerOpen, setMinutePickerOpen] = useState(false);
   const [durationPickerOpen, setDurationPickerOpen] = useState(false);
+  const [calOpen, setCalOpen] = useState(false);
+  const [calYear, setCalYear] = useState(new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(new Date().getMonth());
 
   // ② 레슨 브리핑 모달 상태
   const [briefingVisible, setBriefingVisible] = useState(false);
@@ -157,6 +162,20 @@ export default function LessonDetailScreen() {
       return;
     }
 
+    // 출석 취소 (이미 출석 처리된 경우 토글 off)
+    if (row.status === '출석') {
+      setUpdating(row.member_id);
+      if (row.id) {
+        await supabase.from('attendance').delete().eq('id', row.id);
+        if (row.deduct_credit) {
+          await supabase.rpc('adjust_remaining_credits', { p_member_id: row.member_id, p_delta: 1 });
+        }
+      }
+      await loadAttendance();
+      setUpdating(null);
+      return;
+    }
+
     // 출석 처리
     setUpdating(row.member_id);
     const wasDeducted = row.deduct_credit;
@@ -244,6 +263,11 @@ export default function LessonDetailScreen() {
               await supabase.rpc('adjust_remaining_credits', { p_member_id: a.member_id, p_delta: 1 });
             }
           }
+          // PN-10: 레슨 취소 알림
+          const memberIds = attendance.map((a: any) => a.member_id);
+          for (const memberId of memberIds) {
+            notifyLessonCancel(memberId, '', lesson?.title ?? '레슨').catch(() => {});
+          }
           await supabase.from('lessons').delete().eq('id', id!);
           router.back();
         }
@@ -256,25 +280,31 @@ export default function LessonDetailScreen() {
     const [h, m] = lesson.start_time.slice(0, 5).split(':');
     const startMin = parseInt(h) * 60 + parseInt(m);
     const endMin = parseInt(lesson.end_time.slice(0, 2)) * 60 + parseInt(lesson.end_time.slice(3, 5));
+    setEditDate(lesson.date);
     setEditHour(h);
     setEditMinute(m);
     setEditDuration(endMin - startMin);
     setHourPickerOpen(false);
     setMinutePickerOpen(false);
     setDurationPickerOpen(false);
+    setCalOpen(false);
+    const d = new Date(lesson.date + 'T00:00:00');
+    setCalYear(d.getFullYear());
+    setCalMonth(d.getMonth());
     setEditModal(true);
   }
 
   async function handleSaveTime() {
     if (!editHour) { Alert.alert('오류', '시간을 선택해주세요.'); return; }
+    if (!editDate) { Alert.alert('오류', '날짜를 선택해주세요.'); return; }
     setSavingEdit(true);
     const startMin = parseInt(editHour) * 60 + parseInt(editMinute);
     const endMin = startMin + editDuration;
     const startSt = editHour + ':' + editMinute + ':00';
     const endSt = minutesToTime(endMin) + ':00';
-    // 오버랩 체크 (자신 제외)
+    // 오버랩 체크 (자신 제외, 변경된 날짜 기준)
     const { data: existing } = await supabase.from('lessons').select('id, start_time, end_time')
-      .eq('coach_id', (lesson as any).coach_id).eq('date', lesson!.date).neq('id', lesson!.id);
+      .eq('coach_id', (lesson as any).coach_id).eq('date', editDate).neq('id', lesson!.id);
     const overlap = (existing ?? []).find((l: any) => {
       const ls = parseInt(l.start_time.slice(0,2))*60+parseInt(l.start_time.slice(3,5));
       const le = parseInt(l.end_time.slice(0,2))*60+parseInt(l.end_time.slice(3,5));
@@ -285,11 +315,16 @@ export default function LessonDetailScreen() {
       Alert.alert('시간 충돌', '해당 시간대에 다른 레슨이 있습니다. 다른 시간을 선택해주세요.');
       return;
     }
-    const { error } = await supabase.from('lessons').update({ start_time: startSt, end_time: endSt }).eq('id', lesson!.id);
+    const { error } = await supabase.from('lessons').update({ date: editDate, start_time: startSt, end_time: endSt }).eq('id', lesson!.id);
     setSavingEdit(false);
     if (error) { Alert.alert('오류', '수정 실패'); return; }
     setEditModal(false);
     loadLesson();
+    // PN-09: 스케줄 변경 알림
+    const memberIds = attendance.map((a: any) => a.member_id);
+    for (const memberId of memberIds) {
+      notifyScheduleChange(memberId, editDate, startSt.slice(0, 5), lesson!.id).catch(() => {});
+    }
   }
 
   if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color={Colors.primary} /></View>;
@@ -520,11 +555,57 @@ export default function LessonDetailScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>레슨 시간 수정</Text>
+              <Text style={styles.modalTitle}>레슨 일정 수정</Text>
               <TouchableOpacity onPress={() => setEditModal(false)}><Ionicons name="close" size={22} color={Colors.mutedFg} /></TouchableOpacity>
             </View>
-            <View style={{ padding: 20 }}>
-              <Text style={styles.modalLabel}>시작 시간</Text>
+            <ScrollView style={{ padding: 20 }}>
+              {/* 날짜 선택 */}
+              <Text style={styles.modalLabel}>날짜</Text>
+              <TouchableOpacity
+                style={[styles.spinnerBtn, { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', paddingHorizontal: 16 }]}
+                onPress={() => { setCalOpen(v => !v); setHourPickerOpen(false); setMinutePickerOpen(false); setDurationPickerOpen(false); }}
+              >
+                <Ionicons name="calendar-outline" size={16} color={Colors.primary} />
+                <Text style={[styles.spinnerValue, { fontSize: 16 }]}>{editDate || '--'}</Text>
+              </TouchableOpacity>
+              {calOpen && (() => {
+                const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+                const firstDay = new Date(calYear, calMonth, 1).getDay();
+                const days: (number | null)[] = Array(firstDay).fill(null);
+                for (let i = 1; i <= daysInMonth; i++) days.push(i);
+                return (
+                  <View style={{ marginTop: 8, backgroundColor: Colors.background, borderRadius: 12, padding: 12 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <TouchableOpacity onPress={() => { const d = new Date(calYear, calMonth - 1); setCalYear(d.getFullYear()); setCalMonth(d.getMonth()); }}>
+                        <Ionicons name="chevron-back" size={20} color={Colors.foreground} />
+                      </TouchableOpacity>
+                      <Text style={{ fontWeight: '700', color: Colors.foreground }}>{calYear}년 {calMonth + 1}월</Text>
+                      <TouchableOpacity onPress={() => { const d = new Date(calYear, calMonth + 1); setCalYear(d.getFullYear()); setCalMonth(d.getMonth()); }}>
+                        <Ionicons name="chevron-forward" size={20} color={Colors.foreground} />
+                      </TouchableOpacity>
+                    </View>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                      {['일','월','화','수','목','금','토'].map(d => (
+                        <Text key={d} style={{ width: '14.28%', textAlign: 'center', fontSize: 11, color: Colors.mutedFg, marginBottom: 4 }}>{d}</Text>
+                      ))}
+                      {days.map((day, idx) => {
+                        if (!day) return <View key={`e${idx}`} style={{ width: '14.28%' }} />;
+                        const dateStr = `${calYear}-${String(calMonth + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                        const isSelected = dateStr === editDate;
+                        return (
+                          <TouchableOpacity key={idx} onPress={() => { setEditDate(dateStr); setCalOpen(false); }}
+                            style={{ width: '14.28%', alignItems: 'center', paddingVertical: 4 }}>
+                            <View style={isSelected ? { backgroundColor: Colors.primary, borderRadius: 16, width: 28, height: 28, justifyContent: 'center', alignItems: 'center' } : undefined}>
+                              <Text style={{ fontSize: 13, color: isSelected ? '#fff' : Colors.foreground, fontWeight: isSelected ? '700' : '400' }}>{day}</Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                );
+              })()}
+              <Text style={[styles.modalLabel, { marginTop: 16 }]}>시작 시간</Text>
               <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
                 <TouchableOpacity style={styles.spinnerBtn} onPress={() => { setHourPickerOpen(v => !v); setMinutePickerOpen(false); setDurationPickerOpen(false); }}>
                   <Text style={styles.spinnerLabel}>시</Text>
@@ -576,10 +657,10 @@ export default function LessonDetailScreen() {
                   {editHour}:{editMinute} ~ {minutesToTime(parseInt(editHour)*60+parseInt(editMinute)+editDuration)}
                 </Text>
               )}
-              <TouchableOpacity style={[styles.saveBtn, { marginTop: 16 }]} onPress={handleSaveTime} disabled={savingEdit}>
+              <TouchableOpacity style={[styles.saveBtn, { marginTop: 16, marginBottom: 8 }]} onPress={handleSaveTime} disabled={savingEdit}>
                 {savingEdit ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>저장</Text>}
               </TouchableOpacity>
-            </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>

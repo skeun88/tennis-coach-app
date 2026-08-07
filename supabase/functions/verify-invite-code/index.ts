@@ -122,6 +122,14 @@ serve(async (req: Request) => {
       )
     }
 
+    // createUser "already exists" 케이스: auth_user_id가 아직 members에 없으면 sign in 응답의 user.id로 업데이트
+    if (!member.auth_user_id && signInData.user?.id) {
+      await supabaseAdmin
+        .from('members')
+        .update({ auth_user_id: signInData.user.id })
+        .eq('id', member.id)
+    }
+
     return new Response(
       JSON.stringify({
         session: {

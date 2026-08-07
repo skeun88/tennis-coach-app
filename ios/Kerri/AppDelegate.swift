@@ -40,20 +40,21 @@ public class AppDelegate: ExpoAppDelegate {
     open url: URL,
     options: [UIApplication.OpenURLOptionsKey: Any] = [:]
   ) -> Bool {
+  if kakao_login.RNKakaoLogins.isKakaoTalkLoginUrl(url) { return kakao_login.RNKakaoLogins.handleOpen(url) }
     // 1. 카카오 로그인 콜백
     if kakao_login.RNKakaoLogins.isKakaoTalkLoginUrl(url) {
       return kakao_login.RNKakaoLogins.handleOpen(url)
     }
 
     if url.scheme == "tenniscoach" {
-      // 2. 네이버 로그인 콜백만 네이버 SDK로 — tenniscoach://thirdPartyLoginResult 또는 tenniscoach:///thirdPartyLoginResult
+      // 2. 네이버 로그인 콜백만 네이버 SDK로 (tenniscoach://thirdPartyLoginResult)
       let isNaverCallback = url.host == "thirdPartyLoginResult"
         || url.path.hasPrefix("/thirdPartyLoginResult")
       if isNaverCallback {
         let naverHandled = NaverThirdPartyLoginConnection.getSharedInstance().application(app, open: url, options: options)
         if naverHandled { return true }
       }
-      // 3. 그 외 tenniscoach:// (비밀번호 재설정 등) → React Native Linking으로 전달
+      // 3. 나머지 tenniscoach:// → RCTLinkingManager (비밀번호 재설정 딥링크 등)
       return super.application(app, open: url, options: options)
         || RCTLinkingManager.application(app, open: url, options: options)
     }

@@ -6,18 +6,19 @@ import { supabase } from '../lib/supabase';
 import { View, ActivityIndicator } from 'react-native';
 import { Colors } from '../lib/theme';
 import { getCurrentSubscription } from '../lib/subscription';
+import { registerCoachPushToken } from '../lib/notifications';
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [subscriptionChecked, setSubscriptionChecked] = useState(false);
-  const [profileChecked, setProfileChecked] = useState(false);
+  const [isNavigationReady, setIsNavigationReady] = useState(false);
   const router = useRouter();
   const segments = useSegments();
 
   useEffect(() => {
     // 딥링크 URL에서 Supabase 토큰 추출 후 세션 설정 (비밀번호 재설정 등)
     const handleDeepLinkUrl = async (url: string) => {
+      console.log('[DEEPLINK]', url);
       const fragment = url.split('#')[1] ?? '';
       const params = Object.fromEntries(new URLSearchParams(fragment));
       if (params.access_token && params.refresh_token) {
@@ -62,15 +63,18 @@ export default function RootLayout() {
 
     if (!session && !inAuthGroup && !inResetPassword) {
       router.replace('/(auth)/login');
+      setIsNavigationReady(true);
       return;
     }
 
     // 이미 온보딩 중이면 아무것도 하지 않음
     if (inOnboarding) {
+      setIsNavigationReady(true);
       return;
     }
 
     if (session && !inSubscriptionGroup) {
+      registerCoachPushToken().catch(() => {});
       // 코치 프로필 있는지 확인 → 없으면 온보딩 (인증 후 딥링크 진입 포함)
       supabase
         .from('coach_profiles')
@@ -81,30 +85,32 @@ export default function RootLayout() {
           if (!data) {
             // 프로필 없음 → 무조건 온보딩 (inAuthGroup 여부 관계없이)
             router.replace('/(auth)/onboarding');
+            setIsNavigationReady(true);
             return;
           }
           // 프로필 있으면 로그인 화면이면 탭으로, 아니면 구독 체크
           if (inAuthGroup) {
             router.replace('/(tabs)');
+            setIsNavigationReady(true);
             return;
           }
           // 구독 상태 체크
           getCurrentSubscription().then((sub) => {
-            setSubscriptionChecked(true);
             if (sub && (sub.status === 'blocked' || sub.status === 'cancelled')) {
               router.replace('/subscription/blocked');
             }
+            setIsNavigationReady(true);
           }).catch(() => {
-            setSubscriptionChecked(true);
+            setIsNavigationReady(true);
           });
         });
       return;
     }
 
-    setSubscriptionChecked(true);
+    setIsNavigationReady(true);
   }, [session, loading, segments]);
 
-  if (loading) {
+  if (loading || !isNavigationReady) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.navy }}>
         <ActivityIndicator size="large" color="#fff" />
@@ -125,6 +131,7 @@ export default function RootLayout() {
       <Stack.Screen name="members/ai-analysis" options={{ headerShown: false }} />
       <Stack.Screen name="settings/index" options={{ headerShown: true, title: '설정', headerBackTitle: '뒤로' }} />
       <Stack.Screen name="settings/notifications" options={{ headerShown: true, title: '알림 설정', headerBackTitle: '뒤로' }} />
+      <Stack.Screen name="settings/availability" options={{ headerShown: false }} />
     </Stack>
   );
 }

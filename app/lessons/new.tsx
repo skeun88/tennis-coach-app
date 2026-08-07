@@ -9,7 +9,7 @@ import { supabase } from '../../lib/supabase';
 import { Member } from '../../types';
 import { Colors } from '../../lib/theme';
 
-const HOURS = Array.from({ length: 17 }, (_, i) => String(i + 6).padStart(2, '0'));
+const HOURS = Array.from({ length: 18 }, (_, i) => String(i + 6).padStart(2, '0'));
 const MINUTES = ['00', '10', '15', '20', '30', '40', '45', '50'];
 
 export default function NewLessonScreen() {
