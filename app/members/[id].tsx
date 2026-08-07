@@ -1,11 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
   TextInput, ActivityIndicator, KeyboardAvoidingView, Platform,
   Modal, FlatList, Linking,
 } from 'react-native';
-import { useLocalSearchParams, useRouter, Link, Stack } from 'expo-router';
+import { useLocalSearchParams, useRouter, Link, Stack, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Member, MemberLevel, Attendance, Payment, MemberNote } from '../../types';
@@ -187,6 +187,43 @@ export default function MemberDetailScreen() {
     packageTitle?: string;
   }>();
   const router = useRouter();
+
+  // pending: waiting for lesson package registration before generating schedule
+  const awaitingLessonPkg = useRef(false);
+  const pendingCoachIdRef = useRef<string | null>(null);
+  const pendingScheduleDaysRef2 = useRef<number[]>([]);
+  const pendingDayTimesRef2 = useRef<DayTimes>({});
+  const pendingDurationRef2 = useRef<number>(60);
+  const pendingNameRef2 = useRef<string>('');
+  const pendingStartDateRef2 = useRef<string>('');
+
+  useFocusEffect(useCallback(() => {
+    if (!awaitingLessonPkg.current) return;
+    const cId = pendingCoachIdRef.current;
+    if (!cId || !id) return;
+    (async () => {
+      const { data: pkg } = await supabase
+        .from('lesson_packages')
+        .select('total_credits')
+        .eq('coach_id', cId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!pkg) return;
+      awaitingLessonPkg.current = false;
+      const count = await generateScheduleLessons(
+        supabase, cId, id!, pendingNameRef2.current,
+        pendingScheduleDaysRef2.current, pendingDayTimesRef2.current,
+        pendingDurationRef2.current, pkg.total_credits, pendingStartDateRef2.current,
+      );
+      loadMember();
+      Alert.alert(
+        '스케줄 생성 완료',
+        count > 0 ? `${count}개 레슨이 스케줄에 추가됐습니다.` : '스케줄 생성 완료',
+      );
+    })();
+  }, [id]));
+
   const [member, setMember] = useState<Member | null>(null);
   const [tab, setTab] = useState<Tab>('info');
   const [loading, setLoading] = useState(true);
@@ -616,12 +653,19 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     setEditing(false);
     loadMember();
     if (allDaysHaveTimes3 && !credits) {
+      // 레슨권 등록 후 돌아오면 useFocusEffect가 스케줄 자동 생성
+      awaitingLessonPkg.current = true;
+      pendingCoachIdRef.current = userId;
+      pendingScheduleDaysRef2.current = scheduleDays;
+      pendingDayTimesRef2.current = dayTimes;
+      pendingDurationRef2.current = duration;
+      pendingNameRef2.current = name;
+      pendingStartDateRef2.current = startDate;
       Alert.alert(
-        '레슨권을 등록해주세요',
-        '고정 스케줄이 설정됐지만 레슨권이 없어서 스케줄이 생성되지 않았습니다.\n레슨권을 먼저 등록해주세요.',
+        '레슨권을 먼저 등록해주세요',
+        '고정 스케줄이 설정됐지만 레슨권이 없어서 스케줄이 생성되지 않았습니다.\n레슨권을 등록하면 스케줄이 자동으로 생성됩니다.',
         [
-          { text: '나중에', style: 'cancel' },
-          { text: '레슨권 등록', onPress: () => router.push('/lesson-packages/new') },
+          { text: '레슨권 등록하러 가기', onPress: () => router.push('/lesson-packages/new') },
         ]
       );
     } else if (scheduledCount > 0) {
