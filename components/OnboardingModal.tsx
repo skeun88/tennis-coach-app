@@ -16,7 +16,7 @@ export interface OnboardingModalProps {
   onDismiss: () => void;
 }
 
-const TOTAL_STEPS = 3;
+const TOTAL_STEPS = 4;
 
 const TABS = [
   { icon: 'home-outline' as const, name: '홈', desc: '오늘 레슨 일정 + 회원 현황 한눈에 보기' },
@@ -55,7 +55,8 @@ export default function OnboardingModal({ visible, onRegister, onDismiss }: Onbo
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
             {step === 0 && <Step1 />}
             {step === 1 && <Step2 />}
-            {step === 2 && <Step3 />}
+            {step === 2 && <Step4 />}
+            {step === 3 && <Step3 />}
           </ScrollView>
 
           {/* 버튼 */}
@@ -151,6 +152,50 @@ function Step2() {
       <View style={styles.tipBox}>
         <Ionicons name="bulb-outline" size={16} color="#f59e0b" />
         <Text style={styles.tipText}>회원을 등록하면 홈 화면에서 오늘 레슨 현황이 바로 보여요</Text>
+      </View>
+    </View>
+  );
+}
+
+function Step4() {
+  return (
+    <View style={styles.stepContent}>
+      <View style={styles.iconCircle}>
+        <Text style={{ fontSize: 40 }}>🚫</Text>
+      </View>
+      <Text style={styles.stepTitle}>레슨 불가 시간을{'\n'}블럭해두세요</Text>
+      <Text style={styles.stepSubtitle}>
+        회원이 보강 레슨을 신청할 수 있는{'\n'}가능한 시간대를 미리 설정할 수 있어요
+      </Text>
+
+      <View style={styles.card}>
+        {[
+          {
+            icon: 'time-outline' as const,
+            title: '가용 시간 직접 설정',
+            desc: '요일별로 레슨 가능한 시간대를 지정하면\n그 외 시간엔 회원이 신청할 수 없어요',
+          },
+          {
+            icon: 'ban-outline' as const,
+            title: '개인 일정은 자동 차단',
+            desc: '설정한 시간 외엔 회원 앱에서\n해당 슬롯이 표시되지 않아요',
+          },
+          {
+            icon: 'settings-outline' as const,
+            title: '설정 → 레슨 가능 시간',
+            desc: '언제든지 수정 가능해요',
+          },
+        ].map((item, i) => (
+          <View key={i} style={[styles.featureRow, i > 0 && styles.featureRowBorder]}>
+            <View style={styles.featureIcon}>
+              <Ionicons name={item.icon} size={20} color={Colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.featureTitle}>{item.title}</Text>
+              <Text style={styles.featureDesc}>{item.desc}</Text>
+            </View>
+          </View>
+        ))}
       </View>
     </View>
   );

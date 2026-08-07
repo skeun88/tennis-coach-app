@@ -752,7 +752,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     } else {
       Alert.alert(
         '안내 발송 완료 📨',
-        `${member.name}님에게 재등록 안내를 동로했어요.\n회원이 앱을 열면 확인할 수 있다요.`,
+        `${member.name}님에게 재등록 안내를 발송했어요.\n회원이 앱을 열면 확인할 수 있어요.`,
       );
     }
     setSendingReregister(false);
