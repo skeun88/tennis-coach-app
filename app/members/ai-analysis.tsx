@@ -7,6 +7,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorderState } from 'expo-audio';
+import * as FileSystem from 'expo-file-system/legacy';
 import { supabase } from '../../lib/supabase';
 import { LessonPlan, DrillSuggestion } from '../../types';
 import { Colors } from '../../lib/theme';
@@ -301,13 +302,27 @@ export default function AIAnalysisScreen() {
       // ── Step 0: 오디오 업로드 (재시도가 아닐 때만) ──
       if (!storagePath) {
         setAnalysisStep(0);
+
+        // 파일 크기 사전 검증 (file:// URI가 빈 blob이 되는 문제 방지)
+        const fileInfo = await FileSystem.getInfoAsync(uri);
+        if (!fileInfo.exists || ((fileInfo as any).size ?? 0) < 5000) {
+          throw new Error('녹음 파일이 너무 짧거나 없습니다. 최소 10초 이상 레슨을 녹음한 후 분석을 시작하세요.');
+        }
+
         storagePath = `${userId}/${Date.now()}_lesson.m4a`;
-        const fileRes = await fetch(uri);
-        const blob = await fileRes.blob();
-        const { error: uploadError } = await supabase.storage
-          .from('lesson-audio')
-          .upload(storagePath, blob, { contentType: 'audio/m4a', upsert: false });
-        if (uploadError) throw new Error(`오디오 업로드 실패: ${uploadError.message}`);
+        const uploadUrl = `${SUPABASE_URL}/storage/v1/object/lesson-audio/${storagePath}`;
+        const uploadResult = await FileSystem.uploadAsync(uploadUrl, uri, {
+          httpMethod: 'POST',
+          uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'audio/m4a',
+            'x-upsert': 'false',
+          },
+        });
+        if (uploadResult.status >= 400) {
+          throw new Error(`오디오 업로드 실패: ${uploadResult.body}`);
+        }
       }
 
       // ── Step 1: lesson_plans 행 생성 (재시도가 아닐 때만) ──
@@ -322,20 +337,27 @@ export default function AIAnalysisScreen() {
         planId = pending.id;
       }
 
-      // ── Step 2: Edge Function 트리거 (fire-and-forget) ──
-      // 앱이 백그라운드로 전환돼도 서버에서 분석 계속 진행
+      // ── Step 2: Edge Function 트리거 (fire-and-forget, 단 400+ 시 failed 처리) ──
+      const capturedPlanId = planId;
       fetch(`${SUPABASE_URL}/functions/v1/process-lesson`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
-          lesson_plan_id: planId,
+          lesson_plan_id: capturedPlanId,
           audio_storage_path: storagePath,
           member_id: memberId,
           coach_id: userId,
           duration_seconds: duration,
         }),
+      }).then(async (res) => {
+        if (res.status >= 400 && capturedPlanId) {
+          const errBody = await res.json().catch(() => ({ error: '분석 요청 실패' }));
+          await supabase.from('lesson_plans')
+            .update({ status: 'failed', error_message: errBody.error ?? '분석 요청 실패' })
+            .eq('id', capturedPlanId);
+        }
       }).catch(() => {
-        // 연결 끊겨도 서버에서 계속 처리됨
+        // 네트워크 오류 무시 — 서버에서 계속 처리됨
       });
 
       setAnalysisStep(2);
