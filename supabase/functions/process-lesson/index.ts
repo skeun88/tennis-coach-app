@@ -147,6 +147,7 @@ serve(async (req) => {
 
     // ── 필수 파라미터 체크 ──
     if (!memberId || !coachId) {
+      if (lessonPlanId) await supabase.from('lesson_plans').update({ status: 'failed', error_message: '필수 파라미터 누락' }).eq('id', lessonPlanId)
       return new Response(JSON.stringify({ error: '필수 파라미터 누락 (member_id, coach_id)' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
@@ -177,6 +178,7 @@ serve(async (req) => {
       const limit = sub ? (PLAN_LIMITS[sub.plan_id] ?? 0) : 0
 
       if (sub && (sub.status === 'blocked' || sub.status === 'cancelled')) {
+        if (lessonPlanId) await supabase.from('lesson_plans').update({ status: 'failed', error_message: '구독이 차단되었습니다.' }).eq('id', lessonPlanId)
         return new Response(JSON.stringify({ error: '구독이 차단되었습니다.', code: 'SUBSCRIPTION_BLOCKED' }), {
           status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
@@ -186,6 +188,7 @@ serve(async (req) => {
         // 월 한도 초과 → 추가 크레딧 시도
         const { data: deducted } = await supabase.rpc('deduct_extra_report_credit', { p_coach_id: coachId })
         if (!deducted) {
+          if (lessonPlanId) await supabase.from('lesson_plans').update({ status: 'failed', error_message: 'REPORT_QUOTA_EXCEEDED' }).eq('id', lessonPlanId)
           return new Response(JSON.stringify({
             error: '이번 달 AI 리포트 할당량을 모두 사용했습니다.',
             code: 'REPORT_QUOTA_EXCEEDED',
@@ -202,12 +205,14 @@ serve(async (req) => {
 
     // ── 녹음 데이터 없으면 분석 거부 ──
     if (!audioFile || audioFile.size < 5000) {
+      if (lessonPlanId) await supabase.from('lesson_plans').update({ status: 'failed', error_message: '녹음 파일이 너무 짧거나 없습니다.' }).eq('id', lessonPlanId)
       return new Response(JSON.stringify({ error: '녹음 파일이 너무 짧거나 없습니다. 최소 10초 이상 레슨을 녹음한 후 분석을 시작하세요.' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
     // duration_seconds가 있으면 10초 미만 차단
     if (durationSeconds !== null && durationSeconds < 10) {
+      if (lessonPlanId) await supabase.from('lesson_plans').update({ status: 'failed', error_message: `녹음 시간이 너무 짧습니다 (${durationSeconds}초).` }).eq('id', lessonPlanId)
       return new Response(JSON.stringify({ error: `녹음 시간이 너무 짧습니다 (${durationSeconds}초). 최소 10초 이상 녹음해 주세요.` }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
