@@ -49,10 +49,13 @@ export default function AIAnalysisScreen() {
   } | null>(null);
   const [authToken, setAuthToken] = useState<string>('');
 
-  const audioRecorder = useAudioRecorder({
+  const VOICE_PRESET = {
     ...RecordingPresets.HIGH_QUALITY,
+    ios: { ...RecordingPresets.HIGH_QUALITY.ios, sampleRate: 16000, numberOfChannels: 1, bitRate: 32000 },
+    android: { ...RecordingPresets.HIGH_QUALITY.android, sampleRate: 16000, numberOfChannels: 1, bitRate: 32000 },
     isMeteringEnabled: false,
-  });
+  };
+  const audioRecorder = useAudioRecorder(VOICE_PRESET);
   const recorderState = useAudioRecorderState(audioRecorder);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
@@ -121,7 +124,7 @@ export default function AIAnalysisScreen() {
     if (recorderState.mediaServicesDidReset) {
       // 오디오 세션이 리셋됨 (충전 연결 등) → 오디오 모드 재설정 후 재개
       setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true, shouldPlayInBackground: true })
-        .then(() => audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY))
+        .then(() => audioRecorder.prepareToRecordAsync(VOICE_PRESET))
         .then(() => { audioRecorder.record(); })
         .catch((e: any) => {
           Alert.alert('녹음 재개 실패', `충전 연결로 인해 녹음이 중단됐어요.\n다시 시작해주세요.\n${e?.message ?? ''}`);
@@ -154,10 +157,10 @@ export default function AIAnalysisScreen() {
   }
 
   async function pollForPlan(planId: string): Promise<any> {
-    const MAX_ATTEMPTS = 70; // 약 6분 (5초 간격)
+    const MAX_ATTEMPTS = 120; // 약 6분 (3초 간격)
     let step = 2;
     for (let i = 0; i < MAX_ATTEMPTS; i++) {
-      await new Promise(r => setTimeout(r, 5000));
+      await new Promise(r => setTimeout(r, 3000));
       // 화면잠금·백그라운드 전환 시 네트워크 에러가 발생해도 폴링을 계속 유지
       let pollData: any = null;
       try {
@@ -274,7 +277,7 @@ export default function AIAnalysisScreen() {
         shouldPlayInBackground: true,
         interruptionMode: 'doNotMix' as const, // 전화 수신 시 일시정지 후 재개
       });
-      await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
+      await audioRecorder.prepareToRecordAsync(VOICE_PRESET);
       audioRecorder.record();
       setIsRecording(true);
       setRecordingDuration(0);
