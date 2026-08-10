@@ -105,12 +105,14 @@ export interface LessonPlan {
   next_goals: string;
   session_goals?: string;
   drill_suggestions?: DrillSuggestion[];
+  transcript_summary?: { lesson_flow?: string; [key: string]: any };
   court_type?: string;
   duration_minutes?: number;
   raw_response?: string;
   status?: 'pending' | 'processing' | 'completed' | 'failed';
   audio_storage_path?: string;
   error_message?: string;
+  member_report_status?: string;
   created_at: string;
   updated_at: string;
 }

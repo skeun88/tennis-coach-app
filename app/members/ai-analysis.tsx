@@ -65,6 +65,13 @@ export default function AIAnalysisScreen() {
   const [plans, setPlans] = useState<LessonPlan[]>([]);
   const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [memberReports, setMemberReports] = useState<Record<string, any>>({});
+  const [editingSection, setEditingSection] = useState<{ planId: string; section: string } | null>(null);
+  const [editingValue, setEditingValue] = useState('');
+  const [savingSection, setSavingSection] = useState(false);
+  const [expandedTranscript, setExpandedTranscript] = useState<string | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editModalLabel, setEditModalLabel] = useState('');
 
   // 수동 레포트 모달
   const [manualModalVisible, setManualModalVisible] = useState(false);
@@ -193,6 +200,20 @@ export default function AIAnalysisScreen() {
     setPlans(data ?? []);
     setLoading(false);
 
+    // 연결된 member_lesson_reports 로드 (lesson_plan_id 기준 매핑)
+    if (data && data.length > 0) {
+      const planIds = data.map((p: any) => p.id);
+      const { data: reports } = await supabase
+        .from('member_lesson_reports')
+        .select('*')
+        .in('lesson_plan_id', planIds);
+      if (reports) {
+        const map: Record<string, any> = {};
+        reports.forEach((r: any) => { if (r.lesson_plan_id) map[r.lesson_plan_id] = r; });
+        setMemberReports(map);
+      }
+    }
+
     // 앱 복귀 시 진행 중인 분석 자동 재개
     const inProgress = (data ?? []).find((p: any) => p.status === 'pending' || p.status === 'processing');
     if (inProgress && !isAnalyzing) {
@@ -203,6 +224,42 @@ export default function AIAnalysisScreen() {
         .catch(() => { loadPlans(); })
         .finally(() => { setIsAnalyzing(false); setAnalysisStep(0); });
     }
+  }
+
+  function openEditSection(planId: string, section: string) {
+    const report = memberReports[planId];
+    if (!report) return;
+    let value = '';
+    if (section === 'summary') value = report.summary || '';
+    else if (section === 'achievements') value = (Array.isArray(report.achievements) ? report.achievements : []).join('\n');
+    else if (section === 'improvement_points') value = (Array.isArray(report.improvement_points) ? report.improvement_points : []).join('\n');
+    setEditingValue(value);
+    setEditingSection({ planId, section });
+  }
+
+  function sectionLabel(section: string): string {
+    if (section === 'summary') return '오늘 레슨 요약';
+    if (section === 'achievements') return '오늘 잘한 점';
+    if (section === 'improvement_points') return '개선 포인트';
+    return '';
+  }
+
+  async function saveSection() {
+    if (!editingSection) return;
+    setSavingSection(true);
+    const { planId, section } = editingSection;
+    const report = memberReports[planId];
+    if (!report?.id) { setSavingSection(false); setEditingSection(null); return; }
+    let updateData: any = {};
+    if (section === 'summary') {
+      updateData = { summary: editingValue.trim() };
+    } else {
+      updateData = { [section]: editingValue.split('\n').map((s: string) => s.trim()).filter(Boolean) };
+    }
+    await supabase.from('member_lesson_reports').update(updateData).eq('id', report.id);
+    setMemberReports(prev => ({ ...prev, [planId]: { ...prev[planId], ...updateData } }));
+    setSavingSection(false);
+    setEditingSection(null);
   }
 
   async function polishManualReport() {
@@ -262,6 +319,58 @@ export default function AIAnalysisScreen() {
     } finally {
       setSavingReport(false);
     }
+  }
+
+  async function saveSectionEdit(planId: string, section: string, value: string) {
+    setSavingSection(true);
+    try {
+      if (section === 'achievements') {
+        // member_lesson_reports의 achievements 업데이트
+        const lines = value.split('\n').map(l => l.trim()).filter(Boolean);
+        await supabase.from('member_lesson_reports')
+          .update({ achievements: lines })
+          .eq('lesson_plan_id', planId);
+        setMemberReports(prev => ({
+          ...prev,
+          [planId]: { ...prev[planId], achievements: lines },
+        }));
+      } else {
+        // lesson_plans 필드 업데이트
+        await supabase.from('lesson_plans').update({ [section]: value }).eq('id', planId);
+        setPlans(prev => prev.map(p => p.id === planId ? { ...p, [section]: value } : p));
+      }
+    } catch {
+      Alert.alert('오류', '저장에 실패했습니다.');
+    } finally {
+      setSavingSection(false);
+      setEditingSection(null);
+    }
+  }
+
+  async function sendReportToMember(plan: LessonPlan) {
+    const report = memberReports[plan.id];
+    if (!report) {
+      Alert.alert('안내', '회원 리포트가 아직 생성 중입니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+    Alert.alert('회원에게 전송', '리포트를 회원 앱으로 전송할까요?', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '전송',
+        onPress: async () => {
+          try {
+            // 이미 member_lesson_reports에 저장된 상태이므로 회원이 앱에서 바로 볼 수 있음
+            // is_read 초기화해서 NEW 표시
+            await supabase.from('member_lesson_reports')
+              .update({ is_read: false })
+              .eq('id', report.id);
+            Alert.alert('전송 완료', '회원이 앱을 열면 리포트를 확인할 수 있어요.');
+          } catch {
+            Alert.alert('오류', '전송에 실패했습니다.');
+          }
+        },
+      },
+    ]);
   }
 
   async function startRecording() {
@@ -840,23 +949,137 @@ export default function AIAnalysisScreen() {
                 <View style={styles.planDetail}>
                   <View style={styles.divider} />
 
-                  {plan.summary ? (
-                    <View style={styles.planSection}>
-                      <View style={styles.summaryKeywordBox}>
-                        <Text style={styles.summaryKeywordText}>{shortSummary(plan.summary)}</Text>
-                      </View>
-                      <Text style={styles.planSectionContent}>{cleanSummary(plan.summary)}</Text>
+                  {/* 1. 오늘 레슨 요약 */}
+                  <View style={styles.planSection}>
+                    <View style={styles.sectionHeaderRow}>
+                      <Text style={styles.planSectionTitle}>📋 오늘 레슨 요약</Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setEditingSection({ planId: plan.id, section: 'summary' });
+                          setEditingValue(cleanSummary(plan.summary));
+                          setEditModalLabel('오늘 레슨 요약');
+                          setEditModalVisible(true);
+                        }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons name="create-outline" size={18} color={Colors.mutedFg} />
+                      </TouchableOpacity>
                     </View>
-                  ) : null}
+                    <View style={styles.summaryBox}>
+                      <Text style={styles.summaryBoxText}>{cleanSummary(plan.summary) || '-'}</Text>
+                    </View>
+                  </View>
 
-                  {Array.isArray(plan.drill_suggestions) && plan.drill_suggestions.length > 0 ? (
+                  {/* 2. 오늘 잘한 점 */}
+                  {(() => {
+                    const report = memberReports[plan.id];
+                    const achievements: string[] = report?.achievements ?? [];
+                    return (
+                      <View style={styles.planSection}>
+                        <View style={styles.sectionHeaderRow}>
+                          <Text style={styles.planSectionTitle}>🏆 오늘 잘한 점</Text>
+                          {report && (
+                            <TouchableOpacity
+                              onPress={() => {
+                                setEditingSection({ planId: plan.id, section: 'achievements' });
+                                setEditingValue(achievements.join('\n'));
+                                setEditModalLabel('오늘 잘한 점 (줄바꿈으로 항목 구분)');
+                                setEditModalVisible(true);
+                              }}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                              <Ionicons name="create-outline" size={18} color={Colors.mutedFg} />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                        {achievements.length > 0 ? (
+                          achievements.map((item, i) => (
+                            <View key={i} style={styles.listRow}>
+                              <Text style={styles.listNum}>{String(i + 1).padStart(2, '0')}</Text>
+                              <Text style={styles.listText}>{item}</Text>
+                            </View>
+                          ))
+                        ) : (
+                          <Text style={styles.emptyFieldText}>{report ? '잘한 점이 없습니다' : '리포트 생성 후 표시됩니다'}</Text>
+                        )}
+                      </View>
+                    );
+                  })()}
+
+                  {/* 3. 개선 포인트 */}
+                  <View style={styles.planSection}>
+                    <View style={styles.sectionHeaderRow}>
+                      <Text style={styles.planSectionTitle}>💡 개선 포인트</Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setEditingSection({ planId: plan.id, section: 'improvement_points' });
+                          setEditingValue(toStringArray(plan.improvement_points).join('\n'));
+                          setEditModalLabel('개선 포인트 (줄바꿈으로 항목 구분)');
+                          setEditModalVisible(true);
+                        }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons name="create-outline" size={18} color={Colors.mutedFg} />
+                      </TouchableOpacity>
+                    </View>
+                    {toStringArray(plan.improvement_points).length > 0
+                      ? toStringArray(plan.improvement_points).map((item, i) => (
+                          <View key={i} style={styles.listRow}>
+                            <Text style={styles.listNum}>{String(i + 1).padStart(2, '0')}</Text>
+                            <Text style={styles.listText}>{item}</Text>
+                          </View>
+                        ))
+                      : <Text style={styles.emptyFieldText}>개선 포인트가 없습니다</Text>
+                    }
+                  </View>
+
+                  {/* 4. 개인 맞춤 연습 플랜 */}
+                  {Array.isArray(plan.drill_suggestions) && plan.drill_suggestions.length > 0 && (
                     <View style={styles.planSection}>
-                      <Text style={styles.planSectionTitle}>🎾 추천 드릴</Text>
+                      <Text style={styles.planSectionTitle}>🎾 개인 맞춤 연습 플랜</Text>
                       {plan.drill_suggestions.map((drill, i) => (
                         <DrillCard key={i} drill={drill} index={i} />
                       ))}
                     </View>
+                  )}
+
+                  {/* 5. 레슨 전체 내용 보기 */}
+                  {plan.transcript_summary?.lesson_flow ? (
+                    <View style={styles.planSection}>
+                      <TouchableOpacity
+                        style={styles.sectionHeaderRow}
+                        onPress={() => setExpandedTranscript(expandedTranscript === plan.id ? null : plan.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.planSectionTitle}>📝 레슨 전체 내용 보기</Text>
+                        <Ionicons
+                          name={expandedTranscript === plan.id ? 'chevron-up' : 'chevron-down'}
+                          size={18}
+                          color={Colors.mutedFg}
+                        />
+                      </TouchableOpacity>
+                      {expandedTranscript === plan.id && (
+                        <Text style={styles.transcriptText}>{plan.transcript_summary.lesson_flow}</Text>
+                      )}
+                    </View>
                   ) : null}
+
+                  {/* 액션 버튼 */}
+                  <View style={styles.reportActions}>
+                    <TouchableOpacity
+                      style={styles.sendBtn}
+                      onPress={() => sendReportToMember(plan)}
+                    >
+                      <Ionicons name="paper-plane-outline" size={16} color="#fff" />
+                      <Text style={styles.sendBtnText}>회원에게 전송</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.editReportBtn}
+                      onPress={() => setManualModalVisible(true)}
+                    >
+                      <Text style={styles.editReportBtnText}>수정하기</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               )}
             </TouchableOpacity>
@@ -865,6 +1088,61 @@ export default function AIAnalysisScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* 섹션 편집 모달 */}
+      <Modal
+        visible={editModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <TouchableOpacity
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }}
+            activeOpacity={1}
+            onPress={() => setEditModalVisible(false)}
+          />
+          <View style={styles.editModalSheet}>
+            <View style={styles.editModalHeader}>
+              <Text style={styles.editModalTitle}>{editModalLabel}</Text>
+              <TouchableOpacity onPress={() => setEditModalVisible(false)}>
+                <Ionicons name="close" size={22} color={Colors.mutedFg} />
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={styles.editModalInput}
+              value={editingValue}
+              onChangeText={setEditingValue}
+              multiline
+              autoFocus
+              textAlignVertical="top"
+            />
+            <View style={styles.editModalBtnRow}>
+              <TouchableOpacity
+                style={styles.editModalCancelBtn}
+                onPress={() => setEditModalVisible(false)}
+              >
+                <Text style={styles.editModalCancelText}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.editModalSaveBtn}
+                onPress={() => {
+                  if (editingSection) {
+                    saveSectionEdit(editingSection.planId, editingSection.section, editingValue);
+                    setEditModalVisible(false);
+                  }
+                }}
+                disabled={savingSection}
+              >
+                <Text style={styles.editModalSaveText}>{savingSection ? '저장 중...' : '저장'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* 플랜 업셀 모달 (구독 차단 / 권한 없음) */}
       {upsellContext && (
@@ -1076,4 +1354,72 @@ const styles = StyleSheet.create({
     color: Colors.navy,
     lineHeight: 20,
   },
+
+  // 인라인 편집
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  summaryBox: { backgroundColor: Colors.mutedBg, borderRadius: 8, padding: 12 },
+  summaryBoxText: { fontSize: 14, color: Colors.foreground, lineHeight: 22 },
+  listRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 6 },
+  listNum: { fontSize: 12, fontWeight: '800', color: Colors.primary, width: 22, marginTop: 3 },
+  listText: { fontSize: 14, color: Colors.foreground, lineHeight: 22, flex: 1 },
+  emptyFieldText: { fontSize: 13, color: Colors.placeholder, fontStyle: 'italic' },
+  inlineInput: {
+    borderWidth: 1, borderColor: Colors.primary, borderRadius: 8,
+    padding: 10, fontSize: 14, color: Colors.foreground,
+    minHeight: 80, textAlignVertical: 'top', lineHeight: 22,
+    backgroundColor: '#fff',
+  },
+  inlineHint: { fontSize: 11, color: Colors.mutedFg, marginBottom: 4 },
+  inlineBtnRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  inlineCancelBtn: {
+    flex: 1, borderWidth: 1, borderColor: Colors.border, borderRadius: 8,
+    paddingVertical: 8, alignItems: 'center',
+  },
+  inlineCancelText: { fontSize: 13, color: Colors.foreground },
+  inlineSaveBtn: {
+    flex: 1, backgroundColor: Colors.primary, borderRadius: 8,
+    paddingVertical: 8, alignItems: 'center',
+  },
+  inlineSaveText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  transcriptText: { fontSize: 13, color: Colors.foreground, lineHeight: 22, marginTop: 8 },
+
+  // 편집 모달
+  editModalSheet: {
+    backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 20, paddingBottom: 36, maxHeight: '70%',
+  },
+  editModalHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12,
+  },
+  editModalTitle: { fontSize: 15, fontWeight: '700', color: Colors.foreground },
+  editModalInput: {
+    borderWidth: 1, borderColor: Colors.primary, borderRadius: 10,
+    padding: 12, fontSize: 14, color: Colors.foreground,
+    minHeight: 120, textAlignVertical: 'top', lineHeight: 22,
+    backgroundColor: '#fff', marginBottom: 12,
+  },
+  editModalBtnRow: { flexDirection: 'row', gap: 10 },
+  editModalCancelBtn: {
+    flex: 1, borderWidth: 1, borderColor: Colors.border, borderRadius: 10,
+    paddingVertical: 12, alignItems: 'center',
+  },
+  editModalCancelText: { fontSize: 14, color: Colors.foreground },
+  editModalSaveBtn: {
+    flex: 2, backgroundColor: Colors.primary, borderRadius: 10,
+    paddingVertical: 12, alignItems: 'center',
+  },
+  editModalSaveText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+
+  // 액션 버튼
+  reportActions: { gap: 8, marginTop: 4 },
+  sendBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 13,
+  },
+  sendBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  editReportBtn: {
+    alignItems: 'center', borderWidth: 1, borderColor: Colors.border,
+    borderRadius: 12, paddingVertical: 11,
+  },
+  editReportBtnText: { fontSize: 14, color: Colors.foreground, fontWeight: '600' },
 });
