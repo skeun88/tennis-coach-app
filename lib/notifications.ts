@@ -58,14 +58,21 @@ async function callSendPush(payload: object) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return;
 
-  await fetch(`${SUPABASE_URL}/functions/v1/send-push`, {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/send-push`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${session.access_token}`,
     },
     body: JSON.stringify(payload),
-  }).catch(() => {}); // 알림 실패해도 앱 동작에 영향 없도록
+  }).catch((e: any) => {
+    console.error('[PUSH] send-push 네트워크 오류:', e);
+    return null;
+  });
+  if (res && !res.ok) {
+    const body = await res.text().catch(() => '');
+    console.error('[PUSH] send-push 응답 오류:', res.status, body);
+  }
 }
 
 // PN-08: 코치 → 회원 메시지 알림
