@@ -13,7 +13,7 @@ import { Colors } from '../../lib/theme';
 import { useSubscription } from '../../hooks/useSubscription';
 import MemberIssueTags from '../../components/MemberIssueTags';
 import PlanUpsellModal from '../../components/PlanUpsellModal';
-import { notifyMemberMessage, notifyMemberReregister } from '../../lib/notifications';
+import { notifyMemberMessage, notifyMemberReregister, notifyMemberAbsent } from '../../lib/notifications';
 
 type DayTimes = Record<number, string[]>;
 
@@ -315,6 +315,9 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     } else if (!willDeduct && currentDeductCredit) {
       await supabase.rpc('adjust_remaining_credits', { p_member_id: memberId2, p_delta: 1 });
     }
+    if (newDbStatus === '결석') {
+      notifyMemberAbsent(memberId2).catch(() => {});
+    }
     setSavingAtt(false);
     setEditingAttId(null);
     loadAttendance();
@@ -342,6 +345,9 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       await supabase.rpc('adjust_remaining_credits', { p_member_id: memberId2, p_delta: -1 });
     } else if (!willDeduct && currentDeductCredit) {
       await supabase.rpc('adjust_remaining_credits', { p_member_id: memberId2, p_delta: 1 });
+    }
+    if (editStatus === '결석') {
+      notifyMemberAbsent(memberId2).catch(() => {});
     }
     setSavingAtt(false);
     setEditingAttId(null);

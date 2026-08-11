@@ -148,3 +148,15 @@ export async function notifyMemberReregister(memberId: string) {
     notif_id: 'PN-12',
   });
 }
+
+// PN-13: 결석 처리 → 회원 푸시
+export async function notifyMemberAbsent(memberId: string) {
+  await callSendPush({
+    recipient_type: 'member',
+    recipient_id: memberId,
+    title: '결석 처리됐어요',
+    body: '오늘 레슨이 결석 처리됐어요. 문의사항은 코치님께 연락해주세요.',
+    data: { screen: 'history' },
+    notif_id: 'PN-13',
+  });
+}

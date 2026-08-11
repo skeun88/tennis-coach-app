@@ -9,7 +9,7 @@ import { supabase } from '../../lib/supabase';
 import { Lesson, AttendanceStatus } from '../../types';
 import { Colors } from '../../lib/theme';
 import { useSubscription } from '../../hooks/useSubscription';
-import { notifyScheduleChange, notifyLessonCancel } from '../../lib/notifications';
+import { notifyScheduleChange, notifyLessonCancel, notifyMemberAbsent } from '../../lib/notifications';
 import LessonBriefingModal from '../../components/LessonBriefingModal';
 import PlanUpsellModal from '../../components/PlanUpsellModal';
 
@@ -214,6 +214,7 @@ export default function LessonDetailScreen() {
     }
 
     await doUpdate(row, '결석', willDeduct, creditDelta, selectedReason, selectedDeduction);
+    notifyMemberAbsent(row.member_id).catch(() => {});
     setSavingAbsence(false);
     setAbsenceModal(false);
     setAbsenceRow(null);
