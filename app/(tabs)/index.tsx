@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Colors, Radius, Shadow } from '../../lib/theme';
 import { useSubscription } from '../../hooks/useSubscription';
-import { notifyReregister, notifyLessonCountUpdate } from '../../lib/notifications';
+import { notifyMemberAbsent, notifyReregister, notifyLessonCountUpdate } from '../../lib/notifications';
 import PlanUpsellModal from "../../components/PlanUpsellModal";
 import CoachQRModal from '../../components/CoachQRModal';
 import OnboardingModal from '../../components/OnboardingModal';
@@ -575,6 +575,8 @@ export default function HomeScreen() {
         await supabase.rpc('adjust_remaining_credits', { p_member_id: card.memberId, p_delta: 1 });
       }
 
+      // PN-13: 결석 알림
+      try { await notifyMemberAbsent(card.memberId); } catch (e) { console.error('[PUSH] 결석 알림 실패:', e); }
       setAbsenceModal(false);
       setAbsenceCard(null);
       setSelectedReason('');
