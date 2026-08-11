@@ -20,19 +20,11 @@
       "distribution": "internal",
       "autoIncrement": true
     },
-    "beta": {
-      "distribution": "internal",
-      "autoIncrement": true,
-      "channel": "beta",
-      "env": {
-        "EXPO_PUBLIC_IS_BETA": "true"
-      }
-    },
     "production": {
       "autoIncrement": true,
       "channel": "production",
       "env": {
-        "EXPO_PUBLIC_IS_BETA": "false"
+        "EXPO_PUBLIC_IS_BETA": "true"
       }
     }
   },
