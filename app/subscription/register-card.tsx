@@ -12,6 +12,7 @@ import { WebView, WebViewNavigation } from 'react-native-webview';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { PlanId, createTrialSubscription } from '../../lib/subscription';
+import { IS_BETA } from '../../lib/beta';
 
 type BillingType = 'monthly' | 'biannual';
 
@@ -19,6 +20,7 @@ const TOSS_CLIENT_KEY = 'test_ck_XZYkKL4MrjOxJb6G74A180zJwlEW';
 
 export default function RegisterCardScreen() {
   const router = useRouter();
+  if (IS_BETA) { router.replace('/(tabs)'); return null; }
   const { planId, billingType } = useLocalSearchParams<{ planId: PlanId; billingType?: BillingType }>();
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);

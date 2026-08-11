@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { PLANS, PlanId, PRO_BIANNUAL } from '../../lib/subscription';
 import ClipRecorderModal from '../../components/ClipRecorderModal';
+import { IS_BETA } from '../../lib/beta';
 
 type SelectablePlan = 'basic' | 'pro';
 
@@ -49,6 +50,7 @@ type BillingType = 'monthly' | 'biannual';
 
 export default function SelectPlanScreen() {
   const router = useRouter();
+  if (IS_BETA) { router.replace('/(tabs)'); return null; }
   const [selectedPlan, setSelectedPlan] = useState<SelectablePlan>('pro');
   const [showBillingOptions, setShowBillingOptions] = useState(false);
   const [showRecorderModal, setShowRecorderModal] = useState(false);

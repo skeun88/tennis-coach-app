@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, Modal, TouchableOpacity, ActivityIndicator, Ale
 import { useState } from 'react';
 import { Colors } from '../lib/theme';
 import { TOPUP_PRODUCTS, TopupProductId } from '../lib/subscription';
+import { IS_BETA } from '../lib/beta';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -20,10 +21,13 @@ export default function ReportTopupModal({
   visible,
   onClose,
   onTopupSuccess,
+  // IS_BETA early return below
   onUpgradePress,
   currentPlanId,
   authToken,
 }: Props) {
+  if (IS_BETA) return null;
+
   const [selectedProduct, setSelectedProduct] = useState<TopupProductId>('30');
   const [loading, setLoading] = useState(false);
 

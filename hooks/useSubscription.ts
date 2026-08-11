@@ -8,6 +8,7 @@ import {
   getTrialDaysLeft,
   getCurrentSubscription,
 } from '../lib/subscription';
+import { IS_BETA } from '../lib/beta';
 
 interface UseSubscriptionResult {
   subscription: Subscription | null;
@@ -21,6 +22,20 @@ interface UseSubscriptionResult {
 }
 
 export function useSubscription(): UseSubscriptionResult {
+  if (IS_BETA) {
+    const betaSub: Subscription = { status: 'active', plan_id: 'pro' } as Subscription;
+    return {
+      subscription: betaSub,
+      loading: false,
+      isActive: true,
+      isBlocked: false,
+      isTrial: false,
+      trialDaysLeft: 0,
+      canUse: () => true,
+      refresh: async () => {},
+    };
+  }
+
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const channelIdRef = useRef(`${Date.now()}-${Math.random().toString(36).slice(2)}`);

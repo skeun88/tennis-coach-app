@@ -5,6 +5,7 @@
  * - targetPlan 을 명시하거나 context로 자동 결정
  */
 import React from 'react';
+import { IS_BETA } from '../lib/beta';
 import {
   Modal,
   View,
@@ -154,6 +155,8 @@ export default function PlanUpsellModal({
   featureDesc,
   usageInfo,
 }: PlanUpsellModalProps) {
+  if (IS_BETA) return null;
+
   const router = useRouter();
   const cfg = CONTEXT_CONFIG[context];
   const planColor = PLAN_COLOR[cfg.targetPlan];

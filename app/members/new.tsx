@@ -12,6 +12,7 @@ import { supabase } from '../../lib/supabase';
 import { MemberLevel } from '../../types';
 import { Colors } from '../../lib/theme';
 import { getCurrentSubscription, FREE_MEMBER_LIMIT, getMemberCount, isSubscriptionActive } from '../../lib/subscription';
+import { IS_BETA } from '../../lib/beta';
 
 const LEVELS: MemberLevel[] = ['입문', '초급', '중급', '상급', '선수'];
 const DAYS_KR = ['일', '월', '화', '수', '목', '금', '토'];
@@ -502,9 +503,9 @@ export default function NewMemberScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    // Free 플랜: 회원 3명 초과 시 구독 필요
-    const memberCount = await getMemberCount(user.id);
-    if (memberCount >= FREE_MEMBER_LIMIT) {
+    // Free 플랜: 회원 3명 초과 시 구독 필요 (IS_BETA에서는 무제한)
+    const memberCount = IS_BETA ? 0 : await getMemberCount(user.id);
+    if (!IS_BETA && memberCount >= FREE_MEMBER_LIMIT) {
       const subscription = await getCurrentSubscription();
       const active = isSubscriptionActive(subscription);
       const isPaidPlan = subscription?.plan_id === 'basic' || subscription?.plan_id === 'pro';
