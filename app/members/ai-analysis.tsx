@@ -226,40 +226,11 @@ export default function AIAnalysisScreen() {
     }
   }
 
-  function openEditSection(planId: string, section: string) {
-    const report = memberReports[planId];
-    if (!report) return;
-    let value = '';
-    if (section === 'summary') value = report.summary || '';
-    else if (section === 'achievements') value = (Array.isArray(report.achievements) ? report.achievements : []).join('\n');
-    else if (section === 'improvement_points') value = (Array.isArray(report.improvement_points) ? report.improvement_points : []).join('\n');
-    setEditingValue(value);
-    setEditingSection({ planId, section });
-  }
-
   function sectionLabel(section: string): string {
     if (section === 'summary') return '오늘 레슨 요약';
     if (section === 'achievements') return '오늘 잘한 점';
     if (section === 'improvement_points') return '개선 포인트';
     return '';
-  }
-
-  async function saveSection() {
-    if (!editingSection) return;
-    setSavingSection(true);
-    const { planId, section } = editingSection;
-    const report = memberReports[planId];
-    if (!report?.id) { setSavingSection(false); setEditingSection(null); return; }
-    let updateData: any = {};
-    if (section === 'summary') {
-      updateData = { summary: editingValue.trim() };
-    } else {
-      updateData = { [section]: editingValue.split('\n').map((s: string) => s.trim()).filter(Boolean) };
-    }
-    await supabase.from('member_lesson_reports').update(updateData).eq('id', report.id);
-    setMemberReports(prev => ({ ...prev, [planId]: { ...prev[planId], ...updateData } }));
-    setSavingSection(false);
-    setEditingSection(null);
   }
 
   async function polishManualReport() {
