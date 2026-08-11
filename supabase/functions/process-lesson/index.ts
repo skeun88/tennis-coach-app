@@ -154,7 +154,7 @@ serve(async (req) => {
     }
 
     // ── 서버사이드 quota 체크 (원자적 처리) ──
-    {
+    if (Deno.env.get('BETA_MODE') !== 'true') {
       const now = new Date()
       const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
