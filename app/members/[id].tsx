@@ -316,7 +316,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       await supabase.rpc('adjust_remaining_credits', { p_member_id: memberId2, p_delta: 1 });
     }
     if (newDbStatus === '결석') {
-      notifyMemberAbsent(memberId2).catch(() => {});
+      try { await notifyMemberAbsent(memberId2); } catch (e) { console.error('[PUSH] 결석 알림 실패:', e); }
     }
     setSavingAtt(false);
     setEditingAttId(null);
@@ -347,7 +347,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       await supabase.rpc('adjust_remaining_credits', { p_member_id: memberId2, p_delta: 1 });
     }
     if (editStatus === '결석') {
-      notifyMemberAbsent(memberId2).catch(() => {});
+      try { await notifyMemberAbsent(memberId2); } catch (e) { console.error('[PUSH] 결석 알림 실패:', e); }
     }
     setSavingAtt(false);
     setEditingAttId(null);
@@ -733,8 +733,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     // ── Branch.io 딥링크 생성 ──────────────────────────────────
     // ⚠️  아래 두 값을 Branch 대시보드에서 발급받은 키로 교체하세요
     const APP_STORE_URL = 'https://apps.apple.com/kr/app/kerri-member/id6783235236';
-
-    let inviteLink = APP_STORE_URL;
+    const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.kerri.memberapp';
 
     // 초대 코드도 함께 생성 (폴백용)
     let code = (member as any).invite_code as string | null;
@@ -743,14 +742,14 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       await supabase.from('members').update({ invite_code: code }).eq('id', member.id);
     }
 
-    const msg = `[KERRI 테니스] 안녕하세요 ${member.name}님!\n\n담당 코치가 레슨 관리앱에 초대했습니다.\n\n📱 앱 설치 & 자동 연결:\n${inviteLink}\n\n링크가 안 열릴 경우 앱 설치 후 초대 코드를 입력해주세요\n🔑 초대 코드: ${code}`;
+    const msg = `[KERRI 테니스] 안녕하세요 ${member.name}님!\n\n담당 코치가 레슨 관리앱에 초대했습니다.\n\n📱 앱 설치 & 자동 연결:\n🍎 iPhone: ${APP_STORE_URL}\n🤖 Android: ${PLAY_STORE_URL}\n\n링크가 안 열릴 경우 앱 설치 후 초대 코드를 입력해주세요\n🔑 초대 코드: ${code}`;
     const phone = member.phone.replace(/[^0-9]/g, '');
     const smsUrl = `sms:${phone}${Platform.OS === 'ios' ? '&' : '?'}body=${encodeURIComponent(msg)}`;
     const canOpen = await Linking.canOpenURL(smsUrl);
     if (canOpen) {
       await Linking.openURL(smsUrl);
     } else {
-      Alert.alert('초대 링크', inviteLink);
+      Alert.alert('초대 링크', `🍎 ${APP_STORE_URL}\n🤖 ${PLAY_STORE_URL}`);
     }
   }
 
@@ -804,9 +803,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     }
 
     // 푸시 발송 실패해도 인앱 알림 저장은 롤백하지 않음
-    notifyMemberReregister(member.id).catch((e: any) => {
-      console.error('[PUSH] 재등록 안내 푸시 발송 실패:', e);
-    });
+    try { await notifyMemberReregister(member.id); } catch (e) { console.error('[PUSH] 재등록 안내 푸시 발송 실패:', e); }
 
     Alert.alert(
       '안내 발송 완료 📨',

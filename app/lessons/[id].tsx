@@ -214,7 +214,7 @@ export default function LessonDetailScreen() {
     }
 
     await doUpdate(row, '결석', willDeduct, creditDelta, selectedReason, selectedDeduction);
-    notifyMemberAbsent(row.member_id).catch(() => {});
+    try { await notifyMemberAbsent(row.member_id); } catch (e) { console.error('[PUSH] 결석 알림 실패:', e); }
     setSavingAbsence(false);
     setAbsenceModal(false);
     setAbsenceRow(null);

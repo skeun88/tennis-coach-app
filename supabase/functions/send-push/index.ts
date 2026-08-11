@@ -35,11 +35,14 @@ serve(async (req) => {
       title,
       body,
       data = {},
-      notif_id,       // 'PN-01' ~ 'PN-11' (선택, 중복 방지용)
+      notif_id,       // 'PN-01' ~ 'PN-13' (선택, 중복 방지용)
       lesson_id,      // 선택, 중복 방지용
     } = await req.json()
 
+    console.log('[send-push] 진입:', { recipient_type, recipient_id, notif_id, lesson_id })
+
     if (!recipient_type || !recipient_id || !title || !body) {
+      console.log('[send-push] 필수 파라미터 누락')
       return new Response(JSON.stringify({ error: '필수 파라미터 누락' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -56,6 +59,7 @@ serve(async (req) => {
         .maybeSingle()
 
       if (existing) {
+        console.log('[send-push] 중복 스킵:', { notif_id, recipient_id })
         return new Response(JSON.stringify({ skipped: true, reason: 'duplicate' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
@@ -71,6 +75,7 @@ serve(async (req) => {
 
       const { data: settings } = await query
       if (settings && settings[settingKey] === false) {
+        console.log('[send-push] 사용자 비활성화 스킵:', { settingKey, recipient_id })
         return new Response(JSON.stringify({ skipped: true, reason: 'disabled_by_user' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
@@ -96,43 +101,57 @@ serve(async (req) => {
       pushToken = tokenRow?.push_token ?? null
     }
 
+    console.log('[send-push] 토큰 조회:', { recipient_type, recipient_id, found: !!pushToken, token: pushToken })
+
     if (!pushToken) {
+      console.log('[send-push] no_token 스킵')
       return new Response(JSON.stringify({ skipped: true, reason: 'no_token' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    // ── Expo Push API 호출 ──
-    const expoRes = await fetch('https://exp.host/--/api/v2/push/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        to: pushToken,
-        title,
-        body,
-        data,
-        sound: 'default',
-        priority: 'high',
-      }),
-    })
-
-    const expoData = await expoRes.json()
-
-    // ── 발송 로그 기록 (중복 방지용) ──
-    if (lesson_id && notif_id) {
-      await supabase.from('notification_logs').insert({
-        lesson_id,
-        notif_id,
-        recipient_id,
-      }).onConflict('lesson_id,notif_id,recipient_id').ignore()
-    }
-
-    return new Response(JSON.stringify({ success: true, expo: expoData }), {
+    // ── 응답 먼저 반환 후 Expo API 호출 (EarlyDrop 방지) ──
+    const response = new Response(JSON.stringify({ success: true, queued: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
 
+    EdgeRuntime.waitUntil((async () => {
+      try {
+        const expoRes = await fetch('https://exp.host/--/api/v2/push/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: pushToken,
+            title,
+            body,
+            data,
+            sound: 'default',
+            priority: 'high',
+          }),
+        })
+
+        const expoData = await expoRes.json()
+        console.log('[send-push] Expo API 응답:', JSON.stringify(expoData))
+
+        // ── 발송 로그 기록 (중복 방지용) ──
+        if (lesson_id && notif_id) {
+          await supabase.from('notification_logs').insert({
+            lesson_id,
+            notif_id,
+            recipient_id,
+          }).onConflict('lesson_id,notif_id,recipient_id').ignore()
+        }
+
+        console.log('[send-push] 완료:', { recipient_id, notif_id })
+      } catch (bgErr: any) {
+        console.error('[send-push] 백그라운드 오류:', bgErr.message)
+      }
+    })())
+
+    return response
+
   } catch (error: any) {
-    console.error('send-push error:', error)
+    console.error('[send-push] 오류:', error)
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
