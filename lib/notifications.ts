@@ -136,3 +136,15 @@ export async function notifyLessonCountUpdate(memberId: string, remainingCount: 
     notif_id: 'PN-11',
   });
 }
+
+// PN-12: 재등록 안내 → 회원 푸시 (코치가 수동 발송)
+export async function notifyMemberReregister(memberId: string) {
+  await callSendPush({
+    recipient_type: 'member',
+    recipient_id: memberId,
+    title: '레슨권이 곧 만료돼요',
+    body: '레슨권이 곧 만료돼요. 코치님께 문의해보세요.',
+    data: { screen: 'home' },
+    notif_id: 'PN-12',
+  });
+}

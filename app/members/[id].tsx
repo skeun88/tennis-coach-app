@@ -13,7 +13,7 @@ import { Colors } from '../../lib/theme';
 import { useSubscription } from '../../hooks/useSubscription';
 import MemberIssueTags from '../../components/MemberIssueTags';
 import PlanUpsellModal from '../../components/PlanUpsellModal';
-import { notifyMemberMessage } from '../../lib/notifications';
+import { notifyMemberMessage, notifyMemberReregister } from '../../lib/notifications';
 
 type DayTimes = Record<number, string[]>;
 
@@ -782,7 +782,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSendingReregister(false); return; }
 
-    // member_notifications 테이블에 알림 레코드 저장
+    // member_notifications 테이블에 알림 레코드 저장 (인앱 알림)
     const { error } = await supabase.from('member_notifications').insert({
       coach_id: user.id,
       member_id: member.id,
@@ -793,12 +793,19 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
 
     if (error) {
       Alert.alert('실패', '알림 발송에 실패했어요.');
-    } else {
-      Alert.alert(
-        '안내 발송 완료 📨',
-        `${member.name}님에게 재등록 안내를 발송했어요.\n회원이 앱을 열면 확인할 수 있어요.`,
-      );
+      setSendingReregister(false);
+      return;
     }
+
+    // 푸시 발송 실패해도 인앱 알림 저장은 롤백하지 않음
+    notifyMemberReregister(member.id).catch((e: any) => {
+      console.error('[PUSH] 재등록 안내 푸시 발송 실패:', e);
+    });
+
+    Alert.alert(
+      '안내 발송 완료 📨',
+      `${member.name}님에게 재등록 안내를 발송했어요.\n회원이 앱을 열면 확인할 수 있어요.`,
+    );
     setSendingReregister(false);
   }
 
