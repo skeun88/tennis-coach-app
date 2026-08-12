@@ -13,6 +13,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import ReportQuotaBar from '../../components/ReportQuotaBar';
 import ReportTopupModal from '../../components/ReportTopupModal';
+import { IS_BETA } from '../../lib/beta';
 
 const STATUS_LABELS: Record<string, string> = {
   trial: '무료 체험 중',
@@ -32,6 +33,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function ManageSubscriptionScreen() {
   const router = useRouter();
+  if (IS_BETA) { router.replace('/(tabs)'); return null; }
   const { subscription, loading, isTrial, trialDaysLeft, refresh } = useSubscription();
   const [cancelling, setCancelling] = useState(false);
   const [reportUsed, setReportUsed] = useState(0);

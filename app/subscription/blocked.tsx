@@ -5,9 +5,11 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import { IS_BETA } from '../../lib/beta';
 
 export default function BlockedScreen() {
   const router = useRouter();
+  if (IS_BETA) { router.replace('/(tabs)'); return null; }
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();

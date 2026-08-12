@@ -8,9 +8,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSubscription } from '../../hooks/useSubscription';
 import { PLANS, PlanId, calculateUpgradeCost } from '../../lib/subscription';
 import { supabase } from '../../lib/supabase';
+import { IS_BETA } from '../../lib/beta';
 
 export default function UpgradeScreen() {
   const router = useRouter();
+  if (IS_BETA) { router.replace('/(tabs)'); return null; }
   const { targetPlan } = useLocalSearchParams<{ targetPlan: PlanId }>();
   const { subscription, refresh } = useSubscription();
   const [processing, setProcessing] = useState(false);

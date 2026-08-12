@@ -7,6 +7,7 @@ import { View, ActivityIndicator, Text } from 'react-native';
 import { Colors } from '../lib/theme';
 import { getCurrentSubscription } from '../lib/subscription';
 import { registerCoachPushToken } from '../lib/notifications';
+import { IS_BETA } from '../lib/beta';
 
 // Android 시스템 폰트 크기 설정이 레이아웃을 깨트리지 않도록 전역 비활성화
 if ((Text as any).defaultProps == null) (Text as any).defaultProps = {};
@@ -99,6 +100,7 @@ export default function RootLayout() {
             return;
           }
           // 구독 상태 체크
+          if (IS_BETA) { setIsNavigationReady(true); return; }
           getCurrentSubscription().then((sub) => {
             if (sub && (sub.status === 'blocked' || sub.status === 'cancelled')) {
               router.replace('/subscription/blocked');

@@ -10,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Colors, Radius, Shadow } from '../lib/theme';
+import { IS_BETA } from '../lib/beta';
 
 interface ProUpsellModalProps {
   visible: boolean;
@@ -33,6 +34,7 @@ export default function ProUpsellModal({
   featureTitle,
   featureDesc,
 }: ProUpsellModalProps) {
+  if (IS_BETA) return null;
   const router = useRouter();
 
   return (
