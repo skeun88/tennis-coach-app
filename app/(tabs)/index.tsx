@@ -650,17 +650,17 @@ export default function HomeScreen() {
           </View>
           <View style={styles.statsRow}>
             <TouchableOpacity style={stats.unpaidMembers > 0 ? styles.statCardAlert : styles.statCard} activeOpacity={0.85} onPress={() => { loadUnpaidMembers(); setUnpaidModal(true); }}>
-              <Text style={styles.statValue}>
+              <Text style={[styles.statValue, stats.unpaidMembers > 0 && { color: '#D9534F' }]}>
                 {stats.unpaidMembers}
               </Text>
-              <Text style={styles.statLabel}>미납 회원</Text>
+              <Text style={[styles.statLabel, stats.unpaidMembers > 0 && { color: '#D9534F' }]}>미납 회원</Text>
               <Text style={styles.statHint}>잔여 0회</Text>
             </TouchableOpacity>
             <TouchableOpacity style={stats.expiringMembers > 0 ? styles.statCardAlert : styles.statCard} activeOpacity={0.85} onPress={() => { loadExpiringMembers(); setExpiringModal(true); }}>
-              <Text style={styles.statValue}>
+              <Text style={[styles.statValue, stats.expiringMembers > 0 && { color: '#D99A2B' }]}>
                 {stats.expiringMembers}
               </Text>
-              <Text style={styles.statLabel}>만료 예정</Text>
+              <Text style={[styles.statLabel, stats.expiringMembers > 0 && { color: '#D99A2B' }]}>만료 예정</Text>
               <Text style={styles.statHint}>잔여 1~2회</Text>
             </TouchableOpacity>
           </View>
@@ -687,7 +687,7 @@ export default function HomeScreen() {
           <TouchableOpacity style={styles.interestCard} onPress={() => setInterestModal(true)} activeOpacity={0.85}>
             <View style={styles.churnCardLeft}>
               <View style={styles.churnIconWrap}>
-                <Ionicons name="person-add" size={18} color={Colors.mutedFg} />
+                <Ionicons name="person-add" size={18} color="#D99A2B" />
               </View>
               <View>
                 <Text style={styles.churnTitle}>관심 회원 {interestList.length}명</Text>
@@ -707,7 +707,7 @@ export default function HomeScreen() {
           >
             <View style={styles.churnCardLeft}>
               <View style={styles.churnIconWrap}>
-                <Ionicons name="warning" size={18} color={Colors.mutedFg} />
+                <Ionicons name="warning" size={18} color="#D9534F" />
               </View>
               <View>
                 <Text style={styles.churnTitle}>이탈 위험 {churnRiskList.length}명</Text>
@@ -732,7 +732,7 @@ export default function HomeScreen() {
         >
           <View style={styles.aiCoachingLeft}>
             <View style={styles.aiCoachingIconWrap}>
-              <Ionicons name="bulb" size={20} color={Colors.mutedFg} />
+              <Ionicons name="bulb" size={20} color="#C0755A" />
             </View>
             <View>
               <Text style={styles.aiCoachingTitle}>내 AI 코칭 모델</Text>
