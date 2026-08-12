@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorderState } from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
 import { supabase } from '../../lib/supabase';
+import { notifyMemberReport } from '../../lib/notifications';
 import { LessonPlan, DrillSuggestion } from '../../types';
 import { Colors } from '../../lib/theme';
 import { useSubscription } from '../../hooks/useSubscription';
@@ -286,6 +287,7 @@ export default function AIAnalysisScreen() {
         source: 'manual_direct',
       });
       if (error) throw error;
+      try { await notifyMemberReport(memberId as string); } catch (e) { console.error('[PUSH] 리포트 알림 실패:', e); }
       Alert.alert('전송 완료', '레슨 기록이 회원에게 전송됐어요.');
       setManualModalVisible(false);
       setManualContent('');
@@ -313,6 +315,7 @@ export default function AIAnalysisScreen() {
         source: 'manual',
       });
       if (error) throw error;
+      try { await notifyMemberReport(memberId as string); } catch (e) { console.error('[PUSH] 리포트 알림 실패:', e); }
       Alert.alert('저장 완료', '레포트가 저장되었습니다.');
       setManualModalVisible(false);
       setPolishedReport(null);
@@ -367,6 +370,7 @@ export default function AIAnalysisScreen() {
             await supabase.from('member_lesson_reports')
               .update({ is_read: false })
               .eq('id', report.id);
+            try { await notifyMemberReport(plan.member_id); } catch (e) { console.error('[PUSH] 리포트 알림 실패:', e); }
             Alert.alert('전송 완료', '회원이 앱을 열면 리포트를 확인할 수 있어요.');
           } catch {
             Alert.alert('오류', '전송에 실패했습니다.');

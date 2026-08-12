@@ -160,3 +160,15 @@ export async function notifyMemberAbsent(memberId: string) {
     notif_id: 'PN-13',
   });
 }
+
+// PN-07: 코치 → 회원 리포트 전송 알림
+export async function notifyMemberReport(memberId: string) {
+  await callSendPush({
+    recipient_type: 'member',
+    recipient_id: memberId,
+    title: '새 레슨 리포트가 도착했어요',
+    body: '코치님이 레슨 리포트를 보냈어요. 지금 확인해보세요!',
+    data: { screen: 'report' },
+    notif_id: 'PN-07',
+  });
+}
