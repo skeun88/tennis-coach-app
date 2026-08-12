@@ -6,6 +6,8 @@ import {
   Modal, FlatList, Linking,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Link, Stack, useFocusEffect } from 'expo-router';
+import { useHeaderHeight } from '@react-navigation/elements';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Member, MemberLevel, Attendance, Payment, MemberNote } from '../../types';
@@ -187,6 +189,8 @@ export default function MemberDetailScreen() {
     packageTitle?: string;
   }>();
   const router = useRouter();
+  const headerHeight = useHeaderHeight();
+  const insets = useSafeAreaInsets();
 
   // pending: waiting for lesson package registration before generating schedule
   const awaitingLessonPkg = useRef(false);
@@ -925,7 +929,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   const ATTENDANCE_STATUS_COLOR: Record<string, string> = { '출석': Colors.primary, '결석': Colors.destructive, '지각': Colors.warning, '조퇴': Colors.accentWarm, '보강예정': Colors.accentWarm };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <View style={{ flex: 1 }}>
       {/* 메시지 탭: 헤더 제목 변경 + 뒤로가기 → 탭 복귀 */}
       <Stack.Screen options={{
         title: tab === 'messages' ? member.name : '회원 상세',
@@ -1425,7 +1429,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={90}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}
         >
           {messages.length === 0 ? (
             <View style={[styles.emptyCard, { flex: 1, justifyContent: 'center' }]}>
@@ -1472,8 +1476,8 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
               }}
             />
           )}
-          {/* 입력창 — 키보드 바로 위에 고정 */}
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', backgroundColor: '#fff', padding: 10, paddingBottom: Platform.OS === 'ios' ? 10 : 10, borderTopWidth: 1, borderTopColor: Colors.border, gap: 8 }}>
+          {/* 입력창 — 키보드 바로 위에 고정 (KAV가 올려주므로 insets.bottom만 적용) */}
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', backgroundColor: '#fff', padding: 10, paddingBottom: Math.max(10, insets.bottom), borderTopWidth: 1, borderTopColor: Colors.border, gap: 8 }}>
             <TextInput
               style={{ flex: 1, fontSize: 14, color: Colors.foreground, backgroundColor: Colors.mutedBg, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10, maxHeight: 80 }}
               value={msgInput}
@@ -1852,7 +1856,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
           </View>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
