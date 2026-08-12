@@ -3,10 +3,14 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { Session } from '@supabase/supabase-js';
 import * as Linking from 'expo-linking';
 import { supabase } from '../lib/supabase';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Text } from 'react-native';
 import { Colors } from '../lib/theme';
 import { getCurrentSubscription } from '../lib/subscription';
 import { registerCoachPushToken } from '../lib/notifications';
+
+// Android 시스템 폰트 크기 설정이 레이아웃을 깨트리지 않도록 전역 비활성화
+if ((Text as any).defaultProps == null) (Text as any).defaultProps = {};
+(Text as any).defaultProps.allowFontScaling = false;
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);

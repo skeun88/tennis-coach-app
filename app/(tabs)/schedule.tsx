@@ -1032,15 +1032,15 @@ ${rejectMsg.trim()}`
         renderWeekGrid()
       ) : renderMonthView()}
 
-      {/* FAB */}
-      <TouchableOpacity style={styles.fab} onPress={() => router.push('/lessons/new')}>
+      {/* FAB — Android 하단 nav bar 높이 반영 */}
+      <TouchableOpacity style={[styles.fab, { bottom: insets.bottom + 24 }]} onPress={() => router.push('/lessons/new')}>
         <Ionicons name="add" size={28} color="#fff" />
       </TouchableOpacity>
 
       {/* 새 레슨 등록 모달 */}
       <Modal visible={newModal} transparent animationType="slide" onRequestClose={() => setNewModal(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
+          <View style={[styles.modalSheet, { paddingBottom: Math.max(40, insets.bottom + 20) }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>새 레슨 등록</Text>
               <TouchableOpacity onPress={() => setNewModal(false)}><Ionicons name="close" size={22} color={Colors.mutedFg} /></TouchableOpacity>
@@ -1135,7 +1135,7 @@ ${rejectMsg.trim()}`
       {/* 예약 요청 모달 */}
       <Modal visible={requestModal} transparent animationType="slide" onRequestClose={() => setRequestModal(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
+          <View style={[styles.modalSheet, { paddingBottom: Math.max(40, insets.bottom + 20) }]}>
             <Text style={styles.modalTitle}>레슨 예약 요청</Text>
             {selectedRequest && (
               <>

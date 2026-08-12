@@ -780,7 +780,7 @@ export default function HomeScreen() {
         {/* ④ 이탈 위험 회원 모달 */}
         <Modal visible={churnModal} transparent animationType="slide" onRequestClose={() => setChurnModal(false)}>
           <View style={styles.modalOverlay}>
-            <View style={styles.modalSheet}>
+            <View style={[styles.modalSheet, { paddingBottom: Math.max(40, insets.bottom + 20) }]}>
               <View style={styles.modalHeader}>
                 <View>
                   <Text style={styles.modalTitle}>이탈 위험 회원</Text>
@@ -825,7 +825,7 @@ export default function HomeScreen() {
         {/* ① 체험 회원 모달 */}
         <Modal visible={trialModal} transparent animationType="slide" onRequestClose={() => setTrialModal(false)}>
           <View style={styles.modalOverlay}>
-            <View style={styles.modalSheet}>
+            <View style={[styles.modalSheet, { paddingBottom: Math.max(40, insets.bottom + 20) }]}>
               <View style={styles.modalHeader}>
                 <View>
                   <Text style={styles.modalTitle}>체험 중 회원</Text>
@@ -870,7 +870,7 @@ export default function HomeScreen() {
         {/* ③ 관심 회원 모달 */}
         <Modal visible={interestModal} transparent animationType="slide" onRequestClose={() => setInterestModal(false)}>
           <View style={styles.modalOverlay}>
-            <View style={styles.modalSheet}>
+            <View style={[styles.modalSheet, { paddingBottom: Math.max(40, insets.bottom + 20) }]}>
               <View style={styles.modalHeader}>
                 <View>
                   <Text style={styles.modalTitle}>관심 회원</Text>
@@ -1038,9 +1038,9 @@ export default function HomeScreen() {
         )}
       </ScrollView>
 
-      {/* Chatbot FAB + 힌트 툴팁 */}
+      {/* Chatbot FAB + 힌트 툴팁 — Android 하단 nav bar 높이 반영 */}
       {showChatHint && (
-        <View style={styles.chatHintBubble}>
+        <View style={[styles.chatHintBubble, { bottom: insets.bottom + 92 }]}>
           <View style={{ flex: 1 }}>
             <Text style={styles.chatHintText}>앱 사용법 외에도 드릴·테니스 이론 등</Text>
             <Text style={styles.chatHintText}>무엇이든 물어보세요</Text>
@@ -1050,7 +1050,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       )}
-      <TouchableOpacity style={styles.chatFab} onPress={() => { dismissChatHint(); router.push('/(tabs)/chat'); }}>
+      <TouchableOpacity style={[styles.chatFab, { bottom: insets.bottom + 24 }]} onPress={() => { dismissChatHint(); router.push('/(tabs)/chat'); }}>
         <Ionicons name="chatbubble-ellipses" size={24} color={Colors.white} />
       </TouchableOpacity>
 

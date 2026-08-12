@@ -501,7 +501,7 @@ export default function PaymentsScreen() {
       <Modal visible={editModal} transparent animationType="slide" onRequestClose={() => { setEditModal(false); setEditTarget(null); }}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => { setEditModal(false); setEditTarget(null); }}>
-            <TouchableOpacity style={[styles.modalSheet, { paddingBottom: 32 }]} activeOpacity={1} onPress={() => {}}>
+            <TouchableOpacity style={[styles.modalSheet, { paddingBottom: Math.max(32, insets.bottom + 16) }]} activeOpacity={1} onPress={() => {}}>
               <View style={styles.modalHandle} />
               <Text style={styles.modalTitle}>결제 수정</Text>
               <ScrollView style={{ paddingHorizontal: 16 }} keyboardShouldPersistTaps="handled">
