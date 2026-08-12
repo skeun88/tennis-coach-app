@@ -926,56 +926,67 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* 메시지 탭: 헤더 제목 변경 + 뒤로가기 → 탭 복귀 */}
       <Stack.Screen options={{
-        title: '회원 상세',
+        title: tab === 'messages' ? member.name : '회원 상세',
         headerLeft: () => (
           <TouchableOpacity
-            onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/members')}
+            onPress={tab === 'messages'
+              ? () => setTab('info')
+              : () => router.canGoBack() ? router.back() : router.replace('/(tabs)/members')
+            }
             style={{ paddingLeft: 4, paddingRight: 8 }}
           >
             <Ionicons name="chevron-back" size={26} color={Colors.primary} />
           </TouchableOpacity>
         ),
       }} />
-      {/* Profile Header */}
-      <View style={styles.profileHeader}>
-        <View style={[styles.bigAvatar, { backgroundColor: LEVEL_COLORS[member.level as MemberLevel] ?? Colors.level.입문 }]}>
-          <Text style={styles.bigAvatarText}>{member.name.slice(0, 1)}</Text>
-        </View>
-        <Text style={styles.profileName}>{member.name}</Text>
-        <View style={styles.profileBadgeRow}>
-          <View style={[styles.levelBadge, { backgroundColor: (LEVEL_COLORS[member.level as MemberLevel] ?? Colors.level.입문) + '33' }]}>
-            <Text style={[styles.levelText, { color: LEVEL_COLORS[member.level as MemberLevel] ?? Colors.level.입문 }]}>{member.level}</Text>
+
+      {/* Profile Header — 메시지 탭에서 숨김 */}
+      {tab !== 'messages' && (
+        <View style={styles.profileHeader}>
+          <View style={[styles.bigAvatar, { backgroundColor: LEVEL_COLORS[member.level as MemberLevel] ?? Colors.level.입문 }]}>
+            <Text style={styles.bigAvatarText}>{member.name.slice(0, 1)}</Text>
           </View>
-          {!member.is_active && <View style={styles.inactiveBadge}><Text style={styles.inactiveText}>비활성</Text></View>}
-        </View>
-        <TouchableOpacity
-          style={styles.aiBtn}
-          onPress={() => router.push({ pathname: '/members/ai-analysis', params: { memberId: member.id, memberName: member.name, memberLevel: member.level } })}
-        >
-          <Ionicons name="sparkles" size={14} color="#fff" />
-          <Text style={styles.aiBtnText}>AI 레슨 분석</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* ① 반복 이슈 태그 (프로 전용) — 탭 위 프로필 하단에 표시 */}
-      <View style={{ paddingHorizontal: 16, paddingBottom: 4 }}>
-        <MemberIssueTags
-          memberId={member.id}
-          isPro={canUse('tagging')}
-          onUpgrade={() => setShowProModal(true)}
-        />
-      </View>
-
-      {/* Tabs */}
-      <View style={styles.tabRow}>
-        {TABS.map(t => (
-          <TouchableOpacity key={t.key} style={[styles.tabBtn, tab === t.key && styles.tabBtnActive]} onPress={() => setTab(t.key)}>
-            <Ionicons name={t.icon as any} size={16} color={tab === t.key ? Colors.primary : Colors.mutedFg} />
-            <Text style={[styles.tabLabel, tab === t.key && styles.tabLabelActive]}>{t.label}</Text>
+          <Text style={styles.profileName}>{member.name}</Text>
+          <View style={styles.profileBadgeRow}>
+            <View style={[styles.levelBadge, { backgroundColor: (LEVEL_COLORS[member.level as MemberLevel] ?? Colors.level.입문) + '33' }]}>
+              <Text style={[styles.levelText, { color: LEVEL_COLORS[member.level as MemberLevel] ?? Colors.level.입문 }]}>{member.level}</Text>
+            </View>
+            {!member.is_active && <View style={styles.inactiveBadge}><Text style={styles.inactiveText}>비활성</Text></View>}
+          </View>
+          <TouchableOpacity
+            style={styles.aiBtn}
+            onPress={() => router.push({ pathname: '/members/ai-analysis', params: { memberId: member.id, memberName: member.name, memberLevel: member.level } })}
+          >
+            <Ionicons name="sparkles" size={14} color="#fff" />
+            <Text style={styles.aiBtnText}>AI 레슨 분석</Text>
           </TouchableOpacity>
-        ))}
-      </View>
+        </View>
+      )}
+
+      {/* ① 반복 이슈 태그 — 메시지 탭에서 숨김 */}
+      {tab !== 'messages' && (
+        <View style={{ paddingHorizontal: 16, paddingBottom: 4 }}>
+          <MemberIssueTags
+            memberId={member.id}
+            isPro={canUse('tagging')}
+            onUpgrade={() => setShowProModal(true)}
+          />
+        </View>
+      )}
+
+      {/* Tabs — 메시지 탭에서 숨김 */}
+      {tab !== 'messages' && (
+        <View style={styles.tabRow}>
+          {TABS.map(t => (
+            <TouchableOpacity key={t.key} style={[styles.tabBtn, tab === t.key && styles.tabBtnActive]} onPress={() => setTab(t.key)}>
+              <Ionicons name={t.icon as any} size={16} color={tab === t.key ? Colors.primary : Colors.mutedFg} />
+              <Text style={[styles.tabLabel, tab === t.key && styles.tabLabelActive]}>{t.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       {tab !== 'messages' ? <ScrollView style={styles.content}>
         {/* INFO TAB */}
