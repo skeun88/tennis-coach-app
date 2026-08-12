@@ -627,10 +627,10 @@ export default function AIAnalysisScreen() {
     return (
       <View style={styles.drillCard}>
         <View style={styles.drillHeader}>
-          <View style={styles.drillIndex}>
-            <Text style={styles.drillIndexText}>{index + 1}</Text>
-          </View>
           <Text style={styles.drillName}>{drill.name}</Text>
+          <View style={styles.editIconBtn}>
+            <Ionicons name="pencil-outline" size={14} color={Colors.mutedFg} />
+          </View>
         </View>
         <View style={styles.drillBody}>
           {[
@@ -923,22 +923,21 @@ export default function AIAnalysisScreen() {
                   {/* 1. 오늘 레슨 요약 */}
                   <View style={styles.planSection}>
                     <View style={styles.sectionHeaderRow}>
-                      <Text style={styles.planSectionTitle}>📋 오늘 레슨 요약</Text>
+                      <Text style={styles.planSectionTitle}>오늘 레슨 요약</Text>
                       <TouchableOpacity
+                        style={styles.editIconBtn}
                         onPress={() => {
                           setEditingSection({ planId: plan.id, section: 'summary' });
                           setEditingValue(cleanSummary(plan.summary));
                           setEditModalLabel('오늘 레슨 요약');
                           setEditModalVisible(true);
                         }}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        activeOpacity={0.7}
                       >
-                        <Ionicons name="create-outline" size={18} color={Colors.mutedFg} />
+                        <Ionicons name="pencil-outline" size={14} color={Colors.mutedFg} />
                       </TouchableOpacity>
                     </View>
-                    <View style={styles.summaryBox}>
-                      <Text style={styles.summaryBoxText}>{cleanSummary(plan.summary) || '-'}</Text>
-                    </View>
+                    <Text style={styles.summaryBoxText}>{cleanSummary(plan.summary) || '-'}</Text>
                   </View>
 
                   {/* 2. 오늘 잘한 점 */}
@@ -948,18 +947,19 @@ export default function AIAnalysisScreen() {
                     return (
                       <View style={styles.planSection}>
                         <View style={styles.sectionHeaderRow}>
-                          <Text style={styles.planSectionTitle}>🏆 오늘 잘한 점</Text>
+                          <Text style={styles.planSectionTitle}>오늘 잘한 점</Text>
                           {report && (
                             <TouchableOpacity
+                              style={styles.editIconBtn}
                               onPress={() => {
                                 setEditingSection({ planId: plan.id, section: 'achievements' });
                                 setEditingValue(achievements.join('\n'));
                                 setEditModalLabel('오늘 잘한 점 (줄바꿈으로 항목 구분)');
                                 setEditModalVisible(true);
                               }}
-                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              activeOpacity={0.7}
                             >
-                              <Ionicons name="create-outline" size={18} color={Colors.mutedFg} />
+                              <Ionicons name="pencil-outline" size={14} color={Colors.mutedFg} />
                             </TouchableOpacity>
                           )}
                         </View>
@@ -980,17 +980,18 @@ export default function AIAnalysisScreen() {
                   {/* 3. 개선 포인트 */}
                   <View style={styles.planSection}>
                     <View style={styles.sectionHeaderRow}>
-                      <Text style={styles.planSectionTitle}>💡 개선 포인트</Text>
+                      <Text style={styles.planSectionTitle}>개선 포인트</Text>
                       <TouchableOpacity
+                        style={styles.editIconBtn}
                         onPress={() => {
                           setEditingSection({ planId: plan.id, section: 'improvement_points' });
                           setEditingValue(toStringArray(plan.improvement_points).join('\n'));
                           setEditModalLabel('개선 포인트 (줄바꿈으로 항목 구분)');
                           setEditModalVisible(true);
                         }}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        activeOpacity={0.7}
                       >
-                        <Ionicons name="create-outline" size={18} color={Colors.mutedFg} />
+                        <Ionicons name="pencil-outline" size={14} color={Colors.mutedFg} />
                       </TouchableOpacity>
                     </View>
                     {toStringArray(plan.improvement_points).length > 0
@@ -1007,7 +1008,12 @@ export default function AIAnalysisScreen() {
                   {/* 4. 개인 맞춤 연습 플랜 */}
                   {Array.isArray(plan.drill_suggestions) && plan.drill_suggestions.length > 0 && (
                     <View style={styles.planSection}>
-                      <Text style={styles.planSectionTitle}>🎾 개인 맞춤 연습 플랜</Text>
+                      <View style={styles.sectionHeaderRow}>
+                        <Text style={styles.planSectionTitle}>개인 맞춤 연습 플랜</Text>
+                        <View style={styles.editIconBtn}>
+                          <Ionicons name="pencil-outline" size={14} color={Colors.mutedFg} />
+                        </View>
+                      </View>
                       {plan.drill_suggestions.map((drill, i) => (
                         <DrillCard key={i} drill={drill} index={i} />
                       ))}
@@ -1016,22 +1022,26 @@ export default function AIAnalysisScreen() {
 
                   {/* 5. 레슨 전체 내용 보기 */}
                   {plan.transcript_summary?.lesson_flow ? (
-                    <View style={styles.planSection}>
-                      <TouchableOpacity
-                        style={styles.sectionHeaderRow}
-                        onPress={() => setExpandedTranscript(expandedTranscript === plan.id ? null : plan.id)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.planSectionTitle}>📝 레슨 전체 내용 보기</Text>
-                        <Ionicons
-                          name={expandedTranscript === plan.id ? 'chevron-up' : 'chevron-down'}
-                          size={18}
-                          color={Colors.mutedFg}
-                        />
-                      </TouchableOpacity>
-                      {expandedTranscript === plan.id && (
-                        <Text style={styles.transcriptText}>{plan.transcript_summary.lesson_flow}</Text>
-                      )}
+                    <View style={[styles.planSection, { marginBottom: 0 }]}>
+                      <View style={styles.accordionBox}>
+                        <TouchableOpacity
+                          style={styles.accordionHeader}
+                          onPress={() => setExpandedTranscript(expandedTranscript === plan.id ? null : plan.id)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.planSectionTitle}>레슨 전체 내용 보기</Text>
+                          <Ionicons
+                            name={expandedTranscript === plan.id ? 'chevron-up' : 'chevron-down'}
+                            size={18}
+                            color={Colors.mutedFg}
+                          />
+                        </TouchableOpacity>
+                        {expandedTranscript === plan.id && (
+                          <View style={styles.accordionContent}>
+                            <Text style={styles.transcriptText}>{plan.transcript_summary.lesson_flow}</Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
                   ) : null}
 
@@ -1262,9 +1272,17 @@ const styles = StyleSheet.create({
 
   // 플랜 카드
   planCard: {
-    backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 10,
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 }, elevation: 2,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
   planHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
   planMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' },
@@ -1276,10 +1294,10 @@ const styles = StyleSheet.create({
   courtBadgeText: { fontSize: 11, color: Colors.navy, fontWeight: '700' },
   planPreview: { fontSize: 14, color: Colors.foreground, lineHeight: 20 },
   planDetail: { marginTop: 4 },
-  divider: { height: 1, backgroundColor: Colors.mutedBg, marginVertical: 12 },
-  planSection: { marginBottom: 16 },
-  planSectionTitle: { fontSize: 13, fontWeight: '800', color: Colors.foreground, marginBottom: 8 },
-  planSectionContent: { fontSize: 14, color: Colors.foreground, lineHeight: 22 },
+  divider: { height: 1, backgroundColor: Colors.border, marginVertical: 16 },
+  planSection: { marginBottom: 24 },
+  planSectionTitle: { fontSize: 18, fontWeight: '600', color: Colors.foreground },
+  planSectionContent: { fontSize: 16, color: Colors.foreground, lineHeight: 25.6 },
 
   // Bullet list
   bulletRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 6 },
@@ -1288,28 +1306,33 @@ const styles = StyleSheet.create({
 
   // 드릴 카드
   drillCard: {
-    backgroundColor: '#f8fdf9',
-    borderRadius: 10,
-    marginBottom: 10,
-    overflow: 'hidden',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+    padding: 24,
   },
   drillHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 12, paddingTop: 12, paddingBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
-  drillIndex: {
-    width: 22, height: 22, borderRadius: 11,
-    backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center',
-  },
-  drillIndexText: { fontSize: 11, fontWeight: '800', color: '#fff' },
-  drillName: { fontSize: 14, fontWeight: '800', color: Colors.foreground, flex: 1 },
-  drillBody: { paddingHorizontal: 12, paddingBottom: 12, gap: 4 },
-  drillRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  drillName: { fontSize: 17, fontWeight: '600', color: Colors.foreground, flex: 1 },
+  drillBody: { gap: 16 },
+  drillRow: { flexDirection: 'column' },
   drillLabel: {
-    fontSize: 12, fontWeight: '700', color: Colors.navy,
-    width: 60, marginTop: 2, flexShrink: 0,
+    fontSize: 13,
+    fontWeight: '500',
+    color: Colors.mutedFg,
   },
-  drillValue: { fontSize: 13, color: Colors.foreground, lineHeight: 20, flex: 1 },
+  drillValue: { fontSize: 16, color: Colors.foreground, lineHeight: 25.6, marginTop: 4 },
 
   // 상단 키워드 요약
   summaryKeywordBox: {
@@ -1327,13 +1350,42 @@ const styles = StyleSheet.create({
   },
 
   // 인라인 편집
-  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  summaryBox: { backgroundColor: Colors.mutedBg, borderRadius: 8, padding: 12 },
-  summaryBoxText: { fontSize: 14, color: Colors.foreground, lineHeight: 22 },
-  listRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 6 },
-  listNum: { fontSize: 12, fontWeight: '800', color: Colors.primary, width: 22, marginTop: 3 },
-  listText: { fontSize: 14, color: Colors.foreground, lineHeight: 22, flex: 1 },
-  emptyFieldText: { fontSize: 13, color: Colors.placeholder, fontStyle: 'italic' },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  summaryBox: {},
+  summaryBoxText: { fontSize: 16, color: Colors.foreground, lineHeight: 25.6 },
+  listRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
+  listNum: { fontSize: 13, fontWeight: '600', color: Colors.primary, width: 20, marginTop: 3 },
+  listText: { fontSize: 16, color: Colors.foreground, lineHeight: 25.6, flex: 1 },
+  editIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  accordionBox: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  accordionHeader: {
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  accordionContent: {
+    padding: 24,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  emptyFieldText: { fontSize: 14, color: Colors.placeholder, fontStyle: 'italic' },
   inlineInput: {
     borderWidth: 1, borderColor: Colors.primary, borderRadius: 8,
     padding: 10, fontSize: 14, color: Colors.foreground,
@@ -1352,7 +1404,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8, alignItems: 'center',
   },
   inlineSaveText: { fontSize: 13, fontWeight: '700', color: '#fff' },
-  transcriptText: { fontSize: 13, color: Colors.foreground, lineHeight: 22, marginTop: 8 },
+  transcriptText: { fontSize: 16, color: Colors.foreground, lineHeight: 25.6 },
 
   // 편집 모달
   editModalSheet: {
