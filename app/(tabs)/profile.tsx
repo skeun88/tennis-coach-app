@@ -352,6 +352,13 @@ export default function ProfileScreen() {
       const token = session?.access_token;
       if (!token) throw new Error('인증 토큰 없음');
 
+      // 기존 avatar 파일 모두 삭제 (확장자 혼재 방지: jpg/png 둘 다 남는 문제)
+      const { data: existingFiles } = await supabase.storage.from('avatars').list(user.id);
+      const oldAvatars = (existingFiles ?? []).filter(f => f.name.startsWith('avatar.'));
+      if (oldAvatars.length > 0) {
+        await supabase.storage.from('avatars').remove(oldAvatars.map(f => `${user.id}/${f.name}`));
+      }
+
       const uploadUrl = `${SUPABASE_URL}/storage/v1/object/avatars/${filePath}`;
       const uploadResult = await FileSystem.uploadAsync(uploadUrl, uri, {
         httpMethod: 'POST',
