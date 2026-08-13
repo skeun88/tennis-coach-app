@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import PlanUpsellModal from '../../components/PlanUpsellModal';
 import * as DocumentPicker from 'expo-document-picker';
 import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from 'expo-audio';
@@ -18,6 +19,7 @@ import { PLANS } from '../../lib/subscription';
 import { Colors, Radius, Shadow } from '../../lib/theme';
 import CoachQRModal from '../../components/CoachQRModal';
 
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SPORTS = ['테니스', '배드민턴', '스쿼시', '탁구', '골프', '기타'];
 
 // ─── KERRI 등급 정의 ─────────────────────
@@ -336,14 +338,51 @@ export default function ProfileScreen() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const res = await fetch(uri); const blob = await res.blob();
-      const ext = uri.split('.').pop() ?? 'jpg';
+
+      // 파일 크기 사전 검증 (fetch+blob()은 RN에서 빈 blob을 반환하는 알려진 문제)
+      const fileInfo = await FileSystem.getInfoAsync(uri);
+      if (!fileInfo.exists || ((fileInfo as any).size ?? 0) < 1000) {
+        Alert.alert('오류', '이미지 파일을 읽을 수 없습니다. 다른 사진을 선택해주세요.');
+        return;
+      }
+
+      const ext = (uri.split('.').pop()?.toLowerCase() ?? 'jpg').replace(/[^a-z]/g, '') || 'jpg';
       const filePath = `${user.id}/avatar.${ext}`;
-      const { error } = await supabase.storage.from('avatars').upload(filePath, blob, { upsert: true, contentType: `image/${ext}` });
-      const url = error ? uri : supabase.storage.from('avatars').getPublicUrl(filePath).data.publicUrl;
-      setEditProfile(p => ({ ...p, avatar_url: url }));
-    } catch { setEditProfile(p => ({ ...p, avatar_url: uri })); }
-    finally { setUploadingAvatar(false); }
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('인증 토큰 없음');
+
+      const uploadUrl = `${SUPABASE_URL}/storage/v1/object/avatars/${filePath}`;
+      const uploadResult = await FileSystem.uploadAsync(uploadUrl, uri, {
+        httpMethod: 'POST',
+        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': `image/${ext}`,
+          'x-upsert': 'true',
+        },
+      });
+
+      if (uploadResult.status >= 400) {
+        throw new Error(`이미지 업로드 실패 (${uploadResult.status})`);
+      }
+
+      // 실제 업로드된 파일 크기 검증 — 0바이트 방지
+      const { data: fileList } = await supabase.storage.from('avatars').list(user.id, { search: `avatar.${ext}` });
+      const storedFile = fileList?.find(f => f.name === `avatar.${ext}`);
+      const storedSize = (storedFile?.metadata as any)?.size ?? 0;
+      if (storedSize === 0) {
+        await supabase.storage.from('avatars').remove([filePath]);
+        throw new Error('이미지가 올바르게 업로드되지 않았습니다. 다른 사진을 선택해주세요.');
+      }
+
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath);
+      setEditProfile(p => ({ ...p, avatar_url: `${publicUrl}?t=${Date.now()}` }));
+    } catch (e: any) {
+      Alert.alert('업로드 실패', e?.message ?? '이미지 업로드에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setUploadingAvatar(false);
+    }
   }
 
   async function saveProfile() {

@@ -108,6 +108,7 @@ export interface LessonPlan {
   transcript_summary?: { lesson_flow?: string; [key: string]: any };
   court_type?: string;
   duration_minutes?: number;
+  ai_title?: string;
   raw_response?: string;
   status?: 'pending' | 'processing' | 'completed' | 'failed';
   audio_storage_path?: string;

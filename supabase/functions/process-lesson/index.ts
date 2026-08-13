@@ -44,14 +44,16 @@ const SYSTEM_PROMPT = `당신은 USTA/ITF 자격증을 보유한 전문 테니�
 반드시 아래 JSON 형식으로만 응답하세요 (한국어). JSON 외 텍스트 절대 포함 금지.
 
 ━━ 분량 상한 (엄수) ━━
+• ai_title: 5-8단어 이내, 명사형으로 끝낼 것 (예: "포핸드 타점 교정 집중 레슨")
 • summary: 2문장 이내
 • session_goals: 1문장 이내
 • improvement_points: 정확히 2항목, 각 1문장 (원인→교정법 핵심만)
 • next_goals: 정확히 2항목, 각 1문장
 • drill method/court_adaptation: 각 1문장 이내
-• 전체 출력 900토큰 이내
+• 전체 출력 950토큰 이내
 
 {
+  "ai_title": "이번 레슨 핵심 주제 (5-8단어, 명사형)",
   "summary": "오늘 레슨 흐름 요약 (2문장 이내)",
   "session_goals": "이번 레슨 핵심 목표 (1문장)",
   "improvement_points": [
@@ -499,6 +501,7 @@ ${knowledgeContext || '(없음)'}
     const planPayload = {
       transcript_id: transcriptRow?.id,
       court_type: effectiveCourtType,
+      ai_title: parsed.ai_title || '',
       summary: parsed.summary || '',
       improvement_points: normalizeList(parsed.improvement_points),
       next_goals: normalizeList(parsed.next_goals),

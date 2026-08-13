@@ -64,15 +64,8 @@ export default function AIAnalysisScreen() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStep, setAnalysisStep] = useState(0); // 0 = 대기, 1~4 = 진행중
   const [plans, setPlans] = useState<LessonPlan[]>([]);
-  const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [memberReports, setMemberReports] = useState<Record<string, any>>({});
-  const [editingSection, setEditingSection] = useState<{ planId: string; section: string } | null>(null);
-  const [editingValue, setEditingValue] = useState('');
-  const [savingSection, setSavingSection] = useState(false);
-  const [expandedTranscript, setExpandedTranscript] = useState<string | null>(null);
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const [editModalLabel, setEditModalLabel] = useState('');
 
   // 타이핑 레슨 기록 모달
   const [manualModalVisible, setManualModalVisible] = useState(false);
@@ -225,6 +218,12 @@ export default function AIAnalysisScreen() {
     }
   }
 
+  function getPlanTitle(plan: LessonPlan): string {
+    if (plan.ai_title) return plan.ai_title;
+    const s = shortSummary(plan.summary);
+    return s || '분석 결과 확인하기';
+  }
+
   function sectionLabel(section: string): string {
     if (section === 'summary') return '오늘 레슨 요약';
     if (section === 'achievements') return '오늘 잘한 점';
@@ -324,32 +323,6 @@ export default function AIAnalysisScreen() {
       Alert.alert('오류', '저장에 실패했습니다.');
     } finally {
       setSavingReport(false);
-    }
-  }
-
-  async function saveSectionEdit(planId: string, section: string, value: string) {
-    setSavingSection(true);
-    try {
-      if (section === 'achievements') {
-        // member_lesson_reports의 achievements 업데이트
-        const lines = value.split('\n').map(l => l.trim()).filter(Boolean);
-        await supabase.from('member_lesson_reports')
-          .update({ achievements: lines })
-          .eq('lesson_plan_id', planId);
-        setMemberReports(prev => ({
-          ...prev,
-          [planId]: { ...prev[planId], achievements: lines },
-        }));
-      } else {
-        // lesson_plans 필드 업데이트
-        await supabase.from('lesson_plans').update({ [section]: value }).eq('id', planId);
-        setPlans(prev => prev.map(p => p.id === planId ? { ...p, [section]: value } : p));
-      }
-    } catch {
-      Alert.alert('오류', '저장에 실패했습니다.');
-    } finally {
-      setSavingSection(false);
-      setEditingSection(null);
     }
   }
 
@@ -494,7 +467,6 @@ export default function AIAnalysisScreen() {
 
       if (!skipMonthlyIncrement) await incrementAiAnalysisUsage(userId);
       await loadPlans();
-      setExpandedPlan(completed.id);
       Alert.alert('완료', 'AI 레슨 분석이 완료됐습니다! 🎾');
 
     } catch (e: any) {
@@ -919,247 +891,53 @@ export default function AIAnalysisScreen() {
             </View>
           )}
 
-          {plans.map(plan => (
-            <TouchableOpacity
-              key={plan.id}
-              style={styles.planCard}
-              onPress={() => setExpandedPlan(expandedPlan === plan.id ? null : plan.id)}
-              activeOpacity={0.8}
-            >
-              {/* 카드 헤더 */}
-              <View style={styles.planHeader}>
-                <View style={{ flex: 1 }}>
-                  <View style={styles.planMeta}>
+          {plans.map(plan => {
+            const report = memberReports[plan.id];
+            const isSent = !!report;
+            return (
+              <TouchableOpacity
+                key={plan.id}
+                style={styles.planCard}
+                onPress={() => router.push({
+                  pathname: '/members/plan-detail',
+                  params: {
+                    planId: plan.id,
+                    memberId: memberId as string,
+                    memberName: memberName as string,
+                    memberLevel: memberLevel as string,
+                  },
+                } as any)}
+                activeOpacity={0.8}
+              >
+                {/* 상단: 날짜 + 전송 상태 뱃지 */}
+                <View style={styles.planTopRow}>
+                  <View style={styles.planDateRow}>
                     <Text style={styles.planDate}>{formatDate(plan.created_at)}</Text>
-                    {plan.court_type ? (
-                      <View style={styles.courtBadge}>
-                        <Text style={styles.courtBadgeText}>{plan.court_type}</Text>
-                      </View>
-                    ) : null}
                     {plan.duration_minutes ? (
-                      <Text style={styles.planDuration}>{plan.duration_minutes}분</Text>
+                      <Text style={styles.planDuration}>· {plan.duration_minutes}분</Text>
                     ) : null}
                   </View>
-                  <Text style={styles.planPreview} numberOfLines={2}>
-                    {shortSummary(plan.summary) || '분석 결과를 확인하세요'}
+                  <View style={[styles.sentBadge, isSent ? styles.sentBadgeGreen : styles.sentBadgeTerracotta]}>
+                    <Text style={[styles.sentBadgeText, isSent ? styles.sentBadgeTextGreen : styles.sentBadgeTextTerracotta]}>
+                      {isSent ? '전송 완료' : '전송 전'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* AI 핵심 제목 */}
+                <View style={styles.planTitleRow}>
+                  <Text style={styles.planTitleText} numberOfLines={2}>
+                    {getPlanTitle(plan)}
                   </Text>
+                  <Ionicons name="chevron-forward" size={18} color={Colors.mutedFg} />
                 </View>
-                <Ionicons
-                  name={expandedPlan === plan.id ? 'chevron-up' : 'chevron-down'}
-                  size={20}
-                  color={Colors.mutedFg}
-                />
-              </View>
-
-              {/* 확장 상세 */}
-              {expandedPlan === plan.id && (
-                <View style={styles.planDetail}>
-                  <View style={styles.divider} />
-
-                  {/* 1. 오늘 레슨 요약 */}
-                  <View style={styles.planSection}>
-                    <View style={styles.sectionHeaderRow}>
-                      <Text style={styles.planSectionTitle}>오늘 레슨 요약</Text>
-                      <TouchableOpacity
-                        style={styles.editIconBtn}
-                        onPress={() => {
-                          setEditingSection({ planId: plan.id, section: 'summary' });
-                          setEditingValue(cleanSummary(plan.summary));
-                          setEditModalLabel('오늘 레슨 요약');
-                          setEditModalVisible(true);
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="pencil-outline" size={14} color={Colors.mutedFg} />
-                      </TouchableOpacity>
-                    </View>
-                    <Text style={styles.summaryBoxText}>{cleanSummary(plan.summary) || '-'}</Text>
-                  </View>
-
-                  {/* 2. 오늘 잘한 점 */}
-                  {(() => {
-                    const report = memberReports[plan.id];
-                    const achievements: string[] = report?.achievements ?? [];
-                    return (
-                      <View style={styles.planSection}>
-                        <View style={styles.sectionHeaderRow}>
-                          <Text style={styles.planSectionTitle}>오늘 잘한 점</Text>
-                          {report && (
-                            <TouchableOpacity
-                              style={styles.editIconBtn}
-                              onPress={() => {
-                                setEditingSection({ planId: plan.id, section: 'achievements' });
-                                setEditingValue(achievements.join('\n'));
-                                setEditModalLabel('오늘 잘한 점 (줄바꿈으로 항목 구분)');
-                                setEditModalVisible(true);
-                              }}
-                              activeOpacity={0.7}
-                            >
-                              <Ionicons name="pencil-outline" size={14} color={Colors.mutedFg} />
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                        {achievements.length > 0 ? (
-                          achievements.map((item, i) => (
-                            <View key={i} style={styles.listRow}>
-                              <Text style={styles.listNum}>{String(i + 1).padStart(2, '0')}</Text>
-                              <Text style={styles.listText}>{item}</Text>
-                            </View>
-                          ))
-                        ) : (
-                          <Text style={styles.emptyFieldText}>{report ? '잘한 점이 없습니다' : '리포트 생성 후 표시됩니다'}</Text>
-                        )}
-                      </View>
-                    );
-                  })()}
-
-                  {/* 3. 개선 포인트 */}
-                  <View style={styles.planSection}>
-                    <View style={styles.sectionHeaderRow}>
-                      <Text style={styles.planSectionTitle}>개선 포인트</Text>
-                      <TouchableOpacity
-                        style={styles.editIconBtn}
-                        onPress={() => {
-                          setEditingSection({ planId: plan.id, section: 'improvement_points' });
-                          setEditingValue(toStringArray(plan.improvement_points).join('\n'));
-                          setEditModalLabel('개선 포인트 (줄바꿈으로 항목 구분)');
-                          setEditModalVisible(true);
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="pencil-outline" size={14} color={Colors.mutedFg} />
-                      </TouchableOpacity>
-                    </View>
-                    {toStringArray(plan.improvement_points).length > 0
-                      ? toStringArray(plan.improvement_points).map((item, i) => (
-                          <View key={i} style={styles.listRow}>
-                            <Text style={styles.listNum}>{String(i + 1).padStart(2, '0')}</Text>
-                            <Text style={styles.listText}>{item}</Text>
-                          </View>
-                        ))
-                      : <Text style={styles.emptyFieldText}>개선 포인트가 없습니다</Text>
-                    }
-                  </View>
-
-                  {/* 4. 개인 맞춤 연습 플랜 */}
-                  {Array.isArray(plan.drill_suggestions) && plan.drill_suggestions.length > 0 && (
-                    <View style={styles.planSection}>
-                      <View style={styles.sectionHeaderRow}>
-                        <Text style={styles.planSectionTitle}>개인 맞춤 연습 플랜</Text>
-                        <View style={styles.editIconBtn}>
-                          <Ionicons name="pencil-outline" size={14} color={Colors.mutedFg} />
-                        </View>
-                      </View>
-                      {plan.drill_suggestions.map((drill, i) => (
-                        <DrillCard key={i} drill={drill} index={i} />
-                      ))}
-                    </View>
-                  )}
-
-                  {/* 5. 레슨 전체 내용 보기 */}
-                  {plan.transcript_summary?.lesson_flow ? (
-                    <View style={[styles.planSection, { marginBottom: 0 }]}>
-                      <View style={styles.accordionBox}>
-                        <TouchableOpacity
-                          style={styles.accordionHeader}
-                          onPress={() => setExpandedTranscript(expandedTranscript === plan.id ? null : plan.id)}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={styles.planSectionTitle}>레슨 전체 내용 보기</Text>
-                          <Ionicons
-                            name={expandedTranscript === plan.id ? 'chevron-up' : 'chevron-down'}
-                            size={18}
-                            color={Colors.mutedFg}
-                          />
-                        </TouchableOpacity>
-                        {expandedTranscript === plan.id && (
-                          <View style={styles.accordionContent}>
-                            <Text style={styles.transcriptText}>{plan.transcript_summary.lesson_flow}</Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                  ) : null}
-
-                  {/* 액션 버튼 */}
-                  <View style={styles.reportActions}>
-                    <TouchableOpacity
-                      style={styles.sendBtn}
-                      onPress={() => sendReportToMember(plan)}
-                    >
-                      <Ionicons name="paper-plane-outline" size={16} color="#fff" />
-                      <Text style={styles.sendBtnText}>회원에게 전송</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.editReportBtn}
-                      onPress={() => setManualModalVisible(true)}
-                    >
-                      <Text style={styles.editReportBtnText}>수정하기</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-            </TouchableOpacity>
-          ))}
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         <View style={{ height: 40 }} />
       </ScrollView>
-
-      {/* 섹션 편집 모달 */}
-      <Modal
-        visible={editModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setEditModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <TouchableOpacity
-            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }}
-            activeOpacity={1}
-            onPress={() => setEditModalVisible(false)}
-          />
-          <View style={styles.editModalSheet}>
-            <View style={styles.editModalHeader}>
-              <Text style={styles.editModalTitle}>{editModalLabel}</Text>
-              <TouchableOpacity onPress={() => setEditModalVisible(false)}>
-                <Ionicons name="close" size={22} color={Colors.mutedFg} />
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              style={styles.editModalInput}
-              value={editingValue}
-              onChangeText={setEditingValue}
-              multiline
-              autoFocus
-              textAlignVertical="top"
-            />
-            <View style={styles.editModalBtnRow}>
-              <TouchableOpacity
-                style={styles.editModalCancelBtn}
-                onPress={() => setEditModalVisible(false)}
-              >
-                <Text style={styles.editModalCancelText}>취소</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.editModalSaveBtn}
-                onPress={() => {
-                  if (editingSection) {
-                    saveSectionEdit(editingSection.planId, editingSection.section, editingValue);
-                    setEditModalVisible(false);
-                  }
-                }}
-                disabled={savingSection}
-              >
-                <Text style={styles.editModalSaveText}>{savingSection ? '저장 중...' : '저장'}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
 
       {/* 플랜 업셀 모달 (구독 차단 / 권한 없음) */}
       {upsellContext && (
@@ -1323,8 +1101,9 @@ const styles = StyleSheet.create({
   planCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 24,
-    marginBottom: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: Colors.border,
     shadowColor: '#000',
@@ -1333,15 +1112,24 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     elevation: 1,
   },
-  planHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
-  planMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' },
+  planTopRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8,
+  },
+  planDateRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   planDate: { fontSize: 12, color: Colors.mutedFg },
   planDuration: { fontSize: 12, color: Colors.placeholder },
-  courtBadge: {
-    backgroundColor: Colors.primaryLight, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
+  sentBadge: {
+    borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3,
   },
-  courtBadgeText: { fontSize: 11, color: Colors.navy, fontWeight: '700' },
-  planPreview: { fontSize: 14, color: Colors.foreground, lineHeight: 20 },
+  sentBadgeGreen: { backgroundColor: Colors.successLight },
+  sentBadgeTerracotta: { backgroundColor: Colors.primaryLight },
+  sentBadgeText: { fontSize: 11, fontWeight: '600' },
+  sentBadgeTextGreen: { color: Colors.success },
+  sentBadgeTextTerracotta: { color: Colors.primary },
+  planTitleRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+  },
+  planTitleText: { fontSize: 15, fontWeight: '700', color: Colors.foreground, flex: 1, lineHeight: 22 },
   planDetail: { marginTop: 4 },
   divider: { height: 1, backgroundColor: Colors.border, marginVertical: 16 },
   planSection: { marginBottom: 24 },
