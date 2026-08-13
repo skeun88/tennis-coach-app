@@ -197,6 +197,7 @@ export default function PaymentsScreen() {
       if (selectedPackage) {
         await supabase.from('members').update({
           remaining_credits: (payTarget.remainingCredits ?? 0) + selectedPackage.total_credits,
+          total_credits: selectedPackage.total_credits,
           lesson_package_id: selectedPackage.id,
         }).eq('id', memberId);
       }
@@ -215,6 +216,7 @@ export default function PaymentsScreen() {
       if (error) { Alert.alert('오류', '결제 저장에 실패했어요.\n' + error.message); setSaving(false); return; }
       await supabase.from('members').update({
         remaining_credits: (payTarget.remainingCredits ?? 0) + selectedPackage.total_credits,
+        total_credits: selectedPackage.total_credits,
         lesson_package_id: selectedPackage.id,
       }).eq('id', memberId);
     }
