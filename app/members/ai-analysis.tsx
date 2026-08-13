@@ -66,6 +66,8 @@ export default function AIAnalysisScreen() {
   const [plans, setPlans] = useState<LessonPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [memberReports, setMemberReports] = useState<Record<string, any>>({});
+  const [manualReports, setManualReports] = useState<any[]>([]);
+  const [expandedManual, setExpandedManual] = useState<string | null>(null);
 
   // 타이핑 레슨 기록 모달
   const [manualModalVisible, setManualModalVisible] = useState(false);
@@ -206,6 +208,16 @@ export default function AIAnalysisScreen() {
       }
     }
 
+    // 수동 기록 로드 (lesson_plan_id 없는 member_lesson_reports)
+    const { data: manualData } = await supabase
+      .from('member_lesson_reports')
+      .select('*')
+      .eq('member_id', memberId)
+      .is('lesson_plan_id', null)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    setManualReports(manualData ?? []);
+
     // 앱 복귀 시 진행 중인 분석 자동 재개
     const inProgress = (data ?? []).find((p: any) => p.status === 'pending' || p.status === 'processing');
     if (inProgress && !isAnalyzing) {
@@ -290,6 +302,7 @@ export default function AIAnalysisScreen() {
       Alert.alert('전송 완료', '레슨 기록이 회원에게 전송됐어요.');
       setManualModalVisible(false);
       setManualContent('');
+      loadPlans();
     } catch (e) {
       Alert.alert('오류', '전송에 실패했습니다.');
     } finally {
@@ -319,6 +332,7 @@ export default function AIAnalysisScreen() {
       setManualModalVisible(false);
       setPolishedReport(null);
       setManualContent('');
+      loadPlans();
     } catch (e) {
       Alert.alert('오류', '저장에 실패했습니다.');
     } finally {
@@ -883,7 +897,7 @@ export default function AIAnalysisScreen() {
 
           {loading && <ActivityIndicator color={Colors.primary} style={{ marginTop: 20 }} />}
 
-          {!loading && plans.length === 0 && (
+          {!loading && plans.length === 0 && manualReports.length === 0 && (
             <View style={styles.emptyBox}>
               <Ionicons name="analytics-outline" size={40} color={Colors.iconMuted} />
               <Text style={styles.emptyText}>아직 분석 기록이 없어요</Text>
@@ -934,6 +948,57 @@ export default function AIAnalysisScreen() {
               </TouchableOpacity>
             );
           })}
+
+          {/* 수동 기록 카드 (전송하기 / AI 저장 기록) */}
+          {manualReports.map(report => (
+            <TouchableOpacity
+              key={report.id}
+              style={styles.planCard}
+              onPress={() => setExpandedManual(expandedManual === report.id ? null : report.id)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.planTopRow}>
+                <View style={styles.planDateRow}>
+                  <Text style={styles.planDate}>{formatDate(report.created_at)}</Text>
+                </View>
+                <View style={[styles.sentBadge, styles.manualBadge]}>
+                  <Text style={[styles.sentBadgeText, styles.manualBadgeText]}>직접 작성</Text>
+                </View>
+              </View>
+              <View style={styles.planTitleRow}>
+                <Text style={styles.planTitleText} numberOfLines={2}>
+                  {report.summary || '레슨 기록'}
+                </Text>
+                <Ionicons
+                  name={expandedManual === report.id ? 'chevron-up' : 'chevron-down'}
+                  size={18}
+                  color={Colors.mutedFg}
+                />
+              </View>
+
+              {expandedManual === report.id && (
+                <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border }}>
+                  <Text style={styles.summaryBoxText}>{report.summary}</Text>
+                  {Array.isArray(report.achievements) && report.achievements.length > 0 && (
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={[styles.planSectionTitle, { fontSize: 14, marginBottom: 6 }]}>오늘 잘한 점</Text>
+                      {report.achievements.map((a: string, i: number) => (
+                        <Text key={i} style={[styles.bulletText, { marginBottom: 4 }]}>• {a}</Text>
+                      ))}
+                    </View>
+                  )}
+                  {Array.isArray(report.improvement_points) && report.improvement_points.length > 0 && (
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={[styles.planSectionTitle, { fontSize: 14, marginBottom: 6 }]}>개선 포인트</Text>
+                      {report.improvement_points.map((p: string, i: number) => (
+                        <Text key={i} style={[styles.bulletText, { marginBottom: 4 }]}>• {p}</Text>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )}
+            </TouchableOpacity>
+          ))}
         </View>
 
         <View style={{ height: 40 }} />
@@ -1126,6 +1191,8 @@ const styles = StyleSheet.create({
   sentBadgeText: { fontSize: 11, fontWeight: '600' },
   sentBadgeTextGreen: { color: Colors.success },
   sentBadgeTextTerracotta: { color: Colors.primary },
+  manualBadge: { backgroundColor: Colors.mutedBg, borderWidth: 1, borderColor: Colors.border, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  manualBadgeText: { fontSize: 11, fontWeight: '600', color: Colors.mutedFg },
   planTitleRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8,
   },
