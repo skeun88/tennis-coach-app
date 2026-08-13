@@ -284,7 +284,7 @@ export default function AIAnalysisScreen() {
         achievements: [],
         improvement_points: [],
         practice_plan: [],
-        source: 'manual_direct',
+        source: 'manual',
       });
       if (error) throw error;
       try { await notifyMemberReport(memberId as string); } catch (e) { console.error('[PUSH] 리포트 알림 실패:', e); }
