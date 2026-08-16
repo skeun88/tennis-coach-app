@@ -97,6 +97,7 @@ export default function ScheduleScreen() {
   const [lessons, setLessons] = useState<LessonWithMembers[]>([]);
   const [weekData, setWeekData] = useState<WeekLesson[]>([]);
   const [monthLessons, setMonthLessons] = useState<Map<string, LessonWithMembers[]>>(new Map());
+  const [monthAbsenceCount, setMonthAbsenceCount] = useState(0);
   const [activeMemberIds, setActiveMemberIds] = useState<Set<string>>(new Set());
   const [monthYear, setMonthYear] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
   const [refreshing, setRefreshing] = useState(false);
@@ -334,6 +335,15 @@ ${rejectMsg.trim()}`
       map.get(l.date)!.push(l);
     }
     setMonthLessons(map);
+
+    // 결석 수 계산
+    const lessonIds = withNames.map(l => l.id);
+    if (lessonIds.length > 0) {
+      const { data: absentAtt } = await supabase.from('attendance').select('id').in('lesson_id', lessonIds).eq('status', '결석');
+      setMonthAbsenceCount(absentAtt?.length ?? 0);
+    } else {
+      setMonthAbsenceCount(0);
+    }
 
     // 활성 회원 ID 목록 (비활성/삭제된 회원 제외)
     const { data: activeMembers } = await supabase
@@ -1095,12 +1105,8 @@ ${rejectMsg.trim()}`
                 ]}>{day}</Text>
                 {dayLessons.length > 0 && (
                   <View style={styles.monthLessonDots}>
-                    {dayLessons.slice(0, 3).map((l, i) => (
-                      <View key={i} style={styles.monthDot} />
-                    ))}
-                    {dayLessons.length > 0 && (
-                      <Text style={styles.monthLessonCount}>{dayLessons.length}</Text>
-                    )}
+                    <View style={styles.monthDot} />
+                    <Text style={styles.monthLessonCount}>{dayLessons.length}</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -1121,8 +1127,8 @@ ${rejectMsg.trim()}`
           </View>
           <View style={styles.monthSummaryDivider} />
           <View style={styles.monthSummaryItem}>
-            <Text style={styles.monthSummaryNum}>{new Set(Array.from(monthLessons.values()).flat().flatMap(l => l.memberIds).filter(id => activeMemberIds.has(id))).size}</Text>
-            <Text style={styles.monthSummaryLabel}>회원수</Text>
+            <Text style={styles.monthSummaryNum}>{monthAbsenceCount}</Text>
+            <Text style={styles.monthSummaryLabel}>결석</Text>
           </View>
         </View>
         <View style={{ height: 100 }} />
