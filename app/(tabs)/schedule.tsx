@@ -530,6 +530,22 @@ ${rejectMsg.trim()}`
     if (Math.abs(clamped - oldStartMin) < 5) return; // 변화 없음
     const newStartStr = minutesToTime(clamped);
     const newEndStr = minutesToTime(clamped + duration);
+
+    // 충돌 감지
+    const overlap = lessons.find(l => {
+      if (l.id === lessonId) return false;
+      const ls = timeToMinutes(l.start_time), le = timeToMinutes(l.end_time);
+      return clamped < le && (clamped + duration) > ls;
+    });
+    if (overlap) {
+      const overlapName = overlap.memberNames.length > 0 ? overlap.memberNames.join(', ') : overlap.title;
+      Alert.alert(
+        '시간 충돌',
+        `${overlapName} 레슨(${minutesToTime(timeToMinutes(overlap.start_time))}~${minutesToTime(timeToMinutes(overlap.end_time))})과 겹칩니다.\n다른 시간으로 이동해주세요.`
+      );
+      return;
+    }
+
     Alert.alert(
       '시간 변경',
       lesson.title + '\n' + minutesToTime(oldStartMin) + ' → ' + newStartStr + '\n\n변경하시겠어요?',
@@ -648,6 +664,14 @@ ${rejectMsg.trim()}`
               <View style={styles.hourLine} />
             </View>
           ))}
+
+          {/* 10분 단위 보조 눈금 (드래그 중) */}
+          {draggingId !== null && HOURS.flatMap(h =>
+            [10, 20, 30, 40, 50].map(m => {
+              const lineY = ((h * 60 + m - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+              return <View key={`sub-${h}-${m}`} style={[styles.subHourLine, { top: lineY }]} />;
+            })
+          )}
 
           {/* 탭 가능한 빈 슬롯 오버레이 */}
           <TouchableOpacity
@@ -852,6 +876,9 @@ ${rejectMsg.trim()}`
                     const bWidth = (COL_W - 4 - (layout.totalCols - 1) * 2) / layout.totalCols;
                     const left = 2 + layout.col * (bWidth + 2);
                     const isPast = endMin < nowMin && date <= today;
+                    const dMin = endMin - startMin;
+                    const nm = lesson.memberNames.length > 0 ? lesson.memberNames.join(',') : lesson.title.replace(/ 레슨$/, '');
+                    const ts = lesson.start_time.slice(0, 5);
                     return (
                       <TouchableOpacity
                         key={lesson.id}
@@ -862,14 +889,20 @@ ${rejectMsg.trim()}`
                         onPress={() => router.push('/lessons/' + lesson.id as any)}
                         activeOpacity={0.8}
                       >
-                        <Text style={[styles.weekBlockName, isPast && { color: Colors.mutedFg }]}
-                          numberOfLines={1}>
-                          {lesson.memberNames.length > 0 ? lesson.memberNames.join(',') : lesson.title.replace(/ 레슨$/, '')}
-                        </Text>
-                        {height >= 36 && (
-                          <Text style={[styles.weekBlockTime, isPast && { color: Colors.placeholder }]} numberOfLines={1}>
-                            {lesson.start_time.slice(3, 5) !== '00' ? lesson.start_time.slice(3, 5) + '분' : ''}
-                          </Text>
+                        {height < 28 ? (
+                          <Text style={[styles.weekBlockName, isPast && { color: Colors.mutedFg }]} numberOfLines={1}>{nm}</Text>
+                        ) : height < 44 ? (
+                          <>
+                            <Text style={[styles.weekBlockNameSmall, isPast && { color: Colors.mutedFg }]} numberOfLines={1}>{nm}</Text>
+                            <Text style={[styles.weekBlockTimeSmall, isPast && { color: Colors.placeholder }]} numberOfLines={1}>{ts}</Text>
+                          </>
+                        ) : (
+                          <>
+                            <Text style={[styles.weekBlockName, isPast && { color: Colors.mutedFg }]} numberOfLines={1}>{nm}</Text>
+                            <Text style={[styles.weekBlockTime, isPast && { color: Colors.placeholder }]} numberOfLines={1}>
+                              {ts}{dMin >= 30 ? ` · ${dMin}분` : ''}
+                            </Text>
+                          </>
                         )}
                       </TouchableOpacity>
                     );
@@ -1221,18 +1254,21 @@ function DraggableLesson({
 }) {
   const pan = useRef(new Animated.ValueXY()).current;
   const dragging = useRef(false);
+  const [liveDragTime, setLiveDragTime] = useState<string | null>(null);
 
   // 콜백을 ref로 관리 → PanResponder가 항상 최신 콜백 참조
   const onDragEndRef = useRef(onDragEnd);
   const onDragStartRef = useRef(onDragStart);
   const onDragCancelRef = useRef(onDragCancel);
   const onPressRef = useRef(onPress);
+  const lessonStartMinRef = useRef(timeToMinutes(lesson.start_time));
   useEffect(() => {
     onDragEndRef.current = onDragEnd;
     onDragStartRef.current = onDragStart;
     onDragCancelRef.current = onDragCancel;
     onPressRef.current = onPress;
-  }, [onDragEnd, onDragStart, onDragCancel, onPress]);
+    lessonStartMinRef.current = timeToMinutes(lesson.start_time);
+  }, [onDragEnd, onDragStart, onDragCancel, onPress, lesson.start_time]);
 
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => dragging.current,
@@ -1243,29 +1279,42 @@ function DraggableLesson({
       pan.setOffset({ x: 0, y: (pan.y as any)._value });
       pan.setValue({ x: 0, y: 0 });
     },
-    onPanResponderMove: Animated.event([null, { dy: pan.y }], { useNativeDriver: false }),
+    onPanResponderMove: (_, g) => {
+      pan.y.setValue(g.dy);
+      const deltaMin = Math.round((g.dy / HOUR_HEIGHT) * 60 / 10) * 10;
+      const newMin = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60 - 10, lessonStartMinRef.current + deltaMin));
+      setLiveDragTime(minutesToTime(newMin));
+    },
     onPanResponderRelease: (_, g) => {
       if (!dragging.current) return;
       dragging.current = false;
       pan.flattenOffset();
       const dy = g.dy;
       pan.setValue({ x: 0, y: 0 });
+      setLiveDragTime(null);
       onDragEndRef.current(dy);
       onDragCancelRef.current();
     },
     onPanResponderTerminate: () => {
       dragging.current = false;
       pan.setValue({ x: 0, y: 0 });
+      setLiveDragTime(null);
       onDragCancelRef.current();
     },
     onShouldBlockNativeResponder: () => dragging.current,
   })).current;
+
+  const duration = timeToMinutes(lesson.end_time) - timeToMinutes(lesson.start_time);
+  const nameStr = lesson.memberNames.length > 0 ? lesson.memberNames.join(', ') : lesson.title.replace(/ 레슨$/, '');
+  const startTimeStr = lesson.start_time.slice(0, 5);
+  const isShort = duration <= 20 || height <= 44;
 
   return (
     <Animated.View
       style={[
         styles.lessonCard,
         { top, height, left, width, transform: [{ translateY: pan.y }], zIndex: isDragging ? 999 : 1 },
+        isShort && { padding: 3, paddingHorizontal: 5 },
         isDragging && styles.lessonCardDragging,
       ]}
       {...panResponder.panHandlers}
@@ -1280,13 +1329,27 @@ function DraggableLesson({
         delayLongPress={350}
         activeOpacity={0.85}
       >
-        <View style={{ flex: 1, justifyContent: 'center' }}>
-          <Text style={styles.lessonCardTitle} numberOfLines={2}>
-            {lesson.memberNames.length > 0 ? lesson.memberNames.join(', ') : lesson.title.replace(/ 레슨$/, '')}
-          </Text>
-          <Text style={styles.lessonCardTime} numberOfLines={1}>{lesson.start_time.slice(0, 5)}~{lesson.end_time.slice(0, 5)}</Text>
-        </View>
+        {isShort ? (
+          <View style={styles.lessonCardShortBody}>
+            <Text style={styles.lessonCardTitleShort} numberOfLines={1}>{nameStr}</Text>
+            <Text style={styles.lessonCardTimeShort} numberOfLines={1}>{startTimeStr}</Text>
+          </View>
+        ) : (
+          <View style={{ flex: 1, justifyContent: 'center', gap: 2 }}>
+            <Text style={styles.lessonCardTitle} numberOfLines={1}>{nameStr}</Text>
+            <Text style={styles.lessonCardTime} numberOfLines={1}>
+              {startTimeStr}{duration >= 30 ? ` · ${duration}분` : ''}
+            </Text>
+          </View>
+        )}
       </TouchableOpacity>
+      {isDragging && liveDragTime && liveDragTime !== startTimeStr && (
+        <View style={styles.dragTimeLabel}>
+          <View style={styles.dragTimeLabelInner}>
+            <Text style={styles.dragTimeLabelText}>{startTimeStr} → {liveDragTime}</Text>
+          </View>
+        </View>
+      )}
       {isDragging && (
         <View style={styles.dragHandle}>
           <Ionicons name="reorder-three" size={16} color="#fff" />
@@ -1402,7 +1465,9 @@ const styles = StyleSheet.create({
   weekNowDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.destructive },
   weekLessonBlock: { position: 'absolute', borderRadius: 4, paddingHorizontal: 3, paddingVertical: 2, overflow: 'hidden', justifyContent: 'space-between' },
   weekBlockName: { fontSize: 12, fontWeight: '700', color: Colors.white, lineHeight: 13 },
-  weekBlockTime: { fontSize: 13, fontWeight: '700', color: 'rgba(255,220,210,0.9)', lineHeight: 14, textAlign: 'right' },
+  weekBlockTime: { fontSize: 11, fontWeight: '700', color: 'rgba(255,220,210,0.9)', lineHeight: 13 },
+  weekBlockNameSmall: { fontSize: 10, fontWeight: '700', color: Colors.white, lineHeight: 12 },
+  weekBlockTimeSmall: { fontSize: 9, fontWeight: '600', color: 'rgba(255,220,210,0.9)', lineHeight: 11 },
   // 월간 뷰
   monthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border },
   monthNavBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.mutedBg, justifyContent: 'center', alignItems: 'center' },
@@ -1449,4 +1514,14 @@ const styles = StyleSheet.create({
   requestBtnReject: { backgroundColor: 'rgba(45,51,64,0.08)', borderWidth: 1.5, borderColor: Colors.border },
   requestBtnAccept: { backgroundColor: Colors.primary },
   requestBtnText: { fontSize: 16, fontWeight: '800' },
+  // 일일 뷰 카드 추가 스타일
+  lessonCardShortBody: { flex: 1, justifyContent: 'center', gap: 1 },
+  lessonCardTitleShort: { fontSize: 11, color: '#fff', fontWeight: '700' },
+  lessonCardTimeShort: { fontSize: 10, color: 'rgba(255,255,255,0.8)', fontWeight: '600' },
+  // 드래그 시간 레이블
+  dragTimeLabel: { position: 'absolute', top: -30, left: 0, right: 0, alignItems: 'center', zIndex: 1000 },
+  dragTimeLabelInner: { backgroundColor: 'rgba(0,0,0,0.82)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  dragTimeLabelText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  // 10분 보조 눈금
+  subHourLine: { position: 'absolute', left: 56, right: 0, height: 1, backgroundColor: Colors.border, opacity: 0.35 },
 });
