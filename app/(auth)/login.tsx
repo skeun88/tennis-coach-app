@@ -335,7 +335,11 @@ export default function LoginScreen() {
             {snsLoading === 'kakao'
               ? <ActivityIndicator color="#3C1E1E" size="small" />
               : <>
-                  <Text style={styles.kakaoBtnIcon}>💬</Text>
+                  <Image
+                    source={require('../../assets/social/kakao-symbol.png')}
+                    style={styles.snsSymbol}
+                    resizeMode="contain"
+                  />
                   <Text style={styles.kakaoBtnText}>카카오로 계속하기</Text>
                 </>
             }
@@ -351,7 +355,11 @@ export default function LoginScreen() {
             >
               {snsLoading === 'naver'
                 ? <ActivityIndicator color={WARM_GRAY} size="small" />
-                : <Text style={styles.naverN}>N</Text>
+                : <Image
+                    source={require('../../assets/social/naver-symbol.png')}
+                    style={styles.snsSymbol}
+                    resizeMode="contain"
+                  />
               }
             </TouchableOpacity>
 
@@ -483,8 +491,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEE500', marginBottom: 12,
     minHeight: 48,
   },
-  kakaoBtnIcon: { fontSize: 18 },
   kakaoBtnText: { fontSize: 15, fontWeight: '700', color: '#3C1E1E' },
+
+  // 소셜 아이콘 심볼
+  snsSymbol: { width: 22, height: 22 },
 
   // 소셜 3개 한 줄
   snsRow: { flexDirection: 'row', gap: 12, marginBottom: 32 },
@@ -494,7 +504,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     alignItems: 'center', justifyContent: 'center',
   },
-  naverN: { fontSize: 18, fontWeight: '900', color: '#03C75A' },
 
   // 약관
   termsText: { fontSize: 12, color: WARM_GRAY, textAlign: 'center', lineHeight: 18 },
