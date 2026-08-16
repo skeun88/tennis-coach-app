@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import * as Updates from 'expo-updates';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  Alert, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
+  Alert, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Image,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
@@ -11,7 +11,6 @@ import { login as kakaoLogin, loginWithKakaoAccount } from '@react-native-seoul/
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { supabase } from '../../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../lib/theme';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -43,11 +42,20 @@ function initNaverLogin() {
   }
 }
 
+// 디자인 토큰
+const CREAM = '#F7F0E9';
+const TERRACOTTA = '#C0755A';
+const DARK_BROWN = '#3E2B22';
+const WARM_GRAY = '#9E8E85';
+const WARM_GRAY_BORDER = '#D9CFC9';
+
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [snsLoading, setSnsLoading] = useState<'google' | 'apple' | 'kakao' | 'naver' | null>(null);
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
 
   useEffect(() => {
     initNaverLogin();
@@ -241,90 +249,84 @@ export default function LoginScreen() {
     }
   }
 
-
-
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.iconCircle}>
-            <Ionicons name="tennisball" size={48} color="#fff" />
-          </View>
-          <Text style={styles.appName}>테니스 코치</Text>
-          <Text style={styles.subtitle}>회원 관리 전용 앱</Text>
+
+        {/* 브랜드 영역 — 좌측 정렬 */}
+        <View style={styles.brand}>
+          <Image source={require('../../assets/icon.png')} style={styles.logo} resizeMode="contain" />
+          <Text style={styles.wordmark}>KERRI</Text>
+          <Text style={styles.tagline}>레슨에만 집중하세요</Text>
+          <Text style={styles.taglineSub}>회원 관리부터 레슨 기록까지,{'\n'}케리가 함께합니다.</Text>
         </View>
 
-        {/* Form */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>{isSignUp ? '새 계정 만들기' : '코치 로그인'}</Text>
+        {/* 폼 영역 */}
+        <View style={styles.form}>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>이메일</Text>
-            <View style={styles.inputRow}>
-              <Ionicons name="mail-outline" size={18} color={Colors.mutedFg} style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="coach@example.com"
-                placeholderTextColor={Colors.placeholder}
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoComplete="email"
-              />
-            </View>
+          {/* 이메일 */}
+          <TextInput
+            style={[styles.input, emailFocused && styles.inputFocused]}
+            placeholder="이메일"
+            placeholderTextColor={WARM_GRAY}
+            value={email}
+            onChangeText={setEmail}
+            onFocus={() => setEmailFocused(true)}
+            onBlur={() => setEmailFocused(false)}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoComplete="email"
+          />
+
+          {/* 비밀번호 */}
+          <View style={[styles.inputContainer, passwordFocused && styles.inputFocused]}>
+            <TextInput
+              style={styles.inputInner}
+              placeholder="비밀번호"
+              placeholderTextColor={WARM_GRAY}
+              value={password}
+              onChangeText={setPassword}
+              onFocus={() => setPasswordFocused(true)}
+              onBlur={() => setPasswordFocused(false)}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity onPress={() => setShowPassword(v => !v)} style={styles.eyeBtn}>
+              <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={WARM_GRAY} />
+            </TouchableOpacity>
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>비밀번호</Text>
-            <View style={styles.inputRow}>
-              <Ionicons name="lock-closed-outline" size={18} color={Colors.mutedFg} style={styles.inputIcon} />
-              <TextInput
-                style={[styles.input, { flex: 1 }]}
-                placeholder="비밀번호"
-                placeholderTextColor={Colors.placeholder}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-              />
-              <TouchableOpacity onPress={() => setShowPassword(v => !v)}>
-                <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={Colors.mutedFg} />
-              </TouchableOpacity>
-            </View>
-          </View>
+          {/* 비밀번호 찾기 — 우측 정렬 */}
+          {!isSignUp && (
+            <TouchableOpacity style={styles.forgotRow} onPress={handleForgotPassword} disabled={loading}>
+              <Text style={styles.forgotText}>비밀번호 찾기</Text>
+            </TouchableOpacity>
+          )}
 
-          <TouchableOpacity style={styles.button} onPress={handleAuth} disabled={loading}>
+          {/* 로그인 버튼 */}
+          <TouchableOpacity style={styles.loginBtn} onPress={handleAuth} disabled={loading}>
             {loading
               ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.buttonText}>{isSignUp ? '회원가입' : '로그인'}</Text>
+              : <Text style={styles.loginBtnText}>{isSignUp ? '회원가입' : '로그인'}</Text>
             }
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.switchBtn} onPress={() => setIsSignUp(v => !v)}>
-            <Text style={styles.switchText}>
+          {/* 회원가입 전환 */}
+          <TouchableOpacity style={styles.signupRow} onPress={() => setIsSignUp(v => !v)}>
+            <Text style={styles.signupText}>
               {isSignUp ? '이미 계정이 있으신가요? ' : '계정이 없으신가요? '}
-              <Text style={styles.switchLink}>{isSignUp ? '로그인' : '회원가입'}</Text>
+              <Text style={styles.signupLink}>{isSignUp ? '로그인' : '회원가입'}</Text>
             </Text>
           </TouchableOpacity>
-
-          {!isSignUp && (
-            <TouchableOpacity style={styles.switchBtn} onPress={handleForgotPassword} disabled={loading}>
-              <Text style={styles.switchText}>
-                비밀번호를 잊으셨나요? <Text style={styles.switchLink}>비밀번호 찾기</Text>
-              </Text>
-            </TouchableOpacity>
-          )}
 
           {/* 구분선 */}
           <View style={styles.dividerRow}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>SNS로 계속하기</Text>
+            <Text style={styles.dividerText}>간편 로그인</Text>
             <View style={styles.dividerLine} />
           </View>
 
-          {/* 카카오 */}
+          {/* 카카오 전체 버튼 */}
           <TouchableOpacity
             style={styles.kakaoBtn}
             onPress={() => handleKakaoNaver('kakao')}
@@ -339,54 +341,58 @@ export default function LoginScreen() {
             }
           </TouchableOpacity>
 
-          {/* 네이버 */}
-          <TouchableOpacity
-            style={styles.naverBtn}
-            onPress={() => handleKakaoNaver('naver')}
-            disabled={snsLoading !== null}
-          >
-            {snsLoading === 'naver'
-              ? <ActivityIndicator color="#fff" size="small" />
-              : <>
-                  <Text style={styles.naverBtnIcon}>N</Text>
-                  <Text style={styles.naverBtnText}>네이버로 계속하기</Text>
-                </>
-            }
-          </TouchableOpacity>
-
-          {/* 구글 */}
-          <TouchableOpacity
-            style={styles.snsButton}
-            onPress={() => handleOAuth('google')}
-            disabled={snsLoading !== null}
-          >
-            {snsLoading === 'google'
-              ? <ActivityIndicator color={Colors.foreground} size="small" />
-              : <>
-                  <Ionicons name="logo-google" size={18} color="#DB4437" />
-                  <Text style={styles.snsButtonText}>Google로 계속하기</Text>
-                </>
-            }
-          </TouchableOpacity>
-
-          {/* 애플 (iOS만) */}
-          {Platform.OS === 'ios' && (
+          {/* 네이버 / Google / Apple — 한 줄 */}
+          <View style={styles.snsRow}>
+            {/* 네이버 */}
             <TouchableOpacity
-              style={[styles.snsButton, styles.appleButton]}
-              onPress={() => handleAppleLogin()}
+              style={styles.snsIconBtn}
+              onPress={() => handleKakaoNaver('naver')}
               disabled={snsLoading !== null}
             >
-              {snsLoading === 'apple'
-                ? <ActivityIndicator color="#fff" size="small" />
-                : <>
-                    <Ionicons name="logo-apple" size={18} color="#fff" />
-                    <Text style={[styles.snsButtonText, { color: '#fff' }]}>Apple로 계속하기</Text>
-                  </>
+              {snsLoading === 'naver'
+                ? <ActivityIndicator color={WARM_GRAY} size="small" />
+                : <Text style={styles.naverN}>N</Text>
               }
             </TouchableOpacity>
-          )}
+
+            {/* Google */}
+            <TouchableOpacity
+              style={styles.snsIconBtn}
+              onPress={() => handleOAuth('google')}
+              disabled={snsLoading !== null}
+            >
+              {snsLoading === 'google'
+                ? <ActivityIndicator color={WARM_GRAY} size="small" />
+                : <Ionicons name="logo-google" size={22} color="#DB4437" />
+              }
+            </TouchableOpacity>
+
+            {/* Apple — iOS만 */}
+            {Platform.OS === 'ios' && (
+              <TouchableOpacity
+                style={styles.snsIconBtn}
+                onPress={() => handleAppleLogin()}
+                disabled={snsLoading !== null}
+              >
+                {snsLoading === 'apple'
+                  ? <ActivityIndicator color={WARM_GRAY} size="small" />
+                  : <Ionicons name="logo-apple" size={22} color={DARK_BROWN} />
+                }
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* 약관 */}
+          <Text style={styles.termsText}>
+            로그인 시{' '}
+            <Text style={styles.termsLink}>이용약관</Text>
+            {' 및 '}
+            <Text style={styles.termsLink}>개인정보 처리방침</Text>
+            {'에 동의합니다.'}
+          </Text>
         </View>
       </ScrollView>
+
       {/* OTA 적용 확인용 마커 — update ID 끝 4자리 */}
       <Text style={styles.updateMarker}>
         {Updates.updateId ? `#${Updates.updateId.slice(-4)}` : 'dev'}
@@ -396,76 +402,101 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.navy },
+  container: { flex: 1, backgroundColor: CREAM },
   updateMarker: {
     position: 'absolute', bottom: 8, right: 12,
-    fontSize: 10, color: 'rgba(255,255,255,0.25)',
+    fontSize: 10, color: 'rgba(62,43,34,0.2)',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
-  scroll: { flexGrow: 1, justifyContent: 'center', padding: 24 },
-  header: { alignItems: 'center', marginBottom: 32 },
-  iconCircle: {
-    width: 88, height: 88, borderRadius: 44,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center', alignItems: 'center', marginBottom: 12,
-  },
-  appName: { fontSize: 28, fontWeight: '700', color: '#fff', marginBottom: 4 },
-  subtitle: { fontSize: 14, color: 'rgba(255,255,255,0.75)' },
+  scroll: { flexGrow: 1, paddingHorizontal: 28, paddingTop: 72, paddingBottom: 48 },
 
-  card: {
-    backgroundColor: '#fff', borderRadius: 20, padding: 24,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15, shadowRadius: 12, elevation: 8,
-  },
-  cardTitle: { fontSize: 20, fontWeight: '700', color: Colors.foreground, marginBottom: 20, textAlign: 'center' },
-  inputGroup: { marginBottom: 16 },
-  label: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg, marginBottom: 6 },
-  inputRow: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: Colors.mutedBg, borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 10,
-    borderWidth: 1, borderColor: Colors.border,
-  },
-  inputIcon: { marginRight: 8 },
-  input: { flex: 1, fontSize: 15, color: Colors.foreground },
-  button: {
-    backgroundColor: Colors.primary, borderRadius: 12,
-    paddingVertical: 14, alignItems: 'center', marginTop: 8,
-  },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  switchBtn: { marginTop: 16, alignItems: 'center' },
-  switchText: { fontSize: 14, color: Colors.mutedFg },
-  switchLink: { color: Colors.navy, fontWeight: '700' },
+  // 브랜드
+  brand: { marginBottom: 40 },
+  logo: { width: 48, height: 48, borderRadius: 10, marginBottom: 20 },
+  wordmark: { fontSize: 13, fontWeight: '800', color: TERRACOTTA, letterSpacing: 3, marginBottom: 12 },
+  tagline: { fontSize: 24, fontWeight: '700', color: DARK_BROWN, marginBottom: 8, lineHeight: 30 },
+  taglineSub: { fontSize: 14, color: WARM_GRAY, lineHeight: 21 },
 
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 20, gap: 8 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
-  dividerText: { fontSize: 12, color: Colors.placeholder, fontWeight: '500' },
+  // 폼
+  form: {},
+
+  // 입력 — 이메일 (단독 TextInput)
+  input: {
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: WARM_GRAY_BORDER,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+    color: DARK_BROWN,
+    marginBottom: 12,
+    minHeight: 48,
+  },
+  inputFocused: { borderColor: TERRACOTTA },
+
+  // 입력 — 비밀번호 (View 래퍼)
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: WARM_GRAY_BORDER,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    minHeight: 48,
+    marginBottom: 12,
+  },
+  inputInner: {
+    flex: 1,
+    fontSize: 15,
+    color: DARK_BROWN,
+    paddingVertical: 14,
+  },
+  eyeBtn: { padding: 4 },
+
+  forgotRow: { alignItems: 'flex-end', marginBottom: 20 },
+  forgotText: { fontSize: 13, color: TERRACOTTA, fontWeight: '600' },
+
+  loginBtn: {
+    backgroundColor: TERRACOTTA,
+    borderRadius: 12,
+    paddingVertical: 15,
+    alignItems: 'center',
+    marginBottom: 16,
+    minHeight: 48,
+  },
+  loginBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+  signupRow: { alignItems: 'center', marginBottom: 28 },
+  signupText: { fontSize: 14, color: WARM_GRAY },
+  signupLink: { color: TERRACOTTA, fontWeight: '700' },
+
+  dividerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 10 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: WARM_GRAY_BORDER },
+  dividerText: { fontSize: 12, color: WARM_GRAY, fontWeight: '500' },
 
   // 카카오
   kakaoBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, borderRadius: 12, paddingVertical: 13,
-    backgroundColor: '#FEE500', marginBottom: 10,
+    gap: 8, borderRadius: 12, paddingVertical: 14,
+    backgroundColor: '#FEE500', marginBottom: 12,
+    minHeight: 48,
   },
   kakaoBtnIcon: { fontSize: 18 },
   kakaoBtnText: { fontSize: 15, fontWeight: '700', color: '#3C1E1E' },
 
-  // 네이버
-  naverBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, borderRadius: 12, paddingVertical: 13,
-    backgroundColor: '#03C75A', marginBottom: 10,
+  // 소셜 3개 한 줄
+  snsRow: { flexDirection: 'row', gap: 12, marginBottom: 32 },
+  snsIconBtn: {
+    flex: 1, minHeight: 48, borderRadius: 12,
+    borderWidth: 1.5, borderColor: WARM_GRAY_BORDER,
+    backgroundColor: '#fff',
+    alignItems: 'center', justifyContent: 'center',
   },
-  naverBtnIcon: { fontSize: 16, fontWeight: '900', color: '#fff', width: 20, textAlign: 'center' },
-  naverBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  naverN: { fontSize: 18, fontWeight: '900', color: '#03C75A' },
 
-  // 구글/애플
-  snsButton: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 10, borderRadius: 12, paddingVertical: 13,
-    borderWidth: 1.5, borderColor: Colors.border,
-    backgroundColor: '#fff', marginBottom: 10,
-  },
-  appleButton: { backgroundColor: '#000', borderColor: '#000', marginBottom: 0 },
-  snsButtonText: { fontSize: 15, fontWeight: '600', color: Colors.foreground },
+  // 약관
+  termsText: { fontSize: 12, color: WARM_GRAY, textAlign: 'center', lineHeight: 18 },
+  termsLink: { color: TERRACOTTA },
 });
