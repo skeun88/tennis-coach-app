@@ -490,8 +490,8 @@ const styles = StyleSheet.create({
   },
   kakaoBtnImage: { width: '100%', height: 45 },
 
-  // 네이버 워드마크 (2315×444 비율)
-  naverLogo: { width: 72, height: 14 },
+  // 네이버 공식 N 아이콘 (192×192 정사각형)
+  naverLogo: { width: 28, height: 28 },
 
   // 소셜 3개 한 줄
   snsRow: { flexDirection: 'row', gap: 12, marginBottom: 32 },
