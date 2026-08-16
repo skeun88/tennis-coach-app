@@ -326,7 +326,7 @@ export default function LoginScreen() {
             <View style={styles.dividerLine} />
           </View>
 
-          {/* 카카오 전체 버튼 */}
+          {/* 카카오 — 공식 버튼 이미지 전체 */}
           <TouchableOpacity
             style={styles.kakaoBtn}
             onPress={() => handleKakaoNaver('kakao')}
@@ -334,20 +334,17 @@ export default function LoginScreen() {
           >
             {snsLoading === 'kakao'
               ? <ActivityIndicator color="#3C1E1E" size="small" />
-              : <>
-                  <Image
-                    source={require('../../assets/social/kakao-symbol.png')}
-                    style={styles.snsSymbol}
-                    resizeMode="contain"
-                  />
-                  <Text style={styles.kakaoBtnText}>카카오로 계속하기</Text>
-                </>
+              : <Image
+                  source={require('../../assets/social/kakao-symbol.png')}
+                  style={styles.kakaoBtnImage}
+                  resizeMode="contain"
+                />
             }
           </TouchableOpacity>
 
           {/* 네이버 / Google / Apple — 한 줄 */}
           <View style={styles.snsRow}>
-            {/* 네이버 */}
+            {/* 네이버 — 공식 NAVER 워드마크 */}
             <TouchableOpacity
               style={styles.snsIconBtn}
               onPress={() => handleKakaoNaver('naver')}
@@ -357,7 +354,7 @@ export default function LoginScreen() {
                 ? <ActivityIndicator color={WARM_GRAY} size="small" />
                 : <Image
                     source={require('../../assets/social/naver-symbol.png')}
-                    style={styles.snsSymbol}
+                    style={styles.naverLogo}
                     resizeMode="contain"
                   />
               }
@@ -484,17 +481,17 @@ const styles = StyleSheet.create({
   dividerLine: { flex: 1, height: 1, backgroundColor: WARM_GRAY_BORDER },
   dividerText: { fontSize: 12, color: WARM_GRAY, fontWeight: '500' },
 
-  // 카카오
+  // 카카오 — 공식 버튼 이미지 전체 사용
   kakaoBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, borderRadius: 12, paddingVertical: 14,
-    backgroundColor: '#FEE500', marginBottom: 12,
-    minHeight: 48,
+    borderRadius: 12, marginBottom: 12,
+    overflow: 'hidden', minHeight: 48,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#FEE500',
   },
-  kakaoBtnText: { fontSize: 15, fontWeight: '700', color: '#3C1E1E' },
+  kakaoBtnImage: { width: '100%', height: 45 },
 
-  // 소셜 아이콘 심볼
-  snsSymbol: { width: 22, height: 22 },
+  // 네이버 워드마크 (2315×444 비율)
+  naverLogo: { width: 72, height: 14 },
 
   // 소셜 3개 한 줄
   snsRow: { flexDirection: 'row', gap: 12, marginBottom: 32 },
