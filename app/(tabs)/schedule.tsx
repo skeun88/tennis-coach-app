@@ -155,7 +155,11 @@ export default function ScheduleScreen() {
   // 드래그 상태
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragTargetMin, setDragTargetMin] = useState(0);
+  const [weekDraggingId, setWeekDraggingId] = useState<string | null>(null);
   const dayScrollRef = useRef<any>(null);
+
+  // 출석 상태 맵 (lessonId → 'scheduled' | 'completed' | 'absent')
+  const [attendanceMap, setAttendanceMap] = useState<Map<string, 'scheduled' | 'completed' | 'absent'>>(new Map());
 
   async function attachMemberNames(lessonList: Lesson[]): Promise<LessonWithMembers[]> {
     if (!lessonList.length) return [];
@@ -248,13 +252,32 @@ ${rejectMsg.trim()}`
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const { data } = await supabase.from('lessons').select('*').eq('coach_id', user.id).eq('date', date).order('start_time');
-    setLessons(await attachMemberNames(data ?? []));
+    const withNames = await attachMemberNames(data ?? []);
+    setLessons(withNames);
+
+    // 출석 상태 로드
+    if (withNames.length > 0) {
+      const ids = withNames.map(l => l.id);
+      const { data: att } = await supabase.from('attendance').select('lesson_id, status').in('lesson_id', ids);
+      const newMap = new Map<string, 'scheduled' | 'completed' | 'absent'>();
+      for (const a of att ?? []) {
+        const cur = newMap.get(a.lesson_id);
+        if (a.status === '결석') {
+          newMap.set(a.lesson_id, 'absent');
+        } else if ((a.status === '출석' || a.status === '지각' || a.status === '조퇴') && cur !== 'absent') {
+          newMap.set(a.lesson_id, 'completed');
+        }
+      }
+      setAttendanceMap(newMap);
+    } else {
+      setAttendanceMap(new Map());
+    }
+
     // 오늘이면 현재 시간으로 스크롤, 다른 날이면 첫 레슨으로 스크롤
     const todayStr = toKSTDateStr(new Date());
     if (date === todayStr) {
       scrollToCurrentTime();
     } else {
-      // 첫 레슨 시간으로 스크롤
       const firstLesson = (data ?? []).sort((a: any, b: any) => a.start_time.localeCompare(b.start_time))[0];
       if (firstLesson) {
         const mins = timeToMinutes(firstLesson.start_time) - 30;
@@ -433,6 +456,14 @@ ${rejectMsg.trim()}`
     setSelectedDate(date); loadDayLessons(date);
   }, []);
 
+  function handleDayNav(delta: number) {
+    const d = new Date(selectedDate + 'T12:00:00+09:00');
+    d.setDate(d.getDate() + delta);
+    const newDate = toKSTDateStr(d);
+    setWeekDates(getWeekDatesForDate(newDate));
+    handleSelectDate(newDate);
+  }
+
   // ── 시간 그리드 탭 → 새 레슨 등록 ──────────────────────────
   function handleGridTap(y: number) {
     const mins = yToMinutes(y);
@@ -521,6 +552,44 @@ ${rejectMsg.trim()}`
   }
 
   // ── 드래그 앤 드랍 ────────────────────────────────────────────
+  async function handleWeekDropLesson(lessonId: string, dateStr: string, newStartMinutes: number) {
+    const dayLessons = weekData.find(d => d.date === dateStr)?.lessons ?? [];
+    const lesson = dayLessons.find(l => l.id === lessonId);
+    if (!lesson) return;
+    const oldStartMin = timeToMinutes(lesson.start_time);
+    const duration = timeToMinutes(lesson.end_time) - oldStartMin;
+    const clamped = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60 - 10, newStartMinutes));
+    if (Math.abs(clamped - oldStartMin) < 5) return;
+    const newStartStr = minutesToTime(clamped);
+    const newEndStr = minutesToTime(clamped + duration);
+    const overlap = dayLessons.find(l => {
+      if (l.id === lessonId) return false;
+      const ls = timeToMinutes(l.start_time), le = timeToMinutes(l.end_time);
+      return clamped < le && (clamped + duration) > ls;
+    });
+    if (overlap) {
+      const overlapName = overlap.memberNames.length > 0 ? overlap.memberNames.join(', ') : overlap.title;
+      Alert.alert('시간 충돌', `${overlapName} 레슨(${minutesToTime(timeToMinutes(overlap.start_time))}~${minutesToTime(timeToMinutes(overlap.end_time))})과 겹칩니다.`);
+      return;
+    }
+    Alert.alert(
+      '시간 변경',
+      lesson.title + '\n' + minutesToTime(oldStartMin) + ' → ' + newStartStr + '\n\n변경하시겠어요?',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '변경', onPress: async () => {
+            await supabase.from('lessons').update({
+              start_time: newStartStr + ':00',
+              end_time: newEndStr + ':00',
+            }).eq('id', lessonId);
+            loadWeekLessons(getOffsetWeekDates(weekOffset));
+          },
+        },
+      ]
+    );
+  }
+
   async function handleDropLesson(lessonId: string, newStartMinutes: number) {
     const lesson = lessons.find(l => l.id === lessonId);
     if (!lesson) return;
@@ -650,8 +719,10 @@ ${rejectMsg.trim()}`
             const curMin = kstNow.getUTCHours() * 60 + kstNow.getUTCMinutes();
             if (curMin < START_HOUR * 60 || curMin > END_HOUR * 60) return null;
             const lineY = ((curMin - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+            const nowTimeStr = minutesToTime(curMin);
             return (
               <View key="now-line" style={[styles.nowLine, { top: lineY }]}>
+                <Text style={styles.nowTimeAboveLabel}>{nowTimeStr}</Text>
                 <View style={styles.nowDot} />
                 <View style={styles.nowLineBar} />
               </View>
@@ -663,6 +734,10 @@ ${rejectMsg.trim()}`
               <Text style={styles.hourLabel} numberOfLines={1} ellipsizeMode="clip">{String(h).padStart(2, '0')}:00</Text>
               <View style={styles.hourLine} />
             </View>
+          ))}
+          {/* :30 보조 눈금 */}
+          {HOURS.slice(0, -1).map(h => (
+            <View key={`half-${h}`} style={[styles.halfHourLine, { top: (h - START_HOUR) * HOUR_HEIGHT + HOUR_HEIGHT / 2 }]} />
           ))}
 
           {/* 10분 단위 보조 눈금 (드래그 중) */}
@@ -697,6 +772,16 @@ ${rejectMsg.trim()}`
               const left = GRID_LEFT + layout.col * (colWidth + 3);
               const width = colWidth;
 
+              const attStatus = attendanceMap.get(lesson.id);
+              const cardBg = attStatus === 'absent' ? Colors.destructiveLight
+                : attStatus === 'completed' ? Colors.mutedBg
+                : Colors.primaryLight;
+              const cardNameColor = attStatus === 'absent' ? Colors.destructive
+                : attStatus === 'completed' ? Colors.mutedFg
+                : Colors.navy;
+              const cardTimeColor = attStatus === 'absent' ? Colors.destructive
+                : attStatus === 'completed' ? Colors.placeholder
+                : Colors.primary;
               return (
                 <DraggableLesson
                   key={lesson.id}
@@ -706,6 +791,9 @@ ${rejectMsg.trim()}`
                   left={left}
                   width={width}
                   isDragging={isDragging}
+                  cardBg={cardBg}
+                  cardNameColor={cardNameColor}
+                  cardTimeColor={cardTimeColor}
                   onPress={() => router.push('/lessons/' + lesson.id as any)}
                   onDragEnd={(dy) => {
                     const deltaMin = Math.round((dy / HOUR_HEIGHT) * 60 / 10) * 10;
@@ -833,6 +921,7 @@ ${rejectMsg.trim()}`
           ref={dayScrollRef}
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
+          scrollEnabled={weekDraggingId === null}
           refreshControl={<RefreshControl refreshing={refreshing}
             onRefresh={async () => { setRefreshing(true); await loadWeekLessons(displayDates); setRefreshing(false); }}
             tintColor={Colors.navy} />}
@@ -851,6 +940,7 @@ ${rejectMsg.trim()}`
             {displayDates.map((date, colIdx) => {
               const isToday = date === today;
               const colLessons = lessonsByDate.get(date) ?? [];
+              const isDraggingInCol = weekDraggingId !== null && colLessons.some(l => l.id === weekDraggingId);
               const colMap = computeColumns(colLessons);
               return (
                 <View key={date} style={[styles.weekDayColGrid, { width: COL_W, height: gridHeight },
@@ -859,6 +949,13 @@ ${rejectMsg.trim()}`
                   {HOURS.map(h => (
                     <View key={h} style={[styles.weekHourLine, { top: (h - START_HOUR) * HOUR_HEIGHT }]} />
                   ))}
+                  {/* 10분 보조 눈금 (드래그 중인 컬럼만) */}
+                  {isDraggingInCol && HOURS.flatMap(h =>
+                    [10, 20, 30, 40, 50].map(m => {
+                      const lineY = ((h * 60 + m - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+                      return <View key={`wsub-${h}-${m}`} style={[styles.weekSubHourLine, { top: lineY }]} />;
+                    })
+                  )}
                   {/* 현재 시간선 */}
                   {isToday && nowLineY !== null && (
                     <View style={[styles.weekNowLine, { top: nowLineY }]}>
@@ -876,35 +973,26 @@ ${rejectMsg.trim()}`
                     const bWidth = (COL_W - 4 - (layout.totalCols - 1) * 2) / layout.totalCols;
                     const left = 2 + layout.col * (bWidth + 2);
                     const isPast = endMin < nowMin && date <= today;
-                    const dMin = endMin - startMin;
-                    const nm = lesson.memberNames.length > 0 ? lesson.memberNames.join(',') : lesson.title.replace(/ 레슨$/, '');
-                    const ts = lesson.start_time.slice(0, 5);
+                    const isDragging = weekDraggingId === lesson.id;
                     return (
-                      <TouchableOpacity
+                      <WeekDraggableBlock
                         key={lesson.id}
-                        style={[styles.weekLessonBlock, {
-                          top, height, left, width: bWidth,
-                          backgroundColor: isPast ? Colors.mutedBg : Colors.primary,
-                        }]}
+                        lesson={lesson}
+                        top={top}
+                        height={height}
+                        left={left}
+                        width={bWidth}
+                        isDragging={isDragging}
+                        isPast={isPast}
                         onPress={() => router.push('/lessons/' + lesson.id as any)}
-                        activeOpacity={0.8}
-                      >
-                        {height < 28 ? (
-                          <Text style={[styles.weekBlockName, isPast && { color: Colors.mutedFg }]} numberOfLines={1}>{nm}</Text>
-                        ) : height < 44 ? (
-                          <>
-                            <Text style={[styles.weekBlockNameSmall, isPast && { color: Colors.mutedFg }]} numberOfLines={1}>{nm}</Text>
-                            <Text style={[styles.weekBlockTimeSmall, isPast && { color: Colors.placeholder }]} numberOfLines={1}>{ts}</Text>
-                          </>
-                        ) : (
-                          <>
-                            <Text style={[styles.weekBlockName, isPast && { color: Colors.mutedFg }]} numberOfLines={1}>{nm}</Text>
-                            <Text style={[styles.weekBlockTime, isPast && { color: Colors.placeholder }]} numberOfLines={1}>
-                              {ts}{dMin >= 30 ? ` · ${dMin}분` : ''}
-                            </Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
+                        onDragEnd={(dy) => {
+                          const deltaMin = Math.round((dy / HOUR_HEIGHT) * 60 / 10) * 10;
+                          const newMin = startMin + deltaMin;
+                          handleWeekDropLesson(lesson.id, date, newMin);
+                        }}
+                        onDragStart={() => setWeekDraggingId(lesson.id)}
+                        onDragCancel={() => setWeekDraggingId(null)}
+                      />
                     );
                   })}
                 </View>
@@ -1041,6 +1129,28 @@ ${rejectMsg.trim()}`
 
       {activeTab === '일일' ? (
         <>
+          {/* 날짜 헤더 */}
+          <View style={styles.dayHeaderRow}>
+            <View style={styles.dayHeaderLeft}>
+              <Text style={styles.dayHeaderTitle}>
+                {new Date(selectedDate + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })}
+              </Text>
+              <Text style={styles.dayHeaderHint}>빈 시간을 눌러 레슨을 추가하세요</Text>
+            </View>
+            <View style={styles.dayHeaderNav}>
+              <TouchableOpacity style={styles.dayNavBtn} onPress={() => handleDayNav(-1)}>
+                <Ionicons name="chevron-back" size={16} color={Colors.navy} />
+              </TouchableOpacity>
+              {selectedDate !== today && (
+                <TouchableOpacity style={styles.dayTodayBtn} onPress={() => { setWeekDates(getWeekDatesForDate(today)); handleSelectDate(today); }}>
+                  <Text style={styles.dayTodayBtnText}>오늘</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.dayNavBtn} onPress={() => handleDayNav(1)}>
+                <Ionicons name="chevron-forward" size={16} color={Colors.navy} />
+              </TouchableOpacity>
+            </View>
+          </View>
           {/* 날짜 스트립 */}
           <View style={styles.weekStrip}>
             {weekDates.map(date => {
@@ -1055,10 +1165,7 @@ ${rejectMsg.trim()}`
               );
             })}
           </View>
-          <Text style={styles.dateHeader}>
-            {new Date(selectedDate + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })}
-            <Text style={{ fontSize: 14, color: Colors.navy, fontWeight: '500' }}>  시간 탭해서 레슨 등록</Text>
-          </Text>
+          {renderRequestBanner()}
           {renderDayGrid()}
         </>
       ) : activeTab === '주간' ? (
@@ -1248,9 +1355,11 @@ ${rejectMsg.trim()}`
 // ── 드래그 가능한 레슨 카드 컴포넌트 ──────────────────────────
 function DraggableLesson({
   lesson, top, height, left, width, isDragging, onPress, onDragEnd, onDragStart, onDragCancel,
+  cardBg, cardNameColor, cardTimeColor,
 }: {
   lesson: LessonWithMembers; top: number; height: number; left: number; width: number; isDragging: boolean;
   onPress: () => void; onDragEnd: (dy: number) => void; onDragStart: () => void; onDragCancel: () => void;
+  cardBg: string; cardNameColor: string; cardTimeColor: string;
 }) {
   const pan = useRef(new Animated.ValueXY()).current;
   const dragging = useRef(false);
@@ -1313,7 +1422,7 @@ function DraggableLesson({
     <Animated.View
       style={[
         styles.lessonCard,
-        { top, height, left, width, transform: [{ translateY: pan.y }], zIndex: isDragging ? 999 : 1 },
+        { top, height, left, width, transform: [{ translateY: pan.y }], zIndex: isDragging ? 999 : 1, backgroundColor: cardBg },
         isShort && { padding: 3, paddingHorizontal: 5 },
         isDragging && styles.lessonCardDragging,
       ]}
@@ -1331,13 +1440,13 @@ function DraggableLesson({
       >
         {isShort ? (
           <View style={styles.lessonCardShortBody}>
-            <Text style={styles.lessonCardTitleShort} numberOfLines={1}>{nameStr}</Text>
-            <Text style={styles.lessonCardTimeShort} numberOfLines={1}>{startTimeStr}</Text>
+            <Text style={[styles.lessonCardTitleShort, { color: cardNameColor }]} numberOfLines={1}>{nameStr}</Text>
+            <Text style={[styles.lessonCardTimeShort, { color: cardTimeColor }]} numberOfLines={1}>{startTimeStr}</Text>
           </View>
         ) : (
           <View style={{ flex: 1, justifyContent: 'center', gap: 2 }}>
-            <Text style={styles.lessonCardTitle} numberOfLines={1}>{nameStr}</Text>
-            <Text style={styles.lessonCardTime} numberOfLines={1}>
+            <Text style={[styles.lessonCardTitle, { color: cardNameColor }]} numberOfLines={1}>{nameStr}</Text>
+            <Text style={[styles.lessonCardTime, { color: cardTimeColor }]} numberOfLines={1}>
               {startTimeStr}{duration >= 30 ? ` · ${duration}분` : ''}
             </Text>
           </View>
@@ -1352,7 +1461,116 @@ function DraggableLesson({
       )}
       {isDragging && (
         <View style={styles.dragHandle}>
-          <Ionicons name="reorder-three" size={16} color="#fff" />
+          <Ionicons name="reorder-three" size={16} color={cardNameColor} />
+        </View>
+      )}
+    </Animated.View>
+  );
+}
+
+// ── 주간 드래그 가능한 레슨 블록 ──────────────────────────────────
+function WeekDraggableBlock({
+  lesson, top, height, left, width, isDragging, isPast, onPress, onDragEnd, onDragStart, onDragCancel,
+}: {
+  lesson: LessonWithMembers; top: number; height: number; left: number; width: number; isDragging: boolean; isPast: boolean;
+  onPress: () => void; onDragEnd: (dy: number) => void; onDragStart: () => void; onDragCancel: () => void;
+}) {
+  const pan = useRef(new Animated.ValueXY()).current;
+  const dragging = useRef(false);
+  const [liveDragTime, setLiveDragTime] = useState<string | null>(null);
+
+  const onDragEndRef = useRef(onDragEnd);
+  const onDragStartRef = useRef(onDragStart);
+  const onDragCancelRef = useRef(onDragCancel);
+  const onPressRef = useRef(onPress);
+  const lessonStartMinRef = useRef(timeToMinutes(lesson.start_time));
+  useEffect(() => {
+    onDragEndRef.current = onDragEnd;
+    onDragStartRef.current = onDragStart;
+    onDragCancelRef.current = onDragCancel;
+    onPressRef.current = onPress;
+    lessonStartMinRef.current = timeToMinutes(lesson.start_time);
+  }, [onDragEnd, onDragStart, onDragCancel, onPress, lesson.start_time]);
+
+  const panResponder = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => dragging.current,
+    onStartShouldSetPanResponderCapture: () => dragging.current,
+    onMoveShouldSetPanResponder: (_, g) => dragging.current && Math.abs(g.dy) > 3,
+    onMoveShouldSetPanResponderCapture: (_, g) => dragging.current && Math.abs(g.dy) > 3,
+    onPanResponderGrant: () => {
+      pan.setOffset({ x: 0, y: (pan.y as any)._value });
+      pan.setValue({ x: 0, y: 0 });
+    },
+    onPanResponderMove: (_, g) => {
+      pan.y.setValue(g.dy);
+      const deltaMin = Math.round((g.dy / HOUR_HEIGHT) * 60 / 10) * 10;
+      const newMin = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60 - 10, lessonStartMinRef.current + deltaMin));
+      setLiveDragTime(minutesToTime(newMin));
+    },
+    onPanResponderRelease: (_, g) => {
+      if (!dragging.current) return;
+      dragging.current = false;
+      pan.flattenOffset();
+      const dy = g.dy;
+      pan.setValue({ x: 0, y: 0 });
+      setLiveDragTime(null);
+      onDragEndRef.current(dy);
+      onDragCancelRef.current();
+    },
+    onPanResponderTerminate: () => {
+      dragging.current = false;
+      pan.setValue({ x: 0, y: 0 });
+      setLiveDragTime(null);
+      onDragCancelRef.current();
+    },
+    onShouldBlockNativeResponder: () => dragging.current,
+  })).current;
+
+  const duration = timeToMinutes(lesson.end_time) - timeToMinutes(lesson.start_time);
+  const nameStr = lesson.memberNames.length > 0 ? lesson.memberNames.join(', ') : lesson.title.replace(/ 레슨$/, '');
+  const startTimeStr = lesson.start_time.slice(0, 5);
+  const isCompact = height < 44;
+
+  return (
+    <Animated.View
+      style={[
+        styles.weekLessonBlock,
+        {
+          top, height, left, width,
+          backgroundColor: isPast ? Colors.mutedBg : Colors.primary,
+          transform: [{ translateY: pan.y }],
+          zIndex: isDragging ? 999 : 1,
+        },
+        isDragging && { opacity: 0.85, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 6, elevation: 8 },
+      ]}
+      {...panResponder.panHandlers}
+    >
+      <TouchableOpacity
+        style={{ flex: 1 }}
+        onPress={() => { if (!isDragging) onPressRef.current(); }}
+        onLongPress={() => { dragging.current = true; onDragStartRef.current(); }}
+        delayLongPress={350}
+        activeOpacity={0.8}
+      >
+        {isCompact ? (
+          <View style={{ flex: 1, justifyContent: 'center', gap: 0 }}>
+            <Text style={[styles.weekBlockNameSmall, isPast && { color: Colors.mutedFg }]} numberOfLines={1}>{nameStr}</Text>
+            <Text style={[styles.weekBlockTimeSmall, isPast && { color: Colors.placeholder }]} numberOfLines={1}>{startTimeStr}</Text>
+          </View>
+        ) : (
+          <View style={{ flex: 1, justifyContent: 'center', gap: 1 }}>
+            <Text style={[styles.weekBlockName, isPast && { color: Colors.mutedFg }]} numberOfLines={1}>{nameStr}</Text>
+            <Text style={[styles.weekBlockTime, isPast && { color: Colors.placeholder }]} numberOfLines={1}>
+              {startTimeStr}{duration >= 30 ? ` · ${duration}분` : ''}
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
+      {isDragging && liveDragTime && liveDragTime !== startTimeStr && (
+        <View style={[styles.dragTimeLabel, { top: -28 }]}>
+          <View style={styles.dragTimeLabelInner}>
+            <Text style={styles.dragTimeLabelText}>{startTimeStr} → {liveDragTime}</Text>
+          </View>
         </View>
       )}
     </Animated.View>
@@ -1382,7 +1600,8 @@ const styles = StyleSheet.create({
   // 레슨 카드 (그리드)
   lessonCard: {
     position: 'absolute',
-    backgroundColor: Colors.primary, borderRadius: 8, padding: 6, paddingHorizontal: 8,
+    borderRadius: 8, padding: 6, paddingHorizontal: 8,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2,
     },
   lessonCardDragging: { opacity: 0.85, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 8 },
   lessonCardTime: { fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: '600', flexShrink: 0 },
@@ -1426,8 +1645,10 @@ const styles = StyleSheet.create({
   saveBtn: { backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 8 },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   nowLine: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', zIndex: 10 },
+  nowTimeAboveLabel: { position: 'absolute', left: 0, top: -14, width: 52, textAlign: 'right', paddingRight: 3, fontSize: 9, fontWeight: '800', color: Colors.destructive },
   nowDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.destructive, marginLeft: 42 },
   nowLineBar: { flex: 1, height: 2, backgroundColor: Colors.destructive, marginLeft: 2 },
+  halfHourLine: { position: 'absolute', left: 56, right: 0, height: 1, backgroundColor: Colors.border, opacity: 0.4 },
   memberList: { maxHeight: 160, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, marginBottom: 8 },
   memberItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.mutedBg },
   memberItemSelected: { backgroundColor: Colors.primaryLight },
@@ -1463,6 +1684,7 @@ const styles = StyleSheet.create({
   weekHourLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: Colors.border },
   weekNowLine: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', zIndex: 10 },
   weekNowDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.destructive },
+  weekSubHourLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: Colors.border, opacity: 0.35 },
   weekLessonBlock: { position: 'absolute', borderRadius: 4, paddingHorizontal: 3, paddingVertical: 2, overflow: 'hidden', justifyContent: 'space-between' },
   weekBlockName: { fontSize: 12, fontWeight: '700', color: Colors.white, lineHeight: 13 },
   weekBlockTime: { fontSize: 11, fontWeight: '700', color: 'rgba(255,220,210,0.9)', lineHeight: 13 },
@@ -1524,4 +1746,13 @@ const styles = StyleSheet.create({
   dragTimeLabelText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   // 10분 보조 눈금
   subHourLine: { position: 'absolute', left: 56, right: 0, height: 1, backgroundColor: Colors.border, opacity: 0.35 },
+  // 일일 뷰 헤더
+  dayHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10, backgroundColor: Colors.background, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  dayHeaderLeft: { flex: 1 },
+  dayHeaderTitle: { fontSize: 18, fontWeight: '800', color: Colors.foreground },
+  dayHeaderHint: { fontSize: 12, color: Colors.mutedFg, marginTop: 2 },
+  dayHeaderNav: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  dayNavBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: Colors.mutedBg, justifyContent: 'center', alignItems: 'center' },
+  dayTodayBtn: { backgroundColor: Colors.primary, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  dayTodayBtnText: { color: Colors.white, fontSize: 12, fontWeight: '700' },
 });
