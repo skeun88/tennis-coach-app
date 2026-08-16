@@ -156,6 +156,7 @@ export default function ScheduleScreen() {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragTargetMin, setDragTargetMin] = useState(0);
   const [weekDraggingId, setWeekDraggingId] = useState<string | null>(null);
+  const [weekAttendanceMap, setWeekAttendanceMap] = useState<Map<string, 'scheduled' | 'completed' | 'absent'>>(new Map());
   const dayScrollRef = useRef<any>(null);
 
   // 출석 상태 맵 (lessonId → 'scheduled' | 'completed' | 'absent')
@@ -297,6 +298,24 @@ ${rejectMsg.trim()}`
     for (const d of wDates) map.set(d, []);
     for (const l of withNames) { if (map.has(l.date)) map.get(l.date)!.push(l); }
     setWeekData(wDates.map(d => ({ date: d, lessons: map.get(d) ?? [] })));
+
+    // 출석 상태 로드
+    if (withNames.length > 0) {
+      const ids = withNames.map(l => l.id);
+      const { data: att } = await supabase.from('attendance').select('lesson_id, status').in('lesson_id', ids);
+      const newMap = new Map<string, 'scheduled' | 'completed' | 'absent'>();
+      for (const a of att ?? []) {
+        const cur = newMap.get(a.lesson_id);
+        if (a.status === '결석') {
+          newMap.set(a.lesson_id, 'absent');
+        } else if ((a.status === '출석' || a.status === '지각' || a.status === '조퇴') && cur !== 'absent') {
+          newMap.set(a.lesson_id, 'completed');
+        }
+      }
+      setWeekAttendanceMap(newMap);
+    } else {
+      setWeekAttendanceMap(new Map());
+    }
   }
 
 
@@ -972,7 +991,7 @@ ${rejectMsg.trim()}`
                     const layout = colMap.get(lesson.id) ?? { col: 0, totalCols: 1 };
                     const bWidth = (COL_W - 4 - (layout.totalCols - 1) * 2) / layout.totalCols;
                     const left = 2 + layout.col * (bWidth + 2);
-                    const isPast = endMin < nowMin && date <= today;
+                    const attStatus = weekAttendanceMap.get(lesson.id) ?? 'scheduled';
                     const isDragging = weekDraggingId === lesson.id;
                     return (
                       <WeekDraggableBlock
@@ -983,7 +1002,7 @@ ${rejectMsg.trim()}`
                         left={left}
                         width={bWidth}
                         isDragging={isDragging}
-                        isPast={isPast}
+                        attStatus={attStatus}
                         onPress={() => router.push('/lessons/' + lesson.id as any)}
                         onDragEnd={(dy) => {
                           const deltaMin = Math.round((dy / HOUR_HEIGHT) * 60 / 10) * 10;
@@ -1470,9 +1489,10 @@ function DraggableLesson({
 
 // ── 주간 드래그 가능한 레슨 블록 ──────────────────────────────────
 function WeekDraggableBlock({
-  lesson, top, height, left, width, isDragging, isPast, onPress, onDragEnd, onDragStart, onDragCancel,
+  lesson, top, height, left, width, isDragging, attStatus, onPress, onDragEnd, onDragStart, onDragCancel,
 }: {
-  lesson: LessonWithMembers; top: number; height: number; left: number; width: number; isDragging: boolean; isPast: boolean;
+  lesson: LessonWithMembers; top: number; height: number; left: number; width: number; isDragging: boolean;
+  attStatus: 'scheduled' | 'completed' | 'absent';
   onPress: () => void; onDragEnd: (dy: number) => void; onDragStart: () => void; onDragCancel: () => void;
 }) {
   const pan = useRef(new Animated.ValueXY()).current;
@@ -1531,13 +1551,23 @@ function WeekDraggableBlock({
   const startTimeStr = lesson.start_time.slice(0, 5);
   const isCompact = height < 44;
 
+  const cardBg = attStatus === 'absent' ? Colors.destructiveLight
+    : attStatus === 'completed' ? Colors.mutedBg
+    : Colors.primaryLight;
+  const nameColor = attStatus === 'absent' ? Colors.destructive
+    : attStatus === 'completed' ? Colors.mutedFg
+    : Colors.navy;
+  const timeColor = attStatus === 'absent' ? Colors.destructive
+    : attStatus === 'completed' ? Colors.placeholder
+    : Colors.primary;
+
   return (
     <Animated.View
       style={[
         styles.weekLessonBlock,
         {
           top, height, left, width,
-          backgroundColor: isPast ? Colors.mutedBg : Colors.primary,
+          backgroundColor: cardBg,
           transform: [{ translateY: pan.y }],
           zIndex: isDragging ? 999 : 1,
         },
@@ -1554,13 +1584,13 @@ function WeekDraggableBlock({
       >
         {isCompact ? (
           <View style={{ flex: 1, justifyContent: 'center', gap: 0 }}>
-            <Text style={[styles.weekBlockNameSmall, isPast && { color: Colors.mutedFg }]} numberOfLines={1}>{nameStr}</Text>
-            <Text style={[styles.weekBlockTimeSmall, isPast && { color: Colors.placeholder }]} numberOfLines={1}>{startTimeStr}</Text>
+            <Text style={[styles.weekBlockNameSmall, { color: nameColor }]} numberOfLines={1}>{nameStr}</Text>
+            <Text style={[styles.weekBlockTimeSmall, { color: timeColor }]} numberOfLines={1}>{startTimeStr}</Text>
           </View>
         ) : (
           <View style={{ flex: 1, justifyContent: 'center', gap: 1 }}>
-            <Text style={[styles.weekBlockName, isPast && { color: Colors.mutedFg }]} numberOfLines={1}>{nameStr}</Text>
-            <Text style={[styles.weekBlockTime, isPast && { color: Colors.placeholder }]} numberOfLines={1}>
+            <Text style={[styles.weekBlockName, { color: nameColor }]} numberOfLines={1}>{nameStr}</Text>
+            <Text style={[styles.weekBlockTime, { color: timeColor }]} numberOfLines={1}>
               {startTimeStr}{duration >= 30 ? ` · ${duration}분` : ''}
             </Text>
           </View>
