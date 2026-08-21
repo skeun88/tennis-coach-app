@@ -138,6 +138,7 @@ export default function RootLayout() {
       <Stack.Screen name="settings/index" options={{ headerShown: true, title: '설정', headerBackTitle: '뒤로' }} />
       <Stack.Screen name="settings/notifications" options={{ headerShown: true, title: '알림 설정', headerBackTitle: '뒤로' }} />
       <Stack.Screen name="settings/availability" options={{ headerShown: false }} />
+      <Stack.Screen name="subscription" options={{ headerShown: false }} />
     </Stack>
   );
 }
