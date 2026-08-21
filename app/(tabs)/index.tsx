@@ -596,131 +596,126 @@ export default function HomeScreen() {
     <View style={styles.screenWrapper}>
       <ScrollView
         style={styles.container}
+        contentContainerStyle={{ paddingBottom: 120 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={async () => { setRefreshing(true); await loadAll(); setRefreshing(false); }}
-            tintColor={Colors.navy}
+            tintColor="#C0755A"
           />
         }
       >
-        {/* Header */}
-        <View style={[styles.headerCard, { paddingTop: insets.top + 12 }]}>
-          <View style={styles.headerTop}>
-            <View>
-              <Text style={styles.greeting}>
-                {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
-              </Text>
-            </View>
-            <View style={styles.headerActions}>
-              {/* QR 초대 버튼 */}
-              {userId ? (
-                <TouchableOpacity
-                  onPress={() => setQrModalVisible(true)}
-                  style={styles.headerIconBtn}
-                >
-                  <Ionicons name="qr-code-outline" size={22} color={Colors.mutedFg} />
-                </TouchableOpacity>
-              ) : null}
-              <TouchableOpacity
-                onPress={() => router.push('/settings/notifications')}
-                style={styles.headerIconBtn}
-              >
-                <Ionicons name="notifications-outline" size={22} color={Colors.mutedFg} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleSignOut} style={styles.headerIconBtn}>
-                <Ionicons name="log-out-outline" size={22} color={Colors.mutedFg} />
-              </TouchableOpacity>
-            </View>
+        {/* ── 헤더 ── */}
+        <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+          <View>
+            <Text style={styles.headerDate}>
+              {new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}
+            </Text>
+            <Text style={styles.headerGreeting}>
+              안녕하세요, {coachEmail ? coachEmail.split('@')[0] : '코치'}님 👋
+            </Text>
           </View>
-
-        </View>
-
-        {/* Stats Grid (2x2) — 전체회원 / 오늘레슨 / 미납회원 / 만료예정 */}
-        <View style={styles.statsGrid}>
-          <View style={styles.statsRow}>
-            <TouchableOpacity style={styles.statCard} onPress={() => router.push('/(tabs)/members')} activeOpacity={0.85}>
-              <Text style={styles.statValue}>{stats.totalMembers}</Text>
-              <Text style={styles.statLabel}>전체 회원</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.statCard} onPress={() => router.push('/(tabs)/schedule')} activeOpacity={0.85}>
-              <Text style={styles.statValue}>{stats.todayLessons}</Text>
-              <Text style={styles.statLabel}>오늘 레슨</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.statsRow}>
-            <TouchableOpacity style={stats.unpaidMembers > 0 ? styles.statCardAlert : styles.statCard} activeOpacity={0.85} onPress={() => { loadUnpaidMembers(); setUnpaidModal(true); }}>
-              <Text style={[styles.statValue, stats.unpaidMembers > 0 && { color: '#D9534F' }]}>
-                {stats.unpaidMembers}
-              </Text>
-              <Text style={[styles.statLabel, stats.unpaidMembers > 0 && { color: '#D9534F' }]}>미납 회원</Text>
-              <Text style={styles.statHint}>잔여 0회</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={stats.expiringMembers > 0 ? styles.statCardAlert : styles.statCard} activeOpacity={0.85} onPress={() => { loadExpiringMembers(); setExpiringModal(true); }}>
-              <Text style={[styles.statValue, stats.expiringMembers > 0 && { color: '#D99A2B' }]}>
-                {stats.expiringMembers}
-              </Text>
-              <Text style={[styles.statLabel, stats.expiringMembers > 0 && { color: '#D99A2B' }]}>만료 예정</Text>
-              <Text style={styles.statHint}>잔여 1~2회</Text>
+          <View style={styles.headerIcons}>
+            {userId ? (
+              <TouchableOpacity onPress={() => setQrModalVisible(true)} style={styles.iconBtn}>
+                <Ionicons name="qr-code-outline" size={22} color="#3E2B22" />
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity onPress={() => router.push('/settings/notifications')} style={styles.iconBtn}>
+              <Ionicons name="notifications-outline" size={22} color="#3E2B22" />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* ① 체험 회원 카드 */}
-        {trialCount > 0 && (
-          <TouchableOpacity style={styles.trialCard} onPress={() => setTrialModal(true)} activeOpacity={0.85}>
-            <View style={styles.churnCardLeft}>
-              <View style={styles.churnIconWrap}>
-                <Ionicons name="star-half" size={18} color={Colors.mutedFg} />
-              </View>
-              <View>
-                <Text style={styles.churnTitle}>체험 중 {trialCount}명</Text>
-                <Text style={styles.churnSub}>정규 전환 안내 확인</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.mutedFg} />
-          </TouchableOpacity>
-        )}
-
-        {/* ③ 관심 회원 카드 */}
-        {interestList.length > 0 && (
-          <TouchableOpacity style={styles.interestCard} onPress={() => setInterestModal(true)} activeOpacity={0.85}>
-            <View style={styles.churnCardLeft}>
-              <View style={styles.churnIconWrap}>
-                <Ionicons name="person-add" size={18} color="#D99A2B" />
-              </View>
-              <View>
-                <Text style={styles.churnTitle}>관심 회원 {interestList.length}명</Text>
-                <Text style={styles.churnSub}>QR 스캔 → 레슨권 선택한 회원</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.mutedFg} />
-          </TouchableOpacity>
-        )}
-
-        {/* ④ 이탈 위험 알림 카드 */}
-        {churnRiskList.length > 0 && (
-          <TouchableOpacity
-            style={styles.churnCard}
-            onPress={() => setChurnModal(true)}
-            activeOpacity={0.85}
-          >
-            <View style={styles.churnCardLeft}>
-              <View style={styles.churnIconWrap}>
-                <Ionicons name="warning" size={18} color="#D9534F" />
-              </View>
-              <View>
-                <Text style={styles.churnTitle}>이탈 위험 {churnRiskList.length}명</Text>
-                <Text style={styles.churnSub}>3주 이상 레슨 기록 없음</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.mutedFg} />
-          </TouchableOpacity>
-        )}
-
-        {/* AI 코칭 모델 카드 */}
+        {/* ── 섹션1: 오늘 레슨 배너 ── */}
         <TouchableOpacity
-          style={styles.aiCoachingCard}
+          style={styles.todayBannerCard}
+          onPress={() => router.push('/(tabs)/schedule')}
+          activeOpacity={0.85}
+        >
+          <View style={styles.todayBannerLeft}>
+            <Text style={styles.todayBannerLabel}>오늘 레슨</Text>
+            <Text style={styles.todayBannerCount}>{stats.todayLessons}회</Text>
+            {todayCards.length > 0 && (
+              <Text style={styles.todayBannerFirst}>
+                첫 레슨 {todayCards[0].startTime.slice(0, 5)} · {todayCards[0].memberName}
+              </Text>
+            )}
+          </View>
+          <View style={styles.todayBannerRight}>
+            <Ionicons name="tennisball-outline" size={52} color="rgba(255,255,255,0.25)" />
+          </View>
+        </TouchableOpacity>
+
+        {/* ── 섹션2: 3개 스탯 카드 ── */}
+        <View style={styles.statsRow3}>
+          <TouchableOpacity style={styles.stat3Card} onPress={() => router.push('/(tabs)/members')} activeOpacity={0.85}>
+            <Text style={styles.stat3Value}>{stats.totalMembers}</Text>
+            <Text style={styles.stat3Label}>전체 회원</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.stat3Card, stats.unpaidMembers > 0 && styles.stat3CardAlert]}
+            activeOpacity={0.85}
+            onPress={() => { loadUnpaidMembers(); setUnpaidModal(true); }}
+          >
+            <Text style={[styles.stat3Value, stats.unpaidMembers > 0 && { color: '#D9534F' }]}>
+              {stats.unpaidMembers}
+            </Text>
+            <Text style={[styles.stat3Label, stats.unpaidMembers > 0 && { color: '#D9534F' }]}>미납</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.stat3Card, stats.expiringMembers > 0 && styles.stat3CardWarn]}
+            activeOpacity={0.85}
+            onPress={() => { loadExpiringMembers(); setExpiringModal(true); }}
+          >
+            <Text style={[styles.stat3Value, stats.expiringMembers > 0 && { color: '#D97706' }]}>
+              {stats.expiringMembers}
+            </Text>
+            <Text style={[styles.stat3Label, stats.expiringMembers > 0 && { color: '#D97706' }]}>만료예정</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── 섹션3: 알림 카드들 ── */}
+        {interestList.length > 0 && (
+          <TouchableOpacity style={styles.alertCard} onPress={() => setInterestModal(true)} activeOpacity={0.85}>
+            <View style={[styles.alertIconWrap, { backgroundColor: '#EDE0D4' }]}>
+              <Ionicons name="person-add" size={18} color="#C0755A" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.alertTitle}>관심 회원 {interestList.length}명</Text>
+              <Text style={styles.alertSub}>QR 스캔 후 레슨권 선택한 회원</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#8B7355" />
+          </TouchableOpacity>
+        )}
+        {churnRiskList.length > 0 && (
+          <TouchableOpacity style={styles.alertCard} onPress={() => setChurnModal(true)} activeOpacity={0.85}>
+            <View style={[styles.alertIconWrap, { backgroundColor: '#FEE2E2' }]}>
+              <Ionicons name="warning" size={18} color="#D9534F" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.alertTitle}>이탈 위험 {churnRiskList.length}명</Text>
+              <Text style={styles.alertSub}>3주 이상 레슨 기록 없음</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#8B7355" />
+          </TouchableOpacity>
+        )}
+        {trialCount > 0 && (
+          <TouchableOpacity style={styles.alertCard} onPress={() => setTrialModal(true)} activeOpacity={0.85}>
+            <View style={[styles.alertIconWrap, { backgroundColor: '#FEF3C7' }]}>
+              <Ionicons name="star-half" size={18} color="#D97706" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.alertTitle}>체험 중 {trialCount}명</Text>
+              <Text style={styles.alertSub}>정규 전환 안내 확인</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#8B7355" />
+          </TouchableOpacity>
+        )}
+
+        {/* ── 섹션4: AI 코칭 모델 ── */}
+        <TouchableOpacity
+          style={styles.aiCard}
           activeOpacity={0.85}
           onPress={() => {
             if (!canUse('ai_analysis')) {
@@ -730,44 +725,149 @@ export default function HomeScreen() {
             }
           }}
         >
-          <View style={styles.aiCoachingLeft}>
-            <View style={styles.aiCoachingIconWrap}>
+          <View style={styles.aiCardLeft}>
+            <View style={styles.aiIconWrap}>
               <Ionicons name="bulb" size={20} color="#C0755A" />
             </View>
             <View>
-              <Text style={styles.aiCoachingTitle}>내 AI 코칭 모델</Text>
-              <Text style={styles.aiCoachingDesc}>코칭 스타일 {knowledgeCount}개 등록됨</Text>
+              <Text style={styles.aiCardTitle}>내 AI 코칭 모델</Text>
+              <Text style={styles.aiCardDesc}>코칭 스타일 {knowledgeCount}개 등록됨</Text>
             </View>
           </View>
-          <View style={styles.aiCoachingRight}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             {!canUse('ai_analysis') && (
-              <View style={styles.proBadgeSmall}><Text style={styles.proBadgeSmallText}>PRO</Text></View>
+              <View style={styles.proBadge}><Text style={styles.proBadgeText}>PRO</Text></View>
             )}
-            <Ionicons name="chevron-forward" size={18} color={Colors.mutedFg} />
+            <Ionicons name="chevron-forward" size={18} color="#8B7355" />
           </View>
         </TouchableOpacity>
 
-        {/* Plan Upsell 모달 (홈) */}
+        {/* ── 섹션5: 오늘 레슨 상세 ── */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>오늘 레슨 상세</Text>
+          <TouchableOpacity onPress={() => router.push('/lessons/new')}>
+            <Ionicons name="add-circle-outline" size={22} color="#C0755A" />
+          </TouchableOpacity>
+        </View>
+
+        {todayCards.length === 0 && autoGenSuggestion.length > 0 && (
+          <View style={styles.autoGenBanner}>
+            <View style={styles.autoGenHeader}>
+              <Ionicons name="flash" size={18} color="#C0755A" />
+              <Text style={styles.autoGenTitle}>오늘 고정 스케줄 회원이 있어요</Text>
+            </View>
+            {autoGenSuggestion.map(s => (
+              <View key={s.memberId} style={styles.autoGenItem}>
+                <Text style={styles.autoGenTime}>{s.time}</Text>
+                <Text style={styles.autoGenName}>{s.name}</Text>
+              </View>
+            ))}
+            <TouchableOpacity style={styles.autoGenBtn} onPress={handleAutoGenLessons}>
+              <Text style={styles.autoGenBtnText}>레슨 자동 생성</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {todayCards.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Ionicons name="calendar-outline" size={40} color="#C4B49E" />
+            <Text style={styles.emptyText}>오늘 예정된 레슨이 없습니다</Text>
+            <TouchableOpacity style={styles.addLessonBtn} onPress={() => router.push('/lessons/new')}>
+              <Text style={styles.addLessonBtnText}>레슨 추가하기</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.lessonCardsList}>
+            {todayCards.map(card => {
+              const cardKey = `${card.lessonId}:${card.memberId}`;
+              const isLoading = loadingAttendance === cardKey;
+
+              return (
+                <TouchableOpacity
+                  key={cardKey}
+                  style={[
+                    styles.lessonCard,
+                    card.attended && styles.lessonCardAttended,
+                    card.isAbsent && styles.lessonCardAbsent,
+                  ]}
+                  onPress={() => router.push(`/members/${card.memberId}`)}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.lessonTimeBadge}>
+                    <Text style={styles.lessonTimeText}>{card.startTime.slice(0, 5)}</Text>
+                  </View>
+
+                  <View style={styles.lessonInfo}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                      <Text style={styles.lessonMemberName}>{card.memberName}</Text>
+                      <View style={[styles.levelBadge, { backgroundColor: `${LEVEL_COLOR[card.memberLevel] ?? '#8B7355'}22` }]}>
+                        <Text style={[styles.levelText, { color: LEVEL_COLOR[card.memberLevel] ?? '#8B7355' }]}>
+                          {card.memberLevel}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.lessonPackageName} numberOfLines={1}>{card.lessonPackageName}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Ionicons name="layers-outline" size={12} color={card.remainingCredits <= 1 ? '#D9534F' : '#8B7355'} />
+                      <Text style={[styles.creditsText, { color: card.remainingCredits <= 1 ? '#D9534F' : '#8B7355' }]}>
+                        잔여 {card.remainingCredits}회
+                      </Text>
+                      {card.isAbsent && card.deductionType && (
+                        <View style={styles.deductionBadge}>
+                          <Text style={styles.deductionBadgeText}>{card.deductionType}</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+
+                  {isLoading ? (
+                    <ActivityIndicator size="small" color="#C0755A" style={{ marginLeft: 8 }} />
+                  ) : (
+                    <View style={styles.attendBtns}>
+                      <TouchableOpacity
+                        style={[styles.attendBtn, card.attended && styles.attendBtnActive]}
+                        onPress={() => handleAttend(card)}
+                      >
+                        <Ionicons
+                          name={card.attended ? 'checkmark-circle' : 'checkmark-circle-outline'}
+                          size={28}
+                          color={card.attended ? '#fff' : '#C0755A'}
+                        />
+                        <Text style={[styles.attendBtnLabel, card.attended && { color: '#fff' }]}>출석</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.absentBtn, card.isAbsent && styles.absentBtnActive]}
+                        onPress={() => handleAbsenceBtn(card)}
+                      >
+                        <Ionicons
+                          name={card.isAbsent ? 'close-circle' : 'close-circle-outline'}
+                          size={28}
+                          color={card.isAbsent ? '#fff' : '#D9534F'}
+                        />
+                        <Text style={[styles.absentBtnLabel, card.isAbsent && { color: '#fff' }]}>결석</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
         <PlanUpsellModal
           visible={homeUpsellVisible}
           onClose={() => setHomeUpsellVisible(false)}
           context="ai_coaching_model"
           currentPlanId={subscription?.plan_id ?? 'free'}
         />
-
-        {/* 레슨권 없음 유도 + 온보딩 모달 */}
         <OnboardingModal
           visible={noPackageModal}
           onRegister={() => { setNoPackageModal(false); router.push('/lesson-packages/new'); }}
           onDismiss={async () => {
             setNoPackageModal(false);
-            if (userId) {
-              await AsyncStorage.setItem(`no_package_modal_dismissed_${userId}`, '1');
-            }
+            if (userId) await AsyncStorage.setItem(`no_package_modal_dismissed_${userId}`, '1');
           }}
         />
-
-        {/* QR 초대 모달 */}
         {userId ? (
           <CoachQRModal
             visible={qrModalVisible}
@@ -777,21 +877,21 @@ export default function HomeScreen() {
           />
         ) : null}
 
-        {/* ④ 이탈 위험 회원 모달 */}
+        {/* 이탈 위험 모달 */}
         <Modal visible={churnModal} transparent animationType="slide" onRequestClose={() => setChurnModal(false)}>
           <View style={styles.modalOverlay}>
             <View style={[styles.modalSheet, { paddingBottom: Math.max(40, insets.bottom + 20) }]}>
               <View style={styles.modalHeader}>
                 <View>
-                  <Text style={styles.modalTitle}>이탈 위험 회원</Text>
-                  <Text style={{ fontSize: 14, color: Colors.mutedFg, marginTop: 2 }}>3주 이상 레슨 기록 없음</Text>
+                  <Text style={styles.modalTitle}>최근 레슨이 없는 회원</Text>
+                  <Text style={{ fontSize: 14, color: '#8B7355', marginTop: 2 }}>3주 이상 레슨 기록 없음</Text>
                 </View>
                 <TouchableOpacity onPress={() => setChurnModal(false)}>
-                  <Ionicons name="close" size={22} color={Colors.mutedFg} />
+                  <Ionicons name="close" size={22} color="#8B7355" />
                 </TouchableOpacity>
               </View>
               {churnRiskList.length === 0 ? (
-                <Text style={{ fontSize: 14, color: Colors.placeholder, padding: 20, textAlign: 'center' }}>이탈 위험 회원이 없어요 🎉</Text>
+                <Text style={{ fontSize: 14, color: '#C4B49E', padding: 20, textAlign: 'center' }}>해당 회원이 없어요 🎉</Text>
               ) : (
                 <FlatList
                   data={churnRiskList}
@@ -808,12 +908,10 @@ export default function HomeScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={styles.modalMemberName}>{item.name}</Text>
                         <Text style={styles.modalMemberSub}>
-                          {item.lastAttended
-                            ? `마지막 출석: ${item.lastAttended}`
-                            : '출석 기록 없음'}
+                          {item.lastAttended ? `마지막 출석: ${item.lastAttended}` : '출석 기록 없음'}
                         </Text>
                       </View>
-                      <Ionicons name="chevron-forward" size={16} color={Colors.mutedFg} />
+                      <Ionicons name="chevron-forward" size={16} color="#8B7355" />
                     </TouchableOpacity>
                   )}
                 />
@@ -822,24 +920,24 @@ export default function HomeScreen() {
           </View>
         </Modal>
 
-        {/* ① 체험 회원 모달 */}
+        {/* 체험 회원 모달 */}
         <Modal visible={trialModal} transparent animationType="slide" onRequestClose={() => setTrialModal(false)}>
           <View style={styles.modalOverlay}>
             <View style={[styles.modalSheet, { paddingBottom: Math.max(40, insets.bottom + 20) }]}>
               <View style={styles.modalHeader}>
                 <View>
                   <Text style={styles.modalTitle}>체험 중 회원</Text>
-                  <Text style={{ fontSize: 14, color: Colors.mutedFg, marginTop: 2 }}>정규 전환 후보 회원</Text>
+                  <Text style={{ fontSize: 14, color: '#8B7355', marginTop: 2 }}>정규 전환 후보 회원</Text>
                 </View>
                 <TouchableOpacity onPress={() => setTrialModal(false)}>
-                  <Ionicons name="close" size={22} color={Colors.mutedFg} />
+                  <Ionicons name="close" size={22} color="#8B7355" />
                 </TouchableOpacity>
               </View>
               <FlatList
                 data={trialMembers}
                 keyExtractor={item => item.id}
                 style={{ maxHeight: 400 }}
-                ListEmptyComponent={<Text style={{ fontSize: 14, color: Colors.placeholder, padding: 20, textAlign: 'center' }}>체험 회원이 없어요</Text>}
+                ListEmptyComponent={<Text style={{ fontSize: 14, color: '#C4B49E', padding: 20, textAlign: 'center' }}>체험 회원이 없어요</Text>}
                 renderItem={({ item }) => {
                   const daysSince = item.trial_started_at
                     ? Math.floor((Date.now() - new Date(item.trial_started_at).getTime()) / 86400000)
@@ -858,7 +956,7 @@ export default function HomeScreen() {
                           {daysSince !== null ? `D+${daysSince}일` : '체험 중'} · {item.trial_lesson_count}회 진행
                         </Text>
                       </View>
-                      <Ionicons name="chevron-forward" size={16} color={Colors.mutedFg} />
+                      <Ionicons name="chevron-forward" size={16} color="#8B7355" />
                     </TouchableOpacity>
                   );
                 }}
@@ -867,27 +965,27 @@ export default function HomeScreen() {
           </View>
         </Modal>
 
-        {/* ③ 관심 회원 모달 */}
+        {/* 관심 회원 모달 */}
         <Modal visible={interestModal} transparent animationType="slide" onRequestClose={() => setInterestModal(false)}>
           <View style={styles.modalOverlay}>
             <View style={[styles.modalSheet, { paddingBottom: Math.max(40, insets.bottom + 20) }]}>
               <View style={styles.modalHeader}>
                 <View>
                   <Text style={styles.modalTitle}>관심 회원</Text>
-                  <Text style={{ fontSize: 14, color: Colors.mutedFg, marginTop: 2 }}>QR 스캔 후 레슨권 선택한 회원</Text>
+                  <Text style={{ fontSize: 14, color: '#8B7355', marginTop: 2 }}>QR 스캔 후 레슨권 선택한 회원</Text>
                 </View>
                 <TouchableOpacity onPress={() => setInterestModal(false)}>
-                  <Ionicons name="close" size={22} color={Colors.mutedFg} />
+                  <Ionicons name="close" size={22} color="#8B7355" />
                 </TouchableOpacity>
               </View>
               <FlatList
                 data={interestList}
                 keyExtractor={item => item.id}
                 style={{ maxHeight: 440 }}
-                ListEmptyComponent={<Text style={{ fontSize: 14, color: Colors.placeholder, padding: 20, textAlign: 'center' }}>관심 회원이 없어요</Text>}
+                ListEmptyComponent={<Text style={{ fontSize: 14, color: '#C4B49E', padding: 20, textAlign: 'center' }}>관심 회원이 없어요</Text>}
                 renderItem={({ item }) => (
                   <View style={styles.modalMemberRow}>
-                    <View style={[styles.modalMemberAvatar, { backgroundColor: '#7C3AED' }]}>
+                    <View style={[styles.modalMemberAvatar, { backgroundColor: '#C0755A' }]}>
                       <Ionicons name="person" size={16} color="#fff" />
                     </View>
                     <View style={{ flex: 1 }}>
@@ -920,125 +1018,9 @@ export default function HomeScreen() {
             </View>
           </View>
         </Modal>
-
-        {/* Today's Lessons Section */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>오늘 레슨</Text>
-          <TouchableOpacity onPress={() => router.push('/lessons/new')}>
-            <Ionicons name="add-circle-outline" size={22} color={Colors.primary} />
-          </TouchableOpacity>
-        </View>
-
-        {todayCards.length === 0 && autoGenSuggestion.length > 0 && (
-          <View style={styles.autoGenBanner}>
-            <View style={styles.autoGenHeader}>
-              <Ionicons name="flash" size={18} color={Colors.primary} />
-              <Text style={styles.autoGenTitle}>오늘 고정 스케줄 회원이 있어요</Text>
-            </View>
-            {autoGenSuggestion.map(s => (
-              <View key={s.memberId} style={styles.autoGenItem}>
-                <Text style={styles.autoGenTime}>{s.time}</Text>
-                <Text style={styles.autoGenName}>{s.name}</Text>
-              </View>
-            ))}
-            <TouchableOpacity style={styles.autoGenBtn} onPress={handleAutoGenLessons}>
-              <Text style={styles.autoGenBtnText}>레슨 자동 생성</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {todayCards.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Ionicons name="calendar-outline" size={40} color={Colors.iconMuted} />
-            <Text style={styles.emptyText}>오늘 예정된 레슨이 없습니다</Text>
-            <TouchableOpacity style={styles.addLessonBtn} onPress={() => router.push('/lessons/new')}>
-              <Text style={styles.addLessonBtnText}>레슨 추가하기</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.lessonCardsList}>
-            {todayCards.map(card => {
-              const cardKey = `${card.lessonId}:${card.memberId}`;
-              const isLoading = loadingAttendance === cardKey;
-              const cardBg = card.attended
-                ? styles.memberCardAttended
-                : card.isAbsent
-                  ? styles.memberCardAbsent
-                  : undefined;
-
-              return (
-                <TouchableOpacity
-                  key={cardKey}
-                  style={[styles.memberCard, cardBg]}
-                  onPress={() => router.push(`/members/${card.memberId}`)}
-                  activeOpacity={0.85}
-                >
-                  <View style={styles.timeBadge}>
-                    <Text style={styles.timeText}>{card.startTime.slice(0, 5)}</Text>
-                  </View>
-
-                  <View style={styles.memberInfo}>
-                    <View style={styles.memberNameRow}>
-                      <Text style={styles.memberName}>{card.memberName}</Text>
-                      <View style={styles.levelBadge}>
-                        <Text style={styles.levelText}>
-                          {card.memberLevel}
-                        </Text>
-                      </View>
-                    </View>
-                    {/* 레슨권 이름 */}
-                    <Text style={styles.packageName} numberOfLines={1}>{card.lessonPackageName}</Text>
-                    <View style={styles.creditsRow}>
-                      <Ionicons name="layers-outline" size={12} color={card.remainingCredits <= 1 ? Colors.destructive : Colors.mutedFg} />
-                      <Text style={[styles.creditsText, { color: card.remainingCredits <= 1 ? Colors.destructive : Colors.mutedFg }]}>
-                        잔여 {card.remainingCredits}회
-
-                      </Text>
-                      {card.isAbsent && card.deductionType && (
-                        <View style={styles.deductionBadge}>
-                          <Text style={styles.deductionBadgeText}>{card.deductionType}</Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-
-                  {/* 출석 / 결석 버튼 */}
-                  {isLoading ? (
-                    <ActivityIndicator size="small" color={Colors.primary} style={{ marginLeft: 8 }} />
-                  ) : (
-                    <View style={styles.attendBtns}>
-                      <TouchableOpacity
-                        style={[styles.attendBtn, card.attended && styles.attendBtnActive]}
-                        onPress={() => handleAttend(card)}
-                      >
-                        <Ionicons
-                          name={card.attended ? 'checkmark-circle' : 'checkmark-circle-outline'}
-                          size={28}
-                          color={card.attended ? Colors.white : Colors.primary}
-                        />
-                        <Text style={[styles.attendBtnLabel, card.attended && { color: '#fff' }]}>출석</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.absentBtn, card.isAbsent && styles.absentBtnActive]}
-                        onPress={() => handleAbsenceBtn(card)}
-                      >
-                        <Ionicons
-                          name={card.isAbsent ? 'close-circle' : 'close-circle-outline'}
-                          size={28}
-                          color={card.isAbsent ? Colors.white : Colors.destructive}
-                        />
-                        <Text style={[styles.absentBtnLabel, card.isAbsent && { color: '#fff' }]}>결석</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
       </ScrollView>
 
-      {/* Chatbot FAB + 힌트 툴팁 — Android 하단 nav bar 높이 반영 */}
+      {/* FAB */}
       {showChatHint && (
         <View style={[styles.chatHintBubble, { bottom: insets.bottom + 92 }]}>
           <View style={{ flex: 1 }}>
@@ -1046,12 +1028,12 @@ export default function HomeScreen() {
             <Text style={styles.chatHintText}>무엇이든 물어보세요</Text>
           </View>
           <TouchableOpacity onPress={dismissChatHint} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="close" size={16} color="#5B21B6" />
+            <Ionicons name="close" size={16} color="#C0755A" />
           </TouchableOpacity>
         </View>
       )}
       <TouchableOpacity style={[styles.chatFab, { bottom: insets.bottom + 24 }]} onPress={() => { dismissChatHint(); router.push('/(tabs)/chat'); }}>
-        <Ionicons name="chatbubble-ellipses" size={24} color={Colors.white} />
+        <Ionicons name="chatbubble-ellipses" size={24} color="#fff" />
       </TouchableOpacity>
 
       {/* 미납 회원 모달 */}
@@ -1061,40 +1043,40 @@ export default function HomeScreen() {
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>미납 회원</Text>
-                <Text style={{ fontSize: 14, color: Colors.mutedFg, marginTop: 2 }}>잔여 0회 회원</Text>
+                <Text style={{ fontSize: 14, color: '#8B7355', marginTop: 2 }}>잔여 0회 회원</Text>
               </View>
               <TouchableOpacity onPress={() => setUnpaidModal(false)}>
-                <Ionicons name="close" size={22} color={Colors.mutedFg} />
+                <Ionicons name="close" size={22} color="#8B7355" />
               </TouchableOpacity>
             </View>
             {unpaidMemberList.length === 0 ? (
               <View style={{ padding: 40, alignItems: 'center' }}>
-                <Ionicons name="checkmark-circle-outline" size={40} color={Colors.success} />
-                <Text style={{ fontSize: 14, color: Colors.placeholder, marginTop: 12 }}>미납 회원이 없어요 🎉</Text>
+                <Ionicons name="checkmark-circle-outline" size={40} color="#C0755A" />
+                <Text style={{ fontSize: 14, color: '#C4B49E', marginTop: 12 }}>미납 회원이 없어요 🎉</Text>
               </View>
             ) : (
               <ScrollView style={{ maxHeight: 400 }}>
                 {unpaidMemberList.map(m => (
                   <TouchableOpacity
                     key={m.id}
-                    style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.mutedBg, gap: 12 }}
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#EDE0D4', gap: 12 }}
                     onPress={() => { setUnpaidModal(false); router.push(`/members/${m.id}`); }}
                   >
-                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(45,51,64,0.08)', justifyContent: 'center', alignItems: 'center' }}>
-                      <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.foreground }}>{m.name.slice(0,1)}</Text>
+                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#EDE0D4', justifyContent: 'center', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: '#3E2B22' }}>{m.name.slice(0,1)}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.foreground }}>{m.name}</Text>
-                      <Text style={{ fontSize: 14, color: Colors.mutedFg, marginTop: 2 }}>{m.level} · 잔여 {m.remaining_credits}회</Text>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#3E2B22' }}>{m.name}</Text>
+                      <Text style={{ fontSize: 14, color: '#8B7355', marginTop: 2 }}>{m.level} · 잔여 {m.remaining_credits}회</Text>
                     </View>
-                    <View style={{ backgroundColor: 'rgba(45,51,64,0.08)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.foreground }}>0회</Text>
+                    <View style={{ backgroundColor: '#EDE0D4', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#3E2B22' }}>0회</Text>
                     </View>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
             )}
-            <TouchableOpacity style={{ margin: 16, backgroundColor: Colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: 'center' }} onPress={() => setUnpaidModal(false)}>
+            <TouchableOpacity style={{ margin: 16, backgroundColor: '#C0755A', borderRadius: 10, paddingVertical: 12, alignItems: 'center' }} onPress={() => setUnpaidModal(false)}>
               <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>닫기</Text>
             </TouchableOpacity>
           </View>
@@ -1108,70 +1090,63 @@ export default function HomeScreen() {
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>만료 예정 회원</Text>
-                <Text style={{ fontSize: 14, color: Colors.mutedFg, marginTop: 2 }}>잔여 1~2회 회원</Text>
+                <Text style={{ fontSize: 14, color: '#8B7355', marginTop: 2 }}>잔여 1~2회 회원</Text>
               </View>
               <TouchableOpacity onPress={() => setExpiringModal(false)}>
-                <Ionicons name="close" size={22} color={Colors.mutedFg} />
+                <Ionicons name="close" size={22} color="#8B7355" />
               </TouchableOpacity>
             </View>
             {expiringMemberList.length === 0 ? (
               <View style={{ padding: 40, alignItems: 'center' }}>
-                <Ionicons name="checkmark-circle-outline" size={40} color={Colors.success} />
-                <Text style={{ fontSize: 14, color: Colors.placeholder, marginTop: 12 }}>만료 예정 회원이 없어요 🎉</Text>
+                <Ionicons name="checkmark-circle-outline" size={40} color="#C0755A" />
+                <Text style={{ fontSize: 14, color: '#C4B49E', marginTop: 12 }}>만료 예정 회원이 없어요 🎉</Text>
               </View>
             ) : (
               <ScrollView style={{ maxHeight: 400 }}>
                 {expiringMemberList.map(m => (
                   <TouchableOpacity
                     key={m.id}
-                    style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.mutedBg, gap: 12 }}
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#EDE0D4', gap: 12 }}
                     onPress={() => { setExpiringModal(false); router.push(`/members/${m.id}`); }}
                   >
-                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(45,51,64,0.08)', justifyContent: 'center', alignItems: 'center' }}>
-                      <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.foreground }}>{m.name.slice(0,1)}</Text>
+                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#EDE0D4', justifyContent: 'center', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: '#3E2B22' }}>{m.name.slice(0,1)}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.foreground }}>{m.name}</Text>
-                      <Text style={{ fontSize: 14, color: Colors.mutedFg, marginTop: 2 }}>{m.level}</Text>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#3E2B22' }}>{m.name}</Text>
+                      <Text style={{ fontSize: 14, color: '#8B7355', marginTop: 2 }}>{m.level}</Text>
                     </View>
-                    <View style={{ backgroundColor: 'rgba(45,51,64,0.08)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.foreground }}>잔여 {m.remaining_credits}회</Text>
+                    <View style={{ backgroundColor: '#EDE0D4', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#3E2B22' }}>잔여 {m.remaining_credits}회</Text>
                     </View>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
             )}
-            <TouchableOpacity style={{ margin: 16, backgroundColor: Colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: 'center' }} onPress={() => setExpiringModal(false)}>
+            <TouchableOpacity style={{ margin: 16, backgroundColor: '#C0755A', borderRadius: 10, paddingVertical: 12, alignItems: 'center' }} onPress={() => setExpiringModal(false)}>
               <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>닫기</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {/* 결석 처리 바텀시트 */}
-      <Modal
-        visible={absenceModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setAbsenceModal(false)}
-      >
+      {/* 결석 바텀시트 */}
+      <Modal visible={absenceModal} transparent animationType="slide" onRequestClose={() => setAbsenceModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>결석 처리</Text>
               <TouchableOpacity onPress={() => setAbsenceModal(false)}>
-                <Ionicons name="close" size={22} color={Colors.mutedFg} />
+                <Ionicons name="close" size={22} color="#8B7355" />
               </TouchableOpacity>
             </View>
             {absenceCard && (
               <View style={styles.modalMemberInfo}>
-                <Ionicons name="person-circle-outline" size={20} color={Colors.primary} />
+                <Ionicons name="person-circle-outline" size={20} color="#C0755A" />
                 <Text style={styles.modalMemberName}>{absenceCard.memberName}</Text>
                 <Text style={styles.modalMemberSub}>{absenceCard.startTime.slice(0, 5)} · {absenceCard.lessonPackageName}</Text>
               </View>
             )}
-
-            {/* a) 결석 사유 */}
             <Text style={styles.modalSectionLabel}>결석 사유</Text>
             <View style={styles.optionGrid}>
               {ABSENCE_REASONS.map(r => (
@@ -1184,12 +1159,10 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-
-            {/* b) 처리 방식 */}
             <Text style={styles.modalSectionLabel}>처리 방식</Text>
             <View style={styles.deductionRow}>
               {DEDUCTION_TYPES.map(d => {
-                const color = d === '정상차감' ? Colors.destructive : d === '보강예정' ? Colors.info : Colors.success;
+                const color = d === '정상차감' ? '#D9534F' : d === '보강예정' ? '#3B82F6' : '#22C55E';
                 return (
                   <TouchableOpacity
                     key={d}
@@ -1201,16 +1174,12 @@ export default function HomeScreen() {
                 );
               })}
             </View>
-
-            {/* 처리방식 안내 */}
             {selectedDeduction === '정상차감' && (
               <Text style={styles.deductionHint}>잔여 횟수 1회 차감됩니다</Text>
             )}
             {(selectedDeduction === '미차감' || selectedDeduction === '보강예정') && (
-              <Text style={[styles.deductionHint, { color: Colors.info }]}>잔여 횟수 차감 없이 결석 처리됩니다</Text>
+              <Text style={[styles.deductionHint, { color: '#3B82F6' }]}>잔여 횟수 차감 없이 결석 처리됩니다</Text>
             )}
-
-            {/* c) 저장 */}
             <TouchableOpacity
               style={[styles.saveBtn, (!selectedReason || !selectedDeduction || savingAbsence) && styles.saveBtnDis]}
               onPress={handleAbsenceSave}
@@ -1229,228 +1198,195 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  screenWrapper: { flex: 1 },
-  container: { flex: 1, backgroundColor: Colors.background },
+  screenWrapper: { flex: 1, backgroundColor: '#F7F0E9' },
+  container: { flex: 1, backgroundColor: '#F7F0E9' },
 
-  headerCard: {
-    backgroundColor: Colors.background, paddingHorizontal: 16, paddingTop: 20, paddingBottom: 8,
-    marginBottom: 16,
+  header: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
+    paddingHorizontal: 20, paddingBottom: 20, backgroundColor: '#F7F0E9',
   },
-  headerTop: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'flex-start', marginBottom: 6,
-  },
-  greeting: { fontSize: 24, fontWeight: '700', color: Colors.foreground },
-  email: { fontSize: 13, color: Colors.mutedFg, marginTop: 2 },
-  headerActions: { flexDirection: 'row', gap: 8 },
-  headerIconBtn: { padding: 4 },
-  dateText: { fontSize: 14, color: Colors.mutedFg },
+  headerDate: { fontSize: 15, color: '#8B7355', fontWeight: '500', marginBottom: 6 },
+  headerGreeting: { fontSize: 26, fontWeight: '700', color: '#3E2B22' },
+  headerIcons: { flexDirection: 'row', gap: 8, marginTop: 6 },
+  iconBtn: { padding: 8, borderRadius: 20, backgroundColor: 'rgba(62,43,34,0.08)' },
 
-  statsGrid: { paddingHorizontal: 16, gap: 8, marginBottom: 12 },
-  statsRow: { flexDirection: 'row', gap: 8 },
-  statCard: {
-    flex: 1, backgroundColor: Colors.card, borderRadius: Radius.md,
-    padding: 16,
-    borderWidth: 1, borderColor: Colors.border,
-    ...Shadow.sm,
+  todayBannerCard: {
+    marginHorizontal: 16, marginBottom: 14,
+    backgroundColor: '#C0755A', borderRadius: 20,
+    padding: 20, flexDirection: 'row', alignItems: 'center',
+    overflow: 'hidden',
   },
-  statCardAlert: {
-    flex: 1, backgroundColor: Colors.card, borderRadius: Radius.md,
-    padding: 16,
-    borderWidth: 1, borderColor: Colors.border,
-    borderLeftWidth: 3, borderLeftColor: Colors.foreground,
-    ...Shadow.sm,
-  },
-  statValue: { fontSize: 28, fontWeight: '800', color: Colors.foreground, marginBottom: 4 },
-  statLabel: { fontSize: 13, color: Colors.mutedFg, fontWeight: '500' },
-  statHint: { fontSize: 12, color: Colors.placeholder, marginTop: 2 },
+  todayBannerLeft: { flex: 1 },
+  todayBannerLabel: { fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: '600', marginBottom: 4 },
+  todayBannerCount: { fontSize: 40, fontWeight: '800', color: '#fff', marginBottom: 6 },
+  todayBannerFirst: { fontSize: 14, color: 'rgba(255,255,255,0.85)', fontWeight: '500' },
+  todayBannerRight: { marginLeft: 12 },
 
-  aiCoachingCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: Colors.card, borderRadius: Radius.lg, padding: 14, marginHorizontal: 16, marginBottom: 12, borderWidth: 1, borderColor: Colors.border, ...Shadow.sm },
-  aiCoachingLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  aiCoachingIconWrap: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.mutedBg, alignItems: 'center', justifyContent: 'center' },
-  aiCoachingTitle: { fontSize: 14, fontWeight: '700', color: Colors.foreground },
-  aiCoachingDesc: { fontSize: 14, color: Colors.mutedFg, marginTop: 2 },
-  aiCoachingRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  proBadgeSmall: { backgroundColor: Colors.foreground, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
-  proBadgeSmallText: { color: '#fff', fontSize: 12, fontWeight: '800', letterSpacing: 1 },
+  statsRow3: { flexDirection: 'row', marginHorizontal: 16, gap: 8, marginBottom: 14 },
+  stat3Card: {
+    flex: 1, backgroundColor: '#fff', borderRadius: 16,
+    padding: 14, alignItems: 'center',
+    borderWidth: 1, borderColor: '#EDE0D4',
+  },
+  stat3CardAlert: { borderColor: '#FCA5A5', backgroundColor: '#FFF5F5' },
+  stat3CardWarn: { borderColor: '#FCD34D', backgroundColor: '#FFFBF0' },
+  stat3Value: { fontSize: 26, fontWeight: '800', color: '#3E2B22', marginBottom: 4 },
+  stat3Label: { fontSize: 12, color: '#8B7355', fontWeight: '500' },
+
+  alertCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    marginHorizontal: 16, marginBottom: 8,
+    backgroundColor: '#fff', borderRadius: 16,
+    paddingHorizontal: 14, paddingVertical: 13,
+    borderWidth: 1, borderColor: '#EDE0D4',
+  },
+  alertIconWrap: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  alertTitle: { fontSize: 14, fontWeight: '700', color: '#3E2B22' },
+  alertSub: { fontSize: 12, color: '#8B7355', marginTop: 2 },
+
+  aiCard: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: '#FBF2EF', borderRadius: 16,
+    padding: 14, marginHorizontal: 16, marginTop: 6, marginBottom: 22,
+    borderWidth: 1, borderColor: '#EDE0D4',
+  },
+  aiCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  aiIconWrap: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#EDE0D4', alignItems: 'center', justifyContent: 'center' },
+  aiCardTitle: { fontSize: 14, fontWeight: '700', color: '#3E2B22' },
+  aiCardDesc: { fontSize: 13, color: '#8B7355', marginTop: 2 },
+  proBadge: { backgroundColor: '#3E2B22', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
+  proBadgeText: { color: '#fff', fontSize: 11, fontWeight: '800', letterSpacing: 1 },
+
   sectionHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     marginHorizontal: 16, marginBottom: 10,
   },
-  sectionTitle: { fontSize: 17, fontWeight: '600', color: Colors.foreground },
+  sectionTitle: { fontSize: 17, fontWeight: '700', color: '#3E2B22' },
 
   lessonCardsList: { paddingHorizontal: 16, marginBottom: 16 },
-  memberCard: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card,
-    borderRadius: Radius.md, padding: 14, marginBottom: 8,
-    borderWidth: 1, borderColor: Colors.border,
-    ...Shadow.sm,
+  lessonCard: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
+    borderRadius: 16, padding: 14, marginBottom: 8,
+    borderWidth: 1, borderColor: '#EDE0D4',
   },
-  memberCardAttended: {
-    backgroundColor: '#ECFDF5', borderColor: '#A7F3D0',
-  },
-  memberCardAbsent: {
-    backgroundColor: '#fff1f2', borderColor: '#fecdd3',
-  },
-  timeBadge: {
-    marginRight: 12, minWidth: 52, justifyContent: 'center',
-  },
-  timeText: { fontSize: 15, fontWeight: '600', color: Colors.foreground },
-  memberInfo: { flex: 1 },
-  memberNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
-  memberName: { fontSize: 15, fontWeight: '600', color: Colors.foreground },
-  levelBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: Colors.mutedBg },
-  levelText: { fontSize: 11, fontWeight: '500', color: Colors.mutedFg },
-  packageName: { fontSize: 13, color: Colors.placeholder, marginBottom: 4 },
-  creditsRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  creditsText: { fontSize: 14, fontWeight: '500' },
+  lessonCardAttended: { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' },
+  lessonCardAbsent: { backgroundColor: '#fff1f2', borderColor: '#fecdd3' },
+  lessonTimeBadge: { marginRight: 12, minWidth: 52, justifyContent: 'center' },
+  lessonTimeText: { fontSize: 15, fontWeight: '700', color: '#3E2B22' },
+  lessonInfo: { flex: 1 },
+  lessonMemberName: { fontSize: 15, fontWeight: '700', color: '#3E2B22' },
+  levelBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  levelText: { fontSize: 11, fontWeight: '600' },
+  lessonPackageName: { fontSize: 13, color: '#8B7355', marginBottom: 4 },
+  creditsText: { fontSize: 13, fontWeight: '500' },
   deductionBadge: { backgroundColor: '#fee2e2', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8 },
-  deductionBadgeText: { fontSize: 12, color: Colors.destructive, fontWeight: '700' },
+  deductionBadgeText: { fontSize: 12, color: '#D9534F', fontWeight: '700' },
 
   attendBtns: { flexDirection: 'row', gap: 6, marginLeft: 10 },
   attendBtn: {
-    width: 52, paddingVertical: 8, borderRadius: 10,
-    borderWidth: 1.5, borderColor: Colors.primary,
-    justifyContent: 'center', alignItems: 'center',
-    backgroundColor: 'transparent',
+    width: 52, minHeight: 48, paddingVertical: 8, borderRadius: 12,
+    borderWidth: 1.5, borderColor: '#C0755A',
+    justifyContent: 'center', alignItems: 'center', backgroundColor: 'transparent',
   },
-  attendBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  attendBtnLabel: { fontSize: 12, fontWeight: '700', color: Colors.primary },
+  attendBtnActive: { backgroundColor: '#C0755A', borderColor: '#C0755A' },
+  attendBtnLabel: { fontSize: 11, fontWeight: '700', color: '#C0755A' },
   absentBtn: {
-    width: 52, paddingVertical: 8, borderRadius: 10,
+    width: 52, minHeight: 48, paddingVertical: 8, borderRadius: 12,
     borderWidth: 1.5, borderColor: '#EF4444',
-    justifyContent: 'center', alignItems: 'center',
-    backgroundColor: 'transparent',
+    justifyContent: 'center', alignItems: 'center', backgroundColor: 'transparent',
   },
   absentBtnActive: { backgroundColor: '#EF4444', borderColor: '#EF4444' },
-  absentBtnLabel: { fontSize: 12, fontWeight: '700', color: Colors.destructive },
+  absentBtnLabel: { fontSize: 11, fontWeight: '700', color: '#D9534F' },
 
   emptyCard: {
-    alignItems: 'center', backgroundColor: Colors.card, borderRadius: Radius.lg,
+    alignItems: 'center', backgroundColor: '#fff', borderRadius: 18,
     marginHorizontal: 16, padding: 40, marginBottom: 16,
-    ...Shadow.sm,
+    borderWidth: 1, borderColor: '#EDE0D4',
   },
-  emptyText: { fontSize: 14, color: Colors.placeholder, fontWeight: '500', marginTop: 12, marginBottom: 16 },
+  emptyText: { fontSize: 14, color: '#8B7355', fontWeight: '500', marginTop: 12, marginBottom: 16 },
   addLessonBtn: {
-    backgroundColor: Colors.primary, paddingHorizontal: 20, paddingVertical: 10, borderRadius: Radius.md,
+    backgroundColor: '#C0755A', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10,
   },
-  addLessonBtnText: { color: Colors.white, fontWeight: '700', fontSize: 14 },
+  addLessonBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+
   autoGenBanner: {
-    backgroundColor: '#FBF2EF', borderRadius: Radius.md,
+    backgroundColor: '#FBF2EF', borderRadius: 16,
     marginHorizontal: 16, padding: 14, marginBottom: 12,
-    borderWidth: 1, borderColor: '#f0c4b4',
+    borderWidth: 1, borderColor: '#EDE0D4',
   },
   autoGenHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  autoGenTitle: { fontSize: 15, fontWeight: '700', color: '#1B2E4B' },
+  autoGenTitle: { fontSize: 15, fontWeight: '700', color: '#3E2B22' },
   autoGenItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
-  autoGenTime: { fontSize: 14, fontWeight: '700', color: '#1B2E4B', minWidth: 44 },
-  autoGenName: { fontSize: 14, color: Colors.foreground, fontWeight: '500' },
-  autoGenBtn: { marginTop: 10, backgroundColor: Colors.primary, borderRadius: Radius.sm, padding: 10, alignItems: 'center' },
-  autoGenBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
+  autoGenTime: { fontSize: 14, fontWeight: '700', color: '#3E2B22', minWidth: 44 },
+  autoGenName: { fontSize: 14, color: '#3E2B22', fontWeight: '500' },
+  autoGenBtn: { marginTop: 10, backgroundColor: '#C0755A', borderRadius: 10, padding: 10, alignItems: 'center' },
+  autoGenBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+
   chatHintBubble: {
-    position: 'absolute', bottom: 92, right: 12,
-    backgroundColor: Colors.card, borderRadius: 12, padding: 12,
+    position: 'absolute', right: 12,
+    backgroundColor: '#fff', borderRadius: 12, padding: 12,
     flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    maxWidth: 260, borderWidth: 1, borderColor: Colors.border,
-    ...Shadow.sm,
+    maxWidth: 260, borderWidth: 1, borderColor: '#EDE0D4',
+    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3,
   },
-  chatHintText: { fontSize: 14, color: Colors.mutedFg, lineHeight: 22 },
+  chatHintText: { fontSize: 13, color: '#8B7355', lineHeight: 20 },
   chatFab: {
-    position: 'absolute', bottom: 24, right: 20,
+    position: 'absolute', right: 20,
     width: 56, height: 56, borderRadius: 28,
-    backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center',
-    ...Shadow.md,
+    backgroundColor: '#C0755A', justifyContent: 'center', alignItems: 'center',
+    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 5,
   },
 
-  // 결석 모달
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 },
   modalHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20, paddingVertical: 16,
-    borderBottomWidth: 1, borderBottomColor: Colors.border,
+    borderBottomWidth: 1, borderBottomColor: '#EDE0D4',
   },
-  modalTitle: { fontSize: 17, fontWeight: '700', color: Colors.foreground },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: '#3E2B22' },
   modalMemberInfo: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingHorizontal: 20, paddingVertical: 12,
-    backgroundColor: Colors.background, marginHorizontal: 16, borderRadius: Radius.md, marginTop: 12,
+    backgroundColor: '#F7F0E9', marginHorizontal: 16, borderRadius: 12, marginTop: 12,
   },
-  modalMemberName: { fontSize: 15, fontWeight: '700', color: Colors.foreground },
-  modalMemberSub: { fontSize: 14, color: Colors.mutedFg, marginLeft: 2 },
-  modalSectionLabel: { fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginTop: 16, marginBottom: 8, marginHorizontal: 20 },
+  modalMemberName: { fontSize: 15, fontWeight: '700', color: '#3E2B22' },
+  modalMemberSub: { fontSize: 13, color: '#8B7355', marginLeft: 2 },
+  modalSectionLabel: { fontSize: 13, fontWeight: '700', color: '#8B7355', marginTop: 16, marginBottom: 8, marginHorizontal: 20 },
   optionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginHorizontal: 20 },
   optionChip: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.full,
-    backgroundColor: Colors.mutedBg, borderWidth: 1.5, borderColor: Colors.border,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: '#F7F0E9', borderWidth: 1.5, borderColor: '#EDE0D4',
   },
-  optionChipActive: { backgroundColor: Colors.navy, borderColor: Colors.navy },
-  optionChipText: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg },
+  optionChipActive: { backgroundColor: '#3E2B22', borderColor: '#3E2B22' },
+  optionChipText: { fontSize: 13, fontWeight: '600', color: '#8B7355' },
   optionChipTextActive: { color: '#fff' },
   deductionRow: { flexDirection: 'row', gap: 8, marginHorizontal: 20 },
   deductionChip: {
-    flex: 1, paddingVertical: 12, borderRadius: Radius.md, alignItems: 'center',
-    backgroundColor: Colors.mutedBg, borderWidth: 1.5, borderColor: Colors.border,
+    flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center',
+    backgroundColor: '#F7F0E9', borderWidth: 1.5, borderColor: '#EDE0D4',
   },
-  deductionChipText: { fontSize: 13, fontWeight: '700', color: Colors.mutedFg },
-  deductionHint: { fontSize: 14, color: Colors.destructive, marginHorizontal: 20, marginTop: 8, fontWeight: '500' },
+  deductionChipText: { fontSize: 13, fontWeight: '700', color: '#8B7355' },
+  deductionHint: { fontSize: 13, color: '#D9534F', marginHorizontal: 20, marginTop: 8, fontWeight: '500' },
   saveBtn: {
-    margin: 16, marginTop: 20, backgroundColor: Colors.primary,
-    borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center',
+    margin: 16, marginTop: 20, backgroundColor: '#C0755A',
+    borderRadius: 12, paddingVertical: 14, alignItems: 'center',
   },
-  saveBtnDis: { backgroundColor: Colors.iconMuted },
+  saveBtnDis: { backgroundColor: '#C4B49E' },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  // 이탈 위험 카드
-  churnCard: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginHorizontal: 16, marginBottom: 10,
-    backgroundColor: Colors.card, borderRadius: Radius.lg,
-    paddingHorizontal: 14, paddingVertical: 12,
-    borderWidth: 1, borderColor: Colors.border,
-    borderLeftWidth: 3, borderLeftColor: Colors.foreground,
-  },
-  churnCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  churnIconWrap: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: Colors.mutedBg, alignItems: 'center', justifyContent: 'center',
-  },
-  churnTitle: { fontSize: 14, fontWeight: '700', color: Colors.foreground },
-  churnSub: { fontSize: 14, color: Colors.mutedFg, marginTop: 1 },
-  trialCard: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginHorizontal: 16, marginBottom: 10,
-    backgroundColor: Colors.card, borderRadius: Radius.lg,
-    paddingHorizontal: 14, paddingVertical: 12,
-    borderWidth: 1, borderColor: Colors.border,
-    borderLeftWidth: 3, borderLeftColor: Colors.foreground,
-  },
-  interestCard: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginHorizontal: 16, marginBottom: 10,
-    backgroundColor: Colors.card, borderRadius: Radius.lg,
-    paddingHorizontal: 14, paddingVertical: 12,
-    borderWidth: 1, borderColor: Colors.border,
-    borderLeftWidth: 3, borderLeftColor: Colors.foreground,
-  },
-  interestRegBtn: {
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
-    backgroundColor: '#7C3AED',
-  },
-  interestRegBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
-  interestDismissBtn: {
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
-    backgroundColor: Colors.mutedBg, borderWidth: 1, borderColor: Colors.border,
-  },
-  interestDismissBtnText: { fontSize: 14, fontWeight: '600', color: Colors.mutedFg },
-  // 모달 회원 그리드
+
   modalMemberRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingHorizontal: 20, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: Colors.border,
+    borderBottomWidth: 1, borderBottomColor: '#EDE0D4',
   },
   modalMemberAvatar: {
     width: 36, height: 36, borderRadius: 18,
-    backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#C0755A', alignItems: 'center', justifyContent: 'center',
   },
   modalMemberAvatarText: { fontSize: 14, fontWeight: '800', color: '#fff' },
+  interestRegBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: '#C0755A' },
+  interestRegBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  interestDismissBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: '#F7F0E9', borderWidth: 1, borderColor: '#EDE0D4' },
+  interestDismissBtnText: { fontSize: 13, fontWeight: '600', color: '#8B7355' },
 });
