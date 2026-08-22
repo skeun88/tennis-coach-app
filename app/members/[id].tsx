@@ -926,6 +926,10 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     { key: 'messages', label: '메시지', icon: 'chatbubble-outline' },
   ];
 
+  const memberLevelColor = LEVEL_COLORS[member.level as MemberLevel] ?? Colors.level.입문;
+  const memberRemaining = (member as any).remaining_credits ?? 0;
+  const isTrial = !!(member as any).is_trial;
+
   const ATTENDANCE_STATUS_COLOR: Record<string, string> = { '출석': Colors.primary, '결석': Colors.destructive, '지각': Colors.warning, '조퇴': Colors.accentWarm, '보강예정': Colors.accentWarm };
 
   return (
@@ -949,21 +953,55 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       {/* Profile Header — 메시지 탭에서 숨김 */}
       {tab !== 'messages' && (
         <View style={styles.profileHeader}>
-          <View style={[styles.bigAvatar, { backgroundColor: LEVEL_COLORS[member.level as MemberLevel] ?? Colors.level.입문 }]}>
-            <Text style={styles.bigAvatarText}>{member.name.slice(0, 1)}</Text>
-          </View>
-          <Text style={styles.profileName}>{member.name}</Text>
-          <View style={styles.profileBadgeRow}>
-            <View style={[styles.levelBadge, { backgroundColor: (LEVEL_COLORS[member.level as MemberLevel] ?? Colors.level.입문) + '33' }]}>
-              <Text style={[styles.levelText, { color: LEVEL_COLORS[member.level as MemberLevel] ?? Colors.level.입문 }]}>{member.level}</Text>
+          <View style={styles.profileHeaderTop}>
+            {/* 아바타 */}
+            <View style={[styles.bigAvatar, { backgroundColor: memberLevelColor + '22' }]}>
+              <Text style={[styles.bigAvatarText, { color: memberLevelColor }]}>{member.name.slice(0, 1)}</Text>
             </View>
-            {!member.is_active && <View style={styles.inactiveBadge}><Text style={styles.inactiveText}>비활성</Text></View>}
+            {/* 이름+뱃지 영역 */}
+            <View style={{ flex: 1 }}>
+              <View style={styles.profileNameRow}>
+                <Text style={styles.profileName}>{member.name}</Text>
+                {!member.is_active && (
+                  <View style={styles.inactiveBadge}><Text style={styles.inactiveText}>비활성</Text></View>
+                )}
+              </View>
+              <View style={styles.profileBadgeRow}>
+                <View style={[styles.levelBadge, { backgroundColor: memberLevelColor + '18', borderColor: memberLevelColor + '40' }]}>
+                  <Text style={[styles.levelText, { color: memberLevelColor }]}>{member.level}</Text>
+                </View>
+                {isTrial && (
+                  <View style={styles.trialMiniTag}>
+                    <Text style={styles.trialMiniText}>체험</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.profileSub}>
+                {isTrial
+                  ? `체험 ${(member as any).trial_lesson_count ?? 0}회`
+                  : `잔여 ${memberRemaining}회`
+                }
+              </Text>
+            </View>
+            {/* 크레딧 표시 */}
+            <View style={[
+              styles.headerCreditsBadge,
+              memberRemaining <= 2 && !isTrial && styles.headerCreditsBadgeUrgent,
+            ]}>
+              <Text style={[
+                styles.headerCreditsNum,
+                memberRemaining <= 2 && !isTrial && styles.headerCreditsNumUrgent,
+              ]}>
+                {isTrial ? '체험' : `${memberRemaining}`}
+              </Text>
+              {!isTrial && <Text style={[styles.headerCreditsLabel, memberRemaining <= 2 && styles.headerCreditsNumUrgent]}>회</Text>}
+            </View>
           </View>
           <TouchableOpacity
             style={styles.aiBtn}
             onPress={() => router.push({ pathname: '/members/ai-analysis', params: { memberId: member.id, memberName: member.name, memberLevel: member.level } })}
           >
-            <Ionicons name="sparkles" size={14} color="#fff" />
+            <Ionicons name="sparkles" size={13} color={Colors.navy} />
             <Text style={styles.aiBtnText}>AI 레슨 분석</Text>
           </TouchableOpacity>
         </View>
@@ -1874,21 +1912,57 @@ function InfoRow({ icon, label, value }: { icon: string; label: string; value: s
 
 const styles = StyleSheet.create({
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  profileHeader: { backgroundColor: Colors.primary, alignItems: 'center', paddingVertical: 24, paddingHorizontal: 16 },
-  bigAvatar: { width: 72, height: 72, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 10, backgroundColor: Colors.primary },
-  bigAvatarText: { fontSize: 30, fontWeight: '800', color: '#fff' },
-  profileName: { fontSize: 22, fontWeight: '800', color: '#fff', marginBottom: 8 },
-  profileBadgeRow: { flexDirection: 'row', gap: 8 },
-  levelBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 },
-  levelText: { fontSize: 13, fontWeight: '700' },
-  inactiveBadge: { backgroundColor: 'rgba(239,68,68,0.2)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 },
-  inactiveText: { color: Colors.destructive, fontSize: 13, fontWeight: '700' },
-  aiBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6, marginTop: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
-  aiBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+
+  profileHeader: {
+    backgroundColor: Colors.navy,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 16,
+  },
+  profileHeaderTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginBottom: 12,
+  },
+  bigAvatar: {
+    width: 60, height: 60, borderRadius: 14,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  bigAvatarText: { fontSize: 24, fontWeight: '800' },
+  profileNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  profileName: { fontSize: 20, fontWeight: '800', color: '#fff' },
+  profileBadgeRow: { flexDirection: 'row', gap: 6, marginBottom: 4 },
+  levelBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, borderWidth: 1 },
+  levelText: { fontSize: 11, fontWeight: '700' },
+  trialMiniTag: { backgroundColor: 'rgba(253,211,77,0.2)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  trialMiniText: { fontSize: 11, fontWeight: '700', color: '#F59E0B' },
+  profileSub: { fontSize: 13, color: 'rgba(255,255,255,0.5)' },
+  inactiveBadge: { backgroundColor: 'rgba(239,68,68,0.2)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  inactiveText: { color: '#FCA5A5', fontSize: 11, fontWeight: '700' },
+
+  headerCreditsBadge: {
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center', minWidth: 52,
+  },
+  headerCreditsBadgeUrgent: { backgroundColor: 'rgba(239,68,68,0.2)' },
+  headerCreditsNum: { fontSize: 20, fontWeight: '800', color: '#fff' },
+  headerCreditsNumUrgent: { color: '#FCA5A5' },
+  headerCreditsLabel: { fontSize: 11, color: 'rgba(255,255,255,0.6)', fontWeight: '600' },
+
+  aiBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: '#fff',
+    borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7,
+    alignSelf: 'flex-start',
+  },
+  aiBtnText: { color: Colors.navy, fontSize: 13, fontWeight: '700' },
+
   tabRow: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: Colors.border },
-  tabBtn: { flex: 1, alignItems: 'center', paddingVertical: 10, flexDirection: 'row', justifyContent: 'center', gap: 4 },
+  tabBtn: { flex: 1, alignItems: 'center', paddingVertical: 11, flexDirection: 'column', justifyContent: 'center', gap: 2 },
   tabBtnActive: { borderBottomWidth: 2, borderBottomColor: Colors.primary },
-  tabLabel: { fontSize: 14, color: Colors.mutedFg, fontWeight: '600' },
+  tabLabel: { fontSize: 11, color: Colors.mutedFg, fontWeight: '600' },
   tabLabelActive: { color: Colors.primary },
   content: { flex: 1, backgroundColor: Colors.background },
   card: { backgroundColor: '#fff', margin: 16, borderRadius: 12, padding: 16 },
