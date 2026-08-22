@@ -20,15 +20,13 @@ type FilterType = '전체' | '활성' | '체험' | '미납' | '만료예정';
 
 const FILTERS: FilterType[] = ['전체', '활성', '체험', '미납', '만료예정'];
 
-const LEVEL_COLORS: Record<string, string> = {
-  '입문': '#B0B7C3',
-  '초급': Colors.accentWarm,
-  '중급': Colors.primary,
-  '상급': '#B85A42',
-  '선수': Colors.navy,
+const LEVEL_BADGE: Record<string, { bg: string; text: string }> = {
+  '입문': { bg: '#FBF2EF', text: '#C0755A' },
+  '초급': { bg: '#F0E0D6', text: '#A86045' },
+  '중급': { bg: '#E4C8B8', text: '#8A4A34' },
+  '상급': { bg: '#D4A898', text: '#6B3522' },
+  '선수': { bg: '#3E2B22', text: '#F7F0E9' },
 };
-
-const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
 
 export default function MembersScreen() {
   const router = useRouter();
@@ -38,6 +36,7 @@ export default function MembersScreen() {
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterType>('활성');
+  const [packageCount, setPackageCount] = useState(0);
 
   async function loadMembers() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -88,8 +87,20 @@ export default function MembersScreen() {
     setMembers(enriched);
   }
 
+  async function loadPackageCount() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { count } = await supabase
+      .from('lesson_packages')
+      .select('id', { count: 'exact', head: true })
+      .eq('coach_id', user.id)
+      .eq('is_active', true);
+    setPackageCount(count ?? 0);
+  }
+
   useFocusEffect(useCallback(() => {
     loadMembers();
+    loadPackageCount();
   }, [filter]));
 
   useEffect(() => {
@@ -101,60 +112,52 @@ export default function MembersScreen() {
     setFiltered(q ? base.filter(m => m.name.toLowerCase().includes(q) || m.phone.includes(q)) : base);
   }, [search, members, filter]);
 
-  const activeCount = members.filter(m => m.is_active).length;
-
-  function getMemberSubtitle(item: MemberWithUnread): string {
-    if ((item as any).is_trial) {
-      const started = (item as any).trial_started_at;
-      const days = started
-        ? Math.floor((Date.now() - new Date(started + 'T00:00:00').getTime()) / 86400000)
-        : null;
-      const count = (item as any).trial_lesson_count ?? 0;
-      return days !== null ? `체험 ${count}회 · D+${days}일` : `체험 ${count}회`;
-    }
-    const days: number[] = (item as any).fixed_schedule_days ?? [];
-    const remaining = (item as any).remaining_credits ?? 0;
-    const parts: string[] = [];
-    if (days.length > 0) parts.push(`주${days.length}회`);
-    if (parts.length > 0 || remaining >= 0) {
-      parts.push(`잔여 ${remaining}회`);
-    }
-    return parts.join(' · ');
-  }
-
-  function getCreditsDisplay(item: MemberWithUnread): { label: string; urgent: boolean; trial: boolean } {
-    if ((item as any).is_trial) return { label: '체험', urgent: false, trial: true };
-    const remaining = (item as any).remaining_credits ?? 0;
-    return { label: `${remaining}회`, urgent: remaining <= 2, trial: false };
-  }
-
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* 헤더 */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerEyebrow}>MEMBERS</Text>
           <Text style={styles.headerTitle}>회원</Text>
-          <Text style={styles.headerSub}>{activeCount}명 활성</Text>
+          <Text style={styles.headerSub}>총 {members.length}명</Text>
         </View>
-        <TouchableOpacity style={styles.addBtn} onPress={() => router.push('/members/new')}>
-          <Ionicons name="add" size={22} color="#fff" />
-        </TouchableOpacity>
       </View>
+
+      {/* 레슨권 관리 카드 */}
+      <TouchableOpacity
+        style={styles.packageCard}
+        onPress={() => router.push('/lesson-packages/')}
+        activeOpacity={0.85}
+      >
+        <View style={styles.packageLeft}>
+          <View style={styles.packageIconBox}>
+            <Ionicons name="card-outline" size={20} color="#C0755A" />
+          </View>
+          <View>
+            <Text style={styles.packageTitle}>레슨권 관리</Text>
+            <Text style={styles.packageSub}>
+              {packageCount > 0 ? `${packageCount}종 등록` : '등록된 레슨권 없음'}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.packageRight}>
+          <Text style={styles.packageAction}>관리하기</Text>
+          <Ionicons name="chevron-forward" size={15} color="#C0755A" />
+        </View>
+      </TouchableOpacity>
 
       {/* 검색 */}
       <View style={styles.searchWrap}>
-        <Ionicons name="search" size={15} color={Colors.mutedFg} style={{ marginRight: 8 }} />
+        <Ionicons name="search" size={16} color="#8B7355" style={{ marginRight: 8 }} />
         <TextInput
           style={styles.searchInput}
-          placeholder="이름 또는 전화번호"
-          placeholderTextColor={Colors.placeholder}
+          placeholder="이름 또는 전화번호 검색"
+          placeholderTextColor="#C4B49E"
           value={search}
           onChangeText={setSearch}
         />
         {search.length > 0 && (
           <TouchableOpacity onPress={() => setSearch('')}>
-            <Ionicons name="close-circle" size={16} color={Colors.placeholder} />
+            <Ionicons name="close-circle" size={16} color="#C4B49E" />
           </TouchableOpacity>
         )}
       </View>
@@ -186,160 +189,141 @@ export default function MembersScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={async () => { setRefreshing(true); await loadMembers(); setRefreshing(false); }}
-            tintColor={Colors.primary}
+            tintColor="#C0755A"
           />
         }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Ionicons name="people-outline" size={44} color={Colors.placeholder} />
+            <Ionicons name="people-outline" size={48} color="#C4B49E" />
             <Text style={styles.emptyText}>회원이 없습니다</Text>
           </View>
         }
-        renderItem={({ item }) => {
+        renderItem={({ item, index }) => {
           const initials = item.name.slice(0, 1);
-          const levelColor = LEVEL_COLORS[item.level] ?? Colors.mutedFg;
-          const credits = getCreditsDisplay(item);
-          const subtitle = getMemberSubtitle(item);
+          const badge = LEVEL_BADGE[item.level] ?? LEVEL_BADGE['입문'];
+          const isFirst = index === 0;
+          const isLast = index === filtered.length - 1;
           const hasUnread = (item.unread_count ?? 0) > 0;
-
           return (
             <TouchableOpacity
-              style={styles.memberRow}
+              style={[
+                styles.memberRow,
+                isFirst && styles.memberRowFirst,
+                isLast && styles.memberRowLast,
+                !isLast && styles.memberRowDivider,
+              ]}
               onPress={() => router.push(`/members/${item.id}`)}
               activeOpacity={0.7}
             >
-              {/* 아바타 */}
-              <View style={[styles.avatar, { backgroundColor: levelColor + '22' }]}>
-                <Text style={[styles.avatarText, { color: levelColor }]}>{initials}</Text>
+              <View style={[styles.memberAvatar, { backgroundColor: badge.bg }]}>
+                <Text style={[styles.memberAvatarText, { color: badge.text }]}>{initials}</Text>
               </View>
-
-              {/* 정보 */}
               <View style={styles.memberInfo}>
-                <View style={styles.nameRow}>
+                <View style={styles.memberNameRow}>
                   <Text style={styles.memberName}>{item.name}</Text>
-                  <View style={[styles.levelBadge, { backgroundColor: levelColor + '18', borderColor: levelColor + '40' }]}>
-                    <Text style={[styles.levelText, { color: levelColor }]}>{item.level}</Text>
+                  <View style={[styles.levelBadge, { backgroundColor: badge.bg }]}>
+                    <Text style={[styles.levelText, { color: badge.text }]}>{item.level}</Text>
                   </View>
                   {hasUnread && <View style={styles.unreadDot} />}
                 </View>
-                <Text style={styles.memberSub}>{subtitle}</Text>
+                <Text style={styles.memberPhone}>{item.phone}</Text>
               </View>
-
-              {/* 크레딧 뱃지 */}
-              <View style={[
-                styles.creditsBadge,
-                credits.urgent && styles.creditsBadgeUrgent,
-                credits.trial && styles.creditsBadgeTrial,
-              ]}>
-                <Text style={[
-                  styles.creditsText,
-                  credits.urgent && styles.creditsTextUrgent,
-                  credits.trial && styles.creditsTextTrial,
-                ]}>{credits.label}</Text>
-              </View>
+              <Ionicons name="chevron-forward" size={16} color="#C4B49E" />
             </TouchableOpacity>
           );
         }}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
       />
+
+      {/* FAB */}
+      <TouchableOpacity style={[styles.fab, { bottom: insets.bottom + 16 }]} onPress={() => router.push('/members/new')}>
+        <Ionicons name="person-add" size={24} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: '#F7F0E9' },
 
   header: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    backgroundColor: Colors.navy,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 20,
+    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 14,
   },
-  headerEyebrow: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.45)',
-    letterSpacing: 2,
-    marginBottom: 2,
-  },
-  headerTitle: { fontSize: 30, fontWeight: '800', color: '#fff' },
-  headerSub: { fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
+  headerTitle: { fontSize: 28, fontWeight: '800', color: '#3E2B22' },
+  headerSub: { fontSize: 14, color: '#8B7355', marginTop: 2 },
 
-  addBtn: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+  packageCard: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: '#FBF2EF',
+    marginHorizontal: 16, marginBottom: 12,
+    borderRadius: 18, paddingHorizontal: 16, paddingVertical: 12,
+    borderWidth: 1, borderColor: '#EDE0D4',
   },
+  packageLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  packageIconBox: {
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: '#EDE0D4',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  packageTitle: { fontSize: 14, fontWeight: '700', color: '#3E2B22' },
+  packageSub: { fontSize: 12, color: '#8B7355', marginTop: 1 },
+  packageRight: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  packageAction: { fontSize: 13, fontWeight: '600', color: '#C0755A' },
 
   searchWrap: {
     flexDirection: 'row', alignItems: 'center',
-    marginHorizontal: 16, marginTop: 14, marginBottom: 10,
+    marginHorizontal: 16, marginBottom: 10,
     backgroundColor: '#fff', borderRadius: 12,
-    paddingHorizontal: 14, paddingVertical: 11,
-    borderWidth: 1, borderColor: Colors.border,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderWidth: 1, borderColor: '#EDE0D4',
   },
-  searchInput: { flex: 1, fontSize: 14, color: Colors.foreground },
+  searchInput: { flex: 1, fontSize: 14, color: '#3E2B22' },
 
-  filterScroll: { flexGrow: 0, marginBottom: 8 },
+  filterScroll: { flexGrow: 0, marginBottom: 12 },
   filterChips: { paddingHorizontal: 16, gap: 8, flexDirection: 'row' },
   chip: {
     paddingHorizontal: 14, paddingVertical: 7,
     borderRadius: 20, backgroundColor: '#fff',
-    borderWidth: 1, borderColor: Colors.border,
+    borderWidth: 1, borderColor: '#EDE0D4',
   },
-  chipActive: { backgroundColor: Colors.navy, borderColor: Colors.navy },
-  chipText: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg },
+  chipActive: { backgroundColor: '#C0755A', borderColor: '#C0755A' },
+  chipText: { fontSize: 13, fontWeight: '600', color: '#8B7355' },
   chipTextActive: { color: '#fff' },
 
-  listContent: { paddingHorizontal: 16, paddingBottom: 40, paddingTop: 4 },
+  listContent: { paddingHorizontal: 16, paddingBottom: 100 },
 
   memberRow: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#fff', borderRadius: 14,
-    paddingHorizontal: 14, paddingVertical: 12,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+    backgroundColor: '#fff',
+    paddingHorizontal: 16, paddingVertical: 14,
+    minHeight: 76,
   },
-  separator: { height: 8 },
-
-  avatar: {
-    width: 44, height: 44, borderRadius: 11,
+  memberRowFirst: { borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+  memberRowLast: { borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
+  memberRowDivider: { borderBottomWidth: 1, borderBottomColor: '#EDE0D4' },
+  memberAvatar: {
+    width: 44, height: 44, borderRadius: 22,
     justifyContent: 'center', alignItems: 'center',
     marginRight: 12,
   },
-  avatarText: { fontSize: 18, fontWeight: '800' },
-
+  memberAvatarText: { fontSize: 17, fontWeight: '700' },
   memberInfo: { flex: 1 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-  memberName: { fontSize: 15, fontWeight: '700', color: Colors.foreground },
-  levelBadge: {
-    paddingHorizontal: 7, paddingVertical: 2,
-    borderRadius: 6, borderWidth: 1,
-  },
-  levelText: { fontSize: 11, fontWeight: '700' },
+  memberNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 3 },
+  memberName: { fontSize: 15, fontWeight: '700', color: '#3E2B22' },
+  levelBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  levelText: { fontSize: 11, fontWeight: '600' },
   unreadDot: {
     width: 7, height: 7, borderRadius: 3.5,
-    backgroundColor: Colors.primary,
+    backgroundColor: '#C0755A',
   },
-  memberSub: { fontSize: 13, color: Colors.mutedFg },
+  memberPhone: { fontSize: 13, color: '#8B7355' },
 
-  creditsBadge: {
-    paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 8, backgroundColor: Colors.mutedBg,
-    minWidth: 44, alignItems: 'center',
+  empty: { alignItems: 'center', padding: 60 },
+  emptyText: { fontSize: 15, color: '#C4B49E', fontWeight: '500', marginTop: 12 },
+
+  fab: {
+    position: 'absolute', right: 20,
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: '#C0755A', justifyContent: 'center', alignItems: 'center',
+    shadowColor: '#C0755A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 5,
   },
-  creditsBadgeUrgent: { backgroundColor: Colors.destructiveLight },
-  creditsBadgeTrial: { backgroundColor: '#FEF3C7' },
-  creditsText: { fontSize: 13, fontWeight: '700', color: Colors.mutedFg },
-  creditsTextUrgent: { color: Colors.destructive },
-  creditsTextTrial: { color: '#D97706' },
-
-  empty: { alignItems: 'center', paddingTop: 80 },
-  emptyText: { fontSize: 15, color: Colors.placeholder, fontWeight: '500', marginTop: 12 },
 });
