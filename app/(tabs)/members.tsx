@@ -175,7 +175,7 @@ export default function MembersScreen() {
             style={[styles.chip, filter === f && styles.chipActive]}
             onPress={() => setFilter(f)}
           >
-            <Text style={[styles.chipText, filter === f && styles.chipTextActive]}>{f}</Text>
+            <Text numberOfLines={1} style={[styles.chipText, filter === f && styles.chipTextActive]}>{f}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -211,6 +211,7 @@ export default function MembersScreen() {
                 isFirst && styles.memberRowFirst,
                 isLast && styles.memberRowLast,
                 !isLast && styles.memberRowDivider,
+                hasUnread && styles.memberRowUnread,
               ]}
               onPress={() => router.push(`/members/${item.id}`)}
               activeOpacity={0.7}
@@ -224,7 +225,15 @@ export default function MembersScreen() {
                   <View style={[styles.levelBadge, { backgroundColor: badge.bg }]}>
                     <Text style={[styles.levelText, { color: badge.text }]}>{item.level}</Text>
                   </View>
-                  {hasUnread && <View style={styles.unreadDot} />}
+                  {hasUnread && (
+                    <View style={styles.newMsgBadge}>
+                      <Ionicons name="chatbubble" size={10} color="#fff" />
+                      <Text style={styles.newMsgText}>새 메시지</Text>
+                      <View style={styles.newMsgCount}>
+                        <Text style={styles.newMsgCountText}>{item.unread_count}</Text>
+                      </View>
+                    </View>
+                  )}
                 </View>
                 <Text style={styles.memberPhone}>{item.phone}</Text>
               </View>
@@ -279,14 +288,16 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 14, color: '#3E2B22' },
 
   filterScroll: { flexGrow: 0, marginBottom: 12 },
-  filterChips: { paddingHorizontal: 16, gap: 8, flexDirection: 'row' },
+  filterChips: { paddingHorizontal: 16, gap: 8, flexDirection: 'row', alignItems: 'center' },
   chip: {
-    paddingHorizontal: 14, paddingVertical: 7,
+    paddingHorizontal: 15, paddingVertical: 0,
+    minHeight: 40,
     borderRadius: 20, backgroundColor: '#fff',
-    borderWidth: 1, borderColor: '#EDE0D4',
+    borderWidth: 1, borderColor: '#D5C9BC',
+    justifyContent: 'center', alignItems: 'center',
   },
   chipActive: { backgroundColor: '#C0755A', borderColor: '#C0755A' },
-  chipText: { fontSize: 13, fontWeight: '600', color: '#8B7355' },
+  chipText: { fontSize: 14, fontWeight: '600', color: '#3E2B22', lineHeight: 20, includeFontPadding: false },
   chipTextActive: { color: '#fff' },
 
   listContent: { paddingHorizontal: 16, paddingBottom: 100 },
@@ -300,6 +311,7 @@ const styles = StyleSheet.create({
   memberRowFirst: { borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   memberRowLast: { borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
   memberRowDivider: { borderBottomWidth: 1, borderBottomColor: '#EDE0D4' },
+  memberRowUnread: { borderLeftWidth: 3, borderLeftColor: '#C0755A' },
   memberAvatar: {
     width: 44, height: 44, borderRadius: 22,
     justifyContent: 'center', alignItems: 'center',
@@ -311,11 +323,18 @@ const styles = StyleSheet.create({
   memberName: { fontSize: 15, fontWeight: '700', color: '#3E2B22' },
   levelBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   levelText: { fontSize: 11, fontWeight: '600' },
-  unreadDot: {
-    width: 7, height: 7, borderRadius: 3.5,
-    backgroundColor: '#C0755A',
-  },
   memberPhone: { fontSize: 13, color: '#8B7355' },
+  newMsgBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: '#C0755A', borderRadius: 8,
+    paddingHorizontal: 6, paddingVertical: 2,
+  },
+  newMsgText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  newMsgCount: {
+    backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 8,
+    paddingHorizontal: 5, paddingVertical: 1, marginLeft: 2,
+  },
+  newMsgCountText: { color: '#fff', fontSize: 12, fontWeight: '800' },
 
   empty: { alignItems: 'center', padding: 60 },
   emptyText: { fontSize: 15, color: '#C4B49E', fontWeight: '500', marginTop: 12 },
