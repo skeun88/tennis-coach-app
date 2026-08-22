@@ -166,6 +166,7 @@ export default function MembersScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        removeClippedSubviews={false}
         style={styles.filterScroll}
         contentContainerStyle={styles.filterChips}
       >
@@ -287,8 +288,8 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 14, color: '#3E2B22' },
 
-  filterScroll: { flexGrow: 0, marginBottom: 12 },
-  filterChips: { paddingHorizontal: 16, gap: 8, flexDirection: 'row', alignItems: 'center' },
+  filterScroll: { minHeight: 48, marginBottom: 12 },
+  filterChips: { paddingHorizontal: 16, paddingVertical: 4, gap: 8, flexDirection: 'row', alignItems: 'center' },
   chip: {
     paddingHorizontal: 15, paddingVertical: 0,
     minHeight: 40,
