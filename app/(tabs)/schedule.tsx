@@ -33,6 +33,19 @@ const SPINNER_HOURS = Array.from({ length: 18 }, (_, i) => String(i + 6).padStar
 const SPINNER_MINUTES = ['00', '10', '20', '30', '40', '50'];
 const DURATION_OPTIONS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
 
+// 스케줄 화면 전용 팔레트 (크림/테라코타)
+const S_BG = '#F7F0E9';
+const S_TERRA = '#C0755A';
+const S_TEXT = '#3E2B22';
+const S_TEXT_MUTED = '#A08070';
+const S_BORDER = '#E0CFBF';
+const S_CARD_BG = '#FFFFFF';
+const S_SEG_BG = 'rgba(0,0,0,0.07)';      // 세그먼트 컨트롤 배경
+const S_SCH_BG = '#FAEDE7';               // 예정 카드 배경
+const S_SCH_FG = '#C0755A';               // 예정 카드 글씨
+const S_DONE_BG = '#EDE8E4';              // 완료 카드 배경
+const S_DONE_FG = '#9E8070';              // 완료 카드 글씨
+
 function toKSTDateStr(d: Date): string {
   const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
   return kst.toISOString().split('T')[0];
@@ -107,6 +120,7 @@ export default function ScheduleScreen() {
   const [weekDates, setWeekDates] = useState(getWeekDates);
   const [thisWeekDates, setThisWeekDates] = useState(getThisWeekDates);
   const [weekOffset, setWeekOffset] = useState(0); // 주간 뷰 주 이동 오프셋
+  const [selectedMonthDate, setSelectedMonthDate] = useState<string | null>(null);
 
   // 새 레슨 등록 모달
   const [newModal, setNewModal] = useState(false);
@@ -493,6 +507,37 @@ ${rejectMsg.trim()}`
     handleSelectDate(newDate);
   }
 
+  function getDateNavLabel(): string {
+    if (activeTab === '일일') {
+      return new Date(selectedDate + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' });
+    } else if (activeTab === '주간') {
+      const dates = getOffsetWeekDates(weekOffset);
+      return new Date(dates[0] + 'T00:00:00').toLocaleDateString('ko-KR', { year: 'numeric', month: 'long' });
+    } else {
+      return new Date(monthYear.year, monthYear.month, 1).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long' });
+    }
+  }
+
+  function handleNavPrev() {
+    if (activeTab === '일일') { handleDayNav(-1); }
+    else if (activeTab === '주간') {
+      const newOffset = weekOffset - 1; setWeekOffset(newOffset); loadWeekLessons(getOffsetWeekDates(newOffset));
+    } else {
+      const d = monthYear.month === 0 ? { year: monthYear.year - 1, month: 11 } : { year: monthYear.year, month: monthYear.month - 1 };
+      setMonthYear(d); loadMonthLessons(d.year, d.month);
+    }
+  }
+
+  function handleNavNext() {
+    if (activeTab === '일일') { handleDayNav(1); }
+    else if (activeTab === '주간') {
+      const newOffset = weekOffset + 1; setWeekOffset(newOffset); loadWeekLessons(getOffsetWeekDates(newOffset));
+    } else {
+      const d = monthYear.month === 11 ? { year: monthYear.year + 1, month: 0 } : { year: monthYear.year, month: monthYear.month + 1 };
+      setMonthYear(d); loadMonthLessons(d.year, d.month);
+    }
+  }
+
   // ── 시간 그리드 탭 → 새 레슨 등록 ──────────────────────────
   function handleGridTap(y: number) {
     const mins = yToMinutes(y);
@@ -581,17 +626,18 @@ ${rejectMsg.trim()}`
   }
 
   // ── 드래그 앤 드랍 ────────────────────────────────────────────
-  async function handleWeekDropLesson(lessonId: string, dateStr: string, newStartMinutes: number) {
-    const dayLessons = weekData.find(d => d.date === dateStr)?.lessons ?? [];
-    const lesson = dayLessons.find(l => l.id === lessonId);
+  async function handleWeekDropLesson(lessonId: string, sourceDateStr: string, targetDateStr: string, newStartMinutes: number) {
+    const sourceLessons = weekData.find(d => d.date === sourceDateStr)?.lessons ?? [];
+    const lesson = sourceLessons.find(l => l.id === lessonId);
     if (!lesson) return;
     const oldStartMin = timeToMinutes(lesson.start_time);
     const duration = timeToMinutes(lesson.end_time) - oldStartMin;
     const clamped = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60 - 10, newStartMinutes));
-    if (Math.abs(clamped - oldStartMin) < 5) return;
+    if (sourceDateStr === targetDateStr && Math.abs(clamped - oldStartMin) < 5) return;
     const newStartStr = minutesToTime(clamped);
     const newEndStr = minutesToTime(clamped + duration);
-    const overlap = dayLessons.find(l => {
+    const targetDayLessons = weekData.find(d => d.date === targetDateStr)?.lessons ?? [];
+    const overlap = targetDayLessons.find(l => {
       if (l.id === lessonId) return false;
       const ls = timeToMinutes(l.start_time), le = timeToMinutes(l.end_time);
       return clamped < le && (clamped + duration) > ls;
@@ -601,14 +647,16 @@ ${rejectMsg.trim()}`
       Alert.alert('시간 충돌', `${overlapName} 레슨(${minutesToTime(timeToMinutes(overlap.start_time))}~${minutesToTime(timeToMinutes(overlap.end_time))})과 겹칩니다.`);
       return;
     }
+    const dateChangeLabel = sourceDateStr !== targetDateStr ? `\n${targetDateStr}` : '';
     Alert.alert(
       '시간 변경',
-      lesson.title + '\n' + minutesToTime(oldStartMin) + ' → ' + newStartStr + '\n\n변경하시겠어요?',
+      lesson.title + dateChangeLabel + '\n' + minutesToTime(oldStartMin) + ' → ' + newStartStr + '\n\n변경하시겠어요?',
       [
         { text: '취소', style: 'cancel' },
         {
           text: '변경', onPress: async () => {
             await supabase.from('lessons').update({
+              date: targetDateStr,
               start_time: newStartStr + ':00',
               end_time: newEndStr + ':00',
             }).eq('id', lessonId);
@@ -802,15 +850,15 @@ ${rejectMsg.trim()}`
               const width = colWidth;
 
               const attStatus = attendanceMap.get(lesson.id);
-              const cardBg = attStatus === 'absent' ? Colors.destructiveLight
-                : attStatus === 'completed' ? Colors.mutedBg
-                : Colors.primaryLight;
-              const cardNameColor = attStatus === 'absent' ? Colors.destructive
-                : attStatus === 'completed' ? Colors.mutedFg
-                : Colors.navy;
-              const cardTimeColor = attStatus === 'absent' ? Colors.destructive
-                : attStatus === 'completed' ? Colors.placeholder
-                : Colors.primary;
+              const cardBg = attStatus === 'absent' ? '#FFE8E8'
+                : attStatus === 'completed' ? S_DONE_BG
+                : S_SCH_BG;
+              const cardNameColor = attStatus === 'absent' ? '#C0393A'
+                : attStatus === 'completed' ? S_DONE_FG
+                : S_SCH_FG;
+              const cardTimeColor = attStatus === 'absent' ? '#C0393A'
+                : attStatus === 'completed' ? S_TEXT_MUTED
+                : S_TERRA;
               return (
                 <DraggableLesson
                   key={lesson.id}
@@ -885,10 +933,6 @@ ${rejectMsg.trim()}`
     const displayDates = getOffsetWeekDates(weekOffset);
     const gridHeight = (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT;
     const DAYS_KO = ['월', '화', '수', '목', '금', '토', '일'];
-    const monthLabel = (() => {
-      const d = new Date(displayDates[0] + 'T00:00:00');
-      return d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long' });
-    })();
 
     // 레슨을 날짜별로 그룹핑
     const lessonsByDate = new Map<string, LessonWithMembers[]>();
@@ -903,34 +947,7 @@ ${rejectMsg.trim()}`
     const todayInView = displayDates.findIndex(d => d === today);
 
     return (
-      <View style={{ flex: 1, backgroundColor: Colors.background }}>
-        {/* 주 네비게이션 헤더 */}
-        <View style={styles.weekNavBar}>
-          <TouchableOpacity style={styles.weekNavBtn} onPress={() => {
-            const newOffset = weekOffset - 1;
-            setWeekOffset(newOffset);
-            loadWeekLessons(getOffsetWeekDates(newOffset));
-          }}>
-            <Ionicons name="chevron-back" size={18} color={Colors.navy} />
-          </TouchableOpacity>
-          <Text style={styles.weekNavTitle}>{monthLabel}</Text>
-          <TouchableOpacity style={styles.weekNavBtn} onPress={() => {
-            const newOffset = weekOffset + 1;
-            setWeekOffset(newOffset);
-            loadWeekLessons(getOffsetWeekDates(newOffset));
-          }}>
-            <Ionicons name="chevron-forward" size={18} color={Colors.navy} />
-          </TouchableOpacity>
-          {weekOffset !== 0 && (
-            <TouchableOpacity style={styles.weekTodayBtn} onPress={() => {
-              setWeekOffset(0);
-              loadWeekLessons(getOffsetWeekDates(0));
-            }}>
-              <Text style={styles.weekTodayBtnText}>오늘</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
+      <View style={{ flex: 1, backgroundColor: S_BG }}>
         {/* 요일 헤더 */}
         <View style={[styles.weekDayHeaderRow, { paddingLeft: TIME_COL }]}>
           {displayDates.map((date, i) => {
@@ -938,8 +955,8 @@ ${rejectMsg.trim()}`
             const isToday = date === today;
             return (
               <View key={date} style={[styles.weekColHeader, { width: COL_W }, isToday && styles.weekColHeaderToday]}>
-                <Text style={[styles.weekColDayName, isToday && styles.weekColDayNameToday]}>{DAYS_KO[i]}</Text>
-                <Text style={[styles.weekColDayNum, isToday && styles.weekColDayNumToday]}>{d.getDate()}</Text>
+                <Text style={[styles.weekColDayName, isToday && { color: '#fff' }]}>{DAYS_KO[i]}</Text>
+                <Text style={[styles.weekColDayNum, isToday && { color: '#fff', fontWeight: '900' as const }]}>{d.getDate()}</Text>
               </View>
             );
           })}
@@ -953,7 +970,7 @@ ${rejectMsg.trim()}`
           scrollEnabled={weekDraggingId === null}
           refreshControl={<RefreshControl refreshing={refreshing}
             onRefresh={async () => { setRefreshing(true); await loadWeekLessons(displayDates); setRefreshing(false); }}
-            tintColor={Colors.navy} />}
+            tintColor={S_TERRA} />}
         >
           <View style={{ height: gridHeight + 20, position: 'relative', flexDirection: 'row' }}>
             {/* 시간 라벨 컬럼 */}
@@ -973,7 +990,7 @@ ${rejectMsg.trim()}`
               const colMap = computeColumns(colLessons);
               return (
                 <View key={date} style={[styles.weekDayColGrid, { width: COL_W, height: gridHeight },
-                  isToday && { backgroundColor: Colors.primary + '10' }]}>
+                  isToday && { backgroundColor: S_TERRA + '14' }]}>
                   {/* 시간 구분선 */}
                   {HOURS.map(h => (
                     <View key={h} style={[styles.weekHourLine, { top: (h - START_HOUR) * HOUR_HEIGHT }]} />
@@ -1014,10 +1031,13 @@ ${rejectMsg.trim()}`
                         isDragging={isDragging}
                         attStatus={attStatus}
                         onPress={() => router.push('/lessons/' + lesson.id as any)}
-                        onDragEnd={(dy) => {
+                        onDragEnd={(dy, dx) => {
                           const deltaMin = Math.round((dy / HOUR_HEIGHT) * 60 / 10) * 10;
                           const newMin = startMin + deltaMin;
-                          handleWeekDropLesson(lesson.id, date, newMin);
+                          const currentColX = colIdx * COL_W;
+                          const targetColIdx = Math.min(6, Math.max(0, Math.floor((currentColX + dx + COL_W / 2) / COL_W)));
+                          const targetDate = displayDates[targetColIdx];
+                          handleWeekDropLesson(lesson.id, date, targetDate, newMin);
                         }}
                         onDragStart={() => setWeekDraggingId(lesson.id)}
                         onDragCancel={() => setWeekDraggingId(null)}
@@ -1049,26 +1069,9 @@ ${rejectMsg.trim()}`
     while (cells.length % 7 !== 0) cells.push(null);
 
     return (
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadMonthLessons(year, month); setRefreshing(false); }} tintColor={Colors.navy} />}
+      <ScrollView style={{ flex: 1, backgroundColor: S_BG }} showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadMonthLessons(year, month); setRefreshing(false); }} tintColor={S_TERRA} />}
       >
-        {/* 월 헤더 */}
-        <View style={styles.monthHeader}>
-          <TouchableOpacity style={styles.monthNavBtn} onPress={() => {
-            const d = month === 0 ? { year: year - 1, month: 11 } : { year, month: month - 1 };
-            setMonthYear(d); loadMonthLessons(d.year, d.month);
-          }}>
-            <Ionicons name="chevron-back" size={20} color={Colors.navy} />
-          </TouchableOpacity>
-          <Text style={styles.monthTitle}>{monthLabel}</Text>
-          <TouchableOpacity style={styles.monthNavBtn} onPress={() => {
-            const d = month === 11 ? { year: year + 1, month: 0 } : { year, month: month + 1 };
-            setMonthYear(d); loadMonthLessons(d.year, d.month);
-          }}>
-            <Ionicons name="chevron-forward" size={20} color={Colors.navy} />
-          </TouchableOpacity>
-        </View>
-
         {/* 요일 헤더 */}
         <View style={styles.monthDayHeaders}>
           {['일', '월', '화', '수', '목', '금', '토'].map((d, i) => (
@@ -1088,14 +1091,8 @@ ${rejectMsg.trim()}`
             return (
               <TouchableOpacity
                 key={dateStr}
-                style={[styles.monthCell, isToday && styles.monthCellToday]}
-                onPress={() => {
-                  const weekForDate = getWeekDatesForDate(dateStr);
-                  setWeekDates(weekForDate);
-                  setSelectedDate(dateStr);
-                  setActiveTab('일일');
-                  loadDayLessons(dateStr);
-                }}
+                style={[styles.monthCell, isToday && styles.monthCellToday, selectedMonthDate === dateStr && styles.monthCellSelected]}
+                onPress={() => setSelectedMonthDate(prev => prev === dateStr ? null : dateStr)}
               >
                 <Text style={[
                   styles.monthCellDay,
@@ -1131,52 +1128,87 @@ ${rejectMsg.trim()}`
             <Text style={styles.monthSummaryLabel}>결석</Text>
           </View>
         </View>
+        {/* 선택된 날짜 인라인 레슨 목록 */}
+        {selectedMonthDate && (() => {
+          const dayLessons = monthLessons.get(selectedMonthDate) ?? [];
+          const d = new Date(selectedMonthDate + 'T00:00:00');
+          const label = d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
+          return (
+            <View style={styles.monthInlineList}>
+              <Text style={styles.monthInlineLabel}>{label}</Text>
+              {dayLessons.length === 0 ? (
+                <Text style={styles.monthInlineEmpty}>이 날 레슨 없음</Text>
+              ) : dayLessons.map(lesson => (
+                <TouchableOpacity key={lesson.id} style={styles.monthInlineItem} onPress={() => router.push('/lessons/' + lesson.id as any)}>
+                  <View style={styles.monthInlineItemBar} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.monthInlineItemName} numberOfLines={1}>
+                      {lesson.memberNames.length > 0 ? lesson.memberNames.join(', ') : lesson.title}
+                    </Text>
+                    <Text style={styles.monthInlineItemTime}>
+                      {lesson.start_time.slice(0, 5)} ~ {lesson.end_time.slice(0, 5)}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={S_TEXT_MUTED} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          );
+        })()}
         <View style={{ height: 100 }} />
       </ScrollView>
     );
   }
 
   return (
-    <View style={styles.container}>
-      {/* 탭 */}
-      <View style={[styles.tabRow, { paddingTop: insets.top + 8 }]}>
-        {(['일일', '주간', '월간'] as ViewTab[]).map(tab => (
-          <TouchableOpacity key={tab} style={[styles.tabBtn, activeTab === tab && styles.tabBtnActive]} onPress={() => {
-            setActiveTab(tab);
-            if (tab === '일일') loadDayLessons(selectedDate);
-            else if (tab === '주간') loadWeekLessons(weekDates);
-            else loadMonthLessons(monthYear.year, monthYear.month);
-          }}>
-            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+    <View style={[styles.container, { backgroundColor: S_BG }]}>
+      {/* 통합 헤더 */}
+      <View style={[styles.unifiedHeader, { paddingTop: insets.top + 8 }]}>
+        <View style={styles.unifiedTitleRow}>
+          <Text style={styles.unifiedTitle}>스케줄</Text>
+          {pendingRequests.length > 0 && (
+            <TouchableOpacity
+              style={styles.requestBell}
+              onPress={() => { setSelectedRequest(pendingRequests[0]); setRequestModal(true); }}
+            >
+              <Ionicons name="notifications" size={22} color={S_TERRA} />
+              <View style={styles.requestBellBadge}>
+                <Text style={styles.requestBellBadgeText}>{pendingRequests.length}</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+        </View>
 
-      {activeTab === '일일' ? (
-        <>
-          {/* 날짜 헤더 */}
-          <View style={styles.dayHeaderRow}>
-            <View style={styles.dayHeaderLeft}>
-              <Text style={styles.dayHeaderTitle}>
-                {new Date(selectedDate + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })}
-              </Text>
-              <Text style={styles.dayHeaderHint}>빈 시간을 눌러 레슨을 추가하세요</Text>
-            </View>
-            <View style={styles.dayHeaderNav}>
-              <TouchableOpacity style={styles.dayNavBtn} onPress={() => handleDayNav(-1)}>
-                <Ionicons name="chevron-back" size={16} color={Colors.navy} />
+        <View style={styles.segmentWrap}>
+          <View style={styles.segmentControl}>
+            {(['일일', '주간', '월간'] as ViewTab[]).map(tab => (
+              <TouchableOpacity
+                key={tab}
+                style={[styles.segmentItem, activeTab === tab && styles.segmentItemActive]}
+                onPress={() => {
+                  setActiveTab(tab);
+                  if (tab === '일일') loadDayLessons(selectedDate);
+                  else if (tab === '주간') loadWeekLessons(getOffsetWeekDates(weekOffset));
+                  else loadMonthLessons(monthYear.year, monthYear.month);
+                }}
+              >
+                <Text style={[styles.segmentText, activeTab === tab && styles.segmentTextActive]}>{tab}</Text>
               </TouchableOpacity>
-              {selectedDate !== today && (
-                <TouchableOpacity style={styles.dayTodayBtn} onPress={() => { setWeekDates(getWeekDatesForDate(today)); handleSelectDate(today); }}>
-                  <Text style={styles.dayTodayBtnText}>오늘</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity style={styles.dayNavBtn} onPress={() => handleDayNav(1)}>
-                <Ionicons name="chevron-forward" size={16} color={Colors.navy} />
-              </TouchableOpacity>
-            </View>
+            ))}
           </View>
-          {/* 날짜 스트립 */}
+        </View>
+
+        <View style={styles.dateNavRow}>
+          <TouchableOpacity style={styles.dateNavBtn} onPress={handleNavPrev}>
+            <Ionicons name="chevron-back" size={18} color={S_TEXT} />
+          </TouchableOpacity>
+          <Text style={styles.dateNavLabel}>{getDateNavLabel()}</Text>
+          <TouchableOpacity style={styles.dateNavBtn} onPress={handleNavNext}>
+            <Ionicons name="chevron-forward" size={18} color={S_TEXT} />
+          </TouchableOpacity>
+        </View>
+
+        {activeTab === '일일' && (
           <View style={styles.weekStrip}>
             {weekDates.map(date => {
               const d = new Date(date + 'T00:00:00');
@@ -1190,6 +1222,11 @@ ${rejectMsg.trim()}`
               );
             })}
           </View>
+        )}
+      </View>
+
+      {activeTab === '일일' ? (
+        <>
           {renderRequestBanner()}
           {renderDayGrid()}
         </>
@@ -1499,7 +1536,7 @@ function WeekDraggableBlock({
 }: {
   lesson: LessonWithMembers; top: number; height: number; left: number; width: number; isDragging: boolean;
   attStatus: 'scheduled' | 'completed' | 'absent';
-  onPress: () => void; onDragEnd: (dy: number) => void; onDragStart: () => void; onDragCancel: () => void;
+  onPress: () => void; onDragEnd: (dy: number, dx: number) => void; onDragStart: () => void; onDragCancel: () => void;
 }) {
   const pan = useRef(new Animated.ValueXY()).current;
   const dragging = useRef(false);
@@ -1538,9 +1575,10 @@ function WeekDraggableBlock({
       dragging.current = false;
       pan.flattenOffset();
       const dy = g.dy;
+      const dx = g.dx;
       pan.setValue({ x: 0, y: 0 });
       setLiveDragTime(null);
-      onDragEndRef.current(dy);
+      onDragEndRef.current(dy, dx);
       onDragCancelRef.current();
     },
     onPanResponderTerminate: () => {
@@ -1557,15 +1595,15 @@ function WeekDraggableBlock({
   const startTimeStr = lesson.start_time.slice(0, 5);
   const isCompact = height < 44;
 
-  const cardBg = attStatus === 'absent' ? Colors.destructiveLight
-    : attStatus === 'completed' ? Colors.mutedBg
-    : Colors.primaryLight;
-  const nameColor = attStatus === 'absent' ? Colors.destructive
-    : attStatus === 'completed' ? Colors.mutedFg
-    : Colors.navy;
-  const timeColor = attStatus === 'absent' ? Colors.destructive
-    : attStatus === 'completed' ? Colors.placeholder
-    : Colors.primary;
+  const cardBg = attStatus === 'absent' ? '#FFE8E8'
+    : attStatus === 'completed' ? S_DONE_BG
+    : S_SCH_BG;
+  const nameColor = attStatus === 'absent' ? '#C0393A'
+    : attStatus === 'completed' ? S_DONE_FG
+    : S_SCH_FG;
+  const timeColor = attStatus === 'absent' ? '#C0393A'
+    : attStatus === 'completed' ? S_TEXT_MUTED
+    : S_TERRA;
 
   return (
     <Animated.View
@@ -1620,13 +1658,13 @@ const styles = StyleSheet.create({
   tabBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   tabText: { fontSize: 14, fontWeight: '600', color: Colors.mutedFg },
   tabTextActive: { color: '#fff', fontWeight: '700' },
-  weekStrip: { flexDirection: 'row', backgroundColor: Colors.card, paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: Colors.border, gap: 4 },
-  dayBtn: { flex: 1, alignItems: 'center', paddingVertical: 6, borderRadius: 10, backgroundColor: Colors.mutedBg },
-  daySelected: { backgroundColor: Colors.primary },
-  dayName: { fontSize: 12, color: Colors.mutedFg, marginBottom: 2 },
-  dayNum: { fontSize: 15, fontWeight: '700', color: Colors.foreground },
+  weekStrip: { flexDirection: 'row', backgroundColor: S_BG, paddingVertical: 10, paddingHorizontal: 4, borderTopWidth: 1, borderTopColor: S_BORDER, gap: 4, marginTop: 10 },
+  dayBtn: { flex: 1, alignItems: 'center', paddingVertical: 6, borderRadius: 10, backgroundColor: 'transparent' },
+  daySelected: { backgroundColor: S_TERRA },
+  dayName: { fontSize: 12, color: S_TEXT_MUTED, marginBottom: 2 },
+  dayNum: { fontSize: 15, fontWeight: '700', color: S_TEXT },
   dayTextSelected: { color: '#fff' },
-  dayToday: { color: Colors.navy },
+  dayToday: { color: S_TERRA },
   dateHeader: { fontSize: 20, fontWeight: '700', color: Colors.foreground, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4, backgroundColor: Colors.background, borderBottomWidth: 1, borderBottomColor: Colors.border },
   // 그리드
   hourRow: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center' },
@@ -1791,4 +1829,29 @@ const styles = StyleSheet.create({
   dayNavBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: Colors.mutedBg, justifyContent: 'center', alignItems: 'center' },
   dayTodayBtn: { backgroundColor: Colors.primary, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
   dayTodayBtnText: { color: Colors.white, fontSize: 12, fontWeight: '700' },
+  // 통합 헤더
+  unifiedHeader: { backgroundColor: S_BG, borderBottomWidth: 1, borderBottomColor: S_BORDER, paddingHorizontal: 16, paddingBottom: 12 },
+  unifiedTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  unifiedTitle: { fontSize: 26, fontWeight: '900', color: S_TEXT },
+  requestBell: { position: 'relative', padding: 4 },
+  requestBellBadge: { position: 'absolute', top: 0, right: 0, backgroundColor: S_TERRA, borderRadius: 8, minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3 },
+  requestBellBadgeText: { color: '#fff', fontSize: 10, fontWeight: '900' },
+  segmentWrap: { marginBottom: 10 },
+  segmentControl: { flexDirection: 'row', backgroundColor: S_SEG_BG, borderRadius: 10, padding: 3 },
+  segmentItem: { flex: 1, paddingVertical: 7, borderRadius: 8, alignItems: 'center' },
+  segmentItemActive: { backgroundColor: '#fff', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
+  segmentText: { fontSize: 14, fontWeight: '600', color: S_TEXT_MUTED },
+  segmentTextActive: { color: S_TEXT, fontWeight: '700' },
+  dateNavRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  dateNavBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: S_SEG_BG, justifyContent: 'center', alignItems: 'center' },
+  dateNavLabel: { fontSize: 15, fontWeight: '700', color: S_TEXT, flex: 1, textAlign: 'center' },
+  // 월간 인라인 레슨 목록
+  monthCellSelected: { backgroundColor: S_TERRA + '22' },
+  monthInlineList: { marginHorizontal: 16, marginTop: 12, backgroundColor: S_CARD_BG, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: S_BORDER },
+  monthInlineLabel: { fontSize: 15, fontWeight: '800', color: S_TEXT, marginBottom: 10 },
+  monthInlineEmpty: { fontSize: 14, color: S_TEXT_MUTED, textAlign: 'center', paddingVertical: 10 },
+  monthInlineItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: S_BORDER, gap: 10 },
+  monthInlineItemBar: { width: 4, height: 36, borderRadius: 2, backgroundColor: S_TERRA },
+  monthInlineItemName: { fontSize: 14, fontWeight: '700', color: S_TEXT },
+  monthInlineItemTime: { fontSize: 13, color: S_TEXT_MUTED, marginTop: 2 },
 });
