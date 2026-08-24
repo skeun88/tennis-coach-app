@@ -1,80 +1,104 @@
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, SafeAreaView, Alert, ActivityIndicator
+  ScrollView, Alert, ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSubscription } from '../../hooks/useSubscription';
+import { PLANS } from '../../lib/subscription';
 import { supabase } from '../../lib/supabase';
+import { Colors, Radius } from '../../lib/theme';
 
-interface MenuItemProps {
+const TERRA = '#C0755A';
+const DARK = '#3E2B22';
+const TERRA_LIGHT = '#FBF2EF';
+
+interface SettingRowProps {
   icon: string;
   label: string;
   onPress: () => void;
-  badge?: string;
-  badgeColor?: string;
-  chevron?: boolean;
+  value?: string;
+  destructive?: boolean;
 }
 
-function MenuItem({ icon, label, onPress, badge, badgeColor = '#4A90D9', chevron = true }: MenuItemProps) {
+function SettingRow({ icon, label, onPress, value, destructive }: SettingRowProps) {
   return (
-    <TouchableOpacity style={styles.menuItem} onPress={onPress} activeOpacity={0.7}>
-      <View style={styles.menuLeft}>
-        <Ionicons name={icon as any} size={22} color="#555" style={styles.menuIcon} />
-        <Text style={styles.menuLabel}>{label}</Text>
+    <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.7}>
+      <View style={styles.rowLeft}>
+        <Ionicons name={icon as any} size={20} color={destructive ? Colors.destructive : TERRA} style={styles.rowIcon} />
+        <Text style={[styles.rowLabel, destructive && styles.rowLabelDestructive]}>{label}</Text>
       </View>
-      <View style={styles.menuRight}>
-        {badge && (
-          <View style={[styles.badge, { backgroundColor: badgeColor }]}>
-            <Text style={styles.badgeText}>{badge}</Text>
-          </View>
-        )}
-        {chevron && <Ionicons name="chevron-forward" size={16} color="#ccc" />}
+      <View style={styles.rowRight}>
+        {value ? <Text style={styles.rowValue}>{value}</Text> : null}
+        <Ionicons name="chevron-forward" size={15} color={Colors.placeholder} />
       </View>
     </TouchableOpacity>
   );
 }
 
+function SectionHeader({ title }: { title: string }) {
+  return <Text style={styles.sectionHeader}>{title}</Text>;
+}
+
+function Group({ children }: { children: React.ReactNode }) {
+  return <View style={styles.group}>{children}</View>;
+}
+
 export default function SettingsScreen() {
   const router = useRouter();
   const { subscription, isTrial, trialDaysLeft } = useSubscription();
+  const [email, setEmail] = useState('');
   const [deleting, setDeleting] = useState(false);
 
-  const handleDeleteAccount = () => {
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setEmail(user.email ?? '');
+    });
+  }, []);
+
+  const planLabel = subscription
+    ? PLANS[subscription.plan_id]?.name ?? subscription.plan_id
+    : null;
+  const statusLabel = isTrial
+    ? `무료 체험 중 (${trialDaysLeft}일 남음)`
+    : subscription?.status === 'active' ? '구독 중'
+    : subscription?.status === 'cancelled' ? '해지됨'
+    : subscription?.status === 'past_due' ? '결제 실패'
+    : null;
+
+  function handleSignOut() {
+    Alert.alert('로그아웃', '로그아웃 하시겠습니까?', [
+      { text: '취소', style: 'cancel' },
+      { text: '로그아웃', style: 'destructive', onPress: () => supabase.auth.signOut() },
+    ]);
+  }
+
+  function handleDeleteAccount() {
     Alert.alert(
       '계정 삭제',
-      '정말로 계정을 삭제하시겠습니까?\n\n삭제 시 모든 회원 데이터, 레슨 기록, 결제 정보가 영구적으로 삭제되며 복구할 수 없습니다.',
+      '계정을 삭제하면 모든 데이터(회원, 레슨, 리포트)가 영구적으로 삭제됩니다. 이 작업은 되돌릴 수 없습니다.',
       [
         { text: '취소', style: 'cancel' },
         {
-          text: '삭제',
+          text: '삭제 확인',
           style: 'destructive',
           onPress: () => {
-            Alert.alert(
-              '최종 확인',
-              '계정을 삭제하면 모든 데이터가 영구 삭제됩니다. 계속하시겠습니까?',
-              [
-                { text: '취소', style: 'cancel' },
-                {
-                  text: '영구 삭제',
-                  style: 'destructive',
-                  onPress: confirmDeleteAccount,
-                },
-              ]
-            );
+            Alert.alert('최종 확인', '정말로 계정을 영구 삭제하시겠습니까? 복구할 수 없습니다.', [
+              { text: '취소', style: 'cancel' },
+              { text: '영구 삭제', style: 'destructive', onPress: confirmDeleteAccount },
+            ]);
           },
         },
       ]
     );
-  };
+  }
 
-  const confirmDeleteAccount = async () => {
+  async function confirmDeleteAccount() {
     setDeleting(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('세션이 없습니다.');
-
       const response = await fetch(
         `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/delete-account`,
         {
@@ -85,101 +109,159 @@ export default function SettingsScreen() {
           },
         }
       );
-
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || '삭제 실패');
-
       await supabase.auth.signOut();
-      router.replace('/(auth)/login');
     } catch (err: any) {
       Alert.alert('오류', err.message || '계정 삭제 중 오류가 발생했습니다.');
     } finally {
       setDeleting(false);
     }
-  };
+  }
 
-  const planLabel = subscription
-    ? subscription.plan_id === 'pro' ? 'Pro' : 'Basic'
-    : '미구독';
-
-  const subscriptionBadge = isTrial
-    ? `체험 ${trialDaysLeft}일`
-    : planLabel;
-
-  const subscriptionBadgeColor = isTrial
-    ? '#f39c12'
-    : subscription?.status === 'active' ? '#2ecc71' : '#e74c3c';
+  function notReady() {
+    Alert.alert('준비 중', '곧 제공될 예정입니다.');
+  }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>설정</Text>
-      </View>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.sectionTitle}>계정</Text>
-        <View style={styles.menuGroup}>
-          <MenuItem
-            icon="card-outline"
-            label="구독 관리"
-            badge={subscriptionBadge}
-            badgeColor={subscriptionBadgeColor}
-            onPress={() => router.push('/subscription/manage')}
-          />
-          <MenuItem
-            icon="time-outline"
-            label="레슨 가능 시간"
-            onPress={() => router.push('/settings/availability')}
-          />
-          <MenuItem
-            icon="notifications-outline"
-            label="알림 설정"
-            onPress={() => router.push('/settings/notifications')}
-          />
-        </View>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
 
-        <Text style={styles.sectionTitle}>위험 구역</Text>
-        <View style={styles.menuGroup}>
-          <TouchableOpacity
-            style={styles.deleteItem}
-            onPress={handleDeleteAccount}
-            activeOpacity={0.7}
-            disabled={deleting}
-          >
-            <View style={styles.menuLeft}>
-              <Ionicons name="trash-outline" size={22} color="#e74c3c" style={styles.menuIcon} />
-              <Text style={styles.deleteLabel}>계정 삭제</Text>
-            </View>
-            {deleting
-              ? <ActivityIndicator size="small" color="#e74c3c" />
-              : <Ionicons name="chevron-forward" size={16} color="#e74c3c" />
-            }
-          </TouchableOpacity>
+      {/* ── 계정 및 프로필 ── */}
+      <SectionHeader title="계정 및 프로필" />
+      <Group>
+        <SettingRow icon="person-circle-outline" label="계정 정보" onPress={notReady} value={email || undefined} />
+        <SettingRow icon="create-outline" label="코치 프로필 수정" onPress={() => { router.back(); }} />
+        <SettingRow icon="eye-outline" label="공개 프로필 미리보기" onPress={notReady} />
+      </Group>
+
+      {/* ── 구독 및 AI ── */}
+      <SectionHeader title="구독 및 AI" />
+      {(planLabel || statusLabel) && (
+        <View style={styles.subSummary}>
+          <View style={styles.subSummaryRow}>
+            <Text style={styles.subSummaryLabel}>현재 플랜</Text>
+            <Text style={styles.subSummaryValue}>{planLabel ? `${planLabel} 플랜` : '-'}</Text>
+          </View>
+          <View style={styles.subSummaryRow}>
+            <Text style={styles.subSummaryLabel}>상태</Text>
+            <Text style={[styles.subSummaryValue, { color: TERRA }]}>{statusLabel ?? '-'}</Text>
+          </View>
         </View>
-      </ScrollView>
-    </SafeAreaView>
+      )}
+      <Group>
+        <SettingRow icon="swap-horizontal-outline" label="플랜 변경" onPress={() => router.push('/subscription/manage')} />
+        <SettingRow icon="add-circle-outline" label="충전권 구매" onPress={() => router.push('/subscription/manage')} />
+        <SettingRow icon="receipt-outline" label="구매 내역" onPress={() => router.push('/subscription/manage')} />
+        <SettingRow icon="refresh-outline" label="구독 복원" onPress={() => router.push('/subscription/manage')} />
+      </Group>
+
+      {/* ── 개인정보 및 보안 ── */}
+      <SectionHeader title="개인정보 및 보안" />
+      <Group>
+        <SettingRow icon="document-text-outline" label="개인정보 처리방침" onPress={notReady} />
+        <SettingRow icon="reader-outline" label="이용약관" onPress={notReady} />
+        <SettingRow icon="mic-outline" label="AI 및 음성 분석 동의 관리" onPress={notReady} />
+        <SettingRow icon="shield-outline" label="데이터 및 계정 관리" onPress={notReady} />
+      </Group>
+
+      {/* ── 고객 지원 ── */}
+      <SectionHeader title="고객 지원" />
+      <Group>
+        <SettingRow icon="help-circle-outline" label="자주 묻는 질문" onPress={notReady} />
+        <SettingRow icon="mail-outline" label="문의하기" onPress={notReady} />
+        <SettingRow icon="bug-outline" label="오류 신고" onPress={notReady} />
+        <SettingRow icon="information-circle-outline" label="앱 버전 정보" onPress={() => Alert.alert('앱 버전', '1.1.8 (Build 10)')} value="1.1.8" />
+      </Group>
+
+      {/* ── 로그아웃 ── */}
+      <View style={styles.logoutCard}>
+        <TouchableOpacity style={styles.logoutRow} onPress={handleSignOut} activeOpacity={0.7}>
+          <Ionicons name="log-out-outline" size={20} color={Colors.destructive} />
+          <Text style={styles.logoutText}>로그아웃</Text>
+        </TouchableOpacity>
+        {!!email && <Text style={styles.emailHint}>{email}</Text>}
+      </View>
+
+      {/* ── 계정 삭제 ── */}
+      <TouchableOpacity
+        style={styles.deleteRow}
+        onPress={handleDeleteAccount}
+        disabled={deleting}
+        activeOpacity={0.7}
+      >
+        {deleting
+          ? <ActivityIndicator size="small" color={Colors.mutedFg} />
+          : <Ionicons name="trash-outline" size={14} color={Colors.mutedFg} />
+        }
+        <Text style={styles.deleteText}>계정 삭제</Text>
+      </TouchableOpacity>
+
+      <View style={{ height: 40 }} />
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fa' },
-  header: { padding: 16, paddingTop: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-  headerTitle: { fontSize: 24, fontWeight: '800', color: '#1a1a2e' },
-  scroll: { padding: 20 },
-  sectionTitle: { fontSize: 13, fontWeight: '600', color: '#999', marginBottom: 8, marginLeft: 4 },
-  menuGroup: { backgroundColor: '#fff', borderRadius: 16, overflow: 'hidden', marginBottom: 20 },
-  menuItem: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: 16, borderBottomWidth: 1, borderBottomColor: '#f5f5f5',
+  screen: { flex: 1, backgroundColor: '#F7F0E9' },
+  content: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20 },
+
+  sectionHeader: {
+    fontSize: 12, fontWeight: '700', color: Colors.mutedFg,
+    marginTop: 20, marginBottom: 8, marginLeft: 4,
+    textTransform: 'uppercase', letterSpacing: 0.5,
   },
-  menuLeft: { flexDirection: 'row', alignItems: 'center' },
-  menuIcon: { marginRight: 12 },
-  menuLabel: { fontSize: 15, color: '#333' },
-  menuRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  badge: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
-  badgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  deleteItem: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: 16,
+
+  group: {
+    backgroundColor: '#fff', borderRadius: 20, overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
   },
-  deleteLabel: { fontSize: 15, color: '#e74c3c', fontWeight: '500' },
+
+  row: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: Colors.borderLight,
+  },
+  rowLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  rowIcon: { marginRight: 12 },
+  rowLabel: { fontSize: 15, color: DARK, fontWeight: '500' },
+  rowLabelDestructive: { color: Colors.destructive },
+  rowRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  rowValue: { fontSize: 13, color: Colors.mutedFg, maxWidth: 140, textAlign: 'right' },
+
+  // Subscription summary
+  subSummary: {
+    backgroundColor: '#fff', borderRadius: 16, padding: 14,
+    marginBottom: 8,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+    gap: 6,
+  },
+  subSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  subSummaryLabel: { fontSize: 13, color: Colors.mutedFg },
+  subSummaryValue: { fontSize: 14, fontWeight: '700', color: DARK },
+
+  // Logout
+  logoutCard: {
+    backgroundColor: '#fff', borderRadius: 20, marginTop: 20,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+    overflow: 'hidden',
+  },
+  logoutRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 16, paddingVertical: 16,
+  },
+  logoutText: { fontSize: 15, fontWeight: '600', color: Colors.destructive },
+  emailHint: {
+    fontSize: 12, color: Colors.placeholder,
+    textAlign: 'center', paddingBottom: 12,
+  },
+
+  // Delete account
+  deleteRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 5, marginTop: 16, paddingVertical: 8,
+  },
+  deleteText: { fontSize: 12, color: Colors.mutedFg, textDecorationLine: 'underline' },
 });
