@@ -73,9 +73,10 @@ function getStatusStyle(status: PaymentStatus) {
   }
 }
 
-function getSourceLabel(source?: string) {
-  if (!source || source === 'coach_manual') return '직접 등록';
-  return '회원앱 결제';
+function getSourceLabel(channel?: string) {
+  if (!channel || channel === 'coach_manual') return '직접 등록';
+  if (channel === 'member_app') return '회원앱 결제';
+  return '직접 등록';
 }
 
 export default function PaymentsScreen() {
@@ -229,7 +230,7 @@ export default function PaymentsScreen() {
           paid_amount: (payTarget.unpaidAmount ?? 0) + (payments.find(p => p.id === payTarget.paymentId)?.paid_amount ?? 0),
           paid_date: today,
           payment_method: selectedMethod,
-          payment_source: 'coach_manual',
+          payment_channel: 'coach_manual',
           ...(selectedPackage ? { description: `${selectedPackage.title} 결제` } : {}),
         }).eq('id', payTarget.paymentId);
         if (error) { Alert.alert('오류', '결제 저장에 실패했어요.\n' + error.message); setSaving(false); return; }
@@ -243,7 +244,7 @@ export default function PaymentsScreen() {
           description: pkg ? `${pkg.title} 결제` : '결제',
           due_date: today, paid_date: today,
           payment_method: selectedMethod,
-          payment_source: 'coach_manual',
+          payment_channel: 'coach_manual',
         });
         if (error) { Alert.alert('오류', '결제 저장에 실패했어요.\n' + error.message); setSaving(false); return; }
       }
@@ -347,7 +348,7 @@ export default function PaymentsScreen() {
     const member = (item as any).member;
     const statusStyle = getStatusStyle(item.status);
     const method = (item as any).payment_method as PaymentMethod | undefined;
-    const source = (item as any).payment_source as string | undefined;
+    const source = (item as any).payment_channel as string | undefined;
     const dateStr = item.paid_date ?? item.due_date;
     const dateLabel = dateStr ? dateStr.slice(5).replace('-', '월 ') + '일' : '';
 
@@ -581,6 +582,15 @@ export default function PaymentsScreen() {
                     <TextInput style={s.editInput} value={editPaidAmount} onChangeText={setEditPaidAmount} keyboardType="numeric" placeholderTextColor={Colors.placeholder} />
                   </>
                 )}
+                <Text style={s.editLbl}>납부 방법</Text>
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+                  {METHODS.map(m => (
+                    <TouchableOpacity key={m} style={[s.methodBtn, editMethod === m && s.methodBtnActive]} onPress={() => setEditMethod(m)}>
+                      <Ionicons name={METHOD_ICONS[m] as any} size={20} color={editMethod === m ? '#fff' : WARM_GREY} />
+                      <Text style={[s.methodBtnText, editMethod === m && { color: '#fff' }]}>{m}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
                 <Text style={s.editLbl}>납부기한 (YYYY-MM-DD)</Text>
                 <TextInput style={s.editInput} value={editDueDate} onChangeText={setEditDueDate} placeholder="2026-06-30" placeholderTextColor={Colors.placeholder} />
                 {editStatus !== '미납' && (
