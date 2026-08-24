@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1a7a4a"
+      "backgroundColor": "#C0755A"
     },
     "privacyPolicyUrl": "https://skeun88.github.io/tennis-coach-app/privacy-policy.html",
     "ios": {
@@ -38,7 +38,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#1a7a4a"
+        "backgroundColor": "#C0755A"
       },
       "package": "com.tenniscoach.app",
       "permissions": [

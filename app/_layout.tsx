@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { Session } from '@supabase/supabase-js';
 import * as Linking from 'expo-linking';
@@ -19,14 +19,27 @@ if ((Text as any).defaultProps == null) (Text as any).defaultProps = {};
 (Text as any).defaultProps.allowFontScaling = false;
 
 const PRELOAD_TIMEOUT_MS = 8000;
+const MIN_LOADING_MS = 600;
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isNavigationReady, setIsNavigationReady] = useState(false);
   const [preloading, setPreloading] = useState(false);
+  const loadingStartedAt = useRef(Date.now());
   const router = useRouter();
   const segments = useSegments();
+
+  // Enforces minimum 600ms display time for the loading screen
+  const setNavReady = useCallback(() => {
+    const elapsed = Date.now() - loadingStartedAt.current;
+    const remaining = MIN_LOADING_MS - elapsed;
+    if (remaining > 0) {
+      setTimeout(() => setIsNavigationReady(true), remaining);
+    } else {
+      setIsNavigationReady(true);
+    }
+  }, []);
 
   useEffect(() => {
     const handleDeepLinkUrl = async (url: string) => {
@@ -43,12 +56,14 @@ export default function RootLayout() {
     Linking.getInitialURL().then(url => { if (url) handleDeepLinkUrl(url); });
     const linkSub = Linking.addEventListener('url', ({ url }) => handleDeepLinkUrl(url));
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
-
+    // Use INITIAL_SESSION event to avoid race condition where getSession() returns
+    // null before the persisted token is loaded, which caused the login screen flash.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION') {
+        setSession(session);
+        setLoading(false);
+        return;
+      }
       setSession(session);
       if (event === 'PASSWORD_RECOVERY') {
         router.replace('/reset-password');
@@ -71,12 +86,12 @@ export default function RootLayout() {
 
     if (!session && !inAuthGroup && !inResetPassword) {
       router.replace('/(auth)/login');
-      setIsNavigationReady(true);
+      setNavReady();
       return;
     }
 
     if (inOnboarding) {
-      setIsNavigationReady(true);
+      setNavReady();
       return;
     }
 
@@ -90,7 +105,7 @@ export default function RootLayout() {
         .then(async ({ data }) => {
           if (!data) {
             router.replace('/(auth)/onboarding');
-            setIsNavigationReady(true);
+            setNavReady();
             return;
           }
 
@@ -101,7 +116,7 @@ export default function RootLayout() {
                 const sub = await getCurrentSubscription();
                 if (sub && (sub.status === 'blocked' || sub.status === 'cancelled')) {
                   router.replace('/subscription/blocked');
-                  setIsNavigationReady(true);
+                  setNavReady();
                   return;
                 }
               } catch {}
@@ -113,14 +128,12 @@ export default function RootLayout() {
               const uid = session.user.id;
               const cached = await loadCachedHomeData(uid);
               if (!cached) {
-                // 처음 실행 — 네트워크로 fetch
                 const result = await Promise.race<any>([
                   fetchHomeData(uid, session.user.email ?? ''),
                   new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), PRELOAD_TIMEOUT_MS)),
                 ]);
                 await persistHomeData(uid, result);
               }
-              // stale cache면 home screen이 백그라운드에서 갱신함
             } catch {
               // 오류 시 캐시 있으면 사용, 없으면 home에서 직접 로드
             } finally {
@@ -128,24 +141,24 @@ export default function RootLayout() {
             }
 
             router.replace('/(tabs)');
-            setIsNavigationReady(true);
+            setNavReady();
             return;
           }
 
-          if (IS_BETA) { setIsNavigationReady(true); return; }
+          if (IS_BETA) { setNavReady(); return; }
           getCurrentSubscription().then((sub) => {
             if (sub && (sub.status === 'blocked' || sub.status === 'cancelled')) {
               router.replace('/subscription/blocked');
             }
-            setIsNavigationReady(true);
+            setNavReady();
           }).catch(() => {
-            setIsNavigationReady(true);
+            setNavReady();
           });
         });
       return;
     }
 
-    setIsNavigationReady(true);
+    setNavReady();
   }, [session, loading, segments]);
 
   if (loading || !isNavigationReady || preloading) {

@@ -1,24 +1,28 @@
 import { useEffect, useRef } from 'react';
-import { View, Text, Animated, StyleSheet, Image, StatusBar } from 'react-native';
+import { View, Text, Animated, StyleSheet, StatusBar, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const TERRA = '#C0755A';
-const CREAM = 'rgba(247,240,233,0.9)';
+const CREAM = '#F7F0E9';
 const CREAM_DIM = 'rgba(247,240,233,0.65)';
 const CREAM_FAINT = 'rgba(247,240,233,0.45)';
 
 export default function BrandLoadingScreen() {
   const insets = useSafeAreaInsets();
-  const breathAnim = useRef(new Animated.Value(0.85)).current;
+  const { width } = useWindowDimensions();
+  const breathAnim = useRef(new Animated.Value(0.88)).current;
   const dot1 = useRef(new Animated.Value(0.35)).current;
   const dot2 = useRef(new Animated.Value(0.35)).current;
   const dot3 = useRef(new Animated.Value(0.35)).current;
+
+  // Logo size: 45% of screen width, capped at 200 to match native splash
+  const logoSize = Math.min(width * 0.45, 200);
 
   useEffect(() => {
     const breath = Animated.loop(
       Animated.sequence([
         Animated.timing(breathAnim, { toValue: 1, duration: 2000, useNativeDriver: true }),
-        Animated.timing(breathAnim, { toValue: 0.85, duration: 2000, useNativeDriver: true }),
+        Animated.timing(breathAnim, { toValue: 0.88, duration: 2000, useNativeDriver: true }),
       ])
     );
     breath.start();
@@ -48,14 +52,13 @@ export default function BrandLoadingScreen() {
       <View style={styles.center}>
         <Animated.Image
           source={require('../assets/splash-icon.png')}
-          style={[styles.logo, { opacity: breathAnim }]}
+          style={[{ width: logoSize, height: logoSize, tintColor: CREAM, marginBottom: 12 }, { opacity: breathAnim }]}
           resizeMode="contain"
         />
         <Text style={styles.wordmark}>KERRI</Text>
       </View>
 
       <View style={styles.bottom}>
-        <Text style={styles.tagline}>당신의 가르침이 오래 기억되도록</Text>
         <Text style={styles.status}>오늘의 레슨을 준비하고 있어요</Text>
         <View style={styles.dots}>
           <Animated.View style={[styles.dot, { opacity: dot1 }]} />
@@ -70,7 +73,7 @@ export default function BrandLoadingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#C0755A',
+    backgroundColor: TERRA,
     alignItems: 'center',
     justifyContent: 'space-between',
   },
@@ -79,28 +82,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logo: {
-    width: 72,
-    height: 72,
-    tintColor: '#F7F0E9',
-    marginBottom: 18,
-  },
   wordmark: {
-    fontSize: 30,
+    fontSize: 36,
     fontWeight: '800',
-    color: '#F7F0E9',
-    letterSpacing: 7,
+    color: CREAM,
+    letterSpacing: 8,
   },
   bottom: {
     alignItems: 'center',
     paddingBottom: 20,
-  },
-  tagline: {
-    fontSize: 14,
-    color: CREAM,
-    fontWeight: '500',
-    marginBottom: 22,
-    letterSpacing: 0.2,
   },
   status: {
     fontSize: 13,
