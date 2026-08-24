@@ -260,7 +260,7 @@ export default function PaymentsScreen() {
         amount: selectedPackage.price, paid_amount: selectedPackage.price,
         status: '납부완료', description: `${selectedPackage.title} 결제`,
         due_date: today, paid_date: today,
-        payment_method: selectedMethod, payment_source: 'coach_manual',
+        payment_method: selectedMethod, payment_channel: 'offline',
       });
       if (error) { Alert.alert('오류', '결제 저장에 실패했어요.\n' + error.message); setSaving(false); return; }
       await supabase.from('members').update({
@@ -328,9 +328,9 @@ export default function PaymentsScreen() {
       `${(payment as any).member?.name}님\n${(payment.amount - payment.paid_amount).toLocaleString()}원`,
       [
         { text: '취소', style: 'cancel' },
-        { text: '계좌이체', onPress: async () => { await supabase.from('payments').update({ status: '납부완료', paid_amount: payment.amount, paid_date: new Date().toISOString().split('T')[0], payment_method: '계좌이체', payment_source: 'coach_manual' }).eq('id', payment.id); loadData(); } },
-        { text: '카드', onPress: async () => { await supabase.from('payments').update({ status: '납부완료', paid_amount: payment.amount, paid_date: new Date().toISOString().split('T')[0], payment_method: '카드', payment_source: 'coach_manual' }).eq('id', payment.id); loadData(); } },
-        { text: '현금', onPress: async () => { await supabase.from('payments').update({ status: '납부완료', paid_amount: payment.amount, paid_date: new Date().toISOString().split('T')[0], payment_method: '현금', payment_source: 'coach_manual' }).eq('id', payment.id); loadData(); } },
+        { text: '계좌이체', onPress: async () => { await supabase.from('payments').update({ status: '납부완료', paid_amount: payment.amount, paid_date: new Date().toISOString().split('T')[0], payment_method: '계좌이체', payment_channel: 'offline' }).eq('id', payment.id); loadData(); } },
+        { text: '카드', onPress: async () => { await supabase.from('payments').update({ status: '납부완료', paid_amount: payment.amount, paid_date: new Date().toISOString().split('T')[0], payment_method: '카드', payment_channel: 'offline' }).eq('id', payment.id); loadData(); } },
+        { text: '현금', onPress: async () => { await supabase.from('payments').update({ status: '납부완료', paid_amount: payment.amount, paid_date: new Date().toISOString().split('T')[0], payment_method: '현금', payment_channel: 'offline' }).eq('id', payment.id); loadData(); } },
       ]
     );
   }
