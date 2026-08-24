@@ -171,6 +171,8 @@ export default function ScheduleScreen() {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragTargetMin, setDragTargetMin] = useState(0);
   const [weekDraggingId, setWeekDraggingId] = useState<string | null>(null);
+  const [weekDragTargetMin, setWeekDragTargetMin] = useState(0);
+  const [weekDragTargetColIdx, setWeekDragTargetColIdx] = useState(-1);
   const [weekAttendanceMap, setWeekAttendanceMap] = useState<Map<string, 'scheduled' | 'completed' | 'absent'>>(new Map());
   const dayScrollRef = useRef<any>(null);
 
@@ -1031,6 +1033,14 @@ ${rejectMsg.trim()}`
                         isDragging={isDragging}
                         attStatus={attStatus}
                         onPress={() => router.push('/lessons/' + lesson.id as any)}
+                        onDragMove={(dy, dx) => {
+                          const sMin = timeToMinutes(lesson.start_time);
+                          const deltaMin = Math.round((dy / HOUR_HEIGHT) * 60 / 10) * 10;
+                          const newMin = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60 - 10, sMin + deltaMin));
+                          const tCol = Math.min(6, Math.max(0, Math.floor((colIdx * COL_W + dx + COL_W / 2) / COL_W)));
+                          setWeekDragTargetMin(newMin);
+                          setWeekDragTargetColIdx(tCol);
+                        }}
                         onDragEnd={(dy, dx) => {
                           const deltaMin = Math.round((dy / HOUR_HEIGHT) * 60 / 10) * 10;
                           const newMin = startMin + deltaMin;
@@ -1040,13 +1050,27 @@ ${rejectMsg.trim()}`
                           handleWeekDropLesson(lesson.id, date, targetDate, newMin);
                         }}
                         onDragStart={() => setWeekDraggingId(lesson.id)}
-                        onDragCancel={() => setWeekDraggingId(null)}
+                        onDragCancel={() => { setWeekDraggingId(null); setWeekDragTargetColIdx(-1); }}
                       />
                     );
                   })}
                 </View>
               );
             })}
+            {/* Google Calendar style drag overlays */}
+            {weekDraggingId !== null && weekDragTargetColIdx >= 0 && (() => {
+              const overlayY = ((weekDragTargetMin - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+              const colLeft = TIME_COL + weekDragTargetColIdx * COL_W;
+              return (
+                <>
+                  <View pointerEvents="none" style={{ position: 'absolute', left: colLeft, width: COL_W, top: 0, height: gridHeight + 20, backgroundColor: S_TERRA + '18', zIndex: 1 }} />
+                  <View pointerEvents="none" style={{ position: 'absolute', left: 2, width: TIME_COL - 4, top: overlayY - 8, height: 16, backgroundColor: S_TERRA, borderRadius: 3, justifyContent: 'center', alignItems: 'center', zIndex: 100 }}>
+                    <Text style={{ fontSize: 9, fontWeight: '800', color: '#fff', includeFontPadding: false }}>{minutesToTime(weekDragTargetMin)}</Text>
+                  </View>
+                  <View pointerEvents="none" style={{ position: 'absolute', left: TIME_COL, right: 0, top: overlayY, height: 1, backgroundColor: S_TERRA + 'BB', zIndex: 1 }} />
+                </>
+              );
+            })()}
           </View>
           <View style={{ height: 80 }} />
         </ScrollView>
@@ -1532,43 +1556,42 @@ function DraggableLesson({
 
 // ── 주간 드래그 가능한 레슨 블록 ──────────────────────────────────
 function WeekDraggableBlock({
-  lesson, top, height, left, width, isDragging, attStatus, onPress, onDragEnd, onDragStart, onDragCancel,
+  lesson, top, height, left, width, isDragging, attStatus, onPress, onDragMove, onDragEnd, onDragStart, onDragCancel,
 }: {
   lesson: LessonWithMembers; top: number; height: number; left: number; width: number; isDragging: boolean;
   attStatus: 'scheduled' | 'completed' | 'absent';
-  onPress: () => void; onDragEnd: (dy: number, dx: number) => void; onDragStart: () => void; onDragCancel: () => void;
+  onPress: () => void; onDragMove: (dy: number, dx: number) => void; onDragEnd: (dy: number, dx: number) => void; onDragStart: () => void; onDragCancel: () => void;
 }) {
   const pan = useRef(new Animated.ValueXY()).current;
   const dragging = useRef(false);
-  const [liveDragTime, setLiveDragTime] = useState<string | null>(null);
 
   const onDragEndRef = useRef(onDragEnd);
   const onDragStartRef = useRef(onDragStart);
   const onDragCancelRef = useRef(onDragCancel);
+  const onDragMoveRef = useRef(onDragMove);
   const onPressRef = useRef(onPress);
   const lessonStartMinRef = useRef(timeToMinutes(lesson.start_time));
   useEffect(() => {
     onDragEndRef.current = onDragEnd;
     onDragStartRef.current = onDragStart;
     onDragCancelRef.current = onDragCancel;
+    onDragMoveRef.current = onDragMove;
     onPressRef.current = onPress;
     lessonStartMinRef.current = timeToMinutes(lesson.start_time);
-  }, [onDragEnd, onDragStart, onDragCancel, onPress, lesson.start_time]);
+  }, [onDragEnd, onDragStart, onDragCancel, onDragMove, onPress, lesson.start_time]);
 
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => dragging.current,
     onStartShouldSetPanResponderCapture: () => dragging.current,
-    onMoveShouldSetPanResponder: (_, g) => dragging.current && Math.abs(g.dy) > 3,
-    onMoveShouldSetPanResponderCapture: (_, g) => dragging.current && Math.abs(g.dy) > 3,
+    onMoveShouldSetPanResponder: (_, g) => dragging.current && (Math.abs(g.dy) > 3 || Math.abs(g.dx) > 3),
+    onMoveShouldSetPanResponderCapture: (_, g) => dragging.current && (Math.abs(g.dy) > 3 || Math.abs(g.dx) > 3),
     onPanResponderGrant: () => {
-      pan.setOffset({ x: 0, y: (pan.y as any)._value });
+      pan.setOffset({ x: (pan.x as any)._value, y: (pan.y as any)._value });
       pan.setValue({ x: 0, y: 0 });
     },
     onPanResponderMove: (_, g) => {
-      pan.y.setValue(g.dy);
-      const deltaMin = Math.round((g.dy / HOUR_HEIGHT) * 60 / 10) * 10;
-      const newMin = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60 - 10, lessonStartMinRef.current + deltaMin));
-      setLiveDragTime(minutesToTime(newMin));
+      pan.setValue({ x: g.dx, y: g.dy });
+      onDragMoveRef.current(g.dy, g.dx);
     },
     onPanResponderRelease: (_, g) => {
       if (!dragging.current) return;
@@ -1577,14 +1600,12 @@ function WeekDraggableBlock({
       const dy = g.dy;
       const dx = g.dx;
       pan.setValue({ x: 0, y: 0 });
-      setLiveDragTime(null);
       onDragEndRef.current(dy, dx);
       onDragCancelRef.current();
     },
     onPanResponderTerminate: () => {
       dragging.current = false;
       pan.setValue({ x: 0, y: 0 });
-      setLiveDragTime(null);
       onDragCancelRef.current();
     },
     onShouldBlockNativeResponder: () => dragging.current,
@@ -1612,10 +1633,10 @@ function WeekDraggableBlock({
         {
           top, height, left, width,
           backgroundColor: cardBg,
-          transform: [{ translateY: pan.y }],
-          zIndex: isDragging ? 999 : 1,
+          transform: [{ translateX: pan.x }, { translateY: pan.y }],
+          zIndex: isDragging ? 9999 : 1,
         },
-        isDragging && { opacity: 0.85, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 6, elevation: 8 },
+        isDragging && { opacity: 0.95, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 10 },
       ]}
       {...panResponder.panHandlers}
     >
@@ -1629,24 +1650,13 @@ function WeekDraggableBlock({
         {isCompact ? (
           <View style={{ flex: 1, justifyContent: 'center', gap: 0 }}>
             <Text style={[styles.weekBlockNameSmall, { color: nameColor }]} numberOfLines={1}>{nameStr}</Text>
-            <Text style={[styles.weekBlockTimeSmall, { color: timeColor }]} numberOfLines={1}>{startTimeStr}</Text>
           </View>
         ) : (
           <View style={{ flex: 1, justifyContent: 'center', gap: 1 }}>
             <Text style={[styles.weekBlockName, { color: nameColor }]} numberOfLines={1}>{nameStr}</Text>
-            <Text style={[styles.weekBlockTime, { color: timeColor }]} numberOfLines={1}>
-              {startTimeStr}{duration >= 30 ? ` · ${duration}분` : ''}
-            </Text>
           </View>
         )}
       </TouchableOpacity>
-      {isDragging && liveDragTime && liveDragTime !== startTimeStr && (
-        <View style={[styles.dragTimeLabel, { top: -28 }]}>
-          <View style={styles.dragTimeLabelInner}>
-            <Text style={styles.dragTimeLabelText}>{startTimeStr} → {liveDragTime}</Text>
-          </View>
-        </View>
-      )}
     </Animated.View>
   );
 }
@@ -1699,7 +1709,7 @@ const styles = StyleSheet.create({
   weekLessonTitle: { fontSize: 14, color: Colors.foreground, fontWeight: '600' },
   weekLessonMembers: { fontSize: 13, color: Colors.mutedFg, marginTop: 2 },
   // FAB
-  fab: { position: 'absolute', bottom: 24, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 6 },
+  fab: { position: 'absolute', bottom: 24, right: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: S_TERRA, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 6 },
   // 모달
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 },
@@ -1839,9 +1849,9 @@ const styles = StyleSheet.create({
   segmentWrap: { marginBottom: 10 },
   segmentControl: { flexDirection: 'row', backgroundColor: S_SEG_BG, borderRadius: 10, padding: 3 },
   segmentItem: { flex: 1, paddingVertical: 7, borderRadius: 8, alignItems: 'center' },
-  segmentItemActive: { backgroundColor: '#fff', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
+  segmentItemActive: { backgroundColor: S_TERRA },
   segmentText: { fontSize: 14, fontWeight: '600', color: S_TEXT_MUTED },
-  segmentTextActive: { color: S_TEXT, fontWeight: '700' },
+  segmentTextActive: { color: '#fff', fontWeight: '700' },
   dateNavRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   dateNavBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: S_SEG_BG, justifyContent: 'center', alignItems: 'center' },
   dateNavLabel: { fontSize: 15, fontWeight: '700', color: S_TEXT, flex: 1, textAlign: 'center' },
