@@ -58,8 +58,12 @@ export default function RootLayout() {
 
     // Use INITIAL_SESSION event to avoid race condition where getSession() returns
     // null before the persisted token is loaded, which caused the login screen flash.
+    // Fallback: if INITIAL_SESSION never fires (rare SDK edge case), unblock after 5s.
+    const fallback = setTimeout(() => setLoading(false), 5000);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'INITIAL_SESSION') {
+        clearTimeout(fallback);
         setSession(session);
         setLoading(false);
         return;
@@ -71,6 +75,7 @@ export default function RootLayout() {
     });
 
     return () => {
+      clearTimeout(fallback);
       subscription.unsubscribe();
       linkSub.remove();
     };

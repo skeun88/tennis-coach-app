@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Text, Animated, StyleSheet, StatusBar, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -7,22 +7,28 @@ const CREAM = '#F7F0E9';
 const CREAM_DIM = 'rgba(247,240,233,0.65)';
 const CREAM_FAINT = 'rgba(247,240,233,0.45)';
 
+// Show status text and dots only after this delay to prevent momentary flash
+const STATUS_DELAY_MS = 400;
+
 export default function BrandLoadingScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const breathAnim = useRef(new Animated.Value(0.88)).current;
+  const breathAnim = useRef(new Animated.Value(0.9)).current;
   const dot1 = useRef(new Animated.Value(0.35)).current;
   const dot2 = useRef(new Animated.Value(0.35)).current;
   const dot3 = useRef(new Animated.Value(0.35)).current;
+  const [showStatus, setShowStatus] = useState(false);
 
-  // Logo size: 45% of screen width, capped at 200 to match native splash
+  // Logo at 45% of screen width, capped at 200px — matches native splash proportions
   const logoSize = Math.min(width * 0.45, 200);
 
   useEffect(() => {
+    const timer = setTimeout(() => setShowStatus(true), STATUS_DELAY_MS);
+
     const breath = Animated.loop(
       Animated.sequence([
         Animated.timing(breathAnim, { toValue: 1, duration: 2000, useNativeDriver: true }),
-        Animated.timing(breathAnim, { toValue: 0.88, duration: 2000, useNativeDriver: true }),
+        Animated.timing(breathAnim, { toValue: 0.9, duration: 2000, useNativeDriver: true }),
       ])
     );
     breath.start();
@@ -42,7 +48,11 @@ export default function BrandLoadingScreen() {
     );
     dots.start();
 
-    return () => { breath.stop(); dots.stop(); };
+    return () => {
+      clearTimeout(timer);
+      breath.stop();
+      dots.stop();
+    };
   }, []);
 
   return (
@@ -58,14 +68,16 @@ export default function BrandLoadingScreen() {
         <Text style={styles.wordmark}>KERRI</Text>
       </View>
 
-      <View style={styles.bottom}>
-        <Text style={styles.status}>오늘의 레슨을 준비하고 있어요</Text>
-        <View style={styles.dots}>
-          <Animated.View style={[styles.dot, { opacity: dot1 }]} />
-          <Animated.View style={[styles.dot, { opacity: dot2 }]} />
-          <Animated.View style={[styles.dot, { opacity: dot3 }]} />
+      {showStatus && (
+        <View style={styles.bottom}>
+          <Text style={styles.status}>오늘의 레슨을 준비하고 있어요</Text>
+          <View style={styles.dots}>
+            <Animated.View style={[styles.dot, { opacity: dot1 }]} />
+            <Animated.View style={[styles.dot, { opacity: dot2 }]} />
+            <Animated.View style={[styles.dot, { opacity: dot3 }]} />
+          </View>
         </View>
-      </View>
+      )}
     </View>
   );
 }
@@ -91,6 +103,7 @@ const styles = StyleSheet.create({
   bottom: {
     alignItems: 'center',
     paddingBottom: 20,
+    minHeight: 50,
   },
   status: {
     fontSize: 13,
