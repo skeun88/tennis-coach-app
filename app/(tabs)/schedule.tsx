@@ -1653,23 +1653,24 @@ function WeekDraggableBlock({
     onShouldBlockNativeResponder: () => dragging.current,
   })).current;
 
-  const duration = timeToMinutes(lesson.end_time) - timeToMinutes(lesson.start_time);
   const nameStr = lesson.memberNames.length > 0 ? lesson.memberNames.join(', ') : lesson.title.replace(/ 레슨$/, '');
   const startTimeStr = lesson.start_time.slice(0, 5);
-  const isCompact = height < 44;
 
   const cardBg = attStatus === 'absent' ? S_ABS_BG
     : attStatus === 'completed' ? S_DONE_BG
     : S_SCH_BG;
-  const cardBorderColor = attStatus === 'absent' ? S_ABS_BORDER
-    : attStatus === 'completed' ? S_DONE_BORDER
-    : S_SCH_BORDER;
   const nameColor = attStatus === 'absent' ? '#C0393A'
     : attStatus === 'completed' ? S_DONE_FG
     : S_SCH_FG;
   const timeColor = attStatus === 'absent' ? '#C0393A'
     : attStatus === 'completed' ? S_TEXT_MUTED
     : S_CARD_TIME;
+
+  // 카드 높이별 텍스트 크기
+  const nameSize = height >= 52 ? 13 : height >= 38 ? 12 : height >= 28 ? 11 : 10;
+  const timeSize = height >= 52 ? 11 : height >= 38 ? 10 : 9;
+  const showTime = height >= 28;
+  const cardGap = height >= 38 ? 2 : 1;
 
   return (
     <Animated.View
@@ -1678,8 +1679,6 @@ function WeekDraggableBlock({
         {
           top, height, left, width,
           backgroundColor: cardBg,
-          borderLeftWidth: 3,
-          borderLeftColor: cardBorderColor,
           transform: [{ translateX: pan.x }, { translateY: pan.y }],
           zIndex: isDragging ? 9999 : 1,
         },
@@ -1694,15 +1693,24 @@ function WeekDraggableBlock({
         delayLongPress={350}
         activeOpacity={0.8}
       >
-        {isCompact ? (
-          <View style={{ flex: 1, justifyContent: 'center', gap: 0 }}>
-            <Text style={[styles.weekBlockNameSmall, { color: nameColor }]} numberOfLines={1}>{nameStr}</Text>
-          </View>
-        ) : (
-          <View style={{ flex: 1, justifyContent: 'center', gap: 1 }}>
-            <Text style={[styles.weekBlockName, { color: nameColor }]} numberOfLines={1}>{nameStr}</Text>
-          </View>
-        )}
+        <View style={{ flex: 1, justifyContent: 'center', gap: cardGap }}>
+          <Text
+            style={{ fontSize: nameSize, fontWeight: '600', color: nameColor, lineHeight: nameSize + 2 }}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+          >
+            {nameStr}
+          </Text>
+          {showTime && (
+            <Text
+              style={{ fontSize: timeSize, fontWeight: '500', color: timeColor, lineHeight: timeSize + 2 }}
+              numberOfLines={1}
+            >
+              {startTimeStr}
+            </Text>
+          )}
+        </View>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -1776,9 +1784,9 @@ const styles = StyleSheet.create({
   saveBtn: { backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 8 },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   nowLine: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', zIndex: 10 },
-  nowTimeAboveLabel: { position: 'absolute', left: 0, top: -14, width: 52, textAlign: 'right', paddingRight: 3, fontSize: 9, fontWeight: '800', color: Colors.destructive },
-  nowDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.destructive, marginLeft: 42 },
-  nowLineBar: { flex: 1, height: 2, backgroundColor: Colors.destructive, marginLeft: 2 },
+  nowTimeAboveLabel: { position: 'absolute', left: 0, top: -14, width: 52, textAlign: 'right', paddingRight: 3, fontSize: 9, fontWeight: '800', color: S_TERRA },
+  nowDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: S_TERRA, marginLeft: 42 },
+  nowLineBar: { flex: 1, height: 2, backgroundColor: S_TERRA, marginLeft: 2 },
   halfHourLine: { position: 'absolute', left: 56, right: 0, height: 1, backgroundColor: Colors.border, opacity: 0.4 },
   memberList: { maxHeight: 160, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, marginBottom: 8 },
   memberItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.mutedBg },
@@ -1814,7 +1822,7 @@ const styles = StyleSheet.create({
   weekDayColGrid: { position: 'relative', borderLeftWidth: 1, borderLeftColor: Colors.border },
   weekHourLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: Colors.border },
   weekNowLine: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', alignItems: 'center', zIndex: 10 },
-  weekNowDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.destructive },
+  weekNowDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: S_TERRA },
   weekSubHourLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: Colors.border, opacity: 0.35 },
   weekLessonBlock: { position: 'absolute', borderRadius: 4, paddingHorizontal: 3, paddingVertical: 2, overflow: 'hidden', justifyContent: 'space-between' },
   weekBlockName: { fontSize: 12, fontWeight: '700', color: Colors.white, lineHeight: 13 },
