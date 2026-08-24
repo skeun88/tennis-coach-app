@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, FlatList,
+  View, Text, StyleSheet, TouchableOpacity, Pressable, ScrollView, FlatList,
   RefreshControl, Alert, Modal, TextInput, ActivityIndicator,
   PanResponder, Animated, Dimensions,
 } from 'react-native';
@@ -41,10 +41,16 @@ const S_TEXT_MUTED = '#A08070';
 const S_BORDER = '#E0CFBF';
 const S_CARD_BG = '#FFFFFF';
 const S_SEG_BG = 'rgba(0,0,0,0.07)';      // 세그먼트 컨트롤 배경
-const S_SCH_BG = '#FAEDE7';               // 예정 카드 배경
-const S_SCH_FG = '#C0755A';               // 예정 카드 글씨
-const S_DONE_BG = '#EDE8E4';              // 완료 카드 배경
+const S_GRID_BG = '#FCFAF7';              // 시간표 영역 배경
+const S_SCH_BG = '#F1D8CE';               // 예정 카드 배경
+const S_SCH_FG = '#3E2B22';               // 예정 카드 이름 (다크 브라운)
+const S_SCH_BORDER = '#D9967E';           // 예정 카드 포인트선
+const S_CARD_TIME = '#B86146';            // 카드 시작 시간 색상
+const S_DONE_BG = '#E7E3DE';              // 완료 카드 배경
 const S_DONE_FG = '#9E8070';              // 완료 카드 글씨
+const S_DONE_BORDER = '#B5ADA8';          // 완료 카드 포인트선
+const S_ABS_BG = '#F8DADA';               // 결석 카드 배경
+const S_ABS_BORDER = '#E07070';           // 결석 카드 포인트선
 
 function toKSTDateStr(d: Date): string {
   const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
@@ -175,6 +181,8 @@ export default function ScheduleScreen() {
   const [weekDragTargetColIdx, setWeekDragTargetColIdx] = useState(-1);
   const [weekAttendanceMap, setWeekAttendanceMap] = useState<Map<string, 'scheduled' | 'completed' | 'absent'>>(new Map());
   const dayScrollRef = useRef<any>(null);
+  const weekScrollYRef = useRef(0);
+  const weekAutoScrollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // 출석 상태 맵 (lessonId → 'scheduled' | 'completed' | 'absent')
   const [attendanceMap, setAttendanceMap] = useState<Map<string, 'scheduled' | 'completed' | 'absent'>>(new Map());
@@ -786,7 +794,7 @@ ${rejectMsg.trim()}`
     const gridHeight = (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT;
 
     return (
-      <ScrollView ref={dayScrollRef} style={{ flex: 1 }} showsVerticalScrollIndicator={false}
+      <ScrollView ref={dayScrollRef} style={{ flex: 1, backgroundColor: S_GRID_BG }} showsVerticalScrollIndicator={false}
         scrollEnabled={draggingId === null}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadDayLessons(selectedDate); setRefreshing(false); }} tintColor={Colors.navy} />}
       >
@@ -852,7 +860,7 @@ ${rejectMsg.trim()}`
               const width = colWidth;
 
               const attStatus = attendanceMap.get(lesson.id);
-              const cardBg = attStatus === 'absent' ? '#FFE8E8'
+              const cardBg = attStatus === 'absent' ? S_ABS_BG
                 : attStatus === 'completed' ? S_DONE_BG
                 : S_SCH_BG;
               const cardNameColor = attStatus === 'absent' ? '#C0393A'
@@ -860,7 +868,10 @@ ${rejectMsg.trim()}`
                 : S_SCH_FG;
               const cardTimeColor = attStatus === 'absent' ? '#C0393A'
                 : attStatus === 'completed' ? S_TEXT_MUTED
-                : S_TERRA;
+                : S_CARD_TIME;
+              const cardBorderColor = attStatus === 'absent' ? S_ABS_BORDER
+                : attStatus === 'completed' ? S_DONE_BORDER
+                : S_SCH_BORDER;
               return (
                 <DraggableLesson
                   key={lesson.id}
@@ -873,6 +884,7 @@ ${rejectMsg.trim()}`
                   cardBg={cardBg}
                   cardNameColor={cardNameColor}
                   cardTimeColor={cardTimeColor}
+                  cardBorderColor={cardBorderColor}
                   onPress={() => router.push('/lessons/' + lesson.id as any)}
                   onDragEnd={(dy) => {
                     const deltaMin = Math.round((dy / HOUR_HEIGHT) * 60 / 10) * 10;
@@ -949,7 +961,7 @@ ${rejectMsg.trim()}`
     const todayInView = displayDates.findIndex(d => d === today);
 
     return (
-      <View style={{ flex: 1, backgroundColor: S_BG }}>
+      <View style={{ flex: 1, backgroundColor: S_GRID_BG }}>
         {/* 요일 헤더 */}
         <View style={[styles.weekDayHeaderRow, { paddingLeft: TIME_COL }]}>
           {displayDates.map((date, i) => {
@@ -970,6 +982,8 @@ ${rejectMsg.trim()}`
           style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
           scrollEnabled={weekDraggingId === null}
+          onScroll={(e) => { weekScrollYRef.current = e.nativeEvent.contentOffset.y; }}
+          scrollEventThrottle={16}
           refreshControl={<RefreshControl refreshing={refreshing}
             onRefresh={async () => { setRefreshing(true); await loadWeekLessons(displayDates); setRefreshing(false); }}
             tintColor={S_TERRA} />}
@@ -1033,13 +1047,30 @@ ${rejectMsg.trim()}`
                         isDragging={isDragging}
                         attStatus={attStatus}
                         onPress={() => router.push('/lessons/' + lesson.id as any)}
-                        onDragMove={(dy, dx) => {
+                        onDragMove={(dy, dx, moveY) => {
                           const sMin = timeToMinutes(lesson.start_time);
                           const deltaMin = Math.round((dy / HOUR_HEIGHT) * 60 / 10) * 10;
                           const newMin = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60 - 10, sMin + deltaMin));
                           const tCol = Math.min(6, Math.max(0, Math.floor((colIdx * COL_W + dx + COL_W / 2) / COL_W)));
                           setWeekDragTargetMin(newMin);
                           setWeekDragTargetColIdx(tCol);
+                          // 자동 스크롤
+                          if (weekAutoScrollRef.current) { clearInterval(weekAutoScrollRef.current); weekAutoScrollRef.current = null; }
+                          const { height: screenH } = Dimensions.get('window');
+                          const EDGE = 80;
+                          if (moveY < EDGE) {
+                            weekAutoScrollRef.current = setInterval(() => {
+                              const ny = Math.max(0, weekScrollYRef.current - 6);
+                              dayScrollRef.current?.scrollTo({ y: ny, animated: false });
+                              weekScrollYRef.current = ny;
+                            }, 16);
+                          } else if (moveY > screenH - EDGE) {
+                            weekAutoScrollRef.current = setInterval(() => {
+                              const ny = weekScrollYRef.current + 6;
+                              dayScrollRef.current?.scrollTo({ y: ny, animated: false });
+                              weekScrollYRef.current = ny;
+                            }, 16);
+                          }
                         }}
                         onDragEnd={(dy, dx) => {
                           const deltaMin = Math.round((dy / HOUR_HEIGHT) * 60 / 10) * 10;
@@ -1049,8 +1080,16 @@ ${rejectMsg.trim()}`
                           const targetDate = displayDates[targetColIdx];
                           handleWeekDropLesson(lesson.id, date, targetDate, newMin);
                         }}
-                        onDragStart={() => setWeekDraggingId(lesson.id)}
-                        onDragCancel={() => { setWeekDraggingId(null); setWeekDragTargetColIdx(-1); }}
+                        onDragStart={() => {
+                          setWeekDraggingId(lesson.id);
+                          setWeekDragTargetMin(timeToMinutes(lesson.start_time));
+                          setWeekDragTargetColIdx(colIdx);
+                        }}
+                        onDragCancel={() => {
+                          if (weekAutoScrollRef.current) { clearInterval(weekAutoScrollRef.current); weekAutoScrollRef.current = null; }
+                          setWeekDraggingId(null);
+                          setWeekDragTargetColIdx(-1);
+                        }}
                       />
                     );
                   })}
@@ -1259,9 +1298,12 @@ ${rejectMsg.trim()}`
       ) : renderMonthView()}
 
       {/* FAB — Android 하단 nav bar 높이 반영 */}
-      <TouchableOpacity style={[styles.fab, { bottom: insets.bottom + 24 }]} onPress={() => router.push('/lessons/new')}>
+      <Pressable
+        style={({ pressed }) => [styles.fab, { bottom: insets.bottom + 24, backgroundColor: pressed ? '#A9624B' : S_TERRA }]}
+        onPress={() => router.push('/lessons/new')}
+      >
         <Ionicons name="add" size={28} color="#fff" />
-      </TouchableOpacity>
+      </Pressable>
 
       {/* 새 레슨 등록 모달 */}
       <Modal visible={newModal} transparent animationType="slide" onRequestClose={() => setNewModal(false)}>
@@ -1441,11 +1483,11 @@ ${rejectMsg.trim()}`
 // ── 드래그 가능한 레슨 카드 컴포넌트 ──────────────────────────
 function DraggableLesson({
   lesson, top, height, left, width, isDragging, onPress, onDragEnd, onDragStart, onDragCancel,
-  cardBg, cardNameColor, cardTimeColor,
+  cardBg, cardNameColor, cardTimeColor, cardBorderColor,
 }: {
   lesson: LessonWithMembers; top: number; height: number; left: number; width: number; isDragging: boolean;
   onPress: () => void; onDragEnd: (dy: number) => void; onDragStart: () => void; onDragCancel: () => void;
-  cardBg: string; cardNameColor: string; cardTimeColor: string;
+  cardBg: string; cardNameColor: string; cardTimeColor: string; cardBorderColor: string;
 }) {
   const pan = useRef(new Animated.ValueXY()).current;
   const dragging = useRef(false);
@@ -1508,7 +1550,7 @@ function DraggableLesson({
     <Animated.View
       style={[
         styles.lessonCard,
-        { top, height, left, width, transform: [{ translateY: pan.y }], zIndex: isDragging ? 999 : 1, backgroundColor: cardBg },
+        { top, height, left, width, transform: [{ translateY: pan.y }], zIndex: isDragging ? 999 : 1, backgroundColor: cardBg, borderLeftWidth: 3, borderLeftColor: cardBorderColor },
         isShort && { padding: 3, paddingHorizontal: 5 },
         isDragging && styles.lessonCardDragging,
       ]}
@@ -1560,7 +1602,7 @@ function WeekDraggableBlock({
 }: {
   lesson: LessonWithMembers; top: number; height: number; left: number; width: number; isDragging: boolean;
   attStatus: 'scheduled' | 'completed' | 'absent';
-  onPress: () => void; onDragMove: (dy: number, dx: number) => void; onDragEnd: (dy: number, dx: number) => void; onDragStart: () => void; onDragCancel: () => void;
+  onPress: () => void; onDragMove: (dy: number, dx: number, moveY: number) => void; onDragEnd: (dy: number, dx: number) => void; onDragStart: () => void; onDragCancel: () => void;
 }) {
   const pan = useRef(new Animated.ValueXY()).current;
   const dragging = useRef(false);
@@ -1591,7 +1633,7 @@ function WeekDraggableBlock({
     },
     onPanResponderMove: (_, g) => {
       pan.setValue({ x: g.dx, y: g.dy });
-      onDragMoveRef.current(g.dy, g.dx);
+      onDragMoveRef.current(g.dy, g.dx, g.moveY);
     },
     onPanResponderRelease: (_, g) => {
       if (!dragging.current) return;
@@ -1616,15 +1658,18 @@ function WeekDraggableBlock({
   const startTimeStr = lesson.start_time.slice(0, 5);
   const isCompact = height < 44;
 
-  const cardBg = attStatus === 'absent' ? '#FFE8E8'
+  const cardBg = attStatus === 'absent' ? S_ABS_BG
     : attStatus === 'completed' ? S_DONE_BG
     : S_SCH_BG;
+  const cardBorderColor = attStatus === 'absent' ? S_ABS_BORDER
+    : attStatus === 'completed' ? S_DONE_BORDER
+    : S_SCH_BORDER;
   const nameColor = attStatus === 'absent' ? '#C0393A'
     : attStatus === 'completed' ? S_DONE_FG
     : S_SCH_FG;
   const timeColor = attStatus === 'absent' ? '#C0393A'
     : attStatus === 'completed' ? S_TEXT_MUTED
-    : S_TERRA;
+    : S_CARD_TIME;
 
   return (
     <Animated.View
@@ -1633,6 +1678,8 @@ function WeekDraggableBlock({
         {
           top, height, left, width,
           backgroundColor: cardBg,
+          borderLeftWidth: 3,
+          borderLeftColor: cardBorderColor,
           transform: [{ translateX: pan.x }, { translateY: pan.y }],
           zIndex: isDragging ? 9999 : 1,
         },
@@ -1786,8 +1833,8 @@ const styles = StyleSheet.create({
   monthCellDay: { fontSize: 15, fontWeight: '600', color: Colors.foreground, marginBottom: 3 },
   monthCellDayToday: { color: Colors.primary, fontWeight: '800' },
   monthLessonDots: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  monthDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.primary },
-  monthLessonCount: { fontSize: 12, fontWeight: '700', color: Colors.primary, marginLeft: 1 },
+  monthDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: S_TERRA },
+  monthLessonCount: { fontSize: 12, fontWeight: '700', color: S_TERRA, marginLeft: 1 },
   monthSummary: { flexDirection: 'row', marginHorizontal: 16, marginTop: 16, backgroundColor: Colors.white, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.border },
   monthSummaryItem: { flex: 1, alignItems: 'center' },
   monthSummaryDivider: { width: 1, backgroundColor: Colors.border },
