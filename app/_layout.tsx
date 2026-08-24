@@ -3,27 +3,33 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { Session } from '@supabase/supabase-js';
 import * as Linking from 'expo-linking';
 import { supabase } from '../lib/supabase';
-import { View, ActivityIndicator, Text } from 'react-native';
-import { Colors } from '../lib/theme';
+import { Text } from 'react-native';
 import { getCurrentSubscription } from '../lib/subscription';
 import { registerCoachPushToken } from '../lib/notifications';
 import { IS_BETA } from '../lib/beta';
+import BrandLoadingScreen from '../components/BrandLoadingScreen';
+import {
+  fetchHomeData,
+  persistHomeData,
+  loadCachedHomeData,
+} from '../lib/homeDataLoader';
 
 // Android 시스템 폰트 크기 설정이 레이아웃을 깨트리지 않도록 전역 비활성화
 if ((Text as any).defaultProps == null) (Text as any).defaultProps = {};
 (Text as any).defaultProps.allowFontScaling = false;
 
+const PRELOAD_TIMEOUT_MS = 8000;
+
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isNavigationReady, setIsNavigationReady] = useState(false);
+  const [preloading, setPreloading] = useState(false);
   const router = useRouter();
   const segments = useSegments();
 
   useEffect(() => {
-    // 딥링크 URL에서 Supabase 토큰 추출 후 세션 설정 (비밀번호 재설정 등)
     const handleDeepLinkUrl = async (url: string) => {
-      console.log('[DEEPLINK]', url);
       const fragment = url.split('#')[1] ?? '';
       const params = Object.fromEntries(new URLSearchParams(fragment));
       if (params.access_token && params.refresh_token) {
@@ -34,9 +40,7 @@ export default function RootLayout() {
       }
     };
 
-    // 앱이 딥링크로 최초 실행된 경우
     Linking.getInitialURL().then(url => { if (url) handleDeepLinkUrl(url); });
-    // 앱이 이미 실행 중일 때 딥링크 수신
     const linkSub = Linking.addEventListener('url', ({ url }) => handleDeepLinkUrl(url));
 
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -63,7 +67,6 @@ export default function RootLayout() {
     const inAuthGroup = segments[0] === '(auth)';
     const inSubscriptionGroup = segments[0] === 'subscription';
     const inOnboarding = segments[0] === '(auth)' && (segments as string[])[1] === 'onboarding';
-    // 비밀번호 재설정 딥링크 경로 — 세션 없어도 redirect 금지
     const inResetPassword = (segments as string[])[0] === 'reset-password';
 
     if (!session && !inAuthGroup && !inResetPassword) {
@@ -72,7 +75,6 @@ export default function RootLayout() {
       return;
     }
 
-    // 이미 온보딩 중이면 아무것도 하지 않음
     if (inOnboarding) {
       setIsNavigationReady(true);
       return;
@@ -80,26 +82,56 @@ export default function RootLayout() {
 
     if (session && !inSubscriptionGroup) {
       registerCoachPushToken().catch(() => {});
-      // 코치 프로필 있는지 확인 → 없으면 온보딩 (인증 후 딥링크 진입 포함)
       supabase
         .from('coach_profiles')
         .select('coach_id')
         .eq('coach_id', session.user.id)
         .maybeSingle()
-        .then(({ data }) => {
+        .then(async ({ data }) => {
           if (!data) {
-            // 프로필 없음 → 무조건 온보딩 (inAuthGroup 여부 관계없이)
             router.replace('/(auth)/onboarding');
             setIsNavigationReady(true);
             return;
           }
-          // 프로필 있으면 로그인 화면이면 탭으로, 아니면 구독 체크
+
           if (inAuthGroup) {
+            // 구독 체크
+            if (!IS_BETA) {
+              try {
+                const sub = await getCurrentSubscription();
+                if (sub && (sub.status === 'blocked' || sub.status === 'cancelled')) {
+                  router.replace('/subscription/blocked');
+                  setIsNavigationReady(true);
+                  return;
+                }
+              } catch {}
+            }
+
+            // 홈 데이터 프리로드 (캐시 없거나 stale일 때만)
+            setPreloading(true);
+            try {
+              const uid = session.user.id;
+              const cached = await loadCachedHomeData(uid);
+              if (!cached) {
+                // 처음 실행 — 네트워크로 fetch
+                const result = await Promise.race<any>([
+                  fetchHomeData(uid, session.user.email ?? ''),
+                  new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), PRELOAD_TIMEOUT_MS)),
+                ]);
+                await persistHomeData(uid, result);
+              }
+              // stale cache면 home screen이 백그라운드에서 갱신함
+            } catch {
+              // 오류 시 캐시 있으면 사용, 없으면 home에서 직접 로드
+            } finally {
+              setPreloading(false);
+            }
+
             router.replace('/(tabs)');
             setIsNavigationReady(true);
             return;
           }
-          // 구독 상태 체크
+
           if (IS_BETA) { setIsNavigationReady(true); return; }
           getCurrentSubscription().then((sub) => {
             if (sub && (sub.status === 'blocked' || sub.status === 'cancelled')) {
@@ -116,12 +148,8 @@ export default function RootLayout() {
     setIsNavigationReady(true);
   }, [session, loading, segments]);
 
-  if (loading || !isNavigationReady) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.navy }}>
-        <ActivityIndicator size="large" color="#fff" />
-      </View>
-    );
+  if (loading || !isNavigationReady || preloading) {
+    return <BrandLoadingScreen />;
   }
 
   return (

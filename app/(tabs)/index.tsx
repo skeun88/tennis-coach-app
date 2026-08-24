@@ -15,37 +15,33 @@ import { notifyMemberAbsent, notifyReregister, notifyLessonCountUpdate } from '.
 import PlanUpsellModal from "../../components/PlanUpsellModal";
 import CoachQRModal from '../../components/CoachQRModal';
 import OnboardingModal from '../../components/OnboardingModal';
+import {
+  fetchHomeData,
+  fetchTodayCards,
+  fetchChurnRisk,
+  fetchAutoGenSuggestion,
+  getMemCache,
+  isFresh,
+  persistHomeData,
+  type HomeData,
+  type HomeStats,
+  type TodayCard,
+  type ChurnRiskMember,
+  type AutoGenSuggestion,
+  type InterestMember,
+  type TrialMember,
+} from '../../lib/homeDataLoader';
 
 const ABSENCE_REASONS = ['개인사정', '부상', '일정충돌', '무단결석', '기타'] as const;
 const DEDUCTION_TYPES = ['정상차감', '미차감', '보강예정'] as const;
 
-interface Stats {
-  totalMembers: number;
-  todayLessons: number;
-  unpaidMembers: number;   // 잔여횟수 0회
-  expiringMembers: number; // 잔여횟수 2회 이하(1~2회)
-}
-
-interface TodayMemberCard {
-  lessonId: string;
-  lessonPackageName: string;
-  startTime: string;
-  memberId: string;
-  memberName: string;
-  memberLevel: string;
-  remainingCredits: number;
-  attended: boolean;
-  isAbsent: boolean;
-  deductCredit: boolean;
-  absenceReason?: string | null;
-  deductionType?: string | null;
-  attendanceId?: string;
-}
+// TodayMemberCard alias — same shape as shared TodayCard
+type TodayMemberCard = TodayCard;
 
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [stats, setStats] = useState<Stats>({
+  const [stats, setStats] = useState<HomeStats>({
     totalMembers: 0, todayLessons: 0, unpaidMembers: 0, expiringMembers: 0,
   });
   const [todayCards, setTodayCards] = useState<TodayMemberCard[]>([]);
@@ -82,7 +78,6 @@ export default function HomeScreen() {
   const [noPackageModal, setNoPackageModal] = useState(false);
 
   // ④ 이탈 위험
-  interface ChurnRiskMember { id: string; name: string; level: string; lastAttended: string | null; }
   const [churnRiskList, setChurnRiskList] = useState<ChurnRiskMember[]>([]);
   const [churnModal, setChurnModal] = useState(false);
 
@@ -92,216 +87,59 @@ export default function HomeScreen() {
   // ① 체험 회원
   const [trialCount, setTrialCount] = useState(0);
   const [trialModal, setTrialModal] = useState(false);
-  interface TrialMember { id: string; name: string; trial_started_at: string | null; trial_lesson_count: number; }
   const [trialMembers, setTrialMembers] = useState<TrialMember[]>([]);
 
   // ③ 관심 회원 (member_interest)
-  interface InterestMember { id: string; name: string | null; phone: string | null; package_title: string | null; created_at: string; packageId: string | null; }
   const [interestList, setInterestList] = useState<InterestMember[]>([]);
   const [interestModal, setInterestModal] = useState(false);
+
+  function hydrateFromData(data: HomeData) {
+    setCoachEmail(data.coachEmail);
+    setUserId(data.userId);
+    setStats(data.stats);
+    setTodayCards(data.todayCards);
+    setChurnRiskList(data.churnRiskList);
+    setTrialCount(data.trialCount);
+    setTrialMembers(data.trialMembers);
+    setInterestList(data.interestList);
+    setKnowledgeCount(data.knowledgeCount);
+    setAutoGenSuggestion(data.autoGenSuggestion);
+  }
 
   async function loadAll(targetDate?: string) {
     const date = targetDate ?? today;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+
+    // 캐시가 fresh하고 날짜가 같으면 바로 반환 (중복 조회 방지)
+    const cached = getMemCache(user.id);
+    if (cached && isFresh(cached) && cached.today === date) {
+      hydrateFromData(cached);
+      return;
+    }
+
     setCoachEmail(user.email ?? '');
     setUserId(user.id);
 
-    // 레슨권 없으면 모달 (최초 1회 — AsyncStorage로 dismissed 기록)
+    // 레슨권 없으면 모달 (최초 1회)
     const dismissed = await AsyncStorage.getItem(`no_package_modal_dismissed_${user.id}`);
     if (!dismissed) {
       const { count: pkgCount } = await supabase
         .from('lesson_packages')
         .select('id', { count: 'exact', head: true })
         .eq('coach_id', user.id);
-      if ((pkgCount ?? 0) === 0) {
-        setNoPackageModal(true);
-      }
+      if ((pkgCount ?? 0) === 0) setNoPackageModal(true);
     }
 
-    const [membersRes, lessonsRes] = await Promise.all([
-      supabase.from('members').select('id, name, level, remaining_credits, is_active, is_trial').eq('coach_id', user.id),
-      supabase.from('lessons').select('id').eq('coach_id', user.id).eq('date', date),
-    ]);
-
-    const members = membersRes.data ?? [];
-    const activeMembers = members.filter((m: any) => m.is_active !== false);
-    setStats({
-      totalMembers: activeMembers.length,
-      todayLessons: lessonsRes.data?.length ?? 0,
-      unpaidMembers: activeMembers.filter((m: any) => (m.remaining_credits ?? 0) === 0 && !m.is_trial).length,
-      expiringMembers: activeMembers.filter((m: any) => {
-        const rc = m.remaining_credits ?? 0;
-        return rc > 0 && rc <= 2 && !m.is_trial;
-      }).length,
-    });
-
-    // ④ 이탈 위험
-    await loadChurnRisk(user.id, activeMembers as any[]);
-
-    // ① 체험 회원
-    const trials = activeMembers.filter((m: any) => m.is_trial);
-    setTrialCount(trials.length);
-    setTrialMembers(trials.map((m: any) => ({
-      id: m.id, name: m.name,
-      trial_started_at: m.trial_started_at ?? null,
-      trial_lesson_count: m.trial_lesson_count ?? 0,
-    })));
-
-    // ③ 관심 회원 (member_interest)
-    const { data: interests } = await supabase
-      .from('member_interest')
-      .select('id, name, phone, package_id, created_at, lesson_packages(title)')
-      .eq('coach_id', user.id)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false });
-    setInterestList((interests ?? []).map((i: any) => ({
-      id: i.id, name: i.name, phone: i.phone,
-      package_title: i.lesson_packages?.title ?? null,
-      packageId: i.package_id ?? null,
-      created_at: i.created_at,
-    })));
-
-    await loadTodayCards(user.id, date);
-    await checkAutoGenSchedule(user.id);
-    // AI 코칭 모델 카운트
-    const { count } = await supabase
-      .from('tennis_knowledge')
-      .select('id', { count: 'exact', head: true })
-      .eq('coach_id', user.id);
-    setKnowledgeCount(count ?? 0);
-  }
-
-  async function loadChurnRisk(coachId: string, activeMembers: { id: string; name: string; level: string; is_trial?: boolean }[]) {
-    if (activeMembers.length === 0) { setChurnRiskList([]); return; }
-    const threeWeeksAgo = new Date();
-    threeWeeksAgo.setDate(threeWeeksAgo.getDate() - 21);
-    const cutoff = threeWeeksAgo.toISOString().split('T')[0];
-
-    // 각 회원의 마지막 출석 날짜를 동시에 가져오기 (join with lessons)
-    const memberIds = activeMembers.filter(m => !m.is_trial).map(m => m.id);
-    if (memberIds.length === 0) { setChurnRiskList([]); return; }
-
-    const { data: recentAttendance } = await supabase
-      .from('attendance')
-      .select('member_id, lessons!inner(date)')
-      .in('member_id', memberIds)
-      .gte('lessons.date' as any, cutoff);
-
-    const attendedRecently = new Set((recentAttendance ?? []).map((a: any) => a.member_id));
-    const atRisk = activeMembers
-      .filter(m => !m.is_trial && !attendedRecently.has(m.id))
-      .map(m => ({ id: m.id, name: m.name, level: m.level, lastAttended: null }));
-
-    // 마지막 출석일 데이터 쭄우기 (셀택)
-    if (atRisk.length > 0) {
-      const { data: lastAttData } = await supabase
-        .from('attendance')
-        .select('member_id, lessons!inner(date)')
-        .in('member_id', atRisk.map(m => m.id));
-
-      const lastAttMap: Record<string, string> = {};
-      for (const row of lastAttData ?? []) {
-        const mid = (row as any).member_id;
-        const d = (row as any).lessons?.date ?? null;
-        if (d && !lastAttMap[mid]) lastAttMap[mid] = d;
-      }
-      setChurnRiskList(atRisk.map(m => ({ ...m, lastAttended: lastAttMap[m.id] ?? null })));
-    } else {
-      setChurnRiskList([]);
-    }
+    const data = await fetchHomeData(user.id, user.email ?? '');
+    await persistHomeData(user.id, data);
+    hydrateFromData(data);
   }
 
   async function loadTodayCards(uid: string, targetDate?: string) {
     const date = targetDate ?? today;
-    const { data: lessons } = await supabase
-      .from('lessons')
-      .select('id, title, start_time')
-      .eq('coach_id', uid)
-      .eq('date', date)
-      .order('start_time');
-
-    if (!lessons || lessons.length === 0) {
-      setTodayCards([]);
-      return;
-    }
-
-    const lessonIds = lessons.map(l => l.id);
-
-    const { data: lessonMembers } = await supabase
-      .from('lesson_members')
-      .select('lesson_id, member_id, member:members(id, name, level, remaining_credits, lesson_package_id, lesson_packages(title))')
-      .in('lesson_id', lessonIds);
-
-    const { data: attendances } = await supabase
-      .from('attendance')
-      .select('id, lesson_id, member_id, status, deduct_credit, absence_reason, deduction_type')
-      .in('lesson_id', lessonIds);
-
-    const attendanceMap = new Map<string, {
-      id: string; status: string; deduct_credit: boolean;
-      absence_reason: string | null; deduction_type: string | null;
-    }>();
-    for (const a of attendances ?? []) {
-      attendanceMap.set(`${a.lesson_id}:${a.member_id}`, {
-        id: a.id, status: a.status, deduct_credit: a.deduct_credit,
-        absence_reason: a.absence_reason, deduction_type: a.deduction_type,
-      });
-    }
-
-    const cards: TodayMemberCard[] = [];
-    for (const lm of lessonMembers ?? []) {
-      const lesson = lessons.find(l => l.id === lm.lesson_id);
-      const member = lm.member as any;
-      if (!lesson || !member) continue;
-      const key = `${lm.lesson_id}:${lm.member_id}`;
-      const att = attendanceMap.get(key);
-      const pkgName = member.lesson_packages?.title ?? null;
-      cards.push({
-        lessonId: lm.lesson_id,
-        lessonPackageName: pkgName ?? lesson.title,
-        startTime: lesson.start_time,
-        memberId: lm.member_id,
-        memberName: member.name,
-        memberLevel: member.level,
-        remainingCredits: member.remaining_credits ?? 0,
-        attended: att?.status === '출석',
-        isAbsent: att?.status === '결석',
-        deductCredit: att?.deduct_credit ?? false,
-        absenceReason: att?.absence_reason ?? null,
-        deductionType: att?.deduction_type ?? null,
-        attendanceId: att?.id,
-      });
-    }
-
-    cards.sort((a, b) => {
-      if (a.startTime < b.startTime) return -1;
-      if (a.startTime > b.startTime) return 1;
-      return a.memberName.localeCompare(b.memberName);
-    });
-
+    const cards = await fetchTodayCards(uid, date);
     setTodayCards(cards);
-  }
-
-  async function checkAutoGenSchedule(uid: string) {
-    const todayDayOfWeek = new Date().getDay();
-    const { data: membersWithSchedule } = await supabase
-      .from('members')
-      .select('id, name, fixed_schedule_days, fixed_schedule_time, fixed_schedule_times')
-      .eq('coach_id', uid)
-      .eq('is_active', true)
-      .not('fixed_schedule_days', 'is', null);
-    if (!membersWithSchedule) return;
-    const suggestions = membersWithSchedule
-      .filter(m => m.fixed_schedule_days && m.fixed_schedule_days.includes(todayDayOfWeek))
-      .map(m => {
-        const fst = (m as any).fixed_schedule_times;
-        const time = fst?.[String(todayDayOfWeek)] ?? (m.fixed_schedule_time as string | null)?.slice(0, 5) ?? null;
-        if (!time) return null;
-        return { memberId: m.id, name: m.name, time };
-      })
-      .filter(Boolean) as { memberId: string; name: string; time: string }[];
-    setAutoGenSuggestion(suggestions);
   }
 
   async function handleAutoGenLessons() {
@@ -592,6 +430,27 @@ export default function HomeScreen() {
 
   const LEVEL_COLOR: Record<string, string> = Colors.level;
 
+  const processedToday = todayCards.filter(c => c.attended || c.isAbsent);
+  const unprocessedToday = todayCards.filter(c => !c.attended && !c.isAbsent);
+
+  function getBannerSubText() {
+    if (todayCards.length === 0) return '오늘 예정된 레슨이 없어요';
+    if (unprocessedToday.length === 0) return '오늘 레슨을 모두 완료했어요';
+    if (unprocessedToday.length === 1) {
+      const last = unprocessedToday[0];
+      return `마지막 레슨 ${last.startTime.slice(0, 5)} · ${last.memberName}`;
+    }
+    if (processedToday.length === 0) {
+      const firstTime = todayCards[0].startTime;
+      const cnt = todayCards.filter(c => c.startTime === firstTime).length;
+      return cnt > 1
+        ? `첫 레슨 ${firstTime.slice(0, 5)} · 회원 ${cnt}`
+        : `첫 레슨 ${firstTime.slice(0, 5)} · ${todayCards[0].memberName}`;
+    }
+    const next = unprocessedToday[0];
+    return `다음 레슨 ${next.startTime.slice(0, 5)} · ${next.memberName}`;
+  }
+
   return (
     <View style={styles.screenWrapper}>
       <ScrollView
@@ -612,7 +471,7 @@ export default function HomeScreen() {
               {new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}
             </Text>
             <Text style={styles.headerGreeting}>
-              안녕하세요, {coachEmail ? coachEmail.split('@')[0] : '코치'}님 👋
+              안녕하세요 👋
             </Text>
           </View>
           <View style={styles.headerIcons}>
@@ -635,15 +494,11 @@ export default function HomeScreen() {
         >
           <View style={styles.todayBannerLeft}>
             <Text style={styles.todayBannerLabel}>오늘 레슨</Text>
-            <Text style={styles.todayBannerCount}>{stats.todayLessons}회</Text>
-            {todayCards.length > 0 && (
-              <Text style={styles.todayBannerFirst}>
-                첫 레슨 {todayCards[0].startTime.slice(0, 5)} · {todayCards[0].memberName}
-              </Text>
-            )}
+            <Text style={styles.todayBannerCount}>{processedToday.length}/{todayCards.length}</Text>
+            <Text style={styles.todayBannerFirst}>{getBannerSubText()}</Text>
           </View>
           <View style={styles.todayBannerRight}>
-            <Ionicons name="tennisball-outline" size={52} color="rgba(255,255,255,0.25)" />
+            <Ionicons name="calendar-outline" size={52} color="rgba(255,255,255,0.25)" />
           </View>
         </TouchableOpacity>
 
@@ -744,7 +599,7 @@ export default function HomeScreen() {
 
         {/* ── 섹션5: 오늘 레슨 상세 ── */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>오늘 레슨 상세</Text>
+          <Text style={styles.sectionTitle}>오늘 레슨</Text>
           <TouchableOpacity onPress={() => router.push('/lessons/new')}>
             <Ionicons name="add-circle-outline" size={22} color="#C0755A" />
           </TouchableOpacity>
@@ -796,6 +651,7 @@ export default function HomeScreen() {
                   <View style={styles.lessonTimeBadge}>
                     <Text style={styles.lessonTimeText}>{card.startTime.slice(0, 5)}</Text>
                   </View>
+                  <View style={styles.lessonTimeDivider} />
 
                   <View style={styles.lessonInfo}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
@@ -1271,7 +1127,8 @@ const styles = StyleSheet.create({
   },
   lessonCardAttended: { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' },
   lessonCardAbsent: { backgroundColor: '#fff1f2', borderColor: '#fecdd3' },
-  lessonTimeBadge: { marginRight: 12, minWidth: 52, justifyContent: 'center' },
+  lessonTimeBadge: { marginRight: 4, minWidth: 52, justifyContent: 'center' },
+  lessonTimeDivider: { width: 1, alignSelf: 'stretch', backgroundColor: '#D9CFC7', marginHorizontal: 8 },
   lessonTimeText: { fontSize: 15, fontWeight: '700', color: '#3E2B22' },
   lessonInfo: { flex: 1 },
   lessonMemberName: { fontSize: 15, fontWeight: '700', color: '#3E2B22' },
