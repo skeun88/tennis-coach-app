@@ -34,7 +34,7 @@ export default function BillingHistoryScreen() {
   const [loading, setLoading] = useState(true);
 
   const loadHistory = useCallback(async () => {
-    if (!subscription) { setLoading(false); return; }
+    if (!subscription?.coach_id) { setLoading(false); return; }
     setLoading(true);
     try {
       const { data, error } = await supabase

@@ -22,7 +22,6 @@ const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 
 export default function TopupScreen() {
   const router = useRouter();
-  if (IS_BETA) { router.replace('/(tabs)'); return null; }
 
   const { subscription, refresh } = useSubscription();
   const [aiUsed, setAiUsed] = useState(0);

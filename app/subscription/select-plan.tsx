@@ -56,7 +56,6 @@ function FeatureCell({ value }: { value: boolean | string }) {
 
 export default function SelectPlanScreen() {
   const router = useRouter();
-  if (IS_BETA) { router.replace('/(tabs)'); return null; }
 
   const { subscription, isTrial } = useSubscription();
   const [billing, setBilling] = useState<BillingCycle>('monthly');
