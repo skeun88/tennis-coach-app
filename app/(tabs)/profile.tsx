@@ -62,15 +62,41 @@ function CancelBtn({ onPress }: { onPress: () => void }) {
   );
 }
 
-function StatCell({ value, label, sub, right, bottom }: {
-  value: string; label: string; sub?: string; right?: boolean; bottom?: boolean;
+function StatDetailContent({ icon, title, value, what, how, meaning }: {
+  icon: string; title: string; value: string; what: string; how: string; meaning: string;
 }) {
   return (
-    <View style={[stat.cell, right && stat.cellRight, bottom && stat.cellBottom]}>
+    <View style={{ marginBottom: 16 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+        <Ionicons name={icon as any} size={22} color={TERRA} />
+        <Text style={{ fontSize: 18, fontWeight: '800', color: DARK }}>{title}</Text>
+      </View>
+      <Text style={{ fontSize: 28, fontWeight: '900', color: TERRA, marginBottom: 14 }}>{value}</Text>
+      <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 }}>이 수치는 무엇인가요?</Text>
+      <Text style={{ fontSize: 14, color: DARK, lineHeight: 20, marginBottom: 12 }}>{what}</Text>
+      <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 }}>어떻게 쌓이나요?</Text>
+      <Text style={{ fontSize: 14, color: DARK, lineHeight: 20, marginBottom: 12 }}>{how}</Text>
+      <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 }}>코치에게 주는 의미</Text>
+      <Text style={{ fontSize: 14, color: DARK, lineHeight: 20 }}>{meaning}</Text>
+    </View>
+  );
+}
+
+function StatCell({ value, label, sub, right, bottom, onPress }: {
+  value: string; label: string; sub?: string; right?: boolean; bottom?: boolean; onPress?: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={[stat.cell, right && stat.cellRight, bottom && stat.cellBottom]}
+      onPress={onPress}
+      disabled={!onPress}
+      activeOpacity={onPress ? 0.7 : 1}
+      accessibilityLabel={`${label} ${value} 상세 설명 보기`}
+    >
       <Text style={stat.value}>{value}</Text>
       <Text style={stat.label}>{label}</Text>
       {sub ? <Text style={stat.sub}>{sub}</Text> : null}
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -106,6 +132,7 @@ export default function ProfileScreen() {
   const [qrModalVisible, setQrModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [statDetail, setStatDetail] = useState<null | 'lessons' | 'retention' | 'satisfaction' | 'reports'>(null);
 
   const [perf, setPerf] = useState<Performance>({
     totalLessons: 0, avgRetentionMonths: null,
@@ -271,48 +298,56 @@ export default function ProfileScreen() {
     if (status !== 'granted') { Alert.alert('권한 필요', '사진 라이브러리 접근 권한이 필요합니다.'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.6 });
     if (result.canceled || !result.assets[0]) return;
-    const uri = result.assets[0].uri;
+    const asset = result.assets[0];
+    const uri = asset.uri;
     setUploadingAvatar(true);
     try {
+      console.log('[Avatar] Step 1: 사진 선택 완료, uri 생성');
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const fileInfo = await FileSystem.getInfoAsync(uri);
-      if (!fileInfo.exists || ((fileInfo as any).size ?? 0) < 1000) {
-        Alert.alert('오류', '이미지 파일을 읽을 수 없습니다. 다른 사진을 선택해주세요.');
-        return;
-      }
-      const ext = (uri.split('.').pop()?.toLowerCase() ?? 'jpg').replace(/[^a-z]/g, '') || 'jpg';
+      if (!user) { console.log('[Avatar] Step 2 FAIL: 로그인 필요'); return; }
+      console.log('[Avatar] Step 2: 사용자 인증 확인');
+
+      const mimeType = asset.mimeType ?? 'image/jpeg';
+      const ext = (mimeType.split('/')[1]?.toLowerCase() ?? 'jpg').replace(/[^a-z0-9]/g, '') || 'jpg';
       const filePath = `${user.id}/avatar.${ext}`;
+      console.log(`[Avatar] Step 3: 파일 경로 결정 — avatars/${filePath}`);
+
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) throw new Error('인증 토큰 없음');
+
       const { data: existingFiles } = await supabase.storage.from('avatars').list(user.id);
       const oldAvatars = (existingFiles ?? []).filter(f => f.name.startsWith('avatar.'));
       if (oldAvatars.length > 0) {
+        console.log(`[Avatar] Step 4: 기존 아바타 ${oldAvatars.length}개 삭제`);
         await supabase.storage.from('avatars').remove(oldAvatars.map(f => `${user.id}/${f.name}`));
       }
+
       const uploadUrl = `${SUPABASE_URL}/storage/v1/object/avatars/${filePath}`;
+      console.log('[Avatar] Step 5: Storage 업로드 시작');
       const uploadResult = await FileSystem.uploadAsync(uploadUrl, uri, {
         httpMethod: 'POST',
         uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': `image/${ext}`,
+          'Content-Type': mimeType,
           'x-upsert': 'true',
         },
       });
-      if (uploadResult.status >= 400) throw new Error(`이미지 업로드 실패 (${uploadResult.status})`);
-      const { data: fileList } = await supabase.storage.from('avatars').list(user.id, { search: `avatar.${ext}` });
-      const storedFile = fileList?.find(f => f.name === `avatar.${ext}`);
-      const storedSize = (storedFile?.metadata as any)?.size ?? 0;
-      if (storedSize === 0) {
-        await supabase.storage.from('avatars').remove([filePath]);
-        throw new Error('이미지가 올바르게 업로드되지 않았습니다. 다른 사진을 선택해주세요.');
+      console.log(`[Avatar] Step 5 결과: status=${uploadResult.status}`);
+      if (uploadResult.status >= 400) {
+        console.error(`[Avatar] Step 5 FAIL: HTTP ${uploadResult.status} — ${uploadResult.body}`);
+        throw new Error(`Storage 업로드 실패 (HTTP ${uploadResult.status})`);
       }
+
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath);
-      setEditProfile(p => ({ ...p, avatar_url: `${publicUrl}?t=${Date.now()}` }));
+      const urlWithBust = `${publicUrl}?t=${Date.now()}`;
+      console.log('[Avatar] Step 6: publicUrl 생성 완료');
+      setEditProfile(p => ({ ...p, avatar_url: urlWithBust }));
+      console.log('[Avatar] Step 7: editProfile.avatar_url 업데이트 완료 (저장하기 버튼으로 DB 저장 필요)');
     } catch (e: any) {
-      Alert.alert('업로드 실패', e?.message ?? '이미지 업로드에 실패했습니다. 다시 시도해주세요.');
+      console.error('[Avatar] 업로드 오류:', e?.message ?? e);
+      Alert.alert('오류', '프로필 사진을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       setUploadingAvatar(false);
     }
@@ -442,7 +477,7 @@ export default function ProfileScreen() {
                 <Text style={styles.sectionTitle}>코칭 실적</Text>
               </View>
               {canUse('coaching_stats_public')
-                ? <Text style={styles.verifiedBadge}>KERRI 기록 데이터 기준</Text>
+                ? <Text style={styles.verifiedBadge}>KERRI 검증 데이터 · 조작 불가</Text>
                 : <View style={styles.blindBadge}><Text style={styles.blindBadgeText}>Pro 공개</Text></View>
               }
             </View>
@@ -476,23 +511,27 @@ export default function ProfileScreen() {
                   label="누적 레슨"
                   sub="출석 체크 기준"
                   right
+                  onPress={() => setStatDetail('lessons')}
                 />
                 <StatCell
                   value={perf.avgRetentionMonths !== null ? `${perf.avgRetentionMonths}개월` : '-'}
                   label="평균 유지"
                   sub={perf.avgRetentionMonths !== null ? '이탈 회원 기준' : '데이터 쌓는 중'}
+                  onPress={() => setStatDetail('retention')}
                 />
                 <StatCell
                   value={perf.satisfactionAvg !== null ? `${perf.satisfactionAvg}` : '-'}
                   label="만족도"
                   sub={perf.satisfactionCount > 0 ? `${perf.satisfactionCount}명 평가` : '아직 받은 리뷰가 없어요'}
                   right bottom
+                  onPress={() => setStatDetail('satisfaction')}
                 />
                 <StatCell
                   value={`${perf.totalReports}개`}
-                  label="레슨 리포트"
+                  label="레슨 기록"
                   sub="발송 완료 기준"
                   bottom
+                  onPress={() => setStatDetail('reports')}
                 />
               </View>
             )}
@@ -886,6 +925,64 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
+      {/* ── 코칭 실적 설명 바텀시트 ── */}
+      <Modal visible={statDetail !== null} transparent animationType="slide" onRequestClose={() => setStatDetail(null)}>
+        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setStatDetail(null)}>
+          <TouchableOpacity style={[styles.sheet, { paddingBottom: insets.bottom + 8 }]} activeOpacity={1} onPress={() => {}}>
+            <View style={styles.handle} />
+            {statDetail === 'lessons' && (
+              <StatDetailContent
+                icon="calendar-outline"
+                title="나의 실제 레슨 경험"
+                value={`${perf.totalLessons.toLocaleString()}회`}
+                what="KERRI에서 출석 완료로 기록된 실제 레슨 횟수예요."
+                how="코치가 레슨을 진행하고 출석 처리를 완료할 때마다 누적돼요."
+                meaning="숫자가 쌓일수록 코치가 현장에서 얼마나 꾸준히 레슨해 왔는지 보여줄 수 있어요."
+              />
+            )}
+            {statDetail === 'retention' && (
+              <StatDetailContent
+                icon="people-outline"
+                title="회원과 함께한 평균 기간"
+                value={perf.avgRetentionMonths !== null ? `${perf.avgRetentionMonths}개월` : '데이터 부족'}
+                what="회원들이 코치와 평균적으로 얼마나 오랫동안 레슨을 이어가는지 보여주는 지표예요."
+                how={perf.avgRetentionMonths !== null ? "회원별 실제 레슨 시작일과 마지막 레슨 기록을 기준으로 계산돼요." : "아직 분석할 데이터가 부족해요."}
+                meaning="평균 유지 기간은 회원을 얼마나 꾸준히 관리하고 관계를 이어가는지 보여주는 코칭 케어 지표가 될 수 있어요."
+              />
+            )}
+            {statDetail === 'satisfaction' && (
+              <StatDetailContent
+                icon="star-outline"
+                title="회원이 남긴 실제 만족도"
+                value={perf.satisfactionAvg !== null ? `${perf.satisfactionAvg}` : '리뷰 없음'}
+                what="레슨을 받은 회원이 직접 남긴 평가를 바탕으로 계산된 만족도예요."
+                how={perf.satisfactionCount > 0 ? `회원의 실제 리뷰와 평가가 등록될 때 반영돼요. 현재 ${perf.satisfactionCount}명이 평가했어요.` : "아직 받은 리뷰가 없어요. 회원의 리뷰가 등록되면 만족도가 표시돼요."}
+                meaning="코치의 설명, 레슨 경험과 회원 만족도를 보여주는 신뢰 자료가 될 수 있어요."
+              />
+            )}
+            {statDetail === 'reports' && (
+              <StatDetailContent
+                icon="document-text-outline"
+                title="체계적으로 관리한 레슨"
+                value={`${perf.totalReports}개`}
+                what="코치가 KERRI에 남긴 실제 레슨 기록의 수예요."
+                how="레슨 내용을 작성하고 회원에게 발송 완료할 때마다 누적돼요."
+                meaning="회원별 수업 내용을 얼마나 꾸준하고 체계적으로 관리하는지 보여주는 기록이에요."
+              />
+            )}
+            <View style={styles.statAssetBox}>
+              <Text style={styles.statAssetTitle}>코치의 경험이 데이터 자산이 됩니다</Text>
+              <Text style={styles.statAssetDesc}>{"KERRI에 쌓인 레슨 경험, 회원 유지, 만족도와 레슨 기록은 코치의 전문성과 관리 역량을 보여주는 데이터가 됩니다."}</Text>
+              <Text style={styles.statAssetSub}>{"꾸준히 쌓인 코칭 실적은 회원이 코치를 신뢰하고 선택하는 근거가 되며, 장기적으로 코치의 브랜드 가치와 경쟁력을 높일 수 있어요."}</Text>
+              <Text style={styles.statAssetTrust}>{"KERRI에서 실제 활동을 기준으로 자동 집계되며 코치가 임의로 수정할 수 없습니다."}</Text>
+            </View>
+            <TouchableOpacity style={styles.saveBtn} onPress={() => setStatDetail(null)}>
+              <Text style={styles.saveBtnTxt}>확인</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       <PlanUpsellModal
         visible={upsellVisible}
         onClose={() => setUpsellVisible(false)}
@@ -1004,6 +1101,14 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { fontSize: 15, fontWeight: '800', color: DARK },
   verifiedBadge: { fontSize: 10, color: Colors.mutedFg, fontWeight: '600' },
+  statAssetBox: {
+    backgroundColor: TERRA_LIGHT, borderRadius: 14,
+    padding: 14, marginBottom: 16,
+  },
+  statAssetTitle: { fontSize: 13, fontWeight: '800', color: TERRA, marginBottom: 6 },
+  statAssetDesc: { fontSize: 13, color: DARK, lineHeight: 19, marginBottom: 6 },
+  statAssetSub: { fontSize: 12, color: Colors.mutedFg, lineHeight: 18, marginBottom: 6 },
+  statAssetTrust: { fontSize: 11, color: Colors.mutedFg, fontStyle: 'italic' },
   blindBadge: {
     backgroundColor: TERRA_LIGHT, borderRadius: 8,
     paddingHorizontal: 8, paddingVertical: 3,
