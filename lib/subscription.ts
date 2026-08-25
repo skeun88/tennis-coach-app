@@ -55,6 +55,13 @@ export interface Subscription {
 
 export const FREE_MEMBER_LIMIT = 3;
 
+export const TRIAL_DAYS = 14;
+
+export const ANNUAL_PRICES: Partial<Record<PlanId, number>> = {
+  basic: 109000,
+  pro: 209000,
+};
+
 export const PLANS: Record<PlanId, SubscriptionPlan> = {
   free: {
     id: 'free',
@@ -108,7 +115,7 @@ export const PLANS: Record<PlanId, SubscriptionPlan> = {
     price: 19000,
     regularPrice: 19000,
     memberLimit: null,
-    reportMonthlyLimit: 50,
+    reportMonthlyLimit: 50,      // Free:3, Basic:10, Pro:50
     aiAnalysisMonthlyLimit: 50,
     features: {
       member_management: true,
@@ -222,7 +229,7 @@ export async function createTrialSubscription(
   customerKey: string
 ): Promise<{ subscription: Subscription | null; error: string | null }> {
   const trialEndsAt = new Date();
-  trialEndsAt.setDate(trialEndsAt.getDate() + 30);
+  trialEndsAt.setDate(trialEndsAt.getDate() + TRIAL_DAYS);
 
   const { data, error } = await supabase
     .from('subscriptions')
@@ -433,9 +440,7 @@ export interface TopupProduct {
 }
 
 export const TOPUP_PRODUCTS: TopupProduct[] = [
-  { id: '10', credits: 10, price: 4900, pricePerUnit: 490 },
-  { id: '30', credits: 30, price: 11900, pricePerUnit: 397, isRecommended: true },
-  { id: '50', credits: 50, price: 17900, pricePerUnit: 358 },
+  { id: '10', credits: 10, price: 4900, pricePerUnit: 490, isRecommended: true },
 ];
 
 /** 코치의 추가 크레딧 잔액 조회 */
@@ -462,17 +467,6 @@ export async function updateAutoTopup(
     })
     .eq('coach_id', coachId);
 }
-
-// -------------------------------------------------------
-// Pro 6개월 선결제
-// -------------------------------------------------------
-
-export const PRO_BIANNUAL = {
-  price: 99000,
-  monthlyEquivalent: 16500,
-  discountPct: 17,
-  includesRecorder: true,
-};
 
 /** AI 분석 1회 사용 기록 (upsert) */
 export async function incrementAiAnalysisUsage(coachId: string): Promise<void> {

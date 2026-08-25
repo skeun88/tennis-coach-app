@@ -7,6 +7,8 @@ import {
   ScrollView,
   SafeAreaView,
   Modal,
+  Linking,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -133,6 +135,15 @@ export default function SelectPlanScreen() {
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         <Text style={s.title}>나에게 맞는 플랜을{'\n'}선택하세요</Text>
+        <Text style={s.subtitle}>Basic과 Pro는 신규 구독 시 {TRIAL_DAYS}일 동안 무료로 이용할 수 있어요.</Text>
+
+        {/* 출시가 안내 배너 */}
+        <View style={s.launchBanner}>
+          <Ionicons name="pricetag-outline" size={13} color={TERRACOTTA} />
+          <Text style={s.launchBannerText}>
+            출시가는 첫 유료 결제일부터 12개월간 적용되며, 이후 다음 갱신부터 정가가 적용됩니다.
+          </Text>
+        </View>
 
         {/* 월간/연간 토글 */}
         <View style={s.billingToggle}>
@@ -166,17 +177,31 @@ export default function SelectPlanScreen() {
             )}
           </View>
           <Text style={s.planPrice}>무료</Text>
+          <Text style={s.planDesc}>기본 회원 관리를 가볍게 시작해 보세요.</Text>
           <View style={s.featureList}>
-            <FeatureItem icon="people-outline" text="회원 3명" />
+            <FeatureItem icon="people-outline" text="회원 3명까지 등록" />
             <FeatureItem icon="grid-outline" text="일정·출석·횟수·결제 관리" />
             <FeatureItem icon="mic-outline" text="AI 레슨 기록 월 3개" />
-            <FeatureItem icon="ban-outline" text="AI 레슨 기록 충전 불가" dim />
           </View>
-          <TouchableOpacity style={s.freeCta} disabled>
-            <Text style={s.freeCtaText}>
-              {currentPlanId === 'free' ? '현재 플랜' : '무료로 사용 중'}
-            </Text>
-          </TouchableOpacity>
+          {currentPlanId === 'free' ? (
+            <TouchableOpacity style={s.freeCta} disabled>
+              <Text style={s.freeCtaText}>현재 플랜</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={s.freeCta}
+              onPress={() => {
+                const url = Platform.OS === 'ios'
+                  ? 'https://apps.apple.com/account/subscriptions'
+                  : 'https://play.google.com/store/account/subscriptions';
+                Linking.openURL(url);
+              }}
+            >
+              <Text style={[s.freeCtaText, { color: TERRACOTTA }]}>
+                {Platform.OS === 'ios' ? 'App Store에서 구독 관리' : 'Google Play에서 구독 관리'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Basic 카드 */}
@@ -200,13 +225,14 @@ export default function SelectPlanScreen() {
               <View style={s.priceTopRow}>
                 <Text style={[s.planPrice, s.planPricePaid]}>{PLANS.basic.price.toLocaleString()}원/월</Text>
                 <View style={s.discountBadge}>
-                  <Text style={s.discountBadgeText}>{DISCOUNT_PCTS.basic}% 할인</Text>
+                  <Text style={s.discountBadgeText}>정가 대비 {DISCOUNT_PCTS.basic}% 할인</Text>
                 </View>
               </View>
               <View style={s.regularPriceRow}>
                 <Text style={s.launchLabel}>출시가</Text>
                 <Text style={s.regularPrice}>정가 {REGULAR_PRICES.basic.toLocaleString()}원</Text>
               </View>
+              <Text style={s.launchPeriodNote}>첫 유료 결제일부터 12개월 적용</Text>
             </View>
           ) : (
             <View style={s.priceBlock}>
@@ -214,12 +240,13 @@ export default function SelectPlanScreen() {
               <Text style={s.annualSavings}>월 약 {monthlyEquivalent('basic').toLocaleString()}원 · 1개월 무료</Text>
             </View>
           )}
+          <Text style={s.planDesc}>회원 관리와 기본 AI 분석이 필요한 코치</Text>
           <View style={s.featureList}>
-            <FeatureItem icon="people-outline" text="회원 무제한" />
+            <FeatureItem icon="people-outline" text="회원 무제한 등록" />
             <FeatureItem icon="grid-outline" text="일정·출석·횟수·결제 관리" />
             <FeatureItem icon="notifications-outline" text="회원 관리 자동 알림" />
             <FeatureItem icon="mic-outline" text="AI 레슨 기록 월 10개" />
-            <FeatureItem icon="analytics-outline" text="AI 맞춤 코칭 분석 (기본)" />
+            <FeatureItem icon="analytics-outline" text="AI 맞춤 코칭 분석 기본 제공" />
             <FeatureItem icon="add-circle-outline" text="AI 레슨 기록 충전 가능" />
           </View>
           <TouchableOpacity
@@ -253,13 +280,14 @@ export default function SelectPlanScreen() {
               <View style={s.priceTopRow}>
                 <Text style={[s.planPrice, s.planPricePro]}>{PLANS.pro.price.toLocaleString()}원/월</Text>
                 <View style={[s.discountBadge, { backgroundColor: DARK_BROWN }]}>
-                  <Text style={s.discountBadgeText}>{DISCOUNT_PCTS.pro}% 할인</Text>
+                  <Text style={s.discountBadgeText}>정가 대비 {DISCOUNT_PCTS.pro}% 할인</Text>
                 </View>
               </View>
               <View style={s.regularPriceRow}>
-                <Text style={s.launchLabel}>출시가</Text>
+                <Text style={[s.launchLabel, { color: DARK_BROWN }]}>출시가</Text>
                 <Text style={s.regularPrice}>정가 {REGULAR_PRICES.pro.toLocaleString()}원</Text>
               </View>
+              <Text style={[s.launchPeriodNote, { color: DARK_BROWN + 'AA' }]}>첫 유료 결제일부터 12개월 적용</Text>
             </View>
           ) : (
             <View style={s.priceBlock}>
@@ -267,12 +295,14 @@ export default function SelectPlanScreen() {
               <Text style={s.annualSavings}>월 약 {monthlyEquivalent('pro').toLocaleString()}원 · 1개월 무료</Text>
             </View>
           )}
+          <Text style={s.planDesc}>AI 분석을 적극적으로 활용하는 전문 코치</Text>
           <View style={s.featureList}>
-            <FeatureItem icon="people-outline" text="회원 무제한" />
+            <FeatureItem icon="people-outline" text="회원 무제한 등록" />
             <FeatureItem icon="grid-outline" text="일정·출석·횟수·결제 관리" />
             <FeatureItem icon="notifications-outline" text="회원 관리 자동 알림" />
             <FeatureItem icon="mic-outline" text="AI 레슨 기록 월 50개" />
-            <FeatureItem icon="analytics-outline" text="상세 AI 맞춤 코칭 분석" />
+            <FeatureItem icon="analytics-outline" text="AI 맞춤 코칭 분석 상세 제공" />
+            <FeatureItem icon="key-outline" text="회원별 반복 이슈·키워드 분석" />
             <FeatureItem icon="person-circle-outline" text="개인화 AI · 코치 브랜딩" />
             <FeatureItem icon="add-circle-outline" text="AI 레슨 기록 충전 가능" />
           </View>
@@ -316,7 +346,16 @@ const s = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
   backBtn: { padding: 8 },
   scroll: { paddingHorizontal: 20, paddingBottom: 48 },
-  title: { fontSize: 26, fontWeight: '800', color: DARK_BROWN, marginBottom: 20, lineHeight: 34 },
+  title: { fontSize: 26, fontWeight: '800', color: DARK_BROWN, marginBottom: 6, lineHeight: 34 },
+  subtitle: { fontSize: 13, color: WARM_GRAY, marginBottom: 12, lineHeight: 18 },
+  launchBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 6,
+    backgroundColor: TERRACOTTA + '12', borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 8, marginBottom: 16,
+  },
+  launchBannerText: { fontSize: 11, color: TERRACOTTA, fontWeight: '500', flex: 1, lineHeight: 16 },
+  planDesc: { fontSize: 12, color: WARM_GRAY, marginBottom: 12, lineHeight: 17 },
+  launchPeriodNote: { fontSize: 10, color: TERRACOTTA + 'AA', marginTop: 2 },
 
   billingToggle: {
     flexDirection: 'row', alignSelf: 'flex-start',
