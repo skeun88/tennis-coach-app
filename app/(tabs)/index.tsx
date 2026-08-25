@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity,
-  Alert, RefreshControl, ActivityIndicator, Modal,
+  Alert, RefreshControl, ActivityIndicator, Modal, AppState,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -23,6 +23,8 @@ import {
   getMemCache,
   isFresh,
   persistHomeData,
+  getKSTDateString,
+  msUntilNextKSTMidnight,
   type HomeData,
   type HomeStats,
   type TodayCard,
@@ -62,8 +64,8 @@ export default function HomeScreen() {
   const [showChatHint, setShowChatHint] = useState(false);
   const { canUse, subscription } = useSubscription();
 
-  // today를 state로 관리: 자정이 지나면 자동 갱신
-  const [today, setToday] = useState(() => new Date().toISOString().split('T')[0]);
+  // today를 state로 관리: 한국 시간(KST) 기준, 자정이 지나면 자동 갱신
+  const [today, setToday] = useState(() => getKSTDateString());
 
   // 미납/만료 모달 상태
   const [unpaidModal, setUnpaidModal] = useState(false);
@@ -131,7 +133,7 @@ export default function HomeScreen() {
       if ((pkgCount ?? 0) === 0) setNoPackageModal(true);
     }
 
-    const data = await fetchHomeData(user.id, user.email ?? '');
+    const data = await fetchHomeData(user.id, user.email ?? '', date);
     await persistHomeData(user.id, data);
     hydrateFromData(data);
   }
@@ -151,7 +153,7 @@ export default function HomeScreen() {
         .eq('id', s.memberId)
         .single();
       if (!member) continue;
-      const todayDow2 = new Date().getDay();
+      const todayDow2 = new Date(Date.now() + 9 * 3600 * 1000).getUTCDay();
       const fst2 = (member as any).fixed_schedule_times;
       const startTime = fst2?.[String(todayDow2)] ?? (member.fixed_schedule_time as string | null)?.slice(0, 5);
       if (!startTime) continue;
@@ -223,21 +225,31 @@ export default function HomeScreen() {
 
   useFocusEffect(useCallback(() => { loadAll(); }, []));
 
-  // 자정 다음날 자동 갱신 타이머
+  // 한국 자정(KST 00:00) 기준 자동 갱신 타이머
   useEffect(() => {
-    const now = new Date();
-    const midnight = new Date(now);
-    midnight.setHours(24, 0, 0, 0);
-    const msUntilMidnight = midnight.getTime() - now.getTime();
-
     const timer = setTimeout(() => {
-      const newDate = new Date().toISOString().split('T')[0];
+      const newDate = getKSTDateString();
       setToday(newDate);
       loadAll(newDate);
-    }, msUntilMidnight);
+    }, msUntilNextKSTMidnight());
 
     return () => clearTimeout(timer);
   }, [today]);
+
+  // 앱 포그라운드 복귀 시 날짜 확인 및 재조회
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', nextState => {
+      if (nextState === 'active') {
+        const currentDate = getKSTDateString();
+        setToday(prev => {
+          if (currentDate !== prev) loadAll(currentDate);
+          else loadAll();
+          return currentDate;
+        });
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     AsyncStorage.getItem('chat_hint_dismissed').then(val => {

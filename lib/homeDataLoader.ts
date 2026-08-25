@@ -1,6 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 
+function getKoreaDayOfWeek(): number {
+  const now = new Date();
+  return new Date(now.getTime() + 9 * 60 * 60 * 1000).getUTCDay();
+}
+
 export interface HomeStats {
   totalMembers: number;
   todayLessons: number;
@@ -70,6 +75,21 @@ export interface HomeData {
 
 const CACHE_KEY_PREFIX = 'home_data_v2_';
 const CACHE_TTL_MS = 60_000; // 60s fresh window
+
+// KST = UTC+9. Device locale isn't reliable; always compute from UTC offset.
+export function getKSTDateString(): string {
+  return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+// Returns ms until next KST midnight (00:00 KST = 15:00 UTC previous day).
+export function msUntilNextKSTMidnight(): number {
+  const kstMs = Date.now() + 9 * 3600 * 1000;
+  const kstDate = new Date(kstMs);
+  const nextMidnightKSTMs = Date.UTC(
+    kstDate.getUTCFullYear(), kstDate.getUTCMonth(), kstDate.getUTCDate() + 1,
+  );
+  return nextMidnightKSTMs - 9 * 3600 * 1000 - Date.now();
+}
 
 const memCache: Record<string, HomeData> = {};
 
@@ -178,9 +198,7 @@ export async function fetchChurnRisk(
   const memberIds = activeMembers.filter(m => !m.is_trial).map(m => m.id);
   if (memberIds.length === 0) return [];
 
-  const threeWeeksAgo = new Date();
-  threeWeeksAgo.setDate(threeWeeksAgo.getDate() - 21);
-  const cutoff = threeWeeksAgo.toISOString().split('T')[0];
+  const cutoff = new Date(Date.now() + 9 * 3600 * 1000 - 21 * 86400 * 1000).toISOString().slice(0, 10);
 
   const { data: recentAttendance } = await supabase
     .from('attendance')
@@ -211,7 +229,7 @@ export async function fetchChurnRisk(
 }
 
 export async function fetchAutoGenSuggestion(uid: string): Promise<AutoGenSuggestion[]> {
-  const todayDayOfWeek = new Date().getDay();
+  const todayDayOfWeek = getKoreaDayOfWeek();
   const { data: membersWithSchedule } = await supabase
     .from('members')
     .select('id, name, fixed_schedule_days, fixed_schedule_time, fixed_schedule_times')
@@ -230,8 +248,8 @@ export async function fetchAutoGenSuggestion(uid: string): Promise<AutoGenSugges
     .filter(Boolean) as AutoGenSuggestion[];
 }
 
-export async function fetchHomeData(userId: string, email: string): Promise<HomeData> {
-  const today = new Date().toISOString().split('T')[0];
+export async function fetchHomeData(userId: string, email: string, date?: string): Promise<HomeData> {
+  const today = date ?? getKSTDateString();
 
   const [membersRes, lessonsRes] = await Promise.all([
     supabase.from('members').select('id, name, level, remaining_credits, is_active, is_trial').eq('coach_id', userId),
