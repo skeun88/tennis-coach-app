@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView,
+  Alert, ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { PLANS, ANNUAL_PRICES, TRIAL_DAYS } from '../../lib/subscription';
 import { useSubscription } from '../../hooks/useSubscription';
+import { purchaseProductById, getPlanProductId, ENTITLEMENT_IDS } from '../../lib/purchases';
 
 const CREAM = '#F7F0E9';
 const TERRACOTTA = '#C0755A';
@@ -18,7 +20,8 @@ const REGULAR_PRICES: Record<string, number> = { basic: 19000, pro: 39000 };
 export default function ConfirmPlanScreen() {
   const router = useRouter();
   const { planId, billingType } = useLocalSearchParams<{ planId: string; billingType: string }>();
-  const { subscription, isTrial } = useSubscription();
+  const { subscription, isTrial, refresh } = useSubscription();
+  const [purchasing, setPurchasing] = useState(false);
 
   const plan = planId === 'basic' || planId === 'pro' ? PLANS[planId] : null;
   if (!plan) {
@@ -46,11 +49,30 @@ export default function ConfirmPlanScreen() {
   const isPro = planId === 'pro';
   const accentColor = isPro ? DARK_BROWN : TERRACOTTA;
 
-  function handleConfirm() {
-    router.push({
-      pathname: '/subscription/register-card',
-      params: { planId, billingType: isAnnual ? 'biannual' : 'monthly' },
-    });
+  async function handleConfirm() {
+    if (purchasing) return;
+    setPurchasing(true);
+    try {
+      const productId = getPlanProductId(planId, isAnnual);
+      const { customerInfo } = await purchaseProductById(productId);
+      const entId = planId === 'pro' ? ENTITLEMENT_IDS.PRO : ENTITLEMENT_IDS.BASIC;
+      const isActive = !!customerInfo.entitlements.active[entId];
+      await refresh();
+      if (isActive) {
+        router.replace('/subscription/manage');
+      } else {
+        Alert.alert('구독 완료', '구독이 처리 중입니다. 잠시 후 확인해 주세요.', [
+          { text: '확인', onPress: () => router.replace('/subscription/manage') },
+        ]);
+      }
+    } catch (e: any) {
+      if (!e.userCancelled) {
+        console.error('[IAP] confirm-plan error:', e.code, e.message);
+        Alert.alert('결제 실패', e.message ?? '결제 중 오류가 발생했습니다.');
+      }
+    } finally {
+      setPurchasing(false);
+    }
   }
 
   const ctaLabel = (() => {
@@ -147,11 +169,15 @@ export default function ConfirmPlanScreen() {
 
       <View style={s.footer}>
         <TouchableOpacity
-          style={[s.ctaBtn, { backgroundColor: accentColor }]}
+          style={[s.ctaBtn, { backgroundColor: accentColor }, purchasing && { opacity: 0.6 }]}
           onPress={handleConfirm}
+          disabled={purchasing}
           activeOpacity={0.85}
         >
-          <Text style={s.ctaBtnText}>{ctaLabel}</Text>
+          {purchasing
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={s.ctaBtnText}>{ctaLabel}</Text>
+          }
         </TouchableOpacity>
       </View>
     </SafeAreaView>

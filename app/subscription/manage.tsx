@@ -10,7 +10,7 @@ import {
   PLANS, getAiAnalysisUsageThisMonth,
   TOPUP_PRODUCTS, TRIAL_DAYS, ANNUAL_PRICES,
 } from '../../lib/subscription';
-import { IS_BETA } from '../../lib/beta';
+import { restorePurchases } from '../../lib/purchases';
 
 const CREAM = '#F7F0E9';
 const TERRACOTTA = '#C0755A';
@@ -86,9 +86,16 @@ export default function ManageSubscriptionScreen() {
   }
 
   async function handleRestorePurchase() {
-    Alert.alert('구독 복원', '이전 구독이 있다면 자동으로 복원됩니다.\n복원 후 화면을 아래로 당겨 새로고침해 주세요.', [
-      { text: '확인', onPress: () => refresh() },
-    ]);
+    try {
+      await restorePurchases();
+      await refresh();
+      Alert.alert('구매 복원 완료', '이전 구매 내역이 복원됐습니다.');
+    } catch (e: any) {
+      if (!e.userCancelled) {
+        console.error('[IAP] restore error:', e.code, e.message);
+        Alert.alert('복원 실패', e.message ?? '구매 복원 중 오류가 발생했습니다.');
+      }
+    }
   }
 
   if (loading) {

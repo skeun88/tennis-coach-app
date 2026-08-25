@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSubscription } from '../../hooks/useSubscription';
 import { getAiAnalysisUsageThisMonth, TOPUP_PRODUCTS, PLANS } from '../../lib/subscription';
 import { supabase } from '../../lib/supabase';
-import { IS_BETA } from '../../lib/beta';
+import { purchaseProductById, AI_TOPUP_PRODUCT_ID } from '../../lib/purchases';
 
 const CREAM = '#F7F0E9';
 const TERRACOTTA = '#C0755A';
@@ -51,23 +51,25 @@ export default function TopupScreen() {
     if (!subscription) return;
     setLoading(true);
     try {
+      const { transaction } = await purchaseProductById(AI_TOPUP_PRODUCT_ID);
+
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('로그인이 필요합니다.');
 
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/topup-report-credits`, {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/confirm-coach-iap`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ product_id: TOPUP.id ?? '10' }),
+        body: JSON.stringify({
+          productId: AI_TOPUP_PRODUCT_ID,
+          transactionId: transaction?.transactionIdentifier,
+        }),
       });
       const data = await res.json();
 
-      if (!res.ok || !data.success) {
-        Alert.alert('결제 실패', data.error ?? '결제 중 오류가 발생했습니다.');
-        return;
-      }
+      if (!res.ok || !data.success) throw new Error(data.error ?? '충전 처리 실패');
 
       Alert.alert(
         `${TOPUP.credits}개 충전 완료`,
@@ -75,7 +77,10 @@ export default function TopupScreen() {
         [{ text: '확인', onPress: () => { refresh(); loadUsage(); } }]
       );
     } catch (e: any) {
-      Alert.alert('오류', e.message ?? '결제 중 오류가 발생했습니다.');
+      if (!e.userCancelled) {
+        console.error('[IAP] topup error:', e.code, e.message);
+        Alert.alert('충전 실패', e.message ?? '충전 중 오류가 발생했습니다.');
+      }
     } finally {
       setLoading(false);
     }
