@@ -88,8 +88,7 @@
         }
       ],
       "expo-apple-authentication",
-      "./plugins/withNaverUrlFix",
-      "react-native-purchases"
+      "./plugins/withNaverUrlFix"
     ],
     "extra": {
       "router": {},
