@@ -10,6 +10,7 @@ export default function SubscriptionLayout() {
       <Stack.Screen name="manage" />
       <Stack.Screen name="upgrade" />
       <Stack.Screen name="topup" />
+      <Stack.Screen name="confirm-plan" />
     </Stack>
   );
 }

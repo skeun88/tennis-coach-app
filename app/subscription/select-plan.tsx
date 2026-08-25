@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { PLANS, PlanId, ANNUAL_PRICES, TRIAL_DAYS } from '../../lib/subscription';
+import { PLANS, ANNUAL_PRICES, TRIAL_DAYS } from '../../lib/subscription';
 import { IS_BETA } from '../../lib/beta';
 import { useSubscription } from '../../hooks/useSubscription';
 
@@ -20,6 +20,10 @@ const DARK_BROWN = '#3E2B22';
 const WARM_GRAY = '#9E8E85';
 const WARM_GRAY_BORDER = '#D9CFC9';
 const CREAM_CARD = '#FDFAF7';
+
+// 출시가 vs 정가 (할인율 표시용)
+const REGULAR_PRICES = { basic: 19000, pro: 39000 };
+const DISCOUNT_PCTS = { basic: 48, pro: 51 };
 
 type BillingCycle = 'monthly' | 'annual';
 
@@ -32,11 +36,12 @@ interface PlanFeatureRow {
 
 const FEATURE_ROWS: PlanFeatureRow[] = [
   { label: '회원 등록', free: '3명', basic: '무제한', pro: '무제한' },
+  { label: '일정·출석·횟수·결제 관리', free: true, basic: true, pro: true },
   { label: '회원 운영 관리', free: false, basic: true, pro: true },
   { label: '회원 관리 자동 알림', free: false, basic: true, pro: true },
   { label: 'AI 레슨 기록', free: '월 3개', basic: '월 10개', pro: '월 50개' },
+  { label: 'AI 레슨 기록 충전권', free: '충전 불가', basic: true, pro: true },
   { label: '14일 무료 체험', free: false, basic: true, pro: true },
-  { label: 'AI 레슨 기록 충전권', free: false, basic: true, pro: true },
   { label: 'AI 맞춤 코칭 분석', free: false, basic: '기본', pro: '상세' },
   { label: '개인화 AI·코치 브랜딩', free: false, basic: false, pro: true },
 ];
@@ -60,12 +65,12 @@ export default function SelectPlanScreen() {
   // 신규 유료 구독 자격: Free 플랜이고 trial을 한 번도 사용하지 않은 사용자
   // (createFreeSubscription은 trial_starts_at === trial_ends_at로 기록)
   const isTrialEligible = (() => {
-    if (!subscription) return true; // 구독 정보 없으면 일단 eligible
-    if (subscription.plan_id !== 'free') return false; // 이미 유료 플랜
-    if (isTrial) return false; // 현재 trial 중
+    if (!subscription) return true;
+    if (subscription.plan_id !== 'free') return false;
+    if (isTrial) return false;
     const ts = subscription.trial_starts_at ? new Date(subscription.trial_starts_at).getTime() : 0;
     const te = subscription.trial_ends_at ? new Date(subscription.trial_ends_at).getTime() : 0;
-    return Math.abs(ts - te) < 5000; // 5초 이내 = free 생성 시 동일 타임스탬프
+    return Math.abs(ts - te) < 5000;
   })();
 
   function monthlyEquivalent(planId: 'basic' | 'pro'): number {
@@ -74,18 +79,17 @@ export default function SelectPlanScreen() {
     return Math.round(annual / 12);
   }
 
-  function priceLabel(planId: 'basic' | 'pro'): string {
-    if (billing === 'annual') {
-      const annual = ANNUAL_PRICES[planId];
-      return annual ? `${annual.toLocaleString()}원/년` : `${PLANS[planId].price.toLocaleString()}원/월`;
-    }
-    return `${PLANS[planId].price.toLocaleString()}원/월`;
+  function getCtaText(planId: 'basic' | 'pro'): string {
+    if (currentPlanId === planId) return '현재 플랜';
+    if (isTrialEligible) return '14일 무료로 시작하기';
+    if (currentPlanId === 'free') return `${PLANS[planId].name} 구독하기`;
+    return `${PLANS[planId].name}으로 변경`;
   }
 
   function handleSelectPlan(planId: 'basic' | 'pro') {
     router.push({
-      pathname: '/subscription/register-card',
-      params: { planId, billingType: billing === 'annual' ? 'biannual' : 'monthly' },
+      pathname: '/subscription/confirm-plan',
+      params: { planId, billingType: billing },
     });
   }
 
@@ -164,15 +168,13 @@ export default function SelectPlanScreen() {
           <Text style={s.planPrice}>무료</Text>
           <View style={s.featureList}>
             <FeatureItem icon="people-outline" text="회원 3명" />
+            <FeatureItem icon="grid-outline" text="일정·출석·횟수·결제 관리" />
             <FeatureItem icon="mic-outline" text="AI 레슨 기록 월 3개" />
-            <FeatureItem icon="grid-outline" text="기본 회원 관리" />
+            <FeatureItem icon="ban-outline" text="AI 레슨 기록 충전 불가" dim />
           </View>
-          <TouchableOpacity
-            style={s.freeCta}
-            disabled={currentPlanId === 'free'}
-          >
+          <TouchableOpacity style={s.freeCta} disabled>
             <Text style={s.freeCtaText}>
-              {currentPlanId === 'free' ? '현재 플랜' : '무료로 사용하기'}
+              {currentPlanId === 'free' ? '현재 플랜' : '무료로 사용 중'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -193,34 +195,45 @@ export default function SelectPlanScreen() {
               </View>
             )}
           </View>
-          <View style={s.priceRow}>
-            <Text style={[s.planPrice, s.planPricePaid]}>{priceLabel('basic')}</Text>
-            {billing === 'annual' && (
+          {billing === 'monthly' ? (
+            <View style={s.priceBlock}>
+              <View style={s.priceTopRow}>
+                <Text style={[s.planPrice, s.planPricePaid]}>{PLANS.basic.price.toLocaleString()}원/월</Text>
+                <View style={s.discountBadge}>
+                  <Text style={s.discountBadgeText}>{DISCOUNT_PCTS.basic}% 할인</Text>
+                </View>
+              </View>
+              <View style={s.regularPriceRow}>
+                <Text style={s.launchLabel}>출시가</Text>
+                <Text style={s.regularPrice}>정가 {REGULAR_PRICES.basic.toLocaleString()}원</Text>
+              </View>
+            </View>
+          ) : (
+            <View style={s.priceBlock}>
+              <Text style={[s.planPrice, s.planPricePaid]}>{ANNUAL_PRICES.basic?.toLocaleString()}원/년</Text>
               <Text style={s.annualSavings}>월 약 {monthlyEquivalent('basic').toLocaleString()}원 · 1개월 무료</Text>
-            )}
-          </View>
+            </View>
+          )}
           <View style={s.featureList}>
             <FeatureItem icon="people-outline" text="회원 무제한" />
+            <FeatureItem icon="grid-outline" text="일정·출석·횟수·결제 관리" />
             <FeatureItem icon="notifications-outline" text="회원 관리 자동 알림" />
             <FeatureItem icon="mic-outline" text="AI 레슨 기록 월 10개" />
             <FeatureItem icon="analytics-outline" text="AI 맞춤 코칭 분석 (기본)" />
             <FeatureItem icon="add-circle-outline" text="AI 레슨 기록 충전 가능" />
           </View>
-          {currentPlanId === 'basic' ? (
-            <View style={[s.paidCta, { opacity: 0.4 }]}>
-              <Text style={s.paidCtaText}>현재 플랜</Text>
-            </View>
-          ) : (
-            <TouchableOpacity style={s.paidCta} onPress={() => handleSelectPlan('basic')}>
-              <Text style={s.paidCtaText}>
-                {isTrialEligible ? `${TRIAL_DAYS}일 무료 체험 시작` : `${PLANS['basic'].price.toLocaleString()}원으로 구독하기`}
-              </Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[s.paidCta, currentPlanId === 'basic' && s.paidCtaDisabled]}
+            onPress={currentPlanId !== 'basic' ? () => handleSelectPlan('basic') : undefined}
+            disabled={currentPlanId === 'basic'}
+            activeOpacity={0.85}
+          >
+            <Text style={s.paidCtaText}>{getCtaText('basic')}</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Pro 카드 (추천) */}
-        <View style={[s.planCard, s.planCardPaid, s.planCardPro, currentPlanId === 'pro' && s.planCardCurrent]}>
+        <View style={[s.planCard, s.planCardPaid, s.planCardPro, currentPlanId === 'pro' && s.planCardProCurrent]}>
           <View style={[s.trialBadge, s.trialBadgePro]}>
             <Ionicons name="star-outline" size={12} color={DARK_BROWN} />
             <Text style={[s.trialBadgeText, { color: DARK_BROWN }]}>
@@ -235,31 +248,42 @@ export default function SelectPlanScreen() {
               </View>
             )}
           </View>
-          <View style={s.priceRow}>
-            <Text style={[s.planPrice, s.planPricePro]}>{priceLabel('pro')}</Text>
-            {billing === 'annual' && (
+          {billing === 'monthly' ? (
+            <View style={s.priceBlock}>
+              <View style={s.priceTopRow}>
+                <Text style={[s.planPrice, s.planPricePro]}>{PLANS.pro.price.toLocaleString()}원/월</Text>
+                <View style={[s.discountBadge, { backgroundColor: DARK_BROWN }]}>
+                  <Text style={s.discountBadgeText}>{DISCOUNT_PCTS.pro}% 할인</Text>
+                </View>
+              </View>
+              <View style={s.regularPriceRow}>
+                <Text style={s.launchLabel}>출시가</Text>
+                <Text style={s.regularPrice}>정가 {REGULAR_PRICES.pro.toLocaleString()}원</Text>
+              </View>
+            </View>
+          ) : (
+            <View style={s.priceBlock}>
+              <Text style={[s.planPrice, s.planPricePro]}>{ANNUAL_PRICES.pro?.toLocaleString()}원/년</Text>
               <Text style={s.annualSavings}>월 약 {monthlyEquivalent('pro').toLocaleString()}원 · 1개월 무료</Text>
-            )}
-          </View>
+            </View>
+          )}
           <View style={s.featureList}>
             <FeatureItem icon="people-outline" text="회원 무제한" />
+            <FeatureItem icon="grid-outline" text="일정·출석·횟수·결제 관리" />
             <FeatureItem icon="notifications-outline" text="회원 관리 자동 알림" />
             <FeatureItem icon="mic-outline" text="AI 레슨 기록 월 50개" />
             <FeatureItem icon="analytics-outline" text="상세 AI 맞춤 코칭 분석" />
             <FeatureItem icon="person-circle-outline" text="개인화 AI · 코치 브랜딩" />
             <FeatureItem icon="add-circle-outline" text="AI 레슨 기록 충전 가능" />
           </View>
-          {currentPlanId === 'pro' ? (
-            <View style={[s.paidCta, s.paidCtaPro, { opacity: 0.4 }]}>
-              <Text style={s.paidCtaText}>현재 플랜</Text>
-            </View>
-          ) : (
-            <TouchableOpacity style={[s.paidCta, s.paidCtaPro]} onPress={() => handleSelectPlan('pro')}>
-              <Text style={s.paidCtaText}>
-                {isTrialEligible ? `${TRIAL_DAYS}일 무료 체험 시작` : `${PLANS['pro'].price.toLocaleString()}원으로 구독하기`}
-              </Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[s.paidCta, s.paidCtaPro, currentPlanId === 'pro' && s.paidCtaDisabled]}
+            onPress={currentPlanId !== 'pro' ? () => handleSelectPlan('pro') : undefined}
+            disabled={currentPlanId === 'pro'}
+            activeOpacity={0.85}
+          >
+            <Text style={s.paidCtaText}>{getCtaText('pro')}</Text>
+          </TouchableOpacity>
         </View>
 
         {/* 전체 비교 링크 */}
@@ -269,6 +293,7 @@ export default function SelectPlanScreen() {
         </TouchableOpacity>
 
         <Text style={s.legalNote}>
+          * 출시가는 한시적 특별가로, 종료 시 정가로 변경됩니다{'\n'}
           * 가격은 부가세 포함 · 체험 기간 중 언제든 취소 가능{'\n'}
           * 연간 결제 시 {ANNUAL_PRICES.basic?.toLocaleString()}원 / {ANNUAL_PRICES.pro?.toLocaleString()}원 일괄 결제
         </Text>
@@ -277,11 +302,11 @@ export default function SelectPlanScreen() {
   );
 }
 
-function FeatureItem({ icon, text }: { icon: string; text: string }) {
+function FeatureItem({ icon, text, dim }: { icon: string; text: string; dim?: boolean }) {
   return (
     <View style={s.featureItem}>
-      <Ionicons name={icon as any} size={14} color={TERRACOTTA} />
-      <Text style={s.featureItemText}>{text}</Text>
+      <Ionicons name={icon as any} size={14} color={dim ? WARM_GRAY_BORDER : TERRACOTTA} />
+      <Text style={[s.featureItemText, dim && s.featureItemTextDim]}>{text}</Text>
     </View>
   );
 }
@@ -312,6 +337,7 @@ const s = StyleSheet.create({
   planCardPaid: { borderColor: WARM_GRAY_BORDER },
   planCardPro: { borderColor: DARK_BROWN + '50', backgroundColor: '#FEFCFA' },
   planCardCurrent: { borderColor: TERRACOTTA },
+  planCardProCurrent: { borderColor: DARK_BROWN },
 
   trialBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
@@ -329,15 +355,25 @@ const s = StyleSheet.create({
   currentBadge: { backgroundColor: TERRACOTTA, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   currentBadgeText: { fontSize: 11, color: '#fff', fontWeight: '700' },
 
-  priceRow: { marginBottom: 16 },
+  priceBlock: { marginBottom: 16 },
+  priceTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 3 },
   planPrice: { fontSize: 24, fontWeight: '800', color: WARM_GRAY },
   planPricePaid: { color: TERRACOTTA },
   planPricePro: { color: DARK_BROWN },
+  discountBadge: {
+    backgroundColor: TERRACOTTA, borderRadius: 6,
+    paddingHorizontal: 6, paddingVertical: 2,
+  },
+  discountBadgeText: { fontSize: 11, color: '#fff', fontWeight: '800' },
+  regularPriceRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  launchLabel: { fontSize: 11, color: TERRACOTTA, fontWeight: '700' },
+  regularPrice: { fontSize: 11, color: WARM_GRAY, textDecorationLine: 'line-through' },
   annualSavings: { fontSize: 11, color: WARM_GRAY, marginTop: 3 },
 
   featureList: { gap: 10, marginBottom: 18 },
   featureItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   featureItemText: { fontSize: 13, color: DARK_BROWN, fontWeight: '500', flex: 1 },
+  featureItemTextDim: { color: WARM_GRAY },
 
   freeCta: {
     backgroundColor: 'transparent', borderRadius: 12,
@@ -350,6 +386,7 @@ const s = StyleSheet.create({
     paddingVertical: 15, alignItems: 'center',
   },
   paidCtaPro: { backgroundColor: DARK_BROWN },
+  paidCtaDisabled: { opacity: 0.4 },
   paidCtaText: { fontSize: 15, color: '#fff', fontWeight: '700' },
 
   compareLink: {
