@@ -246,7 +246,7 @@ export default function ManageSubscriptionScreen() {
           <MenuRow
             icon="receipt-outline"
             label="결제·충전 내역"
-            onPress={() => Alert.alert('준비 중', '곧 제공될 예정입니다.')}
+            onPress={() => router.push('/subscription/billing-history')}
           />
 
           {/* 스토어 구독 관리 */}
