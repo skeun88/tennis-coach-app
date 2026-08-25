@@ -47,7 +47,7 @@ function Group({ children }: { children: React.ReactNode }) {
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { subscription, isTrial, trialDaysLeft } = useSubscription();
+  const { subscription } = useSubscription();
   const [email, setEmail] = useState('');
   const [deleting, setDeleting] = useState(false);
 
@@ -59,12 +59,6 @@ export default function SettingsScreen() {
 
   const planLabel = subscription
     ? PLANS[subscription.plan_id]?.name ?? subscription.plan_id
-    : null;
-  const statusLabel = isTrial
-    ? `무료 체험 중 (${trialDaysLeft}일 남음)`
-    : subscription?.status === 'active' ? '구독 중'
-    : subscription?.status === 'cancelled' ? '해지됨'
-    : subscription?.status === 'past_due' ? '결제 실패'
     : null;
 
   function handleSignOut() {
@@ -134,25 +128,15 @@ export default function SettingsScreen() {
         <SettingRow icon="eye-outline" label="공개 프로필 미리보기" onPress={notReady} />
       </Group>
 
-      {/* ── 구독 및 AI ── */}
-      <SectionHeader title="구독 및 AI" />
-      {(planLabel || statusLabel) && (
-        <View style={styles.subSummary}>
-          <View style={styles.subSummaryRow}>
-            <Text style={styles.subSummaryLabel}>현재 플랜</Text>
-            <Text style={styles.subSummaryValue}>{planLabel ? `${planLabel} 플랜` : '-'}</Text>
-          </View>
-          <View style={styles.subSummaryRow}>
-            <Text style={styles.subSummaryLabel}>상태</Text>
-            <Text style={[styles.subSummaryValue, { color: TERRA }]}>{statusLabel ?? '-'}</Text>
-          </View>
-        </View>
-      )}
+      {/* ── 구독 ── */}
+      <SectionHeader title="구독" />
       <Group>
-        <SettingRow icon="swap-horizontal-outline" label="플랜 변경" onPress={() => router.push('/subscription/manage')} />
-        <SettingRow icon="add-circle-outline" label="충전권 구매" onPress={() => router.push('/subscription/manage')} />
-        <SettingRow icon="receipt-outline" label="구매 내역" onPress={() => router.push('/subscription/manage')} />
-        <SettingRow icon="refresh-outline" label="구독 복원" onPress={() => router.push('/subscription/manage')} />
+        <SettingRow
+          icon="card-outline"
+          label="구독 관리"
+          value={planLabel ? `${planLabel} 플랜` : undefined}
+          onPress={() => router.push('/subscription/manage')}
+        />
       </Group>
 
       {/* ── 개인정보 및 보안 ── */}
@@ -228,18 +212,6 @@ const styles = StyleSheet.create({
   rowLabelDestructive: { color: Colors.destructive },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   rowValue: { fontSize: 13, color: Colors.mutedFg, maxWidth: 140, textAlign: 'right' },
-
-  // Subscription summary
-  subSummary: {
-    backgroundColor: '#fff', borderRadius: 16, padding: 14,
-    marginBottom: 8,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
-    gap: 6,
-  },
-  subSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  subSummaryLabel: { fontSize: 13, color: Colors.mutedFg },
-  subSummaryValue: { fontSize: 14, fontWeight: '700', color: DARK },
 
   // Logout
   logoutCard: {

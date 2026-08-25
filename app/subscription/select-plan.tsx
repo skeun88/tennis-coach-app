@@ -10,11 +10,18 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { PLANS, PlanId, PRO_BIANNUAL } from '../../lib/subscription';
-import ClipRecorderModal from '../../components/ClipRecorderModal';
+import { PLANS, PlanId, ANNUAL_PRICES, TRIAL_DAYS } from '../../lib/subscription';
 import { IS_BETA } from '../../lib/beta';
+import { useSubscription } from '../../hooks/useSubscription';
 
-type SelectablePlan = 'basic' | 'pro';
+const CREAM = '#F7F0E9';
+const TERRACOTTA = '#C0755A';
+const DARK_BROWN = '#3E2B22';
+const WARM_GRAY = '#9E8E85';
+const WARM_GRAY_BORDER = '#D9CFC9';
+const CREAM_CARD = '#FDFAF7';
+
+type BillingCycle = 'monthly' | 'annual';
 
 interface PlanFeatureRow {
   label: string;
@@ -24,424 +31,349 @@ interface PlanFeatureRow {
 }
 
 const FEATURE_ROWS: PlanFeatureRow[] = [
-  { label: '회원 등록', free: '3명까지', basic: '무제한', pro: '무제한' },
-  { label: '회원 관리 · 일정 · 출석 · 결제', free: true, basic: true, pro: true },
-  { label: '운영 관리 (미납·이탈·재등록)', free: false, basic: true, pro: true },
-  { label: '회원 알림', free: false, basic: true, pro: true },
-  { label: 'AI 레슨 분석 (월 한도)', free: '월 3회', basic: '월 10회', pro: '월 100회' },
-  { label: '코칭 실적 (4대 지표)', free: false, basic: '블라인드', pro: '공개' },
-  { label: 'AI 코칭 모델 (음성 기반)', free: false, basic: false, pro: true },
-  { label: '코칭 데이터 분석 (태그·패턴)', free: false, basic: false, pro: true },
-  { label: 'KERRI 검증 배지', free: false, basic: false, pro: true },
-  { label: '클립형 녹음기 무상 제공', free: false, basic: false, pro: '6개월 선결제 시' },
+  { label: '회원 등록', free: '3명', basic: '무제한', pro: '무제한' },
+  { label: '회원 운영 관리', free: false, basic: true, pro: true },
+  { label: '회원 관리 자동 알림', free: false, basic: true, pro: true },
+  { label: 'AI 레슨 기록', free: '월 3개', basic: '월 10개', pro: '월 50개' },
+  { label: '14일 무료 체험', free: false, basic: true, pro: true },
+  { label: 'AI 레슨 기록 충전권', free: false, basic: true, pro: true },
+  { label: 'AI 맞춤 코칭 분석', free: false, basic: '기본', pro: '상세' },
+  { label: '개인화 AI·코치 브랜딩', free: false, basic: false, pro: true },
 ];
 
 function FeatureCell({ value }: { value: boolean | string }) {
-  if (value === true) {
-    return <Ionicons name="checkmark-circle" size={18} color="#2ecc71" />;
-  }
-  if (value === false) {
-    return <Ionicons name="remove-circle-outline" size={18} color="#ccc" />;
-  }
-  return <Text style={styles.featureCellText}>{value}</Text>;
+  if (value === true) return <Ionicons name="checkmark-circle" size={16} color={TERRACOTTA} />;
+  if (value === false) return <Ionicons name="remove-circle-outline" size={16} color={WARM_GRAY_BORDER} />;
+  return <Text style={s.featureCellText}>{value}</Text>;
 }
-
-type BillingType = 'monthly' | 'biannual';
 
 export default function SelectPlanScreen() {
   const router = useRouter();
   if (IS_BETA) { router.replace('/(tabs)'); return null; }
-  const [selectedPlan, setSelectedPlan] = useState<SelectablePlan>('pro');
-  const [showBillingOptions, setShowBillingOptions] = useState(false);
-  const [showRecorderModal, setShowRecorderModal] = useState(false);
 
-  const handleNext = () => {
-    if (selectedPlan === 'pro') {
-      // 녹음기 혜택 모달을 먼저 보여줘서 6개월 선결제 전환율 높이기
-      setShowRecorderModal(true);
-    } else {
-      router.push({
-        pathname: '/subscription/register-card',
-        params: { planId: selectedPlan, billingType: 'monthly' },
-      });
+  const { subscription, isTrial } = useSubscription();
+  const [billing, setBilling] = useState<BillingCycle>('monthly');
+  const [compareVisible, setCompareVisible] = useState(false);
+
+  const currentPlanId = subscription?.plan_id ?? 'free';
+
+  // 신규 유료 구독 자격: Free 플랜이고 trial을 한 번도 사용하지 않은 사용자
+  // (createFreeSubscription은 trial_starts_at === trial_ends_at로 기록)
+  const isTrialEligible = (() => {
+    if (!subscription) return true; // 구독 정보 없으면 일단 eligible
+    if (subscription.plan_id !== 'free') return false; // 이미 유료 플랜
+    if (isTrial) return false; // 현재 trial 중
+    const ts = subscription.trial_starts_at ? new Date(subscription.trial_starts_at).getTime() : 0;
+    const te = subscription.trial_ends_at ? new Date(subscription.trial_ends_at).getTime() : 0;
+    return Math.abs(ts - te) < 5000; // 5초 이내 = free 생성 시 동일 타임스탬프
+  })();
+
+  function monthlyEquivalent(planId: 'basic' | 'pro'): number {
+    const annual = ANNUAL_PRICES[planId];
+    if (!annual) return PLANS[planId].price;
+    return Math.round(annual / 12);
+  }
+
+  function priceLabel(planId: 'basic' | 'pro'): string {
+    if (billing === 'annual') {
+      const annual = ANNUAL_PRICES[planId];
+      return annual ? `${annual.toLocaleString()}원/년` : `${PLANS[planId].price.toLocaleString()}원/월`;
     }
-  };
+    return `${PLANS[planId].price.toLocaleString()}원/월`;
+  }
 
-  const handleBillingSelect = (type: BillingType) => {
-    setShowBillingOptions(false);
+  function handleSelectPlan(planId: 'basic' | 'pro') {
     router.push({
       pathname: '/subscription/register-card',
-      params: { planId: 'pro', billingType: type },
+      params: { planId, billingType: billing === 'annual' ? 'biannual' : 'monthly' },
     });
-  };
-
-  const handleRecorderModalConfirm = () => {
-    setShowRecorderModal(false);
-    router.push({
-      pathname: '/subscription/register-card',
-      params: { planId: 'pro', billingType: 'biannual' },
-    });
-  };
-
-  const handleRecorderModalClose = () => {
-    setShowRecorderModal(false);
-    setShowBillingOptions(true);
-  };
+  }
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Pro 결제 방식 선택 모달 */}
-      <Modal visible={showBillingOptions} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>결제 방식 선택</Text>
-            <Text style={styles.modalSubtitle}>Pro 플랜 결제 방식을 선택해 주세요</Text>
-
-            <TouchableOpacity
-              style={styles.billingOptionCard}
-              onPress={() => handleBillingSelect('monthly')}
-            >
-              <View style={styles.billingOptionLeft}>
-                <Text style={styles.billingOptionTitle}>월 결제</Text>
-                <Text style={styles.billingOptionPrice}>19,000원/월</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#888" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.billingOptionCard, styles.billingOptionCardHighlight]}
-              onPress={() => handleBillingSelect('biannual')}
-            >
-              <View style={styles.billingOptionBadge}>
-                <Text style={styles.billingOptionBadgeText}>🎁 녹음기 무상 제공</Text>
-              </View>
-              <View style={styles.billingOptionLeft}>
-                <Text style={[styles.billingOptionTitle, { color: '#9b59b6' }]}>6개월 선결제</Text>
-                <Text style={[styles.billingOptionPrice, { color: '#9b59b6' }]}>{PRO_BIANNUAL.price.toLocaleString()}원 (월 {PRO_BIANNUAL.monthlyEquivalent.toLocaleString()}원)</Text>
-                <Text style={styles.billingOptionDiscount}>약 {PRO_BIANNUAL.discountPct}% 할인 + 클립형 녹음기 무상 제공</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#9b59b6" />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowBillingOptions(false)}>
-              <Text style={styles.modalCancelBtnText}>취소</Text>
+    <SafeAreaView style={s.container}>
+      <Modal visible={compareVisible} animationType="slide" transparent onRequestClose={() => setCompareVisible(false)}>
+        <View style={s.modalOverlay}>
+          <View style={s.compareSheet}>
+            <View style={s.sheetHandle} />
+            <Text style={s.compareTitle}>플랜 전체 비교</Text>
+            <View style={s.compareHeaderRow}>
+              <View style={{ flex: 2.5 }} />
+              <View style={s.compareHeaderCell}><Text style={s.compareHeaderText}>Free</Text></View>
+              <View style={s.compareHeaderCell}><Text style={[s.compareHeaderText, { color: TERRACOTTA }]}>Basic</Text></View>
+              <View style={s.compareHeaderCell}><Text style={[s.compareHeaderText, { color: DARK_BROWN }]}>Pro</Text></View>
+            </View>
+            <ScrollView>
+              {FEATURE_ROWS.map((row, i) => (
+                <View key={i} style={[s.compareRow, i % 2 === 1 && s.compareRowAlt]}>
+                  <View style={{ flex: 2.5 }}>
+                    <Text style={s.compareRowLabel}>{row.label}</Text>
+                  </View>
+                  <View style={s.compareHeaderCell}><FeatureCell value={row.free} /></View>
+                  <View style={s.compareHeaderCell}><FeatureCell value={row.basic} /></View>
+                  <View style={s.compareHeaderCell}><FeatureCell value={row.pro} /></View>
+                </View>
+              ))}
+            </ScrollView>
+            <TouchableOpacity style={s.compareCloseBtn} onPress={() => setCompareVisible(false)}>
+              <Text style={s.compareCloseBtnText}>닫기</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {/* 클립형 녹음기 안내 모달 */}
-      <ClipRecorderModal
-        visible={showRecorderModal}
-        onClose={handleRecorderModalClose}
-        onConfirm={handleRecorderModalConfirm}
-      />
-
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
-          <Ionicons name="close" size={24} color="#1a1a2e" />
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+          <Ionicons name="chevron-back" size={24} color={DARK_BROWN} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>플랜을 선택하세요</Text>
+      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+        <Text style={s.title}>나에게 맞는 플랜을{'\n'}선택하세요</Text>
 
-        {/* 1개월 프로 체험 강조 배너 */}
-        <View style={styles.trialHighlight}>
-          <View style={styles.trialHighlightBadge}>
-            <Text style={styles.trialHighlightBadgeText}>🎁 무료</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.trialHighlightTitle}>지금 가입하면 1개월 프로 체험!</Text>
-            <Text style={styles.trialHighlightSub}>체험 후 선택한 플랜으로 자동 전환</Text>
-          </View>
-        </View>
-
-        {/* 플랜 카드 2개 */}
-        <View style={styles.planRow}>
-          {/* Basic */}
+        {/* 월간/연간 토글 */}
+        <View style={s.billingToggle}>
           <TouchableOpacity
-            style={[styles.planCard, selectedPlan === 'basic' && styles.planCardSelected]}
-            onPress={() => setSelectedPlan('basic')}
-            activeOpacity={0.85}
+            style={[s.billingBtn, billing === 'monthly' && s.billingBtnActive]}
+            onPress={() => setBilling('monthly')}
           >
-            <Text style={styles.planName}>Basic</Text>
-            <Text style={styles.planPrice}>
-              9,900<Text style={styles.planPriceSub}>원/월</Text>
-            </Text>
-            <Text style={styles.planDesc}>월 10회 무료 리포트</Text>
-            {selectedPlan === 'basic' && (
-              <View style={styles.selectedDot} />
+            <Text style={[s.billingBtnText, billing === 'monthly' && s.billingBtnTextActive]}>월간</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.billingBtn, billing === 'annual' && s.billingBtnActive]}
+            onPress={() => setBilling('annual')}
+          >
+            <Text style={[s.billingBtnText, billing === 'annual' && s.billingBtnTextActive]}>연간</Text>
+            {billing !== 'annual' && (
+              <View style={s.savingsBadge}>
+                <Text style={s.savingsBadgeText}>1개월 무료</Text>
+              </View>
             )}
           </TouchableOpacity>
+        </View>
 
-          {/* Pro */}
+        {/* Free 카드 */}
+        <View style={[s.planCard, currentPlanId === 'free' && s.planCardCurrent]}>
+          <View style={s.planCardHeader}>
+            <Text style={s.planName}>Free</Text>
+            {currentPlanId === 'free' && (
+              <View style={s.currentBadge}>
+                <Text style={s.currentBadgeText}>현재 플랜</Text>
+              </View>
+            )}
+          </View>
+          <Text style={s.planPrice}>무료</Text>
+          <View style={s.featureList}>
+            <FeatureItem icon="people-outline" text="회원 3명" />
+            <FeatureItem icon="mic-outline" text="AI 레슨 기록 월 3개" />
+            <FeatureItem icon="grid-outline" text="기본 회원 관리" />
+          </View>
           <TouchableOpacity
-            style={[styles.planCard, styles.planCardPro, selectedPlan === 'pro' && styles.planCardSelected]}
-            onPress={() => setSelectedPlan('pro')}
-            activeOpacity={0.85}
+            style={s.freeCta}
+            disabled={currentPlanId === 'free'}
           >
-            <View style={styles.recommendBadge}>
-              <Text style={styles.recommendText}>추천</Text>
-            </View>
-            <Text style={[styles.planName, styles.planNamePro]}>Pro</Text>
-            <Text style={[styles.planPrice, styles.planPricePro]}>
-              19,000<Text style={styles.planPriceSub}>원/월</Text>
+            <Text style={s.freeCtaText}>
+              {currentPlanId === 'free' ? '현재 플랜' : '무료로 사용하기'}
             </Text>
-            <Text style={styles.planDesc}>월 100회 AI 레슨 분석</Text>
-            {/* 녹음기 혜택 배너 */}
-            <View style={styles.recorderBanner}>
-              <Ionicons name="mic" size={13} color="#9b59b6" />
-              <Text style={styles.recorderBannerText} numberOfLines={1}>🎁 녹음기 무상 제공</Text>
-            </View>
           </TouchableOpacity>
         </View>
 
-        {/* 회원 리포트 열람 안내 */}
-        <View style={styles.creditInfoBanner}>
-          <Ionicons name="information-circle-outline" size={16} color="#4A90D9" />
-          <Text style={styles.creditInfoText}>
-            회원은 <Text style={{ fontWeight: '700' }}>처음 1회 무료</Text> 열람 후 크레딧으로 열람합니다. (만원 단위 충전 · 건당 700원)
-          </Text>
-        </View>
-
-        {/* 기능 비교표 */}
-        <View style={styles.compareCard}>
-          <Text style={styles.compareTitle}>플랜 비교</Text>
-
-          {/* 헤더 */}
-          <View style={styles.compareHeaderRow}>
-            <View style={styles.compareFeatureCol} />
-            <View style={styles.compareValueCol}>
-              <Text style={styles.compareHeaderText}>Free</Text>
+        {/* Basic 카드 */}
+        <View style={[s.planCard, s.planCardPaid, currentPlanId === 'basic' && s.planCardCurrent]}>
+          {isTrialEligible && (
+            <View style={s.trialBadge}>
+              <Ionicons name="gift-outline" size={12} color={TERRACOTTA} />
+              <Text style={s.trialBadgeText}>{TRIAL_DAYS}일 무료 체험</Text>
             </View>
-            <View style={styles.compareValueCol}>
-              <Text style={[styles.compareHeaderText, { color: '#4A90D9' }]}>Basic</Text>
-            </View>
-            <View style={styles.compareValueCol}>
-              <Text style={[styles.compareHeaderText, { color: '#9b59b6' }]}>Pro</Text>
-            </View>
+          )}
+          <View style={s.planCardHeader}>
+            <Text style={[s.planName, s.planNamePaid]}>Basic</Text>
+            {currentPlanId === 'basic' && (
+              <View style={s.currentBadge}>
+                <Text style={s.currentBadgeText}>이용 중</Text>
+              </View>
+            )}
           </View>
-
-          {FEATURE_ROWS.map((row, i) => (
-            <View
-              key={i}
-              style={[styles.compareRow, i % 2 === 1 && styles.compareRowAlt]}
-            >
-              <View style={styles.compareFeatureCol}>
-                <Text style={styles.compareFeatureText}>{row.label}</Text>
-              </View>
-              <View style={styles.compareValueCol}>
-                <FeatureCell value={row.free} />
-              </View>
-              <View style={styles.compareValueCol}>
-                <FeatureCell value={row.basic} />
-              </View>
-              <View style={styles.compareValueCol}>
-                <FeatureCell value={row.pro} />
-              </View>
+          <View style={s.priceRow}>
+            <Text style={[s.planPrice, s.planPricePaid]}>{priceLabel('basic')}</Text>
+            {billing === 'annual' && (
+              <Text style={s.annualSavings}>월 약 {monthlyEquivalent('basic').toLocaleString()}원 · 1개월 무료</Text>
+            )}
+          </View>
+          <View style={s.featureList}>
+            <FeatureItem icon="people-outline" text="회원 무제한" />
+            <FeatureItem icon="notifications-outline" text="회원 관리 자동 알림" />
+            <FeatureItem icon="mic-outline" text="AI 레슨 기록 월 10개" />
+            <FeatureItem icon="analytics-outline" text="AI 맞춤 코칭 분석 (기본)" />
+            <FeatureItem icon="add-circle-outline" text="AI 레슨 기록 충전 가능" />
+          </View>
+          {currentPlanId === 'basic' ? (
+            <View style={[s.paidCta, { opacity: 0.4 }]}>
+              <Text style={s.paidCtaText}>현재 플랜</Text>
             </View>
-          ))}
+          ) : (
+            <TouchableOpacity style={s.paidCta} onPress={() => handleSelectPlan('basic')}>
+              <Text style={s.paidCtaText}>
+                {isTrialEligible ? `${TRIAL_DAYS}일 무료 체험 시작` : `${PLANS['basic'].price.toLocaleString()}원으로 구독하기`}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* 트라이얼 배너 */}
-        <View style={styles.trialBanner}>
-          <Ionicons name="gift-outline" size={20} color="#4A90D9" />
-          <Text style={styles.trialText}>
-            1개월 프로 체험 — 실제 회원 데이터로 KERRI의 모든 기능 경험
-          </Text>
+        {/* Pro 카드 (추천) */}
+        <View style={[s.planCard, s.planCardPaid, s.planCardPro, currentPlanId === 'pro' && s.planCardCurrent]}>
+          <View style={[s.trialBadge, s.trialBadgePro]}>
+            <Ionicons name="star-outline" size={12} color={DARK_BROWN} />
+            <Text style={[s.trialBadgeText, { color: DARK_BROWN }]}>
+              {isTrialEligible ? `추천 · ${TRIAL_DAYS}일 무료 체험` : '추천'}
+            </Text>
+          </View>
+          <View style={s.planCardHeader}>
+            <Text style={[s.planName, s.planNamePro]}>Pro</Text>
+            {currentPlanId === 'pro' && (
+              <View style={[s.currentBadge, { backgroundColor: DARK_BROWN }]}>
+                <Text style={s.currentBadgeText}>이용 중</Text>
+              </View>
+            )}
+          </View>
+          <View style={s.priceRow}>
+            <Text style={[s.planPrice, s.planPricePro]}>{priceLabel('pro')}</Text>
+            {billing === 'annual' && (
+              <Text style={s.annualSavings}>월 약 {monthlyEquivalent('pro').toLocaleString()}원 · 1개월 무료</Text>
+            )}
+          </View>
+          <View style={s.featureList}>
+            <FeatureItem icon="people-outline" text="회원 무제한" />
+            <FeatureItem icon="notifications-outline" text="회원 관리 자동 알림" />
+            <FeatureItem icon="mic-outline" text="AI 레슨 기록 월 50개" />
+            <FeatureItem icon="analytics-outline" text="상세 AI 맞춤 코칭 분석" />
+            <FeatureItem icon="person-circle-outline" text="개인화 AI · 코치 브랜딩" />
+            <FeatureItem icon="add-circle-outline" text="AI 레슨 기록 충전 가능" />
+          </View>
+          {currentPlanId === 'pro' ? (
+            <View style={[s.paidCta, s.paidCtaPro, { opacity: 0.4 }]}>
+              <Text style={s.paidCtaText}>현재 플랜</Text>
+            </View>
+          ) : (
+            <TouchableOpacity style={[s.paidCta, s.paidCtaPro]} onPress={() => handleSelectPlan('pro')}>
+              <Text style={s.paidCtaText}>
+                {isTrialEligible ? `${TRIAL_DAYS}일 무료 체험 시작` : `${PLANS['pro'].price.toLocaleString()}원으로 구독하기`}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
-          <Text style={styles.nextButtonText}>
-            {selectedPlan === 'pro' ? 'Pro' : 'Basic'} 플랜으로 시작하기
-          </Text>
-          <Text style={styles.nextButtonSub}>1개월 프로 체험 후 전환</Text>
+        {/* 전체 비교 링크 */}
+        <TouchableOpacity style={s.compareLink} onPress={() => setCompareVisible(true)}>
+          <Text style={s.compareLinkText}>플랜 전체 비교 보기</Text>
+          <Ionicons name="chevron-forward" size={14} color={TERRACOTTA} />
         </TouchableOpacity>
 
-        <Text style={styles.legalNote}>
-          * 가격은 부가세 포함 · 체험 기간 중 언제든 취소 가능
+        <Text style={s.legalNote}>
+          * 가격은 부가세 포함 · 체험 기간 중 언제든 취소 가능{'\n'}
+          * 연간 결제 시 {ANNUAL_PRICES.basic?.toLocaleString()}원 / {ANNUAL_PRICES.pro?.toLocaleString()}원 일괄 결제
         </Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fa' },
-  header: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 8 },
-  closeBtn: { padding: 8 },
-  scroll: { padding: 20, paddingBottom: 48 },
-  title: { fontSize: 24, fontWeight: '700', color: '#1a1a2e', marginBottom: 12 },
-  subtitle: { fontSize: 14, color: '#666', marginBottom: 24, lineHeight: 20 },
-  trialHighlight: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: '#FFF8E1',
-    borderRadius: 14, padding: 14,
-    marginBottom: 20,
-    borderWidth: 1.5, borderColor: '#F59E0B',
-  },
-  trialHighlightBadge: {
-    backgroundColor: '#F59E0B', borderRadius: 10,
-    paddingHorizontal: 10, paddingVertical: 6,
-  },
-  trialHighlightBadgeText: { color: '#fff', fontSize: 13, fontWeight: '800' },
-  trialHighlightTitle: { fontSize: 16, fontWeight: '800', color: '#92400E', marginBottom: 2 },
-  trialHighlightSub: { fontSize: 12, color: '#B45309' },
+function FeatureItem({ icon, text }: { icon: string; text: string }) {
+  return (
+    <View style={s.featureItem}>
+      <Ionicons name={icon as any} size={14} color={TERRACOTTA} />
+      <Text style={s.featureItemText}>{text}</Text>
+    </View>
+  );
+}
 
-  planRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: CREAM },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
+  backBtn: { padding: 8 },
+  scroll: { paddingHorizontal: 20, paddingBottom: 48 },
+  title: { fontSize: 26, fontWeight: '800', color: DARK_BROWN, marginBottom: 20, lineHeight: 34 },
+
+  billingToggle: {
+    flexDirection: 'row', alignSelf: 'flex-start',
+    backgroundColor: '#EDE6DE', borderRadius: 12, padding: 3, marginBottom: 20,
+  },
+  billingBtn: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  billingBtnActive: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 },
+  billingBtnText: { fontSize: 14, color: WARM_GRAY, fontWeight: '600' },
+  billingBtnTextActive: { color: DARK_BROWN },
+  savingsBadge: { backgroundColor: TERRACOTTA, borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 },
+  savingsBadgeText: { fontSize: 9, color: '#fff', fontWeight: '700' },
+
   planCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: '#e9ecef',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-    position: 'relative',
-    overflow: 'hidden',
+    backgroundColor: CREAM_CARD, borderRadius: 16,
+    borderWidth: 1.5, borderColor: WARM_GRAY_BORDER,
+    padding: 20, marginBottom: 14,
   },
-  planCardPro: { borderColor: '#e9ecef' },
-  planCardSelected: { borderColor: '#4A90D9' },
-  planName: { fontSize: 17, fontWeight: '700', color: '#1a1a2e', marginBottom: 6 },
-  planNamePro: { color: '#9b59b6' },
-  planPrice: { fontSize: 20, fontWeight: '800', color: '#4A90D9' },
-  planPricePro: { color: '#9b59b6' },
-  planPriceSub: { fontSize: 13, fontWeight: '400', color: '#888' },
-  planDesc: { fontSize: 11, color: '#888', marginTop: 4 },
-  selectedDot: {
-    position: 'absolute', top: 10, right: 10,
-    width: 20, height: 20, borderRadius: 10,
-    backgroundColor: '#4A90D9',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  selectedDotPro: { backgroundColor: '#9b59b6' },
-  recommendBadge: {
-    position: 'absolute', top: -1, right: -1,
-    backgroundColor: '#9b59b6',
-    borderTopRightRadius: 14,
-    borderBottomLeftRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  recommendText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  recorderBanner: {
+  planCardPaid: { borderColor: WARM_GRAY_BORDER },
+  planCardPro: { borderColor: DARK_BROWN + '50', backgroundColor: '#FEFCFA' },
+  planCardCurrent: { borderColor: TERRACOTTA },
+
+  trialBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: '#f5f0fa', borderRadius: 8,
-    paddingHorizontal: 8, paddingVertical: 4,
-    marginTop: 8, alignSelf: 'flex-start',
+    alignSelf: 'flex-start',
+    backgroundColor: TERRACOTTA + '15', borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 4, marginBottom: 10,
   },
-  recorderBannerText: { fontSize: 11, color: '#9b59b6', fontWeight: '600' },
+  trialBadgePro: { backgroundColor: DARK_BROWN + '12' },
+  trialBadgeText: { fontSize: 11, color: TERRACOTTA, fontWeight: '700' },
 
-  creditInfoBanner: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    backgroundColor: '#EBF4FF',
-    borderRadius: 12, padding: 12, marginBottom: 16,
-  },
-  creditInfoText: { flex: 1, fontSize: 12, color: '#4A90D9', lineHeight: 18 },
+  planCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  planName: { fontSize: 20, fontWeight: '800', color: WARM_GRAY },
+  planNamePaid: { color: DARK_BROWN },
+  planNamePro: { color: DARK_BROWN },
+  currentBadge: { backgroundColor: TERRACOTTA, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  currentBadgeText: { fontSize: 11, color: '#fff', fontWeight: '700' },
 
-  compareCard: {
-    backgroundColor: '#fff', borderRadius: 16, padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
-  },
-  compareTitle: { fontSize: 15, fontWeight: '700', color: '#1a1a2e', marginBottom: 12 },
-  compareHeaderRow: { flexDirection: 'row', paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0', marginBottom: 4 },
-  compareRow: { flexDirection: 'row', paddingVertical: 8, alignItems: 'center' },
-  compareRowAlt: { backgroundColor: '#fafbfc', borderRadius: 6 },
-  compareFeatureCol: { flex: 2.5 },
-  compareValueCol: { flex: 1, alignItems: 'center' },
-  compareHeaderText: { fontSize: 12, fontWeight: '700', color: '#888' },
-  compareFeatureText: { fontSize: 12, color: '#444', lineHeight: 16 },
-  featureCellText: { fontSize: 11, color: '#555', textAlign: 'center' },
+  priceRow: { marginBottom: 16 },
+  planPrice: { fontSize: 24, fontWeight: '800', color: WARM_GRAY },
+  planPricePaid: { color: TERRACOTTA },
+  planPricePro: { color: DARK_BROWN },
+  annualSavings: { fontSize: 11, color: WARM_GRAY, marginTop: 3 },
 
-  trialBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: '#EBF4FF', borderRadius: 12,
-    padding: 14, marginBottom: 20,
-  },
-  trialText: { flex: 1, fontSize: 13, color: '#4A90D9', lineHeight: 18 },
+  featureList: { gap: 10, marginBottom: 18 },
+  featureItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  featureItemText: { fontSize: 13, color: DARK_BROWN, fontWeight: '500', flex: 1 },
 
-  nextButton: {
-    backgroundColor: '#4A90D9', borderRadius: 14,
-    padding: 18, alignItems: 'center', marginBottom: 12,
+  freeCta: {
+    backgroundColor: 'transparent', borderRadius: 12,
+    borderWidth: 1.5, borderColor: WARM_GRAY_BORDER,
+    paddingVertical: 14, alignItems: 'center',
   },
-  nextButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  nextButtonSub: { color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 3 },
+  freeCtaText: { fontSize: 14, color: WARM_GRAY, fontWeight: '600' },
+  paidCta: {
+    backgroundColor: TERRACOTTA, borderRadius: 12,
+    paddingVertical: 15, alignItems: 'center',
+  },
+  paidCtaPro: { backgroundColor: DARK_BROWN },
+  paidCtaText: { fontSize: 15, color: '#fff', fontWeight: '700' },
 
-  legalNote: { fontSize: 11, color: '#aaa', textAlign: 'center', lineHeight: 16 },
+  compareLink: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 4, paddingVertical: 12, marginBottom: 12,
+  },
+  compareLinkText: { fontSize: 13, color: TERRACOTTA, fontWeight: '600', textDecorationLine: 'underline' },
 
-  // 모달 스타일
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    padding: 24, paddingBottom: 40,
-  },
-  modalHandle: {
-    width: 40, height: 4, backgroundColor: '#e0e0e0',
-    borderRadius: 2, alignSelf: 'center', marginBottom: 20,
-  },
-  recorderIconWrap: {
-    width: 80, height: 80, borderRadius: 40,
-    backgroundColor: '#f5f0fa',
-    justifyContent: 'center', alignItems: 'center',
-    alignSelf: 'center', marginBottom: 16,
-  },
-  modalTitle: { fontSize: 22, fontWeight: '800', color: '#1a1a2e', textAlign: 'center', marginBottom: 4 },
-  modalSubtitle: { fontSize: 14, color: '#888', textAlign: 'center', marginBottom: 24 },
-  recorderFeatureList: { gap: 12, marginBottom: 24 },
-  recorderFeatureRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  recorderFeatureText: { flex: 1, fontSize: 14, color: '#333', lineHeight: 20 },
-  recorderPriceRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: '#f5f0fa', borderRadius: 12, padding: 14, marginBottom: 8,
-  },
-  recorderPriceLabel: { fontSize: 13, color: '#888' },
-  recorderPriceOriginal: { fontSize: 16, color: '#aaa', textDecorationLine: 'line-through', flex: 1 },
-  recorderFreeBadge: {
-    backgroundColor: '#9b59b6', borderRadius: 8,
-    paddingHorizontal: 12, paddingVertical: 4,
-  },
-  recorderFreeText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  recorderNote: { fontSize: 12, color: '#aaa', textAlign: 'center', marginBottom: 24 },
-  modalNextBtn: {
-    backgroundColor: '#9b59b6', borderRadius: 14,
-    padding: 18, alignItems: 'center', marginBottom: 10,
-  },
-  modalNextBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  modalCancelBtn: { alignItems: 'center', padding: 12 },
-  modalCancelBtnText: { color: '#888', fontSize: 14 },
+  legalNote: { fontSize: 11, color: WARM_GRAY, textAlign: 'center', lineHeight: 18, marginTop: 4 },
 
-  // 결제 방식 선택 모달
-  billingOptionCard: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#f8f9fa', borderRadius: 14,
-    padding: 16, marginBottom: 12,
-    borderWidth: 1, borderColor: '#e9ecef',
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  compareSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingBottom: 40, maxHeight: '85%' },
+  sheetHandle: { width: 40, height: 4, backgroundColor: '#E0D8D0', borderRadius: 2, alignSelf: 'center', marginVertical: 12 },
+  compareTitle: { fontSize: 17, fontWeight: '800', color: DARK_BROWN, marginBottom: 16 },
+  compareHeaderRow: { flexDirection: 'row', paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#F0E8E0', marginBottom: 4 },
+  compareHeaderCell: { flex: 1, alignItems: 'center' },
+  compareHeaderText: { fontSize: 12, fontWeight: '700', color: WARM_GRAY },
+  compareRow: { flexDirection: 'row', paddingVertical: 10, alignItems: 'center' },
+  compareRowAlt: { backgroundColor: '#FBF7F3', borderRadius: 8 },
+  compareRowLabel: { fontSize: 12, color: DARK_BROWN, lineHeight: 16 },
+  featureCellText: { fontSize: 11, color: WARM_GRAY, textAlign: 'center' },
+  compareCloseBtn: {
+    backgroundColor: TERRACOTTA, borderRadius: 12,
+    paddingVertical: 15, alignItems: 'center', marginTop: 16,
   },
-  billingOptionCardHighlight: {
-    borderColor: '#9b59b6', backgroundColor: '#f5f0fa',
-    position: 'relative',
-  },
-  billingOptionLeft: { flex: 1 },
-  billingOptionTitle: { fontSize: 15, fontWeight: '700', color: '#1a1a2e', marginBottom: 2 },
-  billingOptionPrice: { fontSize: 16, fontWeight: '800', color: '#4A90D9' },
-  billingOptionDiscount: { fontSize: 11, color: '#9b59b6', marginTop: 4 },
-  billingOptionBadge: {
-    position: 'absolute', top: -1, left: 12,
-    backgroundColor: '#9b59b6', borderRadius: 0,
-    borderBottomLeftRadius: 6, borderBottomRightRadius: 6,
-    paddingHorizontal: 8, paddingVertical: 2,
-  },
-  billingOptionBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  compareCloseBtnText: { fontSize: 15, color: '#fff', fontWeight: '700' },
 });

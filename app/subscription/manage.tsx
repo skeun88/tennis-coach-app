@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  SafeAreaView, Alert, ActivityIndicator, Linking,
+  SafeAreaView, Alert, ActivityIndicator, Linking, Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,8 +10,6 @@ import {
   PLANS, getAiAnalysisUsageThisMonth,
   TOPUP_PRODUCTS, TRIAL_DAYS, ANNUAL_PRICES,
 } from '../../lib/subscription';
-import { supabase } from '../../lib/supabase';
-import ReportTopupModal from '../../components/ReportTopupModal';
 import { IS_BETA } from '../../lib/beta';
 
 const CREAM = '#F7F0E9';
@@ -66,8 +64,6 @@ export default function ManageSubscriptionScreen() {
   const router = useRouter();
   const { subscription, loading, isTrial, trialDaysLeft, refresh } = useSubscription();
   const [aiUsed, setAiUsed] = useState(0);
-  const [topupVisible, setTopupVisible] = useState(false);
-  const [authToken, setAuthToken] = useState('');
 
   const loadUsage = useCallback(async () => {
     if (!subscription) return;
@@ -77,22 +73,22 @@ export default function ManageSubscriptionScreen() {
 
   useEffect(() => { loadUsage(); }, [loadUsage]);
 
-  async function openTopup() {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-    setAuthToken(session.access_token);
-    setTopupVisible(true);
+  async function openStoreManagement() {
+    const url = Platform.OS === 'android'
+      ? 'https://play.google.com/store/account/subscriptions'
+      : 'https://apps.apple.com/account/subscriptions';
+    const canOpen = await Linking.canOpenURL(url);
+    if (canOpen) {
+      Linking.openURL(url);
+    } else {
+      Alert.alert('구독 관리', 'App Store 또는 설정 앱에서 구독을 관리하세요.');
+    }
   }
 
-  async function openStoreManagement() {
-    // Toss Payments 기반이므로 구독 취소/관리는 고객센터 안내
-    Alert.alert(
-      '구독 관리',
-      '구독 변경 및 취소는 아래 방법으로 진행해 주세요.\n\n• 플랜 변경: 이 화면에서 직접 변경\n• 구독 취소: 고객센터 문의',
-      [
-        { text: '확인' },
-      ]
-    );
+  async function handleRestorePurchase() {
+    Alert.alert('구독 복원', '이전 구독이 있다면 자동으로 복원됩니다.\n복원 후 화면을 아래로 당겨 새로고침해 주세요.', [
+      { text: '확인', onPress: () => refresh() },
+    ]);
   }
 
   if (loading) {
@@ -228,9 +224,9 @@ export default function ManageSubscriptionScreen() {
 
           {/* 충전 버튼 (Basic/Pro만) */}
           {isPaid && (
-            <TouchableOpacity style={s.topupBtn} onPress={openTopup} activeOpacity={0.8}>
+            <TouchableOpacity style={s.topupBtn} onPress={() => router.push('/subscription/topup')} activeOpacity={0.8}>
               <Ionicons name="flash-outline" size={15} color={TERRACOTTA} />
-              <Text style={s.topupBtnText}>AI 레슨 기록 충전 · {TOPUP_PRODUCTS[0].credits}개 {TOPUP_PRODUCTS[0].price.toLocaleString()}원</Text>
+              <Text style={s.topupBtnText}>AI 레슨 기록 {TOPUP_PRODUCTS[0].credits}개 충전 · {TOPUP_PRODUCTS[0].price.toLocaleString()}원</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -246,29 +242,30 @@ export default function ManageSubscriptionScreen() {
             />
           )}
 
-          {/* AI 레슨 기록 충전 (Basic/Pro만) */}
-          {isPaid && (
-            <MenuRow
-              icon="add-circle-outline"
-              label="AI 레슨 기록 충전"
-              value={`${TOPUP_PRODUCTS[0].price.toLocaleString()}원/10개`}
-              onPress={openTopup}
-            />
-          )}
+          {/* 결제·충전 내역 */}
+          <MenuRow
+            icon="receipt-outline"
+            label="결제·충전 내역"
+            onPress={() => Alert.alert('준비 중', '곧 제공될 예정입니다.')}
+          />
 
-          {/* 구독 관리 (스토어/고객센터) */}
+          {/* 스토어 구독 관리 */}
           <MenuRow
             icon="storefront-outline"
-            label="구독 관리"
+            label={Platform.OS === 'android' ? 'Google Play에서 구독 관리' : 'App Store에서 구독 관리'}
             onPress={openStoreManagement}
           />
+        </View>
 
-          {/* 유료서비스·구독·환불정책 */}
-          <MenuRow
-            icon="document-text-outline"
-            label="유료서비스·구독·환불정책"
-            onPress={() => Linking.openURL('https://kerri.ai/policy/refund')}
-          />
+        {/* 구매 복원 / 정책 링크 */}
+        <View style={s.footerLinks}>
+          <TouchableOpacity onPress={handleRestorePurchase}>
+            <Text style={s.footerLink}>구매 복원</Text>
+          </TouchableOpacity>
+          <Text style={s.footerSep}>·</Text>
+          <TouchableOpacity onPress={() => Linking.openURL('https://kerri.ai/policy/refund')}>
+            <Text style={s.footerLink}>구독·환불 정책</Text>
+          </TouchableOpacity>
         </View>
 
         {/* 구독 종료 후 충전권 안내 */}
@@ -284,23 +281,6 @@ export default function ManageSubscriptionScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {topupVisible && authToken && subscription && (
-        <ReportTopupModal
-          visible={topupVisible}
-          onClose={() => setTopupVisible(false)}
-          onTopupSuccess={async () => {
-            setTopupVisible(false);
-            await refresh();
-            await loadUsage();
-          }}
-          onUpgradePress={() => {
-            setTopupVisible(false);
-            router.push('/subscription/select-plan');
-          }}
-          currentPlanId={subscription.plan_id}
-          authToken={authToken}
-        />
-      )}
     </SafeAreaView>
   );
 }
@@ -377,6 +357,13 @@ const s = StyleSheet.create({
   menuRowLabelDestructive: { color: '#DC4444' },
   menuRowRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   menuRowValue: { fontSize: 12, color: WARM_GRAY },
+
+  footerLinks: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, paddingVertical: 4,
+  },
+  footerLink: { fontSize: 12, color: WARM_GRAY, textDecorationLine: 'underline' },
+  footerSep: { fontSize: 12, color: WARM_GRAY_BORDER },
 
   retainedCreditCard: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 8,

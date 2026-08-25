@@ -9,6 +9,7 @@ export default function SubscriptionLayout() {
       <Stack.Screen name="blocked" />
       <Stack.Screen name="manage" />
       <Stack.Screen name="upgrade" />
+      <Stack.Screen name="topup" />
     </Stack>
   );
 }
