@@ -417,6 +417,7 @@ export default function ProfileScreen() {
             <Text style={styles.brandName}>{profile.name || '코치'} 코치</Text>
             {!!sportCenter && <Text style={styles.brandSub}>{sportCenter}</Text>}
             {!!regionLabel && <Text style={styles.brandRegion}>{regionLabel}</Text>}
+            {!!profile.bio && <Text style={styles.brandBio}>{profile.bio}</Text>}
 
             <View style={styles.kerriBadge}>
               <Ionicons name="shield-checkmark-outline" size={11} color={CREAM} />
@@ -441,7 +442,7 @@ export default function ProfileScreen() {
                 <Text style={styles.sectionTitle}>코칭 실적</Text>
               </View>
               {canUse('coaching_stats_public')
-                ? <Text style={styles.verifiedBadge}>KERRI 검증 · 조작 불가</Text>
+                ? <Text style={styles.verifiedBadge}>KERRI 기록 데이터 기준</Text>
                 : <View style={styles.blindBadge}><Text style={styles.blindBadgeText}>Pro 공개</Text></View>
               }
             </View>
@@ -498,7 +499,7 @@ export default function ProfileScreen() {
           </View>
 
           {/* ── 프로필 완성도 ── */}
-          <View style={styles.completionCard}>
+          {completionPct < 100 && <View style={styles.completionCard}>
             <View style={{ flex: 1 }}>
               <Text style={styles.completionTitle}>프로필 완성도 {completionPct}%</Text>
               <View style={styles.progressTrack}>
@@ -509,7 +510,7 @@ export default function ProfileScreen() {
             <TouchableOpacity onPress={openProfileEdit} style={styles.completionBtn}>
               <Text style={styles.completionBtnText}>완성하기 →</Text>
             </TouchableOpacity>
-          </View>
+          </View>}
 
           {/* ── 코치 소개 ── */}
           <View style={styles.sectionCard}>
@@ -519,7 +520,7 @@ export default function ProfileScreen() {
                 <Text style={styles.sectionTitle}>코치 소개</Text>
               </View>
               <TouchableOpacity
-                onPress={introRows.length === 0 || !career.career_details ? openCareerEdit : openProfileEdit}
+                onPress={openCareerEdit}
                 style={styles.editChip}
               >
                 <Ionicons name="pencil-outline" size={11} color={TERRA} />
@@ -528,7 +529,7 @@ export default function ProfileScreen() {
             </View>
 
             {introRows.length === 0 ? (
-              <TouchableOpacity onPress={openProfileEdit} style={styles.emptyIntro}>
+              <TouchableOpacity onPress={openCareerEdit} style={styles.emptyIntro}>
                 <Text style={styles.emptyIntroText}>프로필 정보를 입력해 보세요 →</Text>
               </TouchableOpacity>
             ) : (
@@ -559,7 +560,7 @@ export default function ProfileScreen() {
           >
             <View style={styles.aiLeft}>
               <View style={styles.aiIconWrap}>
-                <Ionicons name="analytics-outline" size={22} color={TERRA} />
+                <Ionicons name="hardware-chip-outline" size={22} color={TERRA} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.aiTitle}>나의 AI 코칭 모델</Text>
@@ -604,7 +605,7 @@ export default function ProfileScreen() {
             )}
           </View>
 
-          <View style={{ height: 80 }} />
+          <View style={{ height: 24 }} />
         </View>
       </ScrollView>
 
@@ -947,7 +948,7 @@ const styles = StyleSheet.create({
   brandCard: {
     backgroundColor: TERRA,
     borderRadius: 22,
-    padding: 24,
+    padding: 20,
     marginBottom: 14,
     alignItems: 'center',
     overflow: 'hidden',
@@ -958,24 +959,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center', alignItems: 'center',
   },
-  brandAvatarWrap: { alignItems: 'center', justifyContent: 'center', marginBottom: 14, marginTop: 8 },
+  brandAvatarWrap: { alignItems: 'center', justifyContent: 'center', marginBottom: 10, marginTop: 6 },
   spotlight: {
     position: 'absolute',
-    width: 110, height: 110, borderRadius: 55,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    width: 112, height: 112, borderRadius: 56,
+    backgroundColor: 'rgba(247,240,233,0.15)',
   },
   brandAvatar: {
     width: 80, height: 80, borderRadius: 40,
     backgroundColor: 'rgba(255,255,255,0.3)',
     justifyContent: 'center', alignItems: 'center',
     overflow: 'hidden',
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)',
   },
   brandAvatarImg: { width: 80, height: 80, borderRadius: 40 },
   brandAvatarText: { fontSize: 32, fontWeight: '800', color: '#fff' },
   brandName: { fontSize: 20, fontWeight: '800', color: '#fff', marginBottom: 4 },
   brandSub: { fontSize: 14, color: 'rgba(255,255,255,0.8)', fontWeight: '500', marginBottom: 2 },
-  brandRegion: { fontSize: 13, color: 'rgba(255,255,255,0.65)', marginBottom: 12 },
+  brandRegion: { fontSize: 13, color: 'rgba(255,255,255,0.65)', marginBottom: 4 },
+  brandBio: { fontSize: 13, color: 'rgba(255,255,255,0.75)', marginBottom: 10, textAlign: 'center', paddingHorizontal: 12 },
   kerriBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: 'rgba(255,255,255,0.18)',
