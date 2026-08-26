@@ -95,52 +95,140 @@ async function checkConflicts(
   return allConflicts;
 }
 
-/** 고정 스케줄 기반 레슨 자동 생성 (요일별 다중 시간 지원) */
+type ScheduleType = 'regular' | 'by_date' | 'later';
+type DateEntry = { date: string; time: string };
+
+async function checkConflictsForDates(
+  coachId: string,
+  entries: DateEntry[],
+  lessonDuration: number,
+): Promise<{ date: string; memberName: string; startTime: string }[]> {
+  const allConflicts: { date: string; memberName: string; startTime: string }[] = [];
+  const dates = [...new Set(entries.map(e => e.date))];
+  if (!dates.length) return allConflicts;
+  const { data: existing } = await supabase
+    .from('lessons')
+    .select('id, date, start_time, end_time, lesson_members(member_id, member:members(name))')
+    .eq('coach_id', coachId)
+    .in('date', dates);
+  for (const entry of entries) {
+    const [hh, mm] = entry.time.split(':').map(Number);
+    const newStart = hh * 60 + mm;
+    const newEnd = newStart + lessonDuration;
+    for (const lesson of (existing ?? []) as any[]) {
+      if (lesson.date !== entry.date) continue;
+      if (!lesson.lesson_members?.length) continue;
+      const lStart = timeToMinutes(lesson.start_time);
+      const lEnd = timeToMinutes(lesson.end_time);
+      if (newStart < lEnd && newEnd > lStart) {
+        for (const lmRow of lesson.lesson_members) {
+          const mName = lmRow.member?.name ?? '다른 회원';
+          if (!allConflicts.find(cf => cf.date === lesson.date && cf.startTime === lesson.start_time.slice(0, 5))) {
+            allConflicts.push({ date: lesson.date, memberName: mName, startTime: lesson.start_time.slice(0, 5) });
+          }
+        }
+      }
+    }
+  }
+  return allConflicts;
+}
+
+/** 고정 스케줄 기반 레슨 자동 생성 (요일별 다중 시간 지원, 과거 스케줄 포함) */
 async function generateScheduleLessons(params: {
   coachId: string; memberId: string; memberName: string;
   scheduleDays: number[]; dayTimes: DayTimes; lessonDuration: number;
-  totalCredits: number; joinDate: string;
+  totalCredits: number; remainingCredits?: number; joinDate: string;
   repeatType?: 'none' | 'weekly' | 'custom';
-  repeatInterval?: number; // weeks (custom 전용)
+  repeatInterval?: number;
 }) {
   const {
     coachId, memberId, memberName, scheduleDays, dayTimes,
-    lessonDuration, totalCredits, joinDate,
+    lessonDuration, totalCredits, remainingCredits, joinDate,
     repeatType = 'weekly', repeatInterval = 1,
   } = params;
   if (!scheduleDays.length) return;
 
   const startDate = new Date(joinDate + 'T00:00:00+09:00');
-  const todayForGen = kstToday();
-  const cursor = new Date(startDate);
-  if (cursor < todayForGen) cursor.setTime(todayForGen.getTime());
-
-  // '안 함': 첫 번째 매칭 날짜/시간 1개만. 크레딧 0이면 기본 12회 생성
-  const limit = repeatType === 'none' ? 1 : (totalCredits > 0 ? totalCredits : 12);
+  const todayKST = kstToday();
+  const isHistorical = startDate < todayKST;
   const interval = repeatType === 'custom' ? Math.max(1, repeatInterval) : 1;
 
+  // 남은 횟수 기준으로 생성할 미래/과거 레슨 수 계산
+  const futureLimit = remainingCredits !== undefined
+    ? remainingCredits
+    : (totalCredits > 0 ? totalCredits : 12);
+  const pastLimit = isHistorical && remainingCredits !== undefined
+    ? Math.max(0, totalCredits - remainingCredits)
+    : 0;
+
   const dates: { date: string; time: string }[] = [];
-  let iter = 0;
-  const maxIter = limit * 14 * (interval + 1) + 100;
-  while (dates.length < limit && iter < maxIter) {
-    const dow = cursor.getDay();
-    if (scheduleDays.includes(dow)) {
-      // 주 간격 체크 (custom: interval주마다)
-      const weekOffset = Math.floor(
-        (cursor.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000)
-      );
-      const inValidWeek = weekOffset % interval === 0;
-      if (inValidWeek) {
+
+  if (repeatType === 'none') {
+    // '안 함': 오늘 이후 첫 번째 매칭 날짜/시간 1개만
+    const cursor = new Date(isHistorical ? todayKST : startDate);
+    let iter = 0;
+    while (dates.length === 0 && iter < 30) {
+      const dow = cursor.getDay();
+      if (scheduleDays.includes(dow)) {
         const times = dayTimes[dow] ?? [];
-        for (const time of times) {
-          if (dates.length < limit) {
-            dates.push({ date: toKSTDateStr(cursor), time });
+        if (times.length > 0) dates.push({ date: toKSTDateStr(cursor), time: times[0] });
+      }
+      cursor.setDate(cursor.getDate() + 1);
+      iter++;
+    }
+  } else {
+    // Phase 1: 과거 스케줄 (레슨 시작일 ~ 오늘 이전, 사용된 횟수만큼)
+    if (pastLimit > 0) {
+      const cursor = new Date(startDate);
+      const maxIter = pastLimit * 14 * (interval + 1) + 100;
+      let pastCount = 0;
+      let iter = 0;
+      while (pastCount < pastLimit && iter < maxIter) {
+        if (cursor >= todayKST) break;
+        const dow = cursor.getDay();
+        if (scheduleDays.includes(dow)) {
+          const weekOffset = Math.floor(
+            (cursor.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000)
+          );
+          if (weekOffset % interval === 0) {
+            for (const time of (dayTimes[dow] ?? [])) {
+              if (pastCount < pastLimit) {
+                dates.push({ date: toKSTDateStr(cursor), time });
+                pastCount++;
+              }
+            }
           }
         }
+        cursor.setDate(cursor.getDate() + 1);
+        iter++;
       }
     }
-    cursor.setDate(cursor.getDate() + 1);
-    iter++;
+
+    // Phase 2: 미래 스케줄 (오늘 이후, 남은 횟수만큼)
+    if (futureLimit > 0) {
+      const cursor = new Date(isHistorical ? todayKST : startDate);
+      const maxIter = futureLimit * 14 * (interval + 1) + 100;
+      let futureCount = 0;
+      let iter = 0;
+      while (futureCount < futureLimit && iter < maxIter) {
+        const dow = cursor.getDay();
+        if (scheduleDays.includes(dow)) {
+          const weekOffset = Math.floor(
+            (cursor.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000)
+          );
+          if (weekOffset % interval === 0) {
+            for (const time of (dayTimes[dow] ?? [])) {
+              if (futureCount < futureLimit) {
+                dates.push({ date: toKSTDateStr(cursor), time });
+                futureCount++;
+              }
+            }
+          }
+        }
+        cursor.setDate(cursor.getDate() + 1);
+        iter++;
+      }
+    }
   }
 
   let successCount = 0;
@@ -185,50 +273,32 @@ function formatDate(value: string): string {
 
 export default function NewMemberScreen() {
   const router = useRouter();
-  // pending member awaiting lesson package registration then schedule generation
-  const pendingMemberId = useRef<string | null>(null);
-  const pendingCoachId = useRef<string | null>(null);
+  const scrollViewRef = useRef<any>(null);
+  const prevPackageCountRef = useRef(0);
+  const hasNavigatedToPackageScreen = useRef(false);
+  const timePickerModeRef = useRef<'regular' | 'by_date'>('regular');
+  const byDateTempDateRef = useRef('');
 
   useFocusEffect(useCallback(() => {
-    const mId = pendingMemberId.current;
-    const cId = pendingCoachId.current;
-    if (!mId || !cId) return;
-    (async () => {
-      const { data: pkg } = await supabase
-        .from('lesson_packages')
-        .select('total_credits')
-        .eq('coach_id', cId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (!pkg) return; // still no package, wait
-      pendingMemberId.current = null;
-      pendingCoachId.current = null;
-      const pendingScheduleDays2 = pendingScheduleDaysRef.current;
-      const pendingDayTimes2 = pendingDayTimesRef.current;
-      const pendingDuration2 = pendingDurationRef.current;
-      const pendingName2 = pendingNameRef.current;
-      const pendingStartDate2 = pendingStartDateRef.current;
-      const genResult = await generateScheduleLessons({
-        coachId: cId, memberId: mId, memberName: pendingName2,
-        scheduleDays: pendingScheduleDays2, dayTimes: pendingDayTimes2,
-        lessonDuration: pendingDuration2, totalCredits: pkg.total_credits, joinDate: pendingStartDate2,
-        repeatType: 'none', repeatInterval: 1,
-      });
-      const genCount = genResult?.successCount ?? 0;
-      Alert.alert(
-        '스케줄 생성 완료',
-        genCount > 0 ? `${genCount}개 레슨이 스케줄에 추가됐습니다.` : '스케줄 생성 완료',
-        [{ text: '확인', onPress: () => router.back() }]
-      );
-    })();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      supabase.from('lesson_packages').select('*')
+        .eq('coach_id', user.id).order('created_at', { ascending: false })
+        .then(({ data }) => {
+          const pkgs = data ?? [];
+          setLessonPackages(pkgs);
+          if (hasNavigatedToPackageScreen.current && pkgs.length > prevPackageCountRef.current && pkgs.length > 0) {
+            const newest = pkgs[0];
+            setSelectedPackageId(newest.id);
+            setTotalCredits(String(newest.total_credits ?? 10));
+            setRemainingCredits(String(newest.total_credits ?? 10));
+            setLessonDuration(String(newest.duration_minutes ?? 60));
+            hasNavigatedToPackageScreen.current = false;
+          }
+          prevPackageCountRef.current = pkgs.length;
+        });
+    });
   }, []));
-
-  const pendingScheduleDaysRef = useRef<number[]>([]);
-  const pendingDayTimesRef = useRef<Record<number, string[]>>({});
-  const pendingDurationRef = useRef<number>(60);
-  const pendingNameRef = useRef<string>('');
-  const pendingStartDateRef = useRef<string>('');
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -241,6 +311,14 @@ export default function NewMemberScreen() {
   const [notes, setNotes] = useState('');
   // 체험 회원 토글
   const [isTrial, setIsTrial] = useState(false);
+
+  // 일정 방식
+  const [scheduleType, setScheduleType] = useState<ScheduleType>('regular');
+  const [byDateEntries, setByDateEntries] = useState<DateEntry[]>([]);
+  const [byDatePickerVisible, setByDatePickerVisible] = useState(false);
+  const [byDateCalMonth, setByDateCalMonth] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() });
+  const [packageHighlight, setPackageHighlight] = useState(false);
+  const [packageSectionY, setPackageSectionY] = useState(0);
 
   // 요일 및 요일별 시간 (다중 시간 지원)
   const [scheduleDays, setScheduleDays] = useState<number[]>([]);
@@ -255,6 +333,7 @@ export default function NewMemberScreen() {
 
   const [lessonDuration, setLessonDuration] = useState('60');
   const [totalCredits, setTotalCredits] = useState('');
+  const [remainingCredits, setRemainingCredits] = useState('');
   const [lessonPackages, setLessonPackages] = useState<any[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -271,16 +350,6 @@ export default function NewMemberScreen() {
   const [slotsData, setSlotsData] = useState<{ time: string; available: boolean }[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [slotsDateStr, setSlotsDateStr] = useState('');
-
-  useEffect(() => {
-    (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase.from('lesson_packages').select('*')
-        .eq('coach_id', user.id).order('created_at', { ascending: false });
-      setLessonPackages(data ?? []);
-    })();
-  }, []);
 
   async function fetchAvailableSlots(day: number) {
     const today = new Date();
@@ -356,8 +425,20 @@ export default function NewMemberScreen() {
   }
 
   function confirmTime() {
-    if (!tempHour || editingDay === null) return;
+    if (!tempHour) return;
     const newTime = `${tempHour}:${tempMinute}`;
+    if (timePickerModeRef.current === 'by_date') {
+      if (byDateTempDateRef.current) {
+        const entry: DateEntry = { date: byDateTempDateRef.current, time: newTime };
+        setByDateEntries(prev => [...prev, entry].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)));
+      }
+      timePickerModeRef.current = 'regular';
+      byDateTempDateRef.current = '';
+      setTempHour(''); setTempMinute('00');
+      setTimePickerVisible(false);
+      return;
+    }
+    if (editingDay === null) return;
     setDayTimes(prev => {
       const times = [...(prev[editingDay] ?? [])];
       if (editingTimeIndex !== null) {
@@ -385,10 +466,13 @@ export default function NewMemberScreen() {
     if (selectedPackageId === pkg.id) {
       setSelectedPackageId(null);
       setTotalCredits('');
+      setRemainingCredits('');
       setLessonDuration('60');
     } else {
       setSelectedPackageId(pkg.id);
-      setTotalCredits(String(pkg.total_credits ?? 10));
+      const credits = String(pkg.total_credits ?? 10);
+      setTotalCredits(credits);
+      setRemainingCredits(credits); // 신규 회원 기본값: 전체 횟수
       setLessonDuration(String(pkg.duration_minutes ?? 60));
     }
   }
@@ -398,27 +482,29 @@ export default function NewMemberScreen() {
 
   async function doSave(userId: string) {
     const credits = parseInt(totalCredits) || 0;
+    const remainingCreditsInt = remainingCredits !== '' ? (parseInt(remainingCredits) || 0) : credits;
     const selectedPkg = lessonPackages.find(p => p.id === selectedPackageId);
     const duration = selectedPkg?.duration_minutes ?? (parseInt(lessonDuration) || 60);
 
-    // fixed_schedule_times: { dayIndex: ["HH:MM", ...] }
     const scheduleTimesJson: Record<string, string[]> = {};
-    for (const d of scheduleDays) {
-      if (dayTimes[d]?.length) scheduleTimesJson[String(d)] = dayTimes[d];
+    let firstDayTime: string | null = null;
+    if (scheduleType === 'regular') {
+      for (const d of scheduleDays) {
+        if (dayTimes[d]?.length) scheduleTimesJson[String(d)] = dayTimes[d];
+      }
+      firstDayTime = scheduleDays.length > 0 && dayTimes[scheduleDays[0]]?.[0] ? dayTimes[scheduleDays[0]][0] : null;
     }
-    // backward compat: first day's first time
-    const firstDayTime = scheduleDays.length > 0 && dayTimes[scheduleDays[0]]?.[0] ? dayTimes[scheduleDays[0]][0] : null;
 
     const { data: newMember, error } = await supabase.from('members').insert({
       coach_id: userId, name: name.trim(), phone: phone.trim(),
       birth_date: birthDate || null,
       level, join_date: joinDate, notes: notes.trim() || null, is_active: true,
-      fixed_schedule_days: scheduleDays,
+      fixed_schedule_days: scheduleType === 'regular' ? scheduleDays : [],
       fixed_schedule_time: firstDayTime,
-      fixed_schedule_times: Object.keys(scheduleTimesJson).length > 0 ? scheduleTimesJson : null,
+      fixed_schedule_times: scheduleType === 'regular' && Object.keys(scheduleTimesJson).length > 0 ? scheduleTimesJson : null,
       fixed_lesson_duration: duration,
       total_credits: isTrial ? 0 : credits,
-      remaining_credits: isTrial ? 0 : credits,
+      remaining_credits: isTrial ? 0 : remainingCreditsInt,
       lesson_package_id: isTrial ? null : (selectedPackageId || null),
       is_trial: isTrial,
       trial_started_at: isTrial ? toKSTDateStr(new Date()) : null,
@@ -427,71 +513,71 @@ export default function NewMemberScreen() {
     if (error || !newMember) { setLoading(false); Alert.alert('오류', '회원 등록에 실패했습니다.'); return; }
 
     let genResult: { successCount: number; errors: string[] } | null | undefined = null;
-    if (allDaysHaveTimes && credits > 0) {
+    if (scheduleType === 'regular' && allDaysHaveTimes && credits > 0) {
       genResult = await generateScheduleLessons({
         coachId: userId, memberId: newMember.id, memberName: name.trim(),
-        scheduleDays, dayTimes, lessonDuration: duration, totalCredits: credits, joinDate: lessonStartDate,
+        scheduleDays, dayTimes, lessonDuration: duration, totalCredits: credits,
+        remainingCredits: remainingCreditsInt,
+        joinDate: lessonStartDate,
         repeatType, repeatInterval,
       });
+    } else if (scheduleType === 'by_date' && byDateEntries.length > 0) {
+      let successCount = 0;
+      const errors: string[] = [];
+      for (const entry of byDateEntries) {
+        const [hh, mm] = entry.time.split(':').map(Number);
+        const endMin = hh * 60 + mm + duration;
+        const startSt = entry.time + ':00';
+        const endSt = `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}:00`;
+        const { data: lesson, error: lErr } = await supabase.from('lessons')
+          .insert({ coach_id: userId, title: name.trim(), date: entry.date, start_time: startSt, end_time: endSt })
+          .select('id').single();
+        if (lErr || !lesson) { errors.push(lErr?.message ?? 'unknown'); continue; }
+        const { error: lmErr } = await supabase.from('lesson_members').insert({ lesson_id: lesson.id, member_id: newMember.id });
+        if (!lmErr) successCount++;
+      }
+      genResult = { successCount, errors };
     }
     setLoading(false);
 
     const genCount = genResult?.successCount ?? 0;
     const genErrors = genResult?.errors ?? [];
 
-    const showingLessonPkgPrompt = allDaysHaveTimes && !credits && !isTrial;
-
-    if (showingLessonPkgPrompt) {
-      // 고정스케줄 있는데 레슨권 없음 → 레슨권 등록 강제 (나중에 없음)
-      // 돌아오면 useFocusEffect가 스케줄 자동 생성
-      pendingMemberId.current = newMember.id;
-      pendingCoachId.current = userId;
-      pendingScheduleDaysRef.current = scheduleDays;
-      pendingDayTimesRef.current = dayTimes;
-      pendingDurationRef.current = duration;
-      pendingNameRef.current = name.trim();
-      pendingStartDateRef.current = lessonStartDate;
-      Alert.alert(
-        '레슨권을 먼저 등록해주세요',
-        '고정 스케줄이 설정됐지만 레슨권이 없어요.\n레슨권을 등록하면 스케줄이 자동으로 생성됩니다.',
-        [
-          { text: '레슨권 등록하러 가기', onPress: () => router.push('/lesson-packages/new') },
-        ]
-      );
-    } else {
-      let msg = '회원이 등록됐습니다.';
+    let msg = '회원이 등록됐습니다.';
+    if (scheduleType === 'regular') {
       if (scheduleDays.length > 0 && !allDaysHaveTimes) {
         msg = '회원 등록 완료. 고정스케줄을 저장하려면 각 요일별 시간을 설정해야 합니다.';
       } else if (allDaysHaveTimes && credits > 0) {
-        if (genCount > 0) {
-          msg = `${genCount}개 레슨이 스케줄에 추가됐습니다. (${duration}분 레슨)`;
-        } else {
-          msg = `회원 등록 완료. 레슨 스케줄 생성 실패${genErrors.length ? ': ' + genErrors[0] : ''}`;
-        }
+        msg = genCount > 0
+          ? `${genCount}개 레슨이 스케줄에 추가됐습니다. (${duration}분 레슨)`
+          : `회원 등록 완료. 레슨 스케줄 생성 실패${genErrors.length ? ': ' + genErrors[0] : ''}`;
       }
-      Alert.alert('완료', msg, [{ text: '확인', onPress: () => router.back() }]);
+    } else if (scheduleType === 'by_date') {
+      msg = byDateEntries.length > 0
+        ? `${genCount}개 날짜별 레슨이 등록됐습니다.${genErrors.length ? ` (${genErrors.length}건 실패)` : ''}`
+        : '회원이 등록됐습니다.';
+    } else {
+      msg = '회원이 등록됐습니다. 일정은 나중에 회원 상세에서 설정할 수 있어요.';
     }
+    Alert.alert('완료', msg, [{ text: '확인', onPress: () => router.back() }]);
 
-    // 회원 2명 이상 & 가용시간 미설정 → 팝업 (최초 1회, 레슨권 팝업 표시 중엔 스킵)
-    if (!showingLessonPkgPrompt) {
-      const { data: { user: u } } = await supabase.auth.getUser();
-      if (u) {
-        const POPUP_KEY = `@kerri_availability_popup_shown_${u.id}`;
-        const [{ count: memberCount }, { data: avail }, alreadyShown] = await Promise.all([
-          supabase.from('members').select('id', { count: 'exact', head: true }).eq('coach_id', u.id).eq('is_active', true),
-          supabase.from('coach_availability').select('id').eq('coach_id', u.id).maybeSingle(),
-          AsyncStorage.getItem(POPUP_KEY),
-        ]);
-        if ((memberCount ?? 0) >= 2 && !avail && !alreadyShown) {
-          Alert.alert(
-            '레슨 가능 시간 설정',
-            '회원이 2명 이상입니다.\n회원이 레슨을 신청할 수 있는 가능 시간대를 설정해보세요.',
-            [
-              { text: '나중에', style: 'cancel', onPress: async () => { await AsyncStorage.setItem(POPUP_KEY, '1'); router.back(); } },
-              { text: '지금 설정', onPress: async () => { await AsyncStorage.setItem(POPUP_KEY, '1'); router.push('/settings/availability'); } },
-            ]
-          );
-        }
+    const { data: { user: u } } = await supabase.auth.getUser();
+    if (u) {
+      const POPUP_KEY = `@kerri_availability_popup_shown_${u.id}`;
+      const [{ count: memberCount }, { data: avail }, alreadyShown] = await Promise.all([
+        supabase.from('members').select('id', { count: 'exact', head: true }).eq('coach_id', u.id).eq('is_active', true),
+        supabase.from('coach_availability').select('id').eq('coach_id', u.id).maybeSingle(),
+        AsyncStorage.getItem(POPUP_KEY),
+      ]);
+      if ((memberCount ?? 0) >= 2 && !avail && !alreadyShown) {
+        Alert.alert(
+          '레슨 가능 시간 설정',
+          '회원이 2명 이상입니다.\n회원이 레슨을 신청할 수 있는 가능 시간대를 설정해보세요.',
+          [
+            { text: '나중에', style: 'cancel', onPress: async () => { await AsyncStorage.setItem(POPUP_KEY, '1'); router.back(); } },
+            { text: '지금 설정', onPress: async () => { await AsyncStorage.setItem(POPUP_KEY, '1'); router.push('/settings/availability'); } },
+          ]
+        );
       }
     }
   }
@@ -499,6 +585,47 @@ export default function NewMemberScreen() {
   async function handleSave() {
     if (!name.trim()) { Alert.alert('입력 오류', '이름을 입력해주세요.'); return; }
     if (!phone.trim()) { Alert.alert('입력 오류', '전화번호를 입력해주세요.'); return; }
+
+    // 정규 회원 레슨권 필수 검증 (회원 insert 전)
+    if (!isTrial) {
+      if (lessonPackages.length === 0) {
+        Alert.alert(
+          '먼저 레슨권을 만들어 주세요',
+          '등록된 레슨권이 없어요.\n레슨권을 먼저 만들어야 회원을 등록할 수 있어요.',
+          [
+            { text: '취소', style: 'cancel' },
+            {
+              text: '레슨권 만들러 가기',
+              onPress: () => {
+                prevPackageCountRef.current = lessonPackages.length;
+                hasNavigatedToPackageScreen.current = true;
+                router.push('/lesson-packages/new');
+              },
+            },
+          ]
+        );
+        return;
+      }
+      if (!selectedPackageId) {
+        Alert.alert(
+          '레슨권을 선택해 주세요',
+          '회원을 등록하려면 사용할 레슨권이 필요해요.\n입력한 회원 정보는 그대로 유지됩니다.',
+          [
+            { text: '취소', style: 'cancel' },
+            {
+              text: '레슨권 선택하기',
+              onPress: () => {
+                scrollViewRef.current?.scrollTo({ y: packageSectionY, animated: true });
+                setPackageHighlight(true);
+                setTimeout(() => setPackageHighlight(false), 1200);
+              },
+            },
+          ]
+        );
+        return;
+      }
+    }
+
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
@@ -523,7 +650,7 @@ export default function NewMemberScreen() {
       }
     }
 
-    if (allDaysHaveTimes) {
+    if (scheduleType === 'regular' && allDaysHaveTimes) {
       const selectedPkg2 = lessonPackages.find(p => p.id === selectedPackageId);
       const duration = selectedPkg2?.duration_minutes ?? (parseInt(lessonDuration) || 60);
       const conflicts = await checkConflicts(user.id, scheduleDays, dayTimes, duration);
@@ -543,13 +670,33 @@ export default function NewMemberScreen() {
         );
         return;
       }
+    } else if (scheduleType === 'by_date' && byDateEntries.length > 0) {
+      const selectedPkg2 = lessonPackages.find(p => p.id === selectedPackageId);
+      const duration = selectedPkg2?.duration_minutes ?? (parseInt(lessonDuration) || 60);
+      const conflicts = await checkConflictsForDates(user.id, byDateEntries, duration);
+      if (conflicts.length > 0) {
+        setLoading(false);
+        const conflictMsg = conflicts.slice(0, 3).map(cf => {
+          const d = new Date(cf.date + 'T00:00:00');
+          return d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }) + ' ' + cf.startTime + ' - ' + cf.memberName;
+        }).join('\n') + (conflicts.length > 3 ? ('\n외 ' + (conflicts.length - 3) + '건') : '');
+        Alert.alert(
+          '⚠️ 시간 충돌',
+          '선택한 날짜에 이미 레슨이 있습니다:\n\n' + conflictMsg + '\n\n그래도 등록하시겠어요?',
+          [
+            { text: '날짜 변경', style: 'cancel' },
+            { text: '그대로 등록', style: 'destructive', onPress: async () => { setLoading(true); await doSave(user.id); } },
+          ]
+        );
+        return;
+      }
     }
     await doSave(user.id);
   }
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView ref={scrollViewRef} style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
 
         {/* 정규 / 체험 토글 */}
         <View style={styles.section}>
@@ -603,9 +750,32 @@ export default function NewMemberScreen() {
           </View>
         </View>
 
-        {/* 고정 레슨 스케줄 */}
+        {/* 레슨 스케줄 */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>레슨 스케줄</Text>
+
+          {/* 일정 방식 선택 */}
+          <Text style={styles.label}>일정 방식</Text>
+          <View style={scheduleTypeStyles.row}>
+            {([
+              { key: 'regular', label: '정기', icon: 'repeat' },
+              { key: 'by_date', label: '날짜별', icon: 'calendar' },
+              { key: 'later', label: '나중에', icon: 'time-outline' },
+            ] as const).map(opt => (
+              <TouchableOpacity
+                key={opt.key}
+                style={[scheduleTypeStyles.btn, scheduleType === opt.key && scheduleTypeStyles.btnActive]}
+                onPress={() => setScheduleType(opt.key)}
+              >
+                <Ionicons name={opt.icon as any} size={16} color={scheduleType === opt.key ? '#fff' : Colors.mutedFg} />
+                <Text style={[scheduleTypeStyles.btnText, scheduleType === opt.key && scheduleTypeStyles.btnTextActive]}>{opt.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* 정기 일정 UI */}
+          {scheduleType === 'regular' && (
+          <>
           <Text style={styles.label}>레슨 시작일</Text>
           <TouchableOpacity style={styles.datePickerBtn} onPress={() => setStartDateModalVisible(true)}>
             <Ionicons name="calendar-outline" size={18} color={Colors.primary} />
@@ -679,11 +849,59 @@ export default function NewMemberScreen() {
             </Text>
             <Ionicons name="chevron-forward" size={16} color={Colors.mutedFg} />
           </TouchableOpacity>
+          </>
+          )}
+
+          {/* 날짜별 일정 UI */}
+          {scheduleType === 'by_date' && (
+            <View>
+              <Text style={styles.label}>날짜별 레슨 일정</Text>
+              {byDateEntries.length === 0 && (
+                <Text style={{ fontSize: 14, color: Colors.placeholder, marginBottom: 10 }}>
+                  날짜와 시간을 직접 선택해 레슨 일정을 추가하세요
+                </Text>
+              )}
+              {byDateEntries.map((entry, idx) => (
+                <View key={idx} style={[styles.dayTimeRow, { marginBottom: 6 }]}>
+                  <Ionicons name="calendar" size={15} color={Colors.primary} />
+                  <Text style={styles.dayTimeValue}>
+                    {new Date(entry.date + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })} {entry.time}
+                  </Text>
+                  <TouchableOpacity onPress={() => setByDateEntries(prev => prev.filter((_, i) => i !== idx))} style={styles.timeAction}>
+                    <Ionicons name="close-circle-outline" size={17} color="#ff4444" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              <TouchableOpacity
+                style={[styles.addTimeBtn, { marginTop: 4, alignSelf: 'flex-start' }]}
+                onPress={() => {
+                  setByDateCalMonth({ year: new Date().getFullYear(), month: new Date().getMonth() });
+                  setByDatePickerVisible(true);
+                }}
+              >
+                <Ionicons name="add-circle-outline" size={18} color={Colors.primary} />
+                <Text style={styles.addTimeBtnText}>날짜 추가</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* 나중에 UI */}
+          {scheduleType === 'later' && (
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: Colors.mutedBg, borderRadius: 10, padding: 14, borderWidth: 1, borderColor: Colors.border }}>
+              <Ionicons name="time-outline" size={18} color={Colors.mutedFg} />
+              <Text style={{ fontSize: 14, color: Colors.mutedFg, flex: 1, lineHeight: 20 }}>
+                일정은 나중에 회원 상세 화면에서 설정할 수 있어요.
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* 레슨권 (체험 회원이면 스킵) */}
         {!isTrial && (
-        <View style={styles.section}>
+        <View
+          style={[styles.section, packageHighlight && styles.sectionHighlight]}
+          onLayout={(e) => setPackageSectionY(e.nativeEvent.layout.y)}
+        >
           <Text style={styles.sectionTitle}>레슨권 선택</Text>
           {lessonPackages.length === 0 ? (
             <View style={styles.noPackageBox}>
@@ -716,12 +934,49 @@ export default function NewMemberScreen() {
             </View>
           )}
           {totalCredits !== '' && (
-            <View style={styles.creditPreview}>
-              <Ionicons name="layers-outline" size={16} color={Colors.primary} />
-              <Text style={styles.creditPreviewText}>
-                {totalCredits}회 레슨권{allDaysHaveTimes ? ' · 스케줄 자동 생성' : ''}
-              </Text>
-            </View>
+            <>
+              <View style={styles.creditPreview}>
+                <Ionicons name="layers-outline" size={16} color={Colors.primary} />
+                <Text style={styles.creditPreviewText}>
+                  {totalCredits}회 레슨권{allDaysHaveTimes ? ' · 스케줄 자동 생성' : ''}
+                </Text>
+              </View>
+              <View style={styles.remainingInputRow}>
+                <View>
+                  <Text style={styles.remainingInputLabel}>현재 남은 횟수</Text>
+                  <Text style={styles.remainingInputHint}>기존 회원 이전 시 실제 남은 횟수 입력</Text>
+                </View>
+                <View style={styles.remainingInputWrap}>
+                  <TextInput
+                    style={styles.remainingInput}
+                    keyboardType="number-pad"
+                    value={remainingCredits}
+                    onChangeText={setRemainingCredits}
+                    placeholder={totalCredits}
+                    maxLength={4}
+                    selectTextOnFocus
+                  />
+                  <Text style={styles.remainingUnit}>회</Text>
+                </View>
+              </View>
+              {remainingCredits !== '' && totalCredits !== '' && (() => {
+                const total = parseInt(totalCredits) || 0;
+                const rem = Math.min(parseInt(remainingCredits) || 0, total);
+                const used = total - rem;
+                if (used <= 0) return null;
+                return (
+                  <View style={styles.usageSummary}>
+                    <Ionicons name="stats-chart-outline" size={13} color={Colors.navy} />
+                    <Text style={styles.usageSummaryText}>
+                      총 {total}회 중 {used}회 사용 · {rem}회 남음
+                    </Text>
+                    {allDaysHaveTimes && (
+                      <Text style={styles.usageSummaryHint}>· 과거 스케줄 {used}회 생성</Text>
+                    )}
+                  </View>
+                );
+              })()}
+            </>
           )}
         </View>
         )}
@@ -971,6 +1226,84 @@ export default function NewMemberScreen() {
         </View>
       </Modal>
 
+      {/* 날짜별 일정 - 날짜 선택 모달 */}
+      <Modal visible={byDatePickerVisible} transparent animationType="slide" onRequestClose={() => setByDatePickerVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>날짜 선택</Text>
+              <TouchableOpacity onPress={() => setByDatePickerVisible(false)}>
+                <Ionicons name="close" size={22} color={Colors.foreground} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 360 }}>
+              {(() => {
+                const { year, month } = byDateCalMonth;
+                const todayStr = toKSTDateStr(new Date());
+                const firstDow = new Date(year, month, 1).getDay();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const cells: (number | null)[] = [];
+                for (let i = 0; i < firstDow; i++) cells.push(null);
+                for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+                while (cells.length % 7 !== 0) cells.push(null);
+                const MONTHS_KR = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+                const DAYS_LABEL = ['일','월','화','수','목','금','토'];
+                return (
+                  <View style={{ paddingHorizontal: 12, paddingBottom: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, marginTop: 8 }}>
+                      <TouchableOpacity style={{ padding: 8 }} onPress={() => setByDateCalMonth(p => { const m = p.month - 1; return m < 0 ? { year: p.year - 1, month: 11 } : { year: p.year, month: m }; })}>
+                        <Ionicons name="chevron-back" size={20} color={Colors.primary} />
+                      </TouchableOpacity>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.primary }}>{year}년 {MONTHS_KR[month]}</Text>
+                      <TouchableOpacity style={{ padding: 8 }} onPress={() => setByDateCalMonth(p => { const m = p.month + 1; return m > 11 ? { year: p.year + 1, month: 0 } : { year: p.year, month: m }; })}>
+                        <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
+                      </TouchableOpacity>
+                    </View>
+                    <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+                      {DAYS_LABEL.map((dl, di) => (
+                        <Text key={di} style={{ flex: 1, textAlign: 'center', fontSize: 14, fontWeight: '700',
+                          color: di === 0 ? Colors.destructive : di === 6 ? Colors.accentWarm : Colors.mutedFg, paddingVertical: 4 }}>{dl}</Text>
+                      ))}
+                    </View>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                      {cells.map((day, ci) => {
+                        if (!day) return <View key={ci} style={{ width: '14.28%', paddingVertical: 3 }} />;
+                        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                        const isToday = dateStr === todayStr;
+                        const alreadyAdded = byDateEntries.some(e => e.date === dateStr);
+                        const dow = ci % 7;
+                        return (
+                          <TouchableOpacity
+                            key={ci}
+                            style={{ width: '14.28%', alignItems: 'center', paddingVertical: 3 }}
+                            onPress={() => {
+                              byDateTempDateRef.current = dateStr;
+                              setByDatePickerVisible(false);
+                              setTempHour(''); setTempMinute('00');
+                              timePickerModeRef.current = 'by_date';
+                              setTimePickerVisible(true);
+                            }}
+                          >
+                            <View style={{ width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center',
+                              backgroundColor: alreadyAdded ? Colors.primary : isToday ? Colors.primary + '18' : 'transparent' }}>
+                              <Text style={{ fontSize: 14, fontWeight: alreadyAdded || isToday ? '800' : '400',
+                                color: alreadyAdded ? '#fff' : dow === 0 ? Colors.destructive : dow === 6 ? Colors.accentWarm : Colors.foreground }}>{day}</Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                );
+              })()}
+            </ScrollView>
+            <TouchableOpacity style={[styles.loginBtn, { margin: 16, marginTop: 4 }]} onPress={() => setByDatePickerVisible(false)}>
+              <Text style={styles.loginBtnText}>닫기</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* 시간 스피너 모달 */}
       <Modal visible={timePickerVisible} transparent animationType="slide" onRequestClose={() => setTimePickerVisible(false)}>
         <View style={styles.modalOverlay}>
@@ -1083,6 +1416,15 @@ const styles = StyleSheet.create({
   noPackageSubText: { fontSize: 14, color: Colors.iconMuted },
   creditPreview: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.primaryLight, borderRadius: 8, padding: 10, marginTop: 8 },
   creditPreviewText: { fontSize: 14, color: Colors.navy, fontWeight: '600' },
+  remainingInputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingHorizontal: 2 },
+  remainingInputLabel: { fontSize: 13, fontWeight: '700', color: Colors.foreground, marginBottom: 2 },
+  remainingInputHint: { fontSize: 12, color: Colors.mutedFg },
+  remainingInputWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.mutedBg, borderRadius: 10, borderWidth: 1.5, borderColor: Colors.border, paddingHorizontal: 14, paddingVertical: 6 },
+  remainingInput: { fontSize: 20, fontWeight: '800', color: Colors.foreground, minWidth: 48, textAlign: 'center' },
+  remainingUnit: { fontSize: 14, color: Colors.mutedFg, fontWeight: '600', marginLeft: 4 },
+  usageSummary: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, backgroundColor: Colors.navy + '10', borderRadius: 8, padding: 10, marginTop: 8 },
+  usageSummaryText: { fontSize: 13, color: Colors.navy, fontWeight: '600' },
+  usageSummaryHint: { fontSize: 12, color: Colors.primary, fontWeight: '500' },
   datePickerBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.mutedBg, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 12, borderWidth: 1, borderColor: Colors.border },
   datePickerText: { flex: 1, fontSize: 15, color: Colors.foreground },
   todayTag: { backgroundColor: Colors.primary, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
@@ -1129,6 +1471,18 @@ const styles = StyleSheet.create({
   intervalBtnText: { fontSize: 14, fontWeight: '600', color: Colors.mutedFg },
   intervalBtnTextActive: { color: Colors.primary },
   customRepeatHint: { fontSize: 14, color: Colors.mutedFg, textAlign: 'center' },
+  sectionHighlight: { borderWidth: 2, borderColor: Colors.primary },
+});
+const scheduleTypeStyles = StyleSheet.create({
+  row: { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  btn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 5, paddingVertical: 10, borderRadius: 10,
+    borderWidth: 1.5, borderColor: Colors.border, backgroundColor: Colors.mutedBg,
+  },
+  btnActive: { borderColor: Colors.primary, backgroundColor: Colors.primary },
+  btnText: { fontSize: 13, fontWeight: '700', color: Colors.mutedFg },
+  btnTextActive: { color: '#fff' },
 });
 const trialStyles = StyleSheet.create({
   toggleRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
