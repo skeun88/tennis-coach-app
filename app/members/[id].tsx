@@ -16,8 +16,10 @@ import { useSubscription } from '../../hooks/useSubscription';
 import MemberIssueTags from '../../components/MemberIssueTags';
 import PlanUpsellModal from '../../components/PlanUpsellModal';
 import { notifyMemberMessage, notifyMemberReregister, notifyMemberAbsent } from '../../lib/notifications';
+import { detectScheduleType, ScheduleType } from '../../lib/scheduleTypeUtils';
 
 type DayTimes = Record<number, string[]>;
+type DateEntry = { date: string; startTime: string };
 
 const LEVELS: MemberLevel[] = ['입문', '초급', '중급', '상급', '선수'];
 const LEVEL_COLORS: Record<MemberLevel, string> = {
@@ -295,6 +297,19 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [slotsDateStr, setSlotsDateStr] = useState('');
 
+  // 일정 설정 상태
+  const [futureLessons, setFutureLessons] = useState<any[]>([]);
+  const [scheduleSheet, setScheduleSheet] = useState(false);
+  const [byDateAddSheet, setByDateAddSheet] = useState(false);
+  const [byDateAddEntries, setByDateAddEntries] = useState<DateEntry[]>([]);
+  const [byDateAddCalMonth, setByDateAddCalMonth] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() });
+  const byDateAddTempDateRef = useRef('');
+  const [byDateAddTimePickerVisible, setByDateAddTimePickerVisible] = useState(false);
+  const [byDateAddTempHour, setByDateAddTempHour] = useState('');
+  const [byDateAddTempMinute, setByDateAddTempMinute] = useState('00');
+  const [savingByDate, setSavingByDate] = useState(false);
+  const [changeScopeSheet, setChangeScopeSheet] = useState(false);
+  const [changeScopeLoading, setChangeScopeLoading] = useState(false);
 
   // 출석 수정 상태
   const [editingAttId, setEditingAttId] = useState<string | null>(null);
@@ -441,7 +456,21 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     setMemberNotes(data ?? []);
   }
 
-  useEffect(() => { loadMember(); }, []);
+  async function loadFutureLessons() {
+    if (!id) return;
+    const { data: lmRows } = await supabase
+      .from('lesson_members').select('lesson_id').eq('member_id', id);
+    const lessonIds = (lmRows ?? []).map((r: any) => r.lesson_id as string);
+    if (lessonIds.length === 0) { setFutureLessons([]); return; }
+    const todayStr = toKSTDateStr(new Date());
+    const { data } = await supabase
+      .from('lessons').select('id, date, start_time, end_time, title')
+      .in('id', lessonIds).gte('date', todayStr)
+      .order('date', { ascending: true }).order('start_time', { ascending: true });
+    setFutureLessons(data ?? []);
+  }
+
+  useEffect(() => { loadMember(); loadFutureLessons(); }, []);
   useEffect(() => {
     if (tab === 'attendance') loadAttendance();
     if (tab === 'payment') loadPayments();
@@ -491,6 +520,132 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     }
     setSlotsData(slots);
     setLoadingSlots(false);
+  }
+
+  async function checkConflictsForDates(
+    entries: DateEntry[],
+    duration: number,
+    coachId: string,
+  ): Promise<{ date: string; memberName: string; startTime: string }[]> {
+    const conflicts: { date: string; memberName: string; startTime: string }[] = [];
+    for (const entry of entries) {
+      const [hh, mm] = entry.startTime.split(':').map(Number);
+      const newStart = hh * 60 + mm;
+      const newEnd = newStart + duration;
+      const { data: existing } = await supabase
+        .from('lessons')
+        .select('id, start_time, end_time, lesson_members(member_id, member:members(name))')
+        .eq('coach_id', coachId).eq('date', entry.date);
+      for (const lesson of (existing ?? []) as any[]) {
+        const [lh, lm] = lesson.start_time.slice(0, 5).split(':').map(Number);
+        const [eh, em] = lesson.end_time.slice(0, 5).split(':').map(Number);
+        const lStart = lh * 60 + lm; const lEnd = eh * 60 + em;
+        if (newStart < lEnd && newEnd > lStart) {
+          for (const lmRow of lesson.lesson_members ?? []) {
+            if (lmRow.member_id === id) continue;
+            const mName = lmRow.member?.name ?? '다른 회원';
+            if (!conflicts.find(cf => cf.date === entry.date && cf.memberName === mName)) {
+              conflicts.push({ date: entry.date, memberName: mName, startTime: lesson.start_time.slice(0, 5) });
+            }
+          }
+        }
+      }
+    }
+    return conflicts;
+  }
+
+  async function doAddByDateLessons(coachId: string, duration: number) {
+    if (!member) return;
+    setSavingByDate(true);
+    const failedEntries: DateEntry[] = [];
+    for (const entry of byDateAddEntries) {
+      const [hh, mm] = entry.startTime.split(':').map(Number);
+      const endMin = hh * 60 + mm + duration;
+      const startSt = entry.startTime + ':00';
+      const endSt = `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}:00`;
+      const { data: lesson, error: lErr } = await supabase.from('lessons').insert({
+        coach_id: coachId, title: member.name, date: entry.date,
+        start_time: startSt, end_time: endSt,
+      }).select('id').single();
+      if (lErr || !lesson) { failedEntries.push(entry); continue; }
+      await supabase.from('lesson_members').insert({ lesson_id: lesson.id, member_id: id });
+    }
+    setSavingByDate(false);
+    setByDateAddEntries([]);
+    setByDateAddSheet(false);
+    await loadFutureLessons();
+    if (failedEntries.length > 0) {
+      Alert.alert('일부 저장 실패', `일부 일정을 저장하지 못했어요. (${failedEntries.length}건)`);
+    } else {
+      Alert.alert('완료', `${byDateAddEntries.length}개 일정이 추가됐어요.`);
+    }
+  }
+
+  async function handleAddByDateLessons() {
+    if (byDateAddEntries.length === 0) { Alert.alert('알림', '추가할 일정을 선택해주세요.'); return; }
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const duration = parseInt(lessonDuration) || 60;
+    const conflicts = await checkConflictsForDates(byDateAddEntries, duration, user.id);
+    if (conflicts.length > 0) {
+      const msg = conflicts.slice(0, 3).map(cf => {
+        const d = new Date(cf.date + 'T00:00:00');
+        return `${d.getMonth() + 1}/${d.getDate()} ${cf.startTime} - ${cf.memberName}`;
+      }).join('\n') + (conflicts.length > 3 ? `\n외 ${conflicts.length - 3}건` : '');
+      Alert.alert('시간 충돌', `다음 일정과 겹칩니다:\n\n${msg}\n\n그래도 추가하시겠어요?`, [
+        { text: '취소', style: 'cancel' },
+        { text: '추가', onPress: () => doAddByDateLessons(user.id, duration) },
+      ]);
+      return;
+    }
+    await doAddByDateLessons(user.id, duration);
+  }
+
+  async function handleToByDate(scope: 'forward' | 'also_future') {
+    setChangeScopeLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setChangeScopeLoading(false); return; }
+
+    if (scope === 'also_future') {
+      const todayStr = toKSTDateStr(new Date());
+      const { data: lmRows } = await supabase
+        .from('lesson_members').select('lesson_id').eq('member_id', id!);
+      const lessonIds = (lmRows ?? []).map((r: any) => r.lesson_id as string);
+      if (lessonIds.length > 0) {
+        const { data: futureLsns } = await supabase
+          .from('lessons').select('id, date').in('id', lessonIds).gte('date', todayStr);
+        const futureIds = (futureLsns ?? []).map((l: any) => l.id as string);
+        if (futureIds.length > 0) {
+          const { data: otherRows } = await supabase
+            .from('lesson_members').select('lesson_id').in('lesson_id', futureIds).neq('member_id', id!);
+          const sharedSet = new Set((otherRows ?? []).map((r: any) => r.lesson_id as string));
+          const soloIds = futureIds.filter(lid => !sharedSet.has(lid));
+          const sharedIds = futureIds.filter(lid => sharedSet.has(lid));
+          if (sharedIds.length > 0) {
+            await supabase.from('lesson_members').delete().in('lesson_id', sharedIds).eq('member_id', id!);
+            await supabase.from('attendance').delete().in('lesson_id', sharedIds).eq('member_id', id!);
+          }
+          if (soloIds.length > 0) {
+            await supabase.from('attendance').delete().in('lesson_id', soloIds);
+            await supabase.from('lesson_members').delete().in('lesson_id', soloIds);
+            await supabase.from('lessons').delete().in('id', soloIds);
+          }
+        }
+      }
+    }
+
+    await supabase.from('members').update({
+      fixed_schedule_days: [],
+      fixed_schedule_times: null,
+      fixed_schedule_time: null,
+    }).eq('id', id!);
+
+    setChangeScopeLoading(false);
+    setChangeScopeSheet(false);
+    setScheduleSheet(false);
+    await loadMember();
+    await loadFutureLessons();
+    Alert.alert('변경 완료', '날짜별 일정으로 변경됐어요.');
   }
 
   function handleSelectPackage(pkg: any) {
@@ -918,6 +1073,14 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     setSendingMsg(false);
   }
 
+  // 일정 설정 computed values
+  const isMemberTrial = (member as any).is_trial;
+  const detectedScheduleType: ScheduleType = detectScheduleType(member as any, futureLessons.length > 0);
+  const nextLesson = futureLessons[0] ?? null;
+  const futureCount = futureLessons.length;
+  const memberRemaining = (member as any).remaining_credits ?? 0;
+  const unregisteredCount = Math.max(memberRemaining - futureCount, 0);
+
   const TABS: { key: Tab; label: string; icon: string }[] = [
     { key: 'info', label: '정보', icon: 'person-outline' },
     { key: 'attendance', label: '출석', icon: 'checkbox-outline' },
@@ -1004,22 +1167,52 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                 <InfoRow icon="calendar-outline" label="가입일" value={member.join_date} />
                 <InfoRow icon="fitness-outline" label="레벨" value={member.level} />
                 {member.notes && <InfoRow icon="document-text-outline" label="메모" value={member.notes} />}
-                {((member as any).fixed_schedule_days?.length > 0) && (
-                  <InfoRow
-                    icon="time-outline"
-                    label="고정 스케줄"
-                    value={(() => {
-                      const days: number[] = (member as any).fixed_schedule_days ?? [];
-                      const fst = (member as any).fixed_schedule_times;
-                      const lt = (member as any).fixed_schedule_time?.slice(0, 5);
-                      return days.map(d => {
-                        const raw = fst?.[String(d)];
-                        const timesArr: string[] = Array.isArray(raw) ? raw : (raw ? [raw] : (lt ? [lt] : []));
-                        return `${DAYS_KR[d]}${timesArr.length > 0 ? ' ' + timesArr.join('/') : ''}`;
-                      }).join(' · ');
-                    })()}
-                  />
-                )}
+                {!isMemberTrial && (() => {
+                  let mainText = '';
+                  let subText = '';
+                  let actionLabel = '';
+                  if (detectedScheduleType === 'regular') {
+                    const days: number[] = (member as any).fixed_schedule_days ?? [];
+                    const fst = (member as any).fixed_schedule_times;
+                    const lt = (member as any).fixed_schedule_time?.slice(0, 5);
+                    const schedSummary = days.map(d => {
+                      const raw = fst?.[String(d)];
+                      const timesArr: string[] = Array.isArray(raw) ? raw : (raw ? [raw] : (lt ? [lt] : []));
+                      return `매주 ${DAYS_KR[d]}요일 ${timesArr.join('/')}`;
+                    }).join(' · ');
+                    mainText = `정기 일정 · ${schedSummary}`;
+                    if (nextLesson) {
+                      const dl = new Date(nextLesson.date + 'T00:00:00');
+                      subText = `다음 레슨 ${dl.getMonth() + 1}월 ${dl.getDate()}일 ${DAYS_KR[dl.getDay()]}요일 ${nextLesson.start_time.slice(0, 5)}`;
+                    }
+                    actionLabel = '변경 〉';
+                  } else if (detectedScheduleType === 'by_date') {
+                    mainText = `날짜별 일정 · 예정 ${futureCount}개`;
+                    if (nextLesson) {
+                      const dl = new Date(nextLesson.date + 'T00:00:00');
+                      subText = `다음 레슨 ${dl.getMonth() + 1}월 ${dl.getDate()}일 ${DAYS_KR[dl.getDay()]}요일 ${nextLesson.start_time.slice(0, 5)}`;
+                    }
+                    if (unregisteredCount > 0) subText += (subText ? ' · ' : '') + `미등록 ${unregisteredCount}회`;
+                    actionLabel = '관리 〉';
+                  } else {
+                    mainText = '등록된 일정이 없어요';
+                    subText = `잔여 ${memberRemaining}회의 일정을 등록해 주세요`;
+                    actionLabel = '일정 추가 〉';
+                  }
+                  return (
+                    <TouchableOpacity style={styles.scheduleSectionRow} onPress={() => setScheduleSheet(true)} activeOpacity={0.8}>
+                      <View style={styles.scheduleSectionIconWrap}>
+                        <Ionicons name="calendar-outline" size={18} color={Colors.primary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.scheduleSectionLabel}>일정 설정</Text>
+                        <Text style={styles.scheduleSectionMain} numberOfLines={2}>{mainText}</Text>
+                        {!!subText && <Text style={styles.scheduleSectionSub} numberOfLines={1}>{subText}</Text>}
+                      </View>
+                      <Text style={styles.scheduleSectionAction}>{actionLabel}</Text>
+                    </TouchableOpacity>
+                  );
+                })()}
                 <InfoRow icon="layers-outline" label="레슨권 잔여" value={`${(member as any).remaining_credits ?? 0}회`} />
                 <View style={styles.packageBanner}>
                   {lessonPackage ? (
@@ -1766,6 +1959,294 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         </View>
       </Modal>
 
+      {/* 일정 설정 바텀시트 */}
+      <Modal visible={scheduleSheet} transparent animationType="slide" onRequestClose={() => setScheduleSheet(false)}>
+        <TouchableOpacity style={styles.modalOverlayTP} activeOpacity={1} onPress={() => setScheduleSheet(false)}>
+          <TouchableOpacity activeOpacity={1} onPress={e => e.stopPropagation()}>
+            <View style={[styles.modalSheetTP, { paddingBottom: 40 }]}>
+              <View style={styles.modalHeaderTP}>
+                <Text style={styles.modalTitleTP}>일정 설정</Text>
+                <TouchableOpacity onPress={() => setScheduleSheet(false)}>
+                  <Ionicons name="close" size={22} color={Colors.mutedFg} />
+                </TouchableOpacity>
+              </View>
+              {detectedScheduleType === 'regular' && (
+                <>
+                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setTab('attendance'); }}>
+                    <Ionicons name="list-outline" size={20} color={Colors.primary} />
+                    <Text style={styles.scheduleSheetItemText}>일정 확인</Text>
+                    <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setByDateAddSheet(true); }}>
+                    <Ionicons name="add-circle-outline" size={20} color={Colors.primary} />
+                    <Text style={styles.scheduleSheetItemText}>새 일정 추가</Text>
+                    <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setEditing(true); }}>
+                    <Ionicons name="repeat-outline" size={20} color={Colors.primary} />
+                    <Text style={styles.scheduleSheetItemText}>정기 일정 변경</Text>
+                    <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => {
+                    const scopeFutureCnt = futureLessons.length;
+                    Alert.alert(
+                      '날짜별 일정으로 변경',
+                      scopeFutureCnt > 0
+                        ? `예정 일정 ${scopeFutureCnt}개가 있어요.\n변경 범위를 선택해주세요.`
+                        : '날짜별 일정으로 변경합니다.',
+                      scopeFutureCnt > 0
+                        ? [
+                          { text: '취소', style: 'cancel' },
+                          { text: '앞으로만', onPress: () => handleToByDate('forward') },
+                          { text: '미래 일정도', style: 'destructive', onPress: () => {
+                            Alert.alert('미래 일정 삭제', `앞으로 예정된 ${scopeFutureCnt}개 일정이 삭제됩니다.\n계속하시겠어요?`, [
+                              { text: '취소', style: 'cancel' },
+                              { text: '삭제 후 변경', style: 'destructive', onPress: () => handleToByDate('also_future') },
+                            ]);
+                          }},
+                        ]
+                        : [
+                          { text: '취소', style: 'cancel' },
+                          { text: '변경', onPress: () => handleToByDate('forward') },
+                        ]
+                    );
+                  }}>
+                    <Ionicons name="calendar-number-outline" size={20} color={Colors.mutedFg} />
+                    <Text style={[styles.scheduleSheetItemText, { color: Colors.foreground }]}>날짜별 일정으로 변경</Text>
+                    <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
+                  </TouchableOpacity>
+                </>
+              )}
+              {detectedScheduleType === 'by_date' && (
+                <>
+                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setTab('attendance'); }}>
+                    <Ionicons name="list-outline" size={20} color={Colors.primary} />
+                    <Text style={styles.scheduleSheetItemText}>예정 일정 확인</Text>
+                    <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setByDateAddSheet(true); }}>
+                    <Ionicons name="add-circle-outline" size={20} color={Colors.primary} />
+                    <Text style={styles.scheduleSheetItemText}>일정 추가</Text>
+                    <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setEditing(true); }}>
+                    <Ionicons name="repeat-outline" size={20} color={Colors.primary} />
+                    <Text style={styles.scheduleSheetItemText}>정기 일정으로 변경</Text>
+                    <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
+                  </TouchableOpacity>
+                </>
+              )}
+              {detectedScheduleType === 'later' && (
+                <>
+                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setEditing(true); }}>
+                    <Ionicons name="repeat-outline" size={20} color={Colors.primary} />
+                    <Text style={styles.scheduleSheetItemText}>정기 일정 추가</Text>
+                    <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setByDateAddSheet(true); }}>
+                    <Ionicons name="calendar-number-outline" size={20} color={Colors.primary} />
+                    <Text style={styles.scheduleSheetItemText}>날짜별 일정 추가</Text>
+                    <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 날짜별 일정 추가 시트 */}
+      <Modal visible={byDateAddSheet} transparent animationType="slide" onRequestClose={() => setByDateAddSheet(false)}>
+        <View style={styles.modalOverlayTP}>
+          <View style={[styles.modalSheetTP, { paddingBottom: 40 }]}>
+            <View style={styles.modalHeaderTP}>
+              <Text style={styles.modalTitleTP}>날짜별 일정 추가</Text>
+              <TouchableOpacity onPress={() => setByDateAddSheet(false)}>
+                <Ionicons name="close" size={22} color={Colors.mutedFg} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 460 }}>
+              {/* 추가된 날짜 목록 */}
+              {byDateAddEntries.length > 0 && (
+                <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6 }}>추가할 일정</Text>
+                  {byDateAddEntries.map((entry, idx) => {
+                    const d = new Date(entry.date + 'T00:00:00');
+                    const label = `${d.getMonth() + 1}/${d.getDate()}(${DAYS_KR[d.getDay()]}) ${entry.startTime}`;
+                    return (
+                      <View key={idx} style={styles.dayTimeRow2}>
+                        <Ionicons name="calendar-outline" size={14} color={Colors.primary} style={{ marginRight: 6 }} />
+                        <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: Colors.foreground }}>{label}</Text>
+                        <TouchableOpacity onPress={() => setByDateAddEntries(prev => prev.filter((_, i) => i !== idx))} style={{ padding: 4 }}>
+                          <Ionicons name="close-circle" size={18} color={Colors.destructive} />
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+              {/* 달력 */}
+              <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <TouchableOpacity onPress={() => setByDateAddCalMonth(prev => {
+                    const d = new Date(prev.year, prev.month - 1, 1);
+                    return { year: d.getFullYear(), month: d.getMonth() };
+                  })} style={{ padding: 6 }}>
+                    <Ionicons name="chevron-back" size={20} color={Colors.primary} />
+                  </TouchableOpacity>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.foreground }}>
+                    {byDateAddCalMonth.year}년 {byDateAddCalMonth.month + 1}월
+                  </Text>
+                  <TouchableOpacity onPress={() => setByDateAddCalMonth(prev => {
+                    const d = new Date(prev.year, prev.month + 1, 1);
+                    return { year: d.getFullYear(), month: d.getMonth() };
+                  })} style={{ padding: 6 }}>
+                    <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
+                  </TouchableOpacity>
+                </View>
+                {/* 요일 헤더 */}
+                <View style={{ flexDirection: 'row' }}>
+                  {['일','월','화','수','목','금','토'].map((d, i) => (
+                    <Text key={i} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '700',
+                      color: i === 0 ? Colors.destructive : i === 6 ? Colors.accentWarm : Colors.mutedFg, marginBottom: 4 }}>{d}</Text>
+                  ))}
+                </View>
+                {/* 날짜 그리드 */}
+                {(() => {
+                  const { year, month } = byDateAddCalMonth;
+                  const firstDay = new Date(year, month, 1).getDay();
+                  const daysInMonth = new Date(year, month + 1, 0).getDate();
+                  const todayStr2 = toKSTDateStr(new Date());
+                  const cells: (number | null)[] = [...Array(firstDay).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+                  while (cells.length % 7 !== 0) cells.push(null);
+                  const rows: (number | null)[][] = [];
+                  for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
+                  return rows.map((row, ri) => (
+                    <View key={ri} style={{ flexDirection: 'row', marginBottom: 2 }}>
+                      {row.map((day, di) => {
+                        if (!day) return <View key={di} style={{ flex: 1, height: 36 }} />;
+                        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                        const isPast = dateStr < todayStr2;
+                        const isSelected = byDateAddEntries.some(e => e.date === dateStr);
+                        return (
+                          <TouchableOpacity
+                            key={di} disabled={isPast}
+                            style={{ flex: 1, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center',
+                              backgroundColor: isSelected ? Colors.primary : 'transparent' }}
+                            onPress={() => {
+                              byDateAddTempDateRef.current = dateStr;
+                              setByDateAddTempHour('');
+                              setByDateAddTempMinute('00');
+                              setByDateAddTimePickerVisible(true);
+                            }}
+                          >
+                            <Text style={{ fontSize: 14, fontWeight: isSelected ? '800' : '400',
+                              color: isPast ? Colors.placeholder : isSelected ? '#fff'
+                                : di === 0 ? Colors.destructive : di === 6 ? Colors.accentWarm : Colors.foreground }}>
+                              {day}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ));
+                })()}
+              </View>
+            </ScrollView>
+            <View style={{ flexDirection: 'row', gap: 8, marginHorizontal: 16, marginTop: 8 }}>
+              <TouchableOpacity
+                style={{ flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center', backgroundColor: Colors.mutedBg }}
+                onPress={() => setByDateAddSheet(false)}
+              >
+                <Text style={{ fontWeight: '700', fontSize: 14, color: Colors.mutedFg }}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 2, borderRadius: 12, paddingVertical: 14, alignItems: 'center',
+                  backgroundColor: byDateAddEntries.length > 0 ? Colors.primary : Colors.iconMuted }}
+                onPress={handleAddByDateLessons}
+                disabled={savingByDate || byDateAddEntries.length === 0}
+              >
+                {savingByDate
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={{ fontWeight: '700', fontSize: 14, color: '#fff' }}>
+                      {byDateAddEntries.length > 0 ? `${byDateAddEntries.length}개 저장` : '날짜를 선택하세요'}
+                    </Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 날짜별 일정 추가 - 시간 선택 모달 */}
+      <Modal visible={byDateAddTimePickerVisible} transparent animationType="slide" onRequestClose={() => setByDateAddTimePickerVisible(false)}>
+        <View style={styles.modalOverlayTP}>
+          <View style={styles.modalSheetTP}>
+            <View style={styles.modalHeaderTP}>
+              <Text style={styles.modalTitleTP}>
+                {byDateAddTempDateRef.current ? (() => {
+                  const d = new Date(byDateAddTempDateRef.current + 'T00:00:00');
+                  return `${d.getMonth() + 1}/${d.getDate()}(${DAYS_KR[d.getDay()]}) 시작 시간`;
+                })() : '시작 시간'}
+              </Text>
+              <TouchableOpacity onPress={() => setByDateAddTimePickerVisible(false)}>
+                <Ionicons name="close" size={22} color={Colors.mutedFg} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.spinnerRowTP}>
+              <View style={styles.spinnerColTP}>
+                <Text style={styles.spinnerLabelTP}>시</Text>
+                <FlatList
+                  data={HOURS} keyExtractor={item => item}
+                  showsVerticalScrollIndicator={false} style={styles.spinnerListTP}
+                  renderItem={({ item }) => {
+                    const isSel = item === byDateAddTempHour;
+                    return (
+                      <TouchableOpacity style={[styles.spinnerItemTP, isSel && styles.spinnerItemTPSel]} onPress={() => setByDateAddTempHour(item)}>
+                        <Text style={[styles.spinnerItemTPText, isSel && styles.spinnerItemTPTextSel]}>{item}</Text>
+                      </TouchableOpacity>
+                    );
+                  }}
+                />
+              </View>
+              <Text style={styles.spinnerColonTP}>:</Text>
+              <View style={styles.spinnerColTP}>
+                <Text style={styles.spinnerLabelTP}>분</Text>
+                <FlatList
+                  data={MINUTES} keyExtractor={item => item}
+                  showsVerticalScrollIndicator={false} style={styles.spinnerListTP}
+                  renderItem={({ item }) => {
+                    const isSel = item === byDateAddTempMinute;
+                    return (
+                      <TouchableOpacity style={[styles.spinnerItemTP, isSel && styles.spinnerItemTPSel]} onPress={() => setByDateAddTempMinute(item)}>
+                        <Text style={[styles.spinnerItemTPText, isSel && styles.spinnerItemTPTextSel]}>{item}</Text>
+                      </TouchableOpacity>
+                    );
+                  }}
+                />
+              </View>
+            </View>
+            <TouchableOpacity
+              style={[styles.confirmBtnTP, !byDateAddTempHour && styles.confirmBtnTPDis]}
+              onPress={() => {
+                if (!byDateAddTempHour || !byDateAddTempDateRef.current) return;
+                const newEntry: DateEntry = { date: byDateAddTempDateRef.current, startTime: `${byDateAddTempHour}:${byDateAddTempMinute}` };
+                setByDateAddEntries(prev => {
+                  const filtered = prev.filter(e => !(e.date === newEntry.date && e.startTime === newEntry.startTime));
+                  return [...filtered, newEntry].sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.startTime < b.startTime ? -1 : 1);
+                });
+                setByDateAddTimePickerVisible(false);
+              }}
+            >
+              <Text style={styles.confirmBtnTPText}>
+                {byDateAddTempHour ? `${byDateAddTempHour}:${byDateAddTempMinute} 선택` : '시간을 선택하세요'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Plan Upsell 모달 */}
       <PlanUpsellModal
         visible={showProModal}
@@ -1998,4 +2479,21 @@ const styles = StyleSheet.create({
   confirmBtnTP: { margin: 16, backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   confirmBtnTPDis: { backgroundColor: Colors.iconMuted },
   confirmBtnTPText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  // 일정 설정 행
+  scheduleSectionRow: {
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: Colors.mutedBg,
+    backgroundColor: '#FDF5F2', borderRadius: 10, paddingHorizontal: 12, marginTop: 8, minHeight: 64,
+  },
+  scheduleSectionIconWrap: { marginRight: 10, width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.primaryLight, justifyContent: 'center', alignItems: 'center' },
+  scheduleSectionLabel: { fontSize: 11, fontWeight: '700', color: Colors.primary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
+  scheduleSectionMain: { fontSize: 14, fontWeight: '700', color: Colors.foreground },
+  scheduleSectionSub: { fontSize: 12, color: Colors.mutedFg, marginTop: 2 },
+  scheduleSectionAction: { fontSize: 13, fontWeight: '700', color: Colors.primary, marginLeft: 8 },
+  // 일정 바텀시트 아이템
+  scheduleSheetItem: {
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16,
+    borderBottomWidth: 1, borderBottomColor: Colors.mutedBg, gap: 12,
+  },
+  scheduleSheetItemText: { flex: 1, fontSize: 16, fontWeight: '600', color: Colors.foreground },
 });
