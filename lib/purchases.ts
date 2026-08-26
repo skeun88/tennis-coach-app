@@ -1,7 +1,7 @@
 import Purchases, { LOG_LEVEL, PurchasesPackage } from 'react-native-purchases';
 import { Platform } from 'react-native';
 
-const IOS_KEY = 'appl_ZhygbW0bQrWKqWnaBasIVAIJtfD';
+const IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? '';
 
 export const PLAN_PRODUCT_IDS: Record<string, { monthly: string; annual: string }> = {
   basic: { monthly: 'kerri_basic_monthly', annual: 'kerri_basic_yearly' },
