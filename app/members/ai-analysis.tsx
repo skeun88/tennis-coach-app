@@ -4,6 +4,7 @@ import {
   Alert, ActivityIndicator, Platform, Animated, Modal, TextInput, KeyboardAvoidingView,
   AppState, AppStateStatus,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorderState } from 'expo-audio';
@@ -62,6 +63,7 @@ export default function AIAnalysisScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [enhancedMode, setEnhancedMode] = useState(false);
   const [analysisStep, setAnalysisStep] = useState(0); // 0 = 대기, 1~4 = 진행중
   const [plans, setPlans] = useState<LessonPlan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,35 +84,72 @@ export default function AIAnalysisScreen() {
   }>(null);
   const [savingReport, setSavingReport] = useState(false);
 
+  const [usageSheetVisible, setUsageSheetVisible] = useState(false);
+  const [hasSeenUsage, setHasSeenUsage] = useState(true); // true = no pulse (default until loaded)
+
+  // 녹음 인터럽트 (전화/이어폰) 관련 상태
+  const [isPaused, setIsPaused] = useState(false);
+  const [showResumeBtn, setShowResumeBtn] = useState(false);
+  const [interruptToast, setInterruptToast] = useState<string | null>(null);
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const usagePulseAnim = useRef(new Animated.Value(1)).current;
   const abortControllerRef = useRef<AbortController | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
-  const backgroundTimeRef = useRef<number | null>(null); // 백그라운드 진입 시간
+  const backgroundTimeRef = useRef<number | null>(null);
+  const isIntentionalStopRef = useRef(false); // true = 사용자가 직접 중지 중
+  const recordingSegmentsRef = useRef<string[]>([]); // 여러 구간 녹음 파일 URI 목록
+  const recordingDurationRef = useRef(0); // duration 누적 (timer 재시작 후에도 유지)
+
+  useEffect(() => {
+    AsyncStorage.getItem('ai_lesson_usage_seen').then(val => {
+      const seen = val === '1';
+      setHasSeenUsage(seen);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!hasSeenUsage) {
+      const anim = Animated.loop(
+        Animated.sequence([
+          Animated.timing(usagePulseAnim, { toValue: 1.3, duration: 900, useNativeDriver: true }),
+          Animated.timing(usagePulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
+          Animated.delay(400), // 1.5~2초 간격으로 자연스럽게
+        ])
+      );
+      anim.start();
+      return () => anim.stop();
+    } else {
+      usagePulseAnim.setValue(1);
+    }
+  }, [hasSeenUsage]);
 
   useEffect(() => {
     loadPlans();
-    // AppState 감지: 백그라운드 진입 시 진행 중인 분석은 abort하지 않고 계속 유지
-    // iOS는 백그라운드에서도 URLSession 작업이 유지되지만 fetch가 끊길 수 있으므로
-    // 타임아웃을 5분으로 연장하고 AbortController를 상태에서 관리
     const sub = AppState.addEventListener('change', (nextState: AppStateStatus) => {
       const prevState = appStateRef.current;
       appStateRef.current = nextState;
 
       if (nextState === 'background' || nextState === 'inactive') {
-        // 백그라운드 진입 시간 기록
         backgroundTimeRef.current = Date.now();
-        // fetch는 abort하지 않음 — iOS URLSession은 백그라운드에서도 지속됨
-        // AbortController를 abort하지 않으면 요청이 유지됨
       } else if (nextState === 'active' && prevState !== 'active') {
-        // 포그라운드 복귀
-        const bgMs = backgroundTimeRef.current ? Date.now() - backgroundTimeRef.current : 0;
         backgroundTimeRef.current = null;
-        // 3분 이상 백그라운드에 있었으면 fetch가 이미 끝났을 가능성 높음
-        // 분석 진행 중이면 사용자에게 알림
-        if (bgMs > 3 * 60 * 1000 && abortControllerRef.current) {
-          // 해당 가능성이 있지만 일단 유지 시도 — 구체적 abort는 하지 않음
-          // 타임아웃 5분 내라면 이미 완료/실패 에러로 처리됨
+        // 전화 통화 후 포그라운드 복귀 → 일시정지 상태면 자동 재개 시도
+        if (isPausedRef.current) {
+          setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true, shouldPlayInBackground: true })
+            .then(() => { audioRecorder.record(); })
+            .then(() => {
+              setIsPaused(false);
+              setShowResumeBtn(false);
+              setInterruptToast(null);
+              // 타이머 재개
+              timerRef.current = setInterval(() => setRecordingDuration(d => d + 1), 1000);
+            })
+            .catch(() => {
+              // 자동 재개 실패 → 수동 버튼 표시
+              setShowResumeBtn(true);
+            });
         }
       }
     });
@@ -120,20 +159,48 @@ export default function AIAnalysisScreen() {
     };
   }, []);
 
-  // 충전 연결/해제 등 시스템 오디오 인터럽트 감지 → 자동 재개
+  // isPaused를 ref로 추적해서 클로저 stale 방지
+  const isPausedRef = useRef(false);
+  useEffect(() => { isPausedRef.current = isPaused; }, [isPaused]);
+
+  // recorderState.isRecording 변화 감지 → 시스템 인터럽트 (전화 수신) 처리
   useEffect(() => {
-    if (!isRecording) return;
-    if (recorderState.mediaServicesDidReset) {
-      // 오디오 세션이 리셋됨 (충전 연결 등) → 오디오 모드 재설정 후 재개
-      setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true, shouldPlayInBackground: true })
-        .then(() => audioRecorder.prepareToRecordAsync(VOICE_PRESET))
-        .then(() => { audioRecorder.record(); })
-        .catch((e: any) => {
-          Alert.alert('녹음 재개 실패', `충전 연결로 인해 녹음이 중단됐어요.\n다시 시작해주세요.\n${e?.message ?? ''}`);
-          if (timerRef.current) clearInterval(timerRef.current);
-          setIsRecording(false);
-        });
+    if (!recorderState.isRecording && !isIntentionalStopRef.current && isRecording && !isPaused) {
+      // 녹음 중이었는데 시스템이 중단시킨 경우 → 전화 수신으로 간주
+      setIsPaused(true);
+      setShowResumeBtn(false);
+      setInterruptToast('전화 수신으로 녹음이 잠시 멈췄어요. 통화가 끝나면 자동으로 이어서 녹음합니다.');
+      if (timerRef.current) clearInterval(timerRef.current);
     }
+  }, [recorderState.isRecording]);
+
+  // 이어폰 연결/해제 등 오디오 디바이스 변경 감지 → 구간 저장 후 새 녹음으로 이어서
+  useEffect(() => {
+    if (!isRecording || !recorderState.mediaServicesDidReset) return;
+
+    const handleDeviceChange = async () => {
+      try {
+        // 현재 구간 저장
+        isIntentionalStopRef.current = true;
+        await audioRecorder.stop();
+        isIntentionalStopRef.current = false;
+        const segUri = audioRecorder.uri;
+        if (segUri) recordingSegmentsRef.current.push(segUri);
+
+        setInterruptToast('오디오 기기가 변경되어 녹음을 이어갑니다.');
+        setTimeout(() => setInterruptToast(null), 3000);
+
+        // 새 오디오 세션으로 재개
+        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true, shouldPlayInBackground: true });
+        await audioRecorder.prepareToRecordAsync(VOICE_PRESET);
+        audioRecorder.record();
+      } catch (e: any) {
+        setShowResumeBtn(true);
+        setInterruptToast('오디오 기기 변경 중 오류가 발생했어요. 이어서 녹음 버튼을 눌러주세요.');
+      }
+    };
+
+    handleDeviceChange();
   }, [recorderState.mediaServicesDidReset, isRecording]);
 
   // 녹음 중 pulse 애니메이션
@@ -223,9 +290,20 @@ export default function AIAnalysisScreen() {
     if (inProgress && !isAnalyzing) {
       setIsAnalyzing(true);
       setAnalysisStep(2);
-      pollForPlan(inProgress.id)
+      const resumedPlanId = inProgress.id;
+      pollForPlan(resumedPlanId)
         .then(async () => { await loadPlans(); })
-        .catch(() => { loadPlans(); })
+        .catch(async (e: any) => {
+          if (e?.message === 'POLL_TIMEOUT') {
+            // 무한 재폴링 방지: 타임아웃 시 failed로 마킹 후 재개 중단
+            await supabase.from('lesson_plans')
+              .update({ status: 'failed', error_message: '분석 시간이 초과됐습니다. 다시 시도해 주세요.' })
+              .eq('id', resumedPlanId)
+              .eq('status', 'processing');
+            Alert.alert('분석 시간 초과', '분석에 오류가 발생했습니다. 다시 시도해 주세요.');
+          }
+          loadPlans();
+        })
         .finally(() => { setIsAnalyzing(false); setAnalysisStep(0); });
     }
   }
@@ -379,15 +457,66 @@ export default function AIAnalysisScreen() {
         playsInSilentMode: true,
         allowsBackgroundRecording: true,
         shouldPlayInBackground: true,
-        interruptionMode: 'doNotMix' as const, // 전화 수신 시 일시정지 후 재개
+        interruptionMode: 'doNotMix' as const,
       });
       await audioRecorder.prepareToRecordAsync(VOICE_PRESET);
       audioRecorder.record();
+      recordingSegmentsRef.current = [];
+      recordingDurationRef.current = 0;
+      isIntentionalStopRef.current = false;
       setIsRecording(true);
+      setIsPaused(false);
+      setShowResumeBtn(false);
+      setInterruptToast(null);
       setRecordingDuration(0);
-      timerRef.current = setInterval(() => setRecordingDuration(d => d + 1), 1000);
+      timerRef.current = setInterval(() => {
+        setRecordingDuration(d => {
+          recordingDurationRef.current = d + 1;
+          return d + 1;
+        });
+      }, 1000);
     } catch (e: any) {
       Alert.alert('오류', `녹음을 시작할 수 없습니다.\n${e?.message ?? ''}`);
+    }
+  }
+
+  async function resumeRecording() {
+    try {
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true, shouldPlayInBackground: true });
+      await audioRecorder.record();
+      setIsPaused(false);
+      setShowResumeBtn(false);
+      setInterruptToast(null);
+      timerRef.current = setInterval(() => {
+        setRecordingDuration(d => {
+          recordingDurationRef.current = d + 1;
+          return d + 1;
+        });
+      }, 1000);
+    } catch (e: any) {
+      Alert.alert('재개 실패', `녹음을 다시 시작할 수 없습니다.\n${e?.message ?? ''}`);
+    }
+  }
+
+  async function mergeAndGetUri(): Promise<string | null> {
+    const segments = recordingSegmentsRef.current;
+    const lastUri = audioRecorder.uri;
+    if (lastUri) segments.push(lastUri);
+    if (segments.length === 0) return null;
+    if (segments.length === 1) return segments[0];
+
+    // 여러 구간 → base64 단순 연결 (Whisper는 손상된 경계 허용)
+    try {
+      const parts = await Promise.all(
+        segments.map(uri => FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 }))
+      );
+      const merged = parts.join('');
+      const mergedUri = (FileSystem.cacheDirectory ?? '') + `merged_lesson_${Date.now()}.m4a`;
+      await FileSystem.writeAsStringAsync(mergedUri, merged, { encoding: FileSystem.EncodingType.Base64 });
+      return mergedUri;
+    } catch {
+      // 병합 실패 → 마지막 구간만 사용
+      return segments[segments.length - 1];
     }
   }
 
@@ -451,6 +580,7 @@ export default function AIAnalysisScreen() {
           member_id: memberId,
           coach_id: userId,
           duration_seconds: duration,
+          enhanced_mode: enhancedMode,
         }),
       }).then(async (res) => {
         if (res.status >= 400 && capturedPlanId) {
@@ -501,17 +631,23 @@ export default function AIAnalysisScreen() {
   async function stopAndAnalyze() {
     if (!isRecording) return;
 
-    if (recordingDuration < 10) {
-      Alert.alert('녹음 시간 부족', '최소 10초 이상 녹음해야 분석이 가능합니다.\n현재: ' + recordingDuration + '초');
+    if (recordingDurationRef.current < 10) {
+      Alert.alert('녹음 시간 부족', '최소 10초 이상 녹음해야 분석이 가능합니다.\n현재: ' + recordingDurationRef.current + '초');
       return;
     }
 
     if (timerRef.current) clearInterval(timerRef.current);
+    isIntentionalStopRef.current = true;
     setIsRecording(false);
+    setIsPaused(false);
+    setShowResumeBtn(false);
+    setInterruptToast(null);
 
     try {
       await audioRecorder.stop();
-      const uri = audioRecorder.uri;
+      isIntentionalStopRef.current = false;
+      const uri = await mergeAndGetUri();
+      recordingSegmentsRef.current = [];
       if (!uri) throw new Error('녹음 파일을 찾을 수 없습니다.');
 
       const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -730,10 +866,56 @@ export default function AIAnalysisScreen() {
 
         {/* 녹음 카드 */}
         <View style={styles.recordCard}>
-          <Text style={styles.recordTitle}>🎙 레슨 녹음</Text>
+          {/* 카드 헤더: 아이콘 + 제목 + 사용법 버튼 */}
+          <View style={styles.recordTitleRow}>
+            <View style={styles.recordTitleLeft}>
+              {/* 마이크 + Sparkles 복합 아이콘 */}
+              <View style={styles.recordIconWrap}>
+                <Ionicons name="mic-outline" size={22} color={Colors.primary} />
+                <View style={styles.recordSparklesBadge}>
+                  <Ionicons name="sparkles" size={10} color={Colors.primary} />
+                </View>
+              </View>
+              <Text style={styles.recordTitle}>AI 레슨 기록</Text>
+            </View>
+            {/* 사용법 ? 버튼 */}
+            <TouchableOpacity
+              onPress={async () => {
+                setUsageSheetVisible(true);
+                if (!hasSeenUsage) {
+                  setHasSeenUsage(true);
+                  await AsyncStorage.setItem('ai_lesson_usage_seen', '1');
+                }
+              }}
+              activeOpacity={0.8}
+            >
+              <Animated.View style={[styles.usageHelpBtn, { transform: [{ scale: usagePulseAnim }] }]}>
+                <Text style={styles.usageHelpText}>?</Text>
+              </Animated.View>
+            </TouchableOpacity>
+          </View>
           <Text style={styles.recordDesc}>
-            레슨 중 코치 음성을 녹음하면{'\n'}AI가 자동으로 분석하고 다음 레슨 계획을 만들어드려요
+            레슨을 기록하면 AI가 핵심 내용을 정리해{'\n'}회원별 맞춤 레슨 리포트를 만들어드려요.
           </Text>
+
+          {/* 인식 향상 모드 토글 */}
+          {!isRecording && !isPaused && !isAnalyzing && (
+            <TouchableOpacity
+              style={styles.enhancedModeRow}
+              onPress={() => setEnhancedMode(v => !v)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.enhancedModeLeft}>
+                <Ionicons name="sparkles-outline" size={16} color={enhancedMode ? Colors.primary : Colors.mutedFg} />
+                <Text style={[styles.enhancedModeLabel, enhancedMode && styles.enhancedModeLabelOn]}>
+                  인식 향상 모드
+                </Text>
+              </View>
+              <View style={[styles.enhancedToggle, enhancedMode && styles.enhancedToggleOn]}>
+                <View style={[styles.enhancedThumb, enhancedMode && styles.enhancedThumbOn]} />
+              </View>
+            </TouchableOpacity>
+          )}
 
           {/* 사용량 표시 */}
           {usageInfo && (
@@ -747,30 +929,64 @@ export default function AIAnalysisScreen() {
             </View>
           )}
 
+          {/* 인터럽트 토스트 */}
+          {interruptToast && (
+            <View style={styles.interruptToast}>
+              <Ionicons name="information-circle-outline" size={16} color={Colors.primary} />
+              <Text style={styles.interruptToastText}>{interruptToast}</Text>
+            </View>
+          )}
+
           {isAnalyzing ? (
             <AnalyzingView />
           ) : (
             <View style={styles.recordControls}>
-              {isRecording && (
+              {(isRecording || isPaused) && (
                 <View style={styles.durationBox}>
-                  <View style={styles.recordingDot} />
+                  <View style={[styles.recordingDot, isPaused && styles.recordingDotPaused]} />
                   <Text style={styles.durationText}>{formatDuration(recordingDuration)}</Text>
+                  {isPaused && <Text style={styles.pausedLabel}>일시정지</Text>}
                 </View>
               )}
 
               <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
                 <TouchableOpacity
-                  style={[styles.recordBtn, isRecording && styles.recordBtnActive]}
-                  onPress={isRecording ? stopAndAnalyze : startRecording}
+                  style={[
+                    styles.recordBtn,
+                    (isRecording && !isPaused) && styles.recordBtnActive,
+                    isPaused && styles.recordBtnPaused,
+                  ]}
+                  onPress={isRecording && !isPaused ? stopAndAnalyze : (!isRecording && !isPaused ? startRecording : undefined)}
+                  disabled={isPaused}
                 >
-                  <Ionicons name={isRecording ? 'stop' : 'mic'} size={32} color="#fff" />
+                  <Ionicons
+                    name={isRecording && !isPaused ? 'stop' : isPaused ? 'pause' : 'mic'}
+                    size={32}
+                    color="#fff"
+                  />
                   <Text style={styles.recordBtnText}>
-                    {isRecording ? '분석 시작' : '녹음 시작'}
+                    {isRecording && !isPaused ? '분석 시작' : isPaused ? '일시정지' : '녹음 시작'}
                   </Text>
                 </TouchableOpacity>
               </Animated.View>
 
-              {isRecording && (
+              {/* 이어서 녹음 버튼 (자동 재개 실패 시) */}
+              {showResumeBtn && (
+                <TouchableOpacity style={styles.resumeBtn} onPress={resumeRecording}>
+                  <Ionicons name="play-circle-outline" size={18} color="#fff" />
+                  <Text style={styles.resumeBtnText}>이어서 녹음</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* 일시정지 중일 때 분석 시작 버튼 */}
+              {isPaused && (
+                <TouchableOpacity style={styles.stopAnalyzeBtn} onPress={stopAndAnalyze}>
+                  <Ionicons name="stop-circle-outline" size={18} color={Colors.primary} />
+                  <Text style={styles.stopAnalyzeBtnText}>녹음 종료 후 분석하기</Text>
+                </TouchableOpacity>
+              )}
+
+              {isRecording && !isPaused && (
                 <Text style={styles.recordHint}>버튼을 눌러 녹음을 멈추고 AI 분석을 시작하세요</Text>
               )}
             </View>
@@ -784,7 +1000,7 @@ export default function AIAnalysisScreen() {
           activeOpacity={0.85}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Ionicons name="create-outline" size={20} color={Colors.primary} />
+            <Ionicons name="pencil-outline" size={20} color={Colors.primary} />
             <View>
               <Text style={styles.manualReportBtnTitle}>타이핑으로 레슨 기록</Text>
               <Text style={styles.manualReportBtnSub}>녹음을 놓쳤다면 기억나는 내용을 직접 작성해보세요.</Text>
@@ -893,7 +1109,15 @@ export default function AIAnalysisScreen() {
 
         {/* 분석 기록 */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📋 AI 분석 기록</Text>
+          <View style={styles.sectionTitleRow}>
+            <View style={styles.sectionIconWrap}>
+              <Ionicons name="document-text-outline" size={20} color={Colors.foreground} />
+              <View style={styles.sectionSparklesBadge}>
+                <Ionicons name="sparkles" size={9} color={Colors.primary} />
+              </View>
+            </View>
+            <Text style={styles.sectionTitle}>AI 분석 기록</Text>
+          </View>
 
           {loading && <ActivityIndicator color={Colors.primary} style={{ marginTop: 20 }} />}
 
@@ -1015,6 +1239,87 @@ export default function AIAnalysisScreen() {
         />
       )}
 
+      {/* AI 레슨 기록 사용법 바텀시트 */}
+      <Modal visible={usageSheetVisible} animationType="slide" transparent onRequestClose={() => setUsageSheetVisible(false)}>
+        <View style={styles.usageOverlay}>
+          <View style={styles.usageSheet}>
+            <View style={styles.usageSheetHandle} />
+            <View style={styles.usageSheetHeader}>
+              <Text style={styles.usageSheetTitle}>AI 레슨 기록 사용법</Text>
+              <TouchableOpacity onPress={() => setUsageSheetVisible(false)}>
+                <Ionicons name="close" size={22} color={Colors.mutedFg} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, paddingBottom: 48 }}>
+              {[
+                {
+                  num: '①',
+                  title: '무선 핀마이크 사용',
+                  recommended: true,
+                  icon: 'mic' as const,
+                  device: '옷깃에 고정하는 무선 핀마이크\n(휴대폰과 블루투스 연결)',
+                  how: '무선 핀마이크를 착용한 후\nAI 레슨 기록을 시작하면\n레슨 내용을 자동으로 분석합니다.',
+                },
+                {
+                  num: '②',
+                  title: '휴대폰 녹음',
+                  recommended: false,
+                  icon: 'phone-portrait-outline' as const,
+                  device: '별도 장비 없이 휴대폰 마이크',
+                  how: '휴대폰을 가까운 곳에 두고\nAI 레슨 기록을 시작하면\n레슨 내용을 자동으로 분석합니다.',
+                },
+                {
+                  num: '③',
+                  title: '타이핑으로 기록',
+                  recommended: false,
+                  icon: 'pencil-outline' as const,
+                  device: '장비 없이 텍스트 입력만으로',
+                  how: '레슨이 끝난 후\n핵심 내용을 직접 입력하면\nAI가 레슨 리포트를 생성합니다.',
+                },
+                {
+                  num: '④',
+                  title: '무선 이어폰 마이크 사용',
+                  recommended: false,
+                  icon: 'headset-outline' as const,
+                  device: 'AirPods, Galaxy Buds 등\n사용 중인 무선 이어폰',
+                  how: 'AirPods, Galaxy Buds 등\n본인이 사용하는 무선 이어폰으로도\nAI 레슨 기록을 사용할 수 있습니다.',
+                },
+              ].map((item, i) => (
+                <View key={i} style={[styles.usageCard, i < 3 && { marginBottom: 14 }]}>
+                  {/* 카드 헤더 */}
+                  <View style={styles.usageCardHeader}>
+                    <View style={styles.usageCardHeaderLeft}>
+                      <View style={styles.usageCardIconWrap}>
+                        <Ionicons name={item.icon} size={18} color={Colors.primary} />
+                      </View>
+                      <Text style={styles.usageCardNum}>{item.num}</Text>
+                      <Text style={styles.usageCardTitle}>{item.title}</Text>
+                    </View>
+                    {item.recommended && (
+                      <View style={styles.usageRecommendBadge}>
+                        <Text style={styles.usageRecommendText}>추천</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* 추천 장비 */}
+                  <View style={styles.usageCardSection}>
+                    <Text style={styles.usageCardLabel}>추천 장비</Text>
+                    <Text style={styles.usageCardBody}>{item.device}</Text>
+                  </View>
+
+                  {/* 사용 방법 */}
+                  <View style={styles.usageCardSection}>
+                    <Text style={styles.usageCardLabel}>사용 방법</Text>
+                    <Text style={styles.usageCardBody}>{item.how}</Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* AI 리포트 추가 충전 모달 (월 할당량 소진 시) */}
       {topupModalVisible && authToken && (
         <ReportTopupModal
@@ -1052,6 +1357,77 @@ const styles = StyleSheet.create({
   headerSub: { fontSize: 13, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
   scroll: { flex: 1 },
 
+  // 녹음 카드 헤더
+  recordTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  recordTitleLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  recordIconWrap: { position: 'relative', width: 28, height: 24, justifyContent: 'center', alignItems: 'center' },
+  recordSparklesBadge: { position: 'absolute', top: -2, right: -5 },
+  usageHelpBtnWrap: {
+    width: 36, height: 36, borderRadius: 18,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  usageHelpBtn: {
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: Colors.primary, shadowOpacity: 0.45, shadowRadius: 8, shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
+  },
+  usageHelpText: { fontSize: 13, fontWeight: '800', color: '#fff', lineHeight: 16 },
+
+  // 섹션 타이틀 with 아이콘
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  sectionIconWrap: { position: 'relative', width: 26, height: 22, justifyContent: 'center', alignItems: 'center' },
+  sectionSparklesBadge: { position: 'absolute', top: -2, right: -5 },
+
+  // 사용법 바텀시트
+  usageOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  usageSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '60%', maxHeight: '70%' },
+  usageSheetHandle: { width: 36, height: 4, borderRadius: 2, backgroundColor: Colors.border, alignSelf: 'center', marginTop: 10, marginBottom: 4 },
+  usageSheetHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
+  usageSheetTitle: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
+  usageStep: { flexDirection: 'row', gap: 14, marginBottom: 20 },
+  usageStepIcon: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: Colors.primaryLight,
+    justifyContent: 'center', alignItems: 'center',
+    flexShrink: 0,
+  },
+  usageStepTitle: { fontSize: 14, fontWeight: '700', color: Colors.foreground, marginBottom: 4 },
+  usageStepDesc: { fontSize: 13, color: Colors.mutedFg, lineHeight: 20 },
+
+  // 사용법 카드
+  usageCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14, borderWidth: 1, borderColor: Colors.border,
+    padding: 16,
+    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  usageCardHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14,
+  },
+  usageCardHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  usageCardIconWrap: {
+    width: 34, height: 34, borderRadius: 10,
+    backgroundColor: Colors.primaryLight,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  usageCardNum: { fontSize: 15, fontWeight: '800', color: Colors.primary },
+  usageCardTitle: { fontSize: 14, fontWeight: '700', color: Colors.foreground },
+  usageRecommendBadge: {
+    backgroundColor: Colors.primary, borderRadius: 20,
+    paddingHorizontal: 10, paddingVertical: 3,
+  },
+  usageRecommendText: { fontSize: 11, fontWeight: '700', color: '#fff' },
+  usageCardSection: { marginBottom: 10 },
+  usageCardLabel: { fontSize: 11, fontWeight: '700', color: Colors.mutedFg, marginBottom: 4, letterSpacing: 0.3 },
+  usageCardBody: { fontSize: 13, color: Colors.foreground, lineHeight: 20 },
+
   // 녹음 카드
   recordCard: {
     backgroundColor: '#fff',
@@ -1064,8 +1440,27 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
-  recordTitle: { fontSize: 17, fontWeight: '800', color: Colors.foreground, marginBottom: 8 },
-  recordDesc: { fontSize: 13, color: Colors.mutedFg, lineHeight: 20, marginBottom: 20 },
+  recordTitle: { fontSize: 17, fontWeight: '800', color: Colors.foreground },
+  recordDesc: { fontSize: 13, color: Colors.mutedFg, lineHeight: 20, marginBottom: 12 },
+  enhancedModeRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 10, paddingHorizontal: 14,
+    backgroundColor: Colors.card, borderRadius: 10,
+    marginBottom: 16, borderWidth: 1, borderColor: Colors.border,
+  },
+  enhancedModeLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  enhancedModeLabel: { fontSize: 13, color: Colors.mutedFg, fontWeight: '500' },
+  enhancedModeLabelOn: { color: Colors.primary, fontWeight: '600' },
+  enhancedToggle: {
+    width: 40, height: 22, borderRadius: 11,
+    backgroundColor: Colors.border, justifyContent: 'center', paddingHorizontal: 2,
+  },
+  enhancedToggleOn: { backgroundColor: Colors.primary },
+  enhancedThumb: {
+    width: 18, height: 18, borderRadius: 9,
+    backgroundColor: '#fff', alignSelf: 'flex-start',
+  },
+  enhancedThumbOn: { alignSelf: 'flex-end' },
 
   // 분석 진행 상태
   analyzingBox: { alignItems: 'center', paddingVertical: 20, gap: 10 },
@@ -1082,7 +1477,33 @@ const styles = StyleSheet.create({
   recordControls: { alignItems: 'center', gap: 12 },
   durationBox: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.destructive },
+  recordingDotPaused: { backgroundColor: Colors.mutedFg },
   durationText: { fontSize: 24, fontWeight: '800', color: Colors.foreground, letterSpacing: 2 },
+  pausedLabel: { fontSize: 12, color: Colors.mutedFg, fontWeight: '600' },
+
+  // 인터럽트 토스트
+  interruptToast: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: Colors.primaryLight, borderRadius: 10,
+    padding: 12, marginBottom: 12, borderWidth: 1, borderColor: Colors.accentWarm,
+  },
+  interruptToastText: { fontSize: 13, color: Colors.navy, lineHeight: 18, flex: 1 },
+
+  // 이어서 녹음 버튼
+  resumeBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: Colors.primary, borderRadius: 12,
+    paddingVertical: 10, paddingHorizontal: 20,
+  },
+  resumeBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+
+  // 일시정지 중 분석 시작 버튼
+  stopAnalyzeBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    borderWidth: 1.5, borderColor: Colors.primary, borderRadius: 12,
+    paddingVertical: 10, paddingHorizontal: 20,
+  },
+  stopAnalyzeBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 14 },
   recordBtn: {
     width: 100, height: 100, borderRadius: 50,
     backgroundColor: Colors.primary,
@@ -1091,12 +1512,13 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 }, elevation: 6, gap: 4,
   },
   recordBtnActive: { backgroundColor: Colors.destructive, shadowColor: Colors.destructive },
+  recordBtnPaused: { backgroundColor: Colors.mutedFg, shadowColor: Colors.mutedFg },
   recordBtnText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   recordHint: { fontSize: 12, color: Colors.mutedFg, textAlign: 'center', maxWidth: 240 },
 
   // 분석 기록
   section: { paddingHorizontal: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: Colors.foreground, marginBottom: 12 },
+  sectionTitle: { fontSize: 16, fontWeight: '800', color: Colors.foreground },
 
   // 수동 레포트
   manualReportBtn: {

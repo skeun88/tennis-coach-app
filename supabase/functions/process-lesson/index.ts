@@ -82,13 +82,15 @@ drill_suggestions는 정확히 2개만 포함할 것.`
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
+  // catch 블록에서 접근하기 위해 try 밖에 선언
+  let lessonPlanId: string | null = null
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
+  const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+
   try {
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')!
     const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')!
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
-    const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
     // ── body 파싱: FormData(기존) 또는 JSON(신규 비동기 방식) 지원 ──
     let audioFile: File | null = null
@@ -97,8 +99,8 @@ serve(async (req) => {
     let lessonId: string | null = null
     let courtType: string | null = null
     let durationSeconds: number | null = null
-    let lessonPlanId: string | null = null
     let audioStoragePath: string | null = null
+    let enhancedMode: boolean = false
 
     const contentType = req.headers.get('content-type') || ''
 
@@ -112,6 +114,7 @@ serve(async (req) => {
       durationSeconds = body.duration_seconds ? parseInt(String(body.duration_seconds), 10) : null
       lessonId = body.lesson_id ?? null
       courtType = body.court_type ?? null
+      enhancedMode = body.enhanced_mode === true
 
       if (!audioStoragePath) {
         return new Response(JSON.stringify({ error: 'audio_storage_path가 없습니다.' }), {
@@ -229,19 +232,36 @@ serve(async (req) => {
     }
 
     // ── Step 1: Whisper STT + 회원/코치 정보 병렬 ──
-    const whisperForm = new FormData()
-    whisperForm.append('file', audioFile, 'audio.m4a')
-    whisperForm.append('model', 'whisper-1')
-    whisperForm.append('language', 'ko')
-    whisperForm.append('prompt',
+    const tennisTechPrompt =
       '테니스 레슨 녹음입니다. 포핸드, 백핸드, 서브, 발리, 스매시, 로브, 드롭샷, 풋워크, 스플릿스텝, ' +
       '탑스핀, 슬라이스, 플랫, 이스턴, 웨스턴, 컨티넨탈, 트로피자세, 팔로스루, 테이크백 등의 용어가 나올 수 있습니다.'
-    )
+
+    const whisperForm = new FormData()
+    whisperForm.append('file', audioFile, 'audio.m4a')
+    whisperForm.append('language', 'ko')
+    whisperForm.append('prompt', tennisTechPrompt)
+
+    // enhanced_mode: Groq whisper-large-v3-turbo (더 강한 노이즈 환경 인식)
+    // 기본: OpenAI whisper-1
+    let sttEndpoint: string
+    let sttAuthHeader: string
+    if (enhancedMode) {
+      const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY') ?? ''
+      whisperForm.append('model', 'whisper-large-v3-turbo')
+      sttEndpoint = 'https://api.groq.com/openai/v1/audio/transcriptions'
+      sttAuthHeader = `Bearer ${GROQ_API_KEY}`
+      console.log('[STT] enhanced mode: groq/whisper-large-v3-turbo')
+    } else {
+      whisperForm.append('model', 'whisper-1')
+      sttEndpoint = 'https://api.openai.com/v1/audio/transcriptions'
+      sttAuthHeader = `Bearer ${OPENAI_API_KEY}`
+      console.log('[STT] standard mode: openai/whisper-1')
+    }
 
     const [whisperRes, memberRes, coachRes] = await Promise.all([
-      fetch('https://api.openai.com/v1/audio/transcriptions', {
+      fetch(sttEndpoint, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}` },
+        headers: { 'Authorization': sttAuthHeader },
         body: whisperForm,
       }),
       supabase.from('members')
@@ -632,27 +652,15 @@ ${knowledgeContext || '(없음)'}
     })
 
   } catch (error: any) {
-    console.error('process-lesson error:', error)
-    // 비동기 방식에서 에러 발생 시 lesson_plans status를 failed로 업데이트
-    try {
-      const SUPABASE_URL_ERR = Deno.env.get('SUPABASE_URL')!
-      const SUPABASE_SERVICE_KEY_ERR = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-      const supabaseErr = createClient(SUPABASE_URL_ERR, SUPABASE_SERVICE_KEY_ERR)
-      const contentTypeErr = req.headers.get('content-type') || ''
-      if (contentTypeErr.includes('application/json')) {
-        // req.json()은 이미 소비된 경우가 있으므로 body clone이 없음
-        // lessonPlanId는 위에서 선언된 변수를 시펨다 (closure)
-        if (typeof lessonPlanId === 'string' && lessonPlanId) {
-          await supabaseErr.from('lesson_plans').update({
-            status: 'failed',
-            error_message: error.message ?? 'unknown error',
-          }).eq('id', lessonPlanId)
-        }
-      }
-    } catch (updateErr) {
-      console.error('failed status update error:', updateErr)
+    console.error('process-lesson error:', error?.message ?? error)
+    if (lessonPlanId) {
+      const { error: updateErr } = await supabase.from('lesson_plans').update({
+        status: 'failed',
+        error_message: error?.message ?? 'unknown error',
+      }).eq('id', lessonPlanId)
+      if (updateErr) console.error('failed status update error:', updateErr.message)
     }
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: error?.message }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
   }
