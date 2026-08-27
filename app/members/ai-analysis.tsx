@@ -166,6 +166,7 @@ export default function AIAnalysisScreen() {
   // recorderState.isRecording 변화 감지 → 시스템 인터럽트 (전화 수신) 처리
   useEffect(() => {
     if (!recorderState.isRecording && !isIntentionalStopRef.current && isRecording && !isPaused) {
+      console.log('[REC][C] recorderState.isRecording=false → setIsPaused. AppState:', appStateRef.current);
       // 녹음 중이었는데 시스템이 중단시킨 경우 → 전화 수신으로 간주
       setIsPaused(true);
       setShowResumeBtn(false);
@@ -179,6 +180,7 @@ export default function AIAnalysisScreen() {
     if (!isRecording || !recorderState.mediaServicesDidReset) return;
 
     const handleDeviceChange = async () => {
+      console.log('[REC][D] mediaServicesDidReset: 오디오 기기 변경 → 구간저장 후 재개');
       try {
         // 현재 구간 저장
         isIntentionalStopRef.current = true;
@@ -288,6 +290,7 @@ export default function AIAnalysisScreen() {
     // 앱 복귀 시 진행 중인 분석 자동 재개
     const inProgress = (data ?? []).find((p: any) => p.status === 'pending' || p.status === 'processing');
     if (inProgress && !isAnalyzing) {
+      console.log('[ANA][3] loadPlans 자동재개: planId=', inProgress.id, 'status=', inProgress.status, 'created=', inProgress.created_at);
       setIsAnalyzing(true);
       setAnalysisStep(2);
       const resumedPlanId = inProgress.id;
@@ -525,6 +528,7 @@ export default function AIAnalysisScreen() {
     skipMonthlyIncrement = false,
     reuseStoragePath?: string, reusePlanId?: string,
   ) {
+    console.log('[ANA][1] runAnalysis 시작: duration=', duration, 'reuse=', !!reusePlanId);
     setIsAnalyzing(true);
 
     try {
@@ -628,7 +632,7 @@ export default function AIAnalysisScreen() {
     }
   }
 
-  async function stopAndAnalyze() {
+  async function stopAndAnalyze(source: 'main' | 'pause' = 'main') {
     if (!isRecording) return;
 
     if (recordingDurationRef.current < 10) {
@@ -636,12 +640,16 @@ export default function AIAnalysisScreen() {
       return;
     }
 
+    console.log('[REC][STOP] stopAndAnalyze:', source, '| 녹음시간:', recordingDurationRef.current + '초');
+
     if (timerRef.current) clearInterval(timerRef.current);
     isIntentionalStopRef.current = true;
     setIsRecording(false);
     setIsPaused(false);
     setShowResumeBtn(false);
     setInterruptToast(null);
+    setIsAnalyzing(true);
+    setAnalysisStep(0);
 
     try {
       await audioRecorder.stop();
@@ -659,14 +667,16 @@ export default function AIAnalysisScreen() {
       // ── 월별 한도 체크 (로컬 사전 체크 — extra credit 없을 때만 모달 즉시 표시) ──
       const limitCheck = await checkAiAnalysisLimit(user.id, subscription);
       if (!limitCheck.allowed && !limitCheck.needsExtraCredit) {
-        // 구독 자체 차단
+        setIsAnalyzing(false);
+        setAnalysisStep(0);
         setUsageInfo({ used: limitCheck.used, limit: limitCheck.limit });
         setUpsellContext(limitCheck.planId === 'basic' ? 'ai_analysis_limit' : 'ai_analysis_free');
         return;
       }
 
       if (!limitCheck.allowed && limitCheck.needsExtraCredit && limitCheck.extraCredits === 0) {
-        // 월 한도 초과 + 추가 크레딧 없음 → 즉시 충전 모달
+        setIsAnalyzing(false);
+        setAnalysisStep(0);
         setUsageInfo({ used: limitCheck.used, limit: limitCheck.limit });
         setPendingAnalysis({ uri, userId: user.id, duration: recordingDuration });
         setAuthToken(token);
@@ -679,11 +689,15 @@ export default function AIAnalysisScreen() {
       await runAnalysis(uri, user.id, recordingDuration, token, usingExtraCredit);
 
     } catch (e: any) {
+      console.log('[REC][ERR] stopAndAnalyze 에러:', source, e?.message);
+      setIsAnalyzing(false);
+      setAnalysisStep(0);
       Alert.alert('오류', e.message || '분석 시작 중 오류가 발생했습니다.');
     }
   }
 
   async function handleTopupSuccess(newBalance: number) {
+    console.log('[ANA][2] handleTopupSuccess → runAnalysis 재시도');
     setTopupModalVisible(false);
     if (!pendingAnalysis) return;
     const { uri, userId, duration, storagePath, planId } = pendingAnalysis;
@@ -956,7 +970,7 @@ export default function AIAnalysisScreen() {
                     (isRecording && !isPaused) && styles.recordBtnActive,
                     isPaused && styles.recordBtnPaused,
                   ]}
-                  onPress={isRecording && !isPaused ? stopAndAnalyze : (!isRecording && !isPaused ? startRecording : undefined)}
+                  onPress={isRecording && !isPaused ? () => stopAndAnalyze('main') : (!isRecording && !isPaused ? startRecording : undefined)}
                   disabled={isPaused}
                 >
                   <Ionicons
@@ -980,7 +994,7 @@ export default function AIAnalysisScreen() {
 
               {/* 일시정지 중일 때 분석 시작 버튼 */}
               {isPaused && (
-                <TouchableOpacity style={styles.stopAnalyzeBtn} onPress={stopAndAnalyze}>
+                <TouchableOpacity style={styles.stopAnalyzeBtn} onPress={() => stopAndAnalyze('pause')}>
                   <Ionicons name="stop-circle-outline" size={18} color={Colors.primary} />
                   <Text style={styles.stopAnalyzeBtnText}>녹음 종료 후 분석하기</Text>
                 </TouchableOpacity>
