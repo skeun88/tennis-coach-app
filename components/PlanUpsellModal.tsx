@@ -55,7 +55,7 @@ const CONTEXT_CONFIG: Record<UpsellContext, {
     featureName: 'AI 레슨 분석',
     targetPlan: 'basic',
     features: [
-      { icon: 'mic', label: 'AI 레슨 분석 (Free: 월 3회, Basic: 월 10회, Pro: 월 100회)' },
+      { icon: 'mic', label: 'AI 레슨 기록 (Free: 월 3개, Basic: 월 10개, Pro: 월 50개)' },
       { icon: 'document-text', label: '범용 AI 리포트' },
       { icon: 'people', label: '회원 알림 · 운영 관리' },
     ],
@@ -66,7 +66,7 @@ const CONTEXT_CONFIG: Record<UpsellContext, {
     featureName: 'AI 레슨 분석 무제한',
     targetPlan: 'pro',
     features: [
-      { icon: 'mic', label: 'AI 레슨 분석 월 100회' },
+      { icon: 'mic', label: 'AI 레슨 분석 월 50개' },
       { icon: 'bulb', label: '개인화 AI 코칭 모델 (음성 기반)' },
       { icon: 'bar-chart', label: '코칭 데이터 분석 · 패턴 태그' },
       { icon: 'ribbon', label: 'KERRI 검증 배지 · 코칭 실적 공개' },
@@ -79,7 +79,7 @@ const CONTEXT_CONFIG: Record<UpsellContext, {
     targetPlan: 'pro',
     features: [
       { icon: 'bulb', label: '음성 기반 코칭 스타일 학습' },
-      { icon: 'mic', label: 'AI 레슨 분석 월 100회' },
+      { icon: 'mic', label: 'AI 레슨 분석 월 50개' },
       { icon: 'bar-chart', label: '기술별 패턴 분석 · 회원 변화 추적' },
       { icon: 'ribbon', label: 'KERRI 검증 배지' },
     ],
@@ -92,7 +92,7 @@ const CONTEXT_CONFIG: Record<UpsellContext, {
     features: [
       { icon: 'ribbon', label: 'KERRI 검증 배지 · 4대 지표 공개' },
       { icon: 'bulb', label: 'AI 코칭 모델' },
-      { icon: 'mic', label: 'AI 레슨 분석 월 100회' },
+      { icon: 'mic', label: 'AI 레슨 분석 월 50개' },
     ],
   },
   tagging: {
@@ -103,7 +103,7 @@ const CONTEXT_CONFIG: Record<UpsellContext, {
     features: [
       { icon: 'pricetag', label: '반복 이슈 태그 · 기술별 패턴 분석' },
       { icon: 'trending-up', label: '회원 변화 추적' },
-      { icon: 'mic', label: 'AI 레슨 분석 월 100회' },
+      { icon: 'mic', label: 'AI 레슨 분석 월 50개' },
     ],
   },
   operations: {
@@ -134,7 +134,7 @@ const CONTEXT_CONFIG: Record<UpsellContext, {
     featureName: 'Pro 플랜 전용',
     targetPlan: 'pro',
     features: [
-      { icon: 'mic', label: 'AI 레슨 분석 월 100회' },
+      { icon: 'mic', label: 'AI 레슨 분석 월 50개' },
       { icon: 'bulb', label: 'AI 코칭 모델' },
       { icon: 'ribbon', label: 'KERRI 검증 배지' },
       { icon: 'bar-chart', label: '코칭 데이터 분석 · 태그' },
@@ -165,7 +165,7 @@ export default function PlanUpsellModal({
 
   const defaultDesc = () => {
     if (context === 'ai_analysis_limit' && usageInfo) {
-      return `이번 달 AI 분석을 ${usageInfo.used}/${usageInfo.limit}회 사용했어요.\nBasic 10회 초과 시 Pro로 업그레이드하면 월 100회까지 사용할 수 있어요.`;
+      return `이번 달 AI 분석을 ${usageInfo.used}/${usageInfo.limit}회 사용했어요.\nBasic 10회 초과 시 Pro로 업그레이드하면 월 50개까지 사용할 수 있어요.`;
     }
     if (context === 'member_limit') {
       return `Free 플랜은 회원 3명까지 등록할 수 있어요.\nBasic 이상으로 업그레이드하면 무제한 등록이 가능해요.`;

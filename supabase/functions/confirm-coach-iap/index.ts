@@ -5,8 +5,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const PRODUCT_CREDITS_MAP: Record<string, { credits: number; amount: number }> = {
-  kerri_ai_10: { credits: 10, amount: 4900 },
+const PRODUCT_CREDITS_MAP: Record<string, { credits: number; amount: number; dbProductId: string }> = {
+  kerri_ai_10: { credits: 10, amount: 4900, dbProductId: '10' },
 };
 
 Deno.serve(async (req) => {
@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
       .from('report_topup_transactions')
       .insert({
         coach_id: user.id,
-        product_id: productId,
+        product_id: product.dbProductId,
         credits_added: product.credits,
         amount: product.amount,
         toss_order_id: appleOrderId,

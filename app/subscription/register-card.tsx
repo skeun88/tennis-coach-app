@@ -144,9 +144,7 @@ export default function RegisterCardScreen() {
 
       <View style={styles.infoBox}>
         <Text style={styles.infoText}>
-          💳 카드를 등록하면 1달 무료 체험이 시작됩니다.{'\n'}
-          체험 기간 중 언제든지 취소할 수 있습니다.
-          {billingType === 'biannual' ? '\n🎁 6개월 선결제 — 클립형 녹음기 무상 제공 예정' : ''}
+          {`카드를 등록하면 14일 무료 체험이 시작됩니다.\n체험 기간 중 언제든지 취소할 수 있습니다.`}
         </Text>
       </View>
 

@@ -11,6 +11,11 @@ const PRODUCT_CREDIT_MAP: Record<string, number> = {
   kerri_member_credits_20k: 20000,
   kerri_member_credits_30k: 30000,
   kerri_member_credits_50k: 50000,
+  // 소비형 단건 충전권
+  kerri_credit_4900: 4900,
+  kerri_credit_10000: 10000,
+  kerri_credit_20000: 20000,
+  kerri_credit_30000: 30000,
 };
 
 Deno.serve(async (req) => {
