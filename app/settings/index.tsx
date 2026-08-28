@@ -126,6 +126,7 @@ export default function SettingsScreen() {
         <SettingRow icon="person-circle-outline" label="계정 정보" onPress={notReady} value={email || undefined} />
         <SettingRow icon="create-outline" label="코치 프로필 수정" onPress={() => { router.back(); }} />
         <SettingRow icon="eye-outline" label="공개 프로필 미리보기" onPress={notReady} />
+        <SettingRow icon="time-outline" label="시간블럭 설정" onPress={() => router.push('/settings/availability')} />
       </Group>
 
       {/* ── 구독 ── */}
