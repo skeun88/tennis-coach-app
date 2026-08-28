@@ -310,6 +310,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   const [savingByDate, setSavingByDate] = useState(false);
   const [changeScopeSheet, setChangeScopeSheet] = useState(false);
   const [changeScopeLoading, setChangeScopeLoading] = useState(false);
+  const [scheduleListSheet, setScheduleListSheet] = useState(false);
 
   // 출석 수정 상태
   const [editingAttId, setEditingAttId] = useState<string | null>(null);
@@ -470,6 +471,13 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     setFutureLessons(data ?? []);
   }
 
+  function closeByDateAddSheet() {
+    setByDateAddSheet(false);
+    setByDateAddEntries([]);
+    setByDateAddTimePickerVisible(false);
+    byDateAddTempDateRef.current = '';
+  }
+
   useEffect(() => { loadMember(); loadFutureLessons(); }, []);
   useEffect(() => {
     if (tab === 'attendance') loadAttendance();
@@ -571,8 +579,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       await supabase.from('lesson_members').insert({ lesson_id: lesson.id, member_id: id });
     }
     setSavingByDate(false);
-    setByDateAddEntries([]);
-    setByDateAddSheet(false);
+    closeByDateAddSheet();
     await loadFutureLessons();
     if (failedEntries.length > 0) {
       Alert.alert('일부 저장 실패', `일부 일정을 저장하지 못했어요. (${failedEntries.length}건)`);
@@ -1707,14 +1714,27 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
             {/* 선택된 날짜 표시 */}
             <View style={{ marginHorizontal: 16, marginBottom: 8, backgroundColor: Colors.primary + '12', borderRadius: 10, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Ionicons name="calendar" size={18} color={Colors.primary} />
-              <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.primary }}>
-                {scheduleStartDate ? (() => {
-                  const d = new Date(scheduleStartDate + 'T00:00:00');
-                  return d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
-                })() : '날짜를 선택하세요'}
-              </Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.primary }}>
+                  {scheduleStartDate ? (() => {
+                    const d = new Date(scheduleStartDate + 'T00:00:00');
+                    return d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+                  })() : '날짜를 선택하세요'}
+                </Text>
+                {(() => {
+                  const affected = futureLessons.filter(l => l.date >= scheduleStartDate);
+                  if (affected.length > 0) {
+                    return (
+                      <Text style={{ fontSize: 12, color: Colors.primary, marginTop: 2 }}>
+                        예정 레슨 {affected.length}개가 새 일정으로 교체됩니다
+                      </Text>
+                    );
+                  }
+                  return null;
+                })()}
+              </View>
               {scheduleStartDate === toKSTDateStr(new Date()) && (
-                <View style={{ marginLeft: 'auto', backgroundColor: Colors.primary, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}>
+                <View style={{ backgroundColor: Colors.primary, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}>
                   <Text style={{ fontSize: 13, color: '#fff', fontWeight: '700' }}>오늘</Text>
                 </View>
               )}
@@ -1972,12 +1992,12 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
               </View>
               {detectedScheduleType === 'regular' && (
                 <>
-                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setTab('attendance'); }}>
+                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setScheduleListSheet(true); }}>
                     <Ionicons name="list-outline" size={20} color={Colors.primary} />
                     <Text style={styles.scheduleSheetItemText}>일정 확인</Text>
                     <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setByDateAddSheet(true); }}>
+                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setTimeout(() => setByDateAddSheet(true), 350); }}>
                     <Ionicons name="add-circle-outline" size={20} color={Colors.primary} />
                     <Text style={styles.scheduleSheetItemText}>새 일정 추가</Text>
                     <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
@@ -1988,28 +2008,12 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                     <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => {
-                    const scopeFutureCnt = futureLessons.length;
-                    Alert.alert(
-                      '날짜별 일정으로 변경',
-                      scopeFutureCnt > 0
-                        ? `예정 일정 ${scopeFutureCnt}개가 있어요.\n변경 범위를 선택해주세요.`
-                        : '날짜별 일정으로 변경합니다.',
-                      scopeFutureCnt > 0
-                        ? [
-                          { text: '취소', style: 'cancel' },
-                          { text: '앞으로만', onPress: () => handleToByDate('forward') },
-                          { text: '미래 일정도', style: 'destructive', onPress: () => {
-                            Alert.alert('미래 일정 삭제', `앞으로 예정된 ${scopeFutureCnt}개 일정이 삭제됩니다.\n계속하시겠어요?`, [
-                              { text: '취소', style: 'cancel' },
-                              { text: '삭제 후 변경', style: 'destructive', onPress: () => handleToByDate('also_future') },
-                            ]);
-                          }},
-                        ]
-                        : [
-                          { text: '취소', style: 'cancel' },
-                          { text: '변경', onPress: () => handleToByDate('forward') },
-                        ]
-                    );
+                    setScheduleSheet(false);
+                    if (futureLessons.length === 0) {
+                      handleToByDate('forward');
+                    } else {
+                      setChangeScopeSheet(true);
+                    }
                   }}>
                     <Ionicons name="calendar-number-outline" size={20} color={Colors.mutedFg} />
                     <Text style={[styles.scheduleSheetItemText, { color: Colors.foreground }]}>날짜별 일정으로 변경</Text>
@@ -2019,12 +2023,12 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
               )}
               {detectedScheduleType === 'by_date' && (
                 <>
-                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setTab('attendance'); }}>
+                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setScheduleListSheet(true); }}>
                     <Ionicons name="list-outline" size={20} color={Colors.primary} />
-                    <Text style={styles.scheduleSheetItemText}>예정 일정 확인</Text>
+                    <Text style={styles.scheduleSheetItemText}>일정 확인</Text>
                     <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setByDateAddSheet(true); }}>
+                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setTimeout(() => setByDateAddSheet(true), 350); }}>
                     <Ionicons name="add-circle-outline" size={20} color={Colors.primary} />
                     <Text style={styles.scheduleSheetItemText}>일정 추가</Text>
                     <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
@@ -2043,7 +2047,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                     <Text style={styles.scheduleSheetItemText}>정기 일정 추가</Text>
                     <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setByDateAddSheet(true); }}>
+                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setTimeout(() => setByDateAddSheet(true), 350); }}>
                     <Ionicons name="calendar-number-outline" size={20} color={Colors.primary} />
                     <Text style={styles.scheduleSheetItemText}>날짜별 일정 추가</Text>
                     <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
@@ -2056,25 +2060,32 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       </Modal>
 
       {/* 날짜별 일정 추가 시트 */}
-      <Modal visible={byDateAddSheet} transparent animationType="slide" onRequestClose={() => setByDateAddSheet(false)}>
+      <Modal visible={byDateAddSheet} transparent animationType="slide" onRequestClose={closeByDateAddSheet}>
         <View style={styles.modalOverlayTP}>
           <View style={[styles.modalSheetTP, { paddingBottom: 40 }]}>
             <View style={styles.modalHeaderTP}>
-              <Text style={styles.modalTitleTP}>날짜별 일정 추가</Text>
-              <TouchableOpacity onPress={() => setByDateAddSheet(false)}>
+              <View>
+                <Text style={styles.modalTitleTP}>날짜별 일정 추가</Text>
+                {byDateAddEntries.length > 0 && (
+                  <Text style={{ fontSize: 13, color: Colors.primary, marginTop: 2 }}>
+                    {byDateAddEntries.length}개 선택됨
+                  </Text>
+                )}
+              </View>
+              <TouchableOpacity onPress={closeByDateAddSheet}>
                 <Ionicons name="close" size={22} color={Colors.mutedFg} />
               </TouchableOpacity>
             </View>
-            <ScrollView style={{ maxHeight: 460 }}>
-              {/* 추가된 날짜 목록 */}
-              {byDateAddEntries.length > 0 && (
-                <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6 }}>추가할 일정</Text>
+
+            {/* 추가된 날짜 목록 - ScrollView 분리 */}
+            {byDateAddEntries.length > 0 && (
+              <ScrollView style={{ maxHeight: 120 }} bounces={false}>
+                <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 }}>
                   {byDateAddEntries.map((entry, idx) => {
                     const d = new Date(entry.date + 'T00:00:00');
                     const label = `${d.getMonth() + 1}/${d.getDate()}(${DAYS_KR[d.getDay()]}) ${entry.startTime}`;
                     return (
-                      <View key={idx} style={styles.dayTimeRow2}>
+                      <View key={idx} style={[styles.dayTimeRow2, { marginBottom: 4 }]}>
                         <Ionicons name="calendar-outline" size={14} color={Colors.primary} style={{ marginRight: 6 }} />
                         <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: Colors.foreground }}>{label}</Text>
                         <TouchableOpacity onPress={() => setByDateAddEntries(prev => prev.filter((_, i) => i !== idx))} style={{ padding: 4 }}>
@@ -2084,80 +2095,85 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                     );
                   })}
                 </View>
-              )}
+              </ScrollView>
+            )}
 
-              {/* 달력 */}
-              <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <TouchableOpacity onPress={() => setByDateAddCalMonth(prev => {
-                    const d = new Date(prev.year, prev.month - 1, 1);
-                    return { year: d.getFullYear(), month: d.getMonth() };
-                  })} style={{ padding: 6 }}>
-                    <Ionicons name="chevron-back" size={20} color={Colors.primary} />
-                  </TouchableOpacity>
-                  <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.foreground }}>
-                    {byDateAddCalMonth.year}년 {byDateAddCalMonth.month + 1}월
-                  </Text>
-                  <TouchableOpacity onPress={() => setByDateAddCalMonth(prev => {
-                    const d = new Date(prev.year, prev.month + 1, 1);
-                    return { year: d.getFullYear(), month: d.getMonth() };
-                  })} style={{ padding: 6 }}>
-                    <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
-                  </TouchableOpacity>
-                </View>
-                {/* 요일 헤더 */}
-                <View style={{ flexDirection: 'row' }}>
-                  {['일','월','화','수','목','금','토'].map((d, i) => (
-                    <Text key={i} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '700',
-                      color: i === 0 ? Colors.destructive : i === 6 ? Colors.accentWarm : Colors.mutedFg, marginBottom: 4 }}>{d}</Text>
-                  ))}
-                </View>
-                {/* 날짜 그리드 */}
-                {(() => {
-                  const { year, month } = byDateAddCalMonth;
-                  const firstDay = new Date(year, month, 1).getDay();
-                  const daysInMonth = new Date(year, month + 1, 0).getDate();
-                  const todayStr2 = toKSTDateStr(new Date());
-                  const cells: (number | null)[] = [...Array(firstDay).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
-                  while (cells.length % 7 !== 0) cells.push(null);
-                  const rows: (number | null)[][] = [];
-                  for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
-                  return rows.map((row, ri) => (
-                    <View key={ri} style={{ flexDirection: 'row', marginBottom: 2 }}>
-                      {row.map((day, di) => {
-                        if (!day) return <View key={di} style={{ flex: 1, height: 36 }} />;
-                        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                        const isPast = dateStr < todayStr2;
-                        const isSelected = byDateAddEntries.some(e => e.date === dateStr);
-                        return (
-                          <TouchableOpacity
-                            key={di} disabled={isPast}
-                            style={{ flex: 1, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center',
-                              backgroundColor: isSelected ? Colors.primary : 'transparent' }}
-                            onPress={() => {
-                              byDateAddTempDateRef.current = dateStr;
-                              setByDateAddTempHour('');
-                              setByDateAddTempMinute('00');
-                              setByDateAddTimePickerVisible(true);
-                            }}
-                          >
-                            <Text style={{ fontSize: 14, fontWeight: isSelected ? '800' : '400',
-                              color: isPast ? Colors.placeholder : isSelected ? '#fff'
-                                : di === 0 ? Colors.destructive : di === 6 ? Colors.accentWarm : Colors.foreground }}>
-                              {day}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  ));
-                })()}
+            {/* 달력 - ScrollView 밖에서 직접 렌더링 (터치 충돌 방지) */}
+            <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <TouchableOpacity onPress={() => setByDateAddCalMonth(prev => {
+                  const d = new Date(prev.year, prev.month - 1, 1);
+                  return { year: d.getFullYear(), month: d.getMonth() };
+                })} style={{ padding: 6 }}>
+                  <Ionicons name="chevron-back" size={20} color={Colors.primary} />
+                </TouchableOpacity>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.foreground }}>
+                  {byDateAddCalMonth.year}년 {byDateAddCalMonth.month + 1}월
+                </Text>
+                <TouchableOpacity onPress={() => setByDateAddCalMonth(prev => {
+                  const d = new Date(prev.year, prev.month + 1, 1);
+                  return { year: d.getFullYear(), month: d.getMonth() };
+                })} style={{ padding: 6 }}>
+                  <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
+                </TouchableOpacity>
               </View>
-            </ScrollView>
-            <View style={{ flexDirection: 'row', gap: 8, marginHorizontal: 16, marginTop: 8 }}>
+              {/* 요일 헤더 */}
+              <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+                {['일','월','화','수','목','금','토'].map((d, i) => (
+                  <Text key={i} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '700',
+                    color: i === 0 ? Colors.destructive : i === 6 ? Colors.accentWarm : Colors.mutedFg }}>{d}</Text>
+                ))}
+              </View>
+              {/* 날짜 그리드 */}
+              {(() => {
+                const { year, month } = byDateAddCalMonth;
+                const firstDay = new Date(year, month, 1).getDay();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const todayStr2 = toKSTDateStr(new Date());
+                const cells: (number | null)[] = [...Array(firstDay).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+                while (cells.length % 7 !== 0) cells.push(null);
+                const rows: (number | null)[][] = [];
+                for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
+                return rows.map((row, ri) => (
+                  <View key={ri} style={{ flexDirection: 'row', marginBottom: 4 }}>
+                    {row.map((day, di) => {
+                      if (!day) return <View key={di} style={{ flex: 1, height: 40 }} />;
+                      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                      const isPast = dateStr < todayStr2;
+                      const isSelected = byDateAddEntries.some(e => e.date === dateStr);
+                      const isToday = dateStr === todayStr2;
+                      return (
+                        <TouchableOpacity
+                          key={di}
+                          disabled={isPast}
+                          activeOpacity={0.7}
+                          style={{ flex: 1, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center',
+                            backgroundColor: isSelected ? Colors.primary : isToday ? Colors.primaryLight : 'transparent' }}
+                          onPress={() => {
+                            byDateAddTempDateRef.current = dateStr;
+                            setByDateAddTempHour('');
+                            setByDateAddTempMinute('00');
+                            setByDateAddTimePickerVisible(true);
+                          }}
+                        >
+                          <Text style={{ fontSize: 15, fontWeight: isSelected || isToday ? '800' : '400',
+                            color: isPast ? Colors.placeholder : isSelected ? '#fff'
+                              : isToday ? Colors.primary
+                              : di === 0 ? Colors.destructive : di === 6 ? Colors.accentWarm : Colors.foreground }}>
+                            {day}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ));
+              })()}
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 8, marginHorizontal: 16, marginTop: 12 }}>
               <TouchableOpacity
                 style={{ flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center', backgroundColor: Colors.mutedBg }}
-                onPress={() => setByDateAddSheet(false)}
+                onPress={closeByDateAddSheet}
               >
                 <Text style={{ fontWeight: '700', fontSize: 14, color: Colors.mutedFg }}>취소</Text>
               </TouchableOpacity>
@@ -2243,6 +2259,148 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                 {byDateAddTempHour ? `${byDateAddTempHour}:${byDateAddTempMinute} 선택` : '시간을 선택하세요'}
               </Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 일정 확인 시트 */}
+      <Modal visible={scheduleListSheet} transparent animationType="slide" onRequestClose={() => setScheduleListSheet(false)}>
+        <View style={styles.modalOverlayTP}>
+          <View style={[styles.modalSheetTP, { paddingBottom: 40 }]}>
+            <View style={styles.modalHeaderTP}>
+              <View>
+                <Text style={styles.modalTitleTP}>레슨 일정</Text>
+                <Text style={{ fontSize: 13, color: Colors.mutedFg, marginTop: 2 }}>
+                  {member?.name}님 · {futureLessons.length}개 예정
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setScheduleListSheet(false)}>
+                <Ionicons name="close" size={22} color={Colors.mutedFg} />
+              </TouchableOpacity>
+            </View>
+            {futureLessons.length === 0 ? (
+              <View style={{ padding: 32, alignItems: 'center' }}>
+                <Ionicons name="calendar-outline" size={36} color={Colors.iconMuted} />
+                <Text style={{ fontSize: 15, color: Colors.placeholder, marginTop: 12, textAlign: 'center' }}>
+                  등록된 레슨 일정이 없어요
+                </Text>
+                <Text style={{ fontSize: 13, color: Colors.placeholder, marginTop: 4, textAlign: 'center' }}>
+                  일정 설정에서 새 일정을 추가하세요
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={futureLessons}
+                keyExtractor={item => item.id}
+                style={{ maxHeight: 480 }}
+                contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }}
+                renderItem={({ item }) => {
+                  const d = new Date(item.date + 'T00:00:00');
+                  const dayLabel = DAY_NAMES[d.getDay()];
+                  const dateLabel = `${d.getMonth() + 1}월 ${d.getDate()}일 (${dayLabel})`;
+                  const startT = item.start_time?.slice(0, 5) ?? '';
+                  const endT = item.end_time?.slice(0, 5) ?? '';
+                  return (
+                    <TouchableOpacity
+                      style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12,
+                        borderBottomWidth: 1, borderBottomColor: Colors.mutedBg, gap: 12 }}
+                      onPress={() => { setScheduleListSheet(false); router.push(`/lessons/${item.id}`); }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={{ width: 42, height: 42, borderRadius: 10, backgroundColor: Colors.primaryLight,
+                        justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: Colors.primary }}>{d.getDate()}</Text>
+                        <Text style={{ fontSize: 11, color: Colors.primary, marginTop: -2 }}>{dayLabel}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.foreground }}>{dateLabel}</Text>
+                        <Text style={{ fontSize: 13, color: Colors.mutedFg, marginTop: 2 }}>
+                          {startT}{endT ? ` ~ ${endT}` : ''}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* 날짜별 일정 변경 범위 선택 시트 */}
+      <Modal visible={changeScopeSheet} transparent animationType="slide" onRequestClose={() => setChangeScopeSheet(false)}>
+        <View style={styles.modalOverlayTP}>
+          <View style={[styles.modalSheetTP, { paddingBottom: 40 }]}>
+            <View style={styles.modalHeaderTP}>
+              <View>
+                <Text style={styles.modalTitleTP}>날짜별 일정으로 변경</Text>
+                <Text style={{ fontSize: 13, color: Colors.mutedFg, marginTop: 2 }}>
+                  예정 일정 {futureLessons.length}개가 있어요
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setChangeScopeSheet(false)}>
+                <Ionicons name="close" size={22} color={Colors.mutedFg} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ paddingHorizontal: 16, paddingTop: 8, gap: 10 }}>
+              {/* 선택 1 */}
+              <TouchableOpacity
+                style={{ borderWidth: 2, borderColor: Colors.primary, borderRadius: 14, padding: 16, backgroundColor: Colors.primaryLight, opacity: changeScopeLoading ? 0.5 : 1 }}
+                onPress={() => { setChangeScopeSheet(false); handleToByDate('forward'); }}
+                disabled={changeScopeLoading}
+                activeOpacity={0.8}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '800', color: Colors.primary, marginBottom: 6 }}>
+                  기존 예약은 그대로 두기
+                </Text>
+                <Text style={{ fontSize: 13, color: Colors.foreground, lineHeight: 19 }}>
+                  이미 등록된 레슨은 유지하고, 다음에 추가하는 일정부터 새 방식으로 관리해요.
+                </Text>
+                <View style={{ marginTop: 12, alignSelf: 'flex-end', backgroundColor: Colors.primary, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7 }}>
+                  <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>새 방식 적용</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* 선택 2 */}
+              <TouchableOpacity
+                style={{ borderWidth: 2, borderColor: Colors.border, borderRadius: 14, padding: 16, backgroundColor: '#fff', opacity: changeScopeLoading ? 0.5 : 1 }}
+                onPress={() => {
+                  const cnt = futureLessons.length;
+                  const firstDate = futureLessons[0]?.date ?? '';
+                  const lastDate = futureLessons[cnt - 1]?.date ?? '';
+                  const rangeText = firstDate && lastDate ? `\n기간: ${firstDate} ~ ${lastDate}` : '';
+                  Alert.alert(
+                    '예정된 레슨 변경 확인',
+                    `예정된 레슨 ${cnt}개가 취소됩니다.${rangeText}\n\n과거·완료 일정은 유지됩니다.\n\n계속하시겠어요?`,
+                    [
+                      { text: '취소', style: 'cancel' },
+                      { text: '예정 레슨 변경', style: 'destructive', onPress: () => {
+                        setChangeScopeSheet(false);
+                        handleToByDate('also_future');
+                      }},
+                    ]
+                  );
+                }}
+                disabled={changeScopeLoading}
+                activeOpacity={0.8}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '800', color: Colors.foreground, marginBottom: 6 }}>
+                  예정된 레슨도 새 일정으로 변경
+                </Text>
+                <Text style={{ fontSize: 13, color: Colors.mutedFg, lineHeight: 19 }}>
+                  아직 진행하지 않은 레슨 일정을 새로 선택한 날짜와 시간에 맞게 변경해요.
+                </Text>
+                <View style={{ marginTop: 12, alignSelf: 'flex-end', borderWidth: 1.5, borderColor: Colors.destructive, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 7 }}>
+                  <Text style={{ color: Colors.destructive, fontWeight: '700', fontSize: 13 }}>예정 레슨 변경</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            {changeScopeLoading && (
+              <ActivityIndicator color={Colors.primary} style={{ padding: 16 }} />
+            )}
           </View>
         </View>
       </Modal>
