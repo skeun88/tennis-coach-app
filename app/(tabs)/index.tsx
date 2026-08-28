@@ -555,18 +555,16 @@ export default function HomeScreen() {
             <Ionicons name="chevron-forward" size={16} color="#8B7355" />
           </TouchableOpacity>
         )}
-        {churnRiskList.length > 0 && (
-          <TouchableOpacity style={styles.alertCard} onPress={() => setChurnModal(true)} activeOpacity={0.85}>
-            <View style={[styles.alertIconWrap, { backgroundColor: '#FEE2E2' }]}>
-              <Ionicons name="warning" size={18} color="#D9534F" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.alertTitle}>이탈 위험 {churnRiskList.length}명</Text>
-              <Text style={styles.alertSub}>3주 이상 레슨 기록 없음</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color="#8B7355" />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity style={styles.alertCard} onPress={() => router.push('/settings/availability')} activeOpacity={0.85}>
+          <View style={[styles.alertIconWrap, { backgroundColor: '#EDE0D4' }]}>
+            <Ionicons name="time-outline" size={18} color="#C0755A" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.alertTitle}>레슨 가능 시간</Text>
+            <Text style={styles.alertSub}>요일·시간 설정하기</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color="#8B7355" />
+        </TouchableOpacity>
         {trialCount > 0 && (
           <TouchableOpacity style={styles.alertCard} onPress={() => setTrialModal(true)} activeOpacity={0.85}>
             <View style={[styles.alertIconWrap, { backgroundColor: '#FEF3C7' }]}>

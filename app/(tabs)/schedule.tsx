@@ -180,6 +180,7 @@ export default function ScheduleScreen() {
   const [weekDragTargetMin, setWeekDragTargetMin] = useState(0);
   const [weekDragTargetColIdx, setWeekDragTargetColIdx] = useState(-1);
   const [weekAttendanceMap, setWeekAttendanceMap] = useState<Map<string, 'scheduled' | 'completed' | 'absent'>>(new Map());
+  const [availability, setAvailability] = useState<{ days: number[]; start: string; end: string } | null>(null);
   const dayScrollRef = useRef<any>(null);
   const weekScrollYRef = useRef(0);
   const weekAutoScrollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -206,6 +207,19 @@ export default function ScheduleScreen() {
       nameMap.get(row.lesson_id)!.push(n);
     }
     return lessonList.map(l => ({ ...l, memberNames: nameMap.get(l.id) ?? [], memberIds: idMap.get(l.id) ?? [] }));
+  }
+
+  async function loadAvailability() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase.from('coach_availability').select('*').eq('coach_id', user.id).maybeSingle();
+    if (data) {
+      setAvailability({
+        days: data.available_days ?? [],
+        start: (data.available_start ?? '09:00').slice(0, 5),
+        end: (data.available_end ?? '18:00').slice(0, 5),
+      });
+    }
   }
 
   async function loadPendingRequests() {
@@ -448,6 +462,7 @@ ${rejectMsg.trim()}`
     else if (activeTab === '주간') loadWeekLessons(newThisWeek);
     else { const d = new Date(); loadMonthLessons(d.getFullYear(), d.getMonth()); }
     loadPendingRequests();
+    loadAvailability();
     // 회원 목록 로드
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -815,6 +830,22 @@ ${rejectMsg.trim()}`
               </View>
             );
           })()}
+          {/* 레슨 가능 시간 쉐도우 */}
+          {availability && (() => {
+            const dow = new Date(selectedDate + 'T12:00:00+09:00').getDay();
+            if (!availability.days.includes(dow)) return null;
+            const startMin = timeToMinutes(availability.start);
+            const endMin = timeToMinutes(availability.end);
+            const top = Math.max(0, (startMin - START_HOUR * 60) / 60 * HOUR_HEIGHT);
+            const height = (endMin - startMin) / 60 * HOUR_HEIGHT;
+            return (
+              <View
+                key="avail-shadow"
+                pointerEvents="none"
+                style={{ position: 'absolute', left: 56, right: 8, top, height, backgroundColor: 'rgba(192,117,90,0.10)', borderRadius: 4 }}
+              />
+            );
+          })()}
           {/* 시간 라인들 */}
           {HOURS.map(h => (
             <View key={h} style={[styles.hourRow, { top: (h - START_HOUR) * HOUR_HEIGHT }]}>
@@ -1007,6 +1038,22 @@ ${rejectMsg.trim()}`
               return (
                 <View key={date} style={[styles.weekDayColGrid, { width: COL_W, height: gridHeight },
                   isToday && { backgroundColor: S_TERRA + '14' }]}>
+                  {/* 레슨 가능 시간 쉐도우 */}
+                  {availability && (() => {
+                    const dow = new Date(date + 'T12:00:00+09:00').getDay();
+                    if (!availability.days.includes(dow)) return null;
+                    const startMin = timeToMinutes(availability.start);
+                    const endMin = timeToMinutes(availability.end);
+                    const top = Math.max(0, (startMin - START_HOUR * 60) / 60 * HOUR_HEIGHT);
+                    const height = (endMin - startMin) / 60 * HOUR_HEIGHT;
+                    return (
+                      <View
+                        key="avail-shadow"
+                        pointerEvents="none"
+                        style={{ position: 'absolute', top, left: 0, right: 0, height, backgroundColor: 'rgba(192,117,90,0.10)' }}
+                      />
+                    );
+                  })()}
                   {/* 시간 구분선 */}
                   {HOURS.map(h => (
                     <View key={h} style={[styles.weekHourLine, { top: (h - START_HOUR) * HOUR_HEIGHT }]} />

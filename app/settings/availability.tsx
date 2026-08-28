@@ -244,6 +244,28 @@ export default function AvailabilityScreen() {
         <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving}>
           {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>저장</Text>}
         </TouchableOpacity>
+
+        {selectedDays.length > 0 && (
+          <View style={{ marginTop: 20 }}>
+            <Text style={styles.sectionLabel}>현재 설정</Text>
+            <View style={styles.card}>
+              {selectedDays.map((dayIdx, i) => (
+                <View
+                  key={dayIdx}
+                  style={{
+                    flexDirection: 'row', alignItems: 'center',
+                    justifyContent: 'space-between', paddingVertical: 10,
+                    borderBottomWidth: i < selectedDays.length - 1 ? 1 : 0,
+                    borderBottomColor: Colors.border,
+                  }}
+                >
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.foreground }}>{DAYS[dayIdx]}요일</Text>
+                  <Text style={{ fontSize: 14, color: Colors.mutedFg }}>{startHour}:{startMin} ~ {endHour}:{endMin}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
