@@ -160,7 +160,7 @@ async function generateScheduleLessons(
     const startSt = time + ':00';
     const endSt = String(Math.floor(endMin / 60)).padStart(2, '0') + ':' + String(endMin % 60).padStart(2, '0') + ':00';
     const { data: lesson, error: lErr } = await sb.from('lessons').insert({
-      coach_id: coachId, title: memberName, date, start_time: startSt, end_time: endSt,
+      coach_id: coachId, title: memberName, date, start_time: startSt, end_time: endSt, source: 'auto',
     }).select('id').single();
     if (lErr || !lesson) continue;
     await sb.from('lesson_members').insert({ lesson_id: lesson.id, member_id: memberId });
@@ -472,10 +472,11 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   }
 
   function closeByDateAddSheet() {
+    setByDateAddTimePickerVisible(false);
     setByDateAddSheet(false);
     setByDateAddEntries([]);
-    setByDateAddTimePickerVisible(false);
     byDateAddTempDateRef.current = '';
+    setByDateAddCalMonth({ year: new Date().getFullYear(), month: new Date().getMonth() });
   }
 
   useEffect(() => { loadMember(); loadFutureLessons(); }, []);
@@ -573,7 +574,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       const endSt = `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}:00`;
       const { data: lesson, error: lErr } = await supabase.from('lessons').insert({
         coach_id: coachId, title: member.name, date: entry.date,
-        start_time: startSt, end_time: endSt,
+        start_time: startSt, end_time: endSt, source: 'manual',
       }).select('id').single();
       if (lErr || !lesson) { failedEntries.push(entry); continue; }
       await supabase.from('lesson_members').insert({ lesson_id: lesson.id, member_id: id });
@@ -776,21 +777,33 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         const deleteFrom = startDate > todayStr2 ? startDate : todayStr2;
         const { data: futureLMrows } = await supabase
           .from('lesson_members')
-          .select('lesson_id, lesson:lessons(id, date, coach_id)')
+          .select('lesson_id, lesson:lessons(id, date, coach_id, source)')
           .eq('member_id', id!);
         const futureLessonIds = (futureLMrows ?? [])
-          .filter((r: any) => r.lesson?.date >= deleteFrom && r.lesson?.coach_id === userId)
+          .filter((r: any) => r.lesson?.date >= deleteFrom && r.lesson?.coach_id === userId && r.lesson?.source === 'auto')
           .map((r: any) => r.lesson_id as string);
         if (futureLessonIds.length > 0) {
+          // 완료·결석 일정 보호 (삭제 금지)
+          const { data: doneAttRows } = await supabase
+            .from('attendance')
+            .select('lesson_id')
+            .in('lesson_id', futureLessonIds)
+            .eq('member_id', id!)
+            .in('status', ['출석', '결석']);
+          const protectedSet = new Set((doneAttRows ?? []).map((r: any) => r.lesson_id as string));
+          const deletableIds = futureLessonIds.filter(lid => !protectedSet.has(lid));
+          if (deletableIds.length === 0) {
+            // 삭제 가능한 일정 없음 - 새 일정만 추가
+          } else {
           // 다른 회원이 함께 있는 레슨 확인
           const { data: otherMemberRows } = await supabase
             .from('lesson_members')
             .select('lesson_id')
-            .in('lesson_id', futureLessonIds)
+            .in('lesson_id', deletableIds)
             .neq('member_id', id!);
           const sharedSet = new Set((otherMemberRows ?? []).map((r: any) => r.lesson_id as string));
-          const soloIds = futureLessonIds.filter(lid => !sharedSet.has(lid));
-          const sharedIds = futureLessonIds.filter(lid => sharedSet.has(lid));
+          const soloIds = deletableIds.filter(lid => !sharedSet.has(lid));
+          const sharedIds = deletableIds.filter(lid => sharedSet.has(lid));
           // 공유 레슨에서 이 회원만 제거
           if (sharedIds.length > 0) {
             await supabase.from('lesson_members').delete().in('lesson_id', sharedIds).eq('member_id', id!);
@@ -802,6 +815,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
             await supabase.from('lesson_members').delete().in('lesson_id', soloIds);
             await supabase.from('lessons').delete().in('id', soloIds);
           }
+          } // end else (deletableIds.length > 0)
         }
         // 새 스케줄로 재생성 (startDate부터, 크레딧 0이면 기본 12회)
         scheduledCount = await generateScheduleLessons(
@@ -1997,7 +2011,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                     <Text style={styles.scheduleSheetItemText}>일정 확인</Text>
                     <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setTimeout(() => setByDateAddSheet(true), 350); }}>
+                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setByDateAddCalMonth({ year: new Date().getFullYear(), month: new Date().getMonth() }); setTimeout(() => setByDateAddSheet(true), 500); }}>
                     <Ionicons name="add-circle-outline" size={20} color={Colors.primary} />
                     <Text style={styles.scheduleSheetItemText}>새 일정 추가</Text>
                     <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
@@ -2028,7 +2042,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                     <Text style={styles.scheduleSheetItemText}>일정 확인</Text>
                     <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setTimeout(() => setByDateAddSheet(true), 350); }}>
+                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setByDateAddCalMonth({ year: new Date().getFullYear(), month: new Date().getMonth() }); setTimeout(() => setByDateAddSheet(true), 500); }}>
                     <Ionicons name="add-circle-outline" size={20} color={Colors.primary} />
                     <Text style={styles.scheduleSheetItemText}>일정 추가</Text>
                     <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
@@ -2047,7 +2061,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                     <Text style={styles.scheduleSheetItemText}>정기 일정 추가</Text>
                     <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setTimeout(() => setByDateAddSheet(true), 350); }}>
+                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setByDateAddCalMonth({ year: new Date().getFullYear(), month: new Date().getMonth() }); setTimeout(() => setByDateAddSheet(true), 500); }}>
                     <Ionicons name="calendar-number-outline" size={20} color={Colors.primary} />
                     <Text style={styles.scheduleSheetItemText}>날짜별 일정 추가</Text>
                     <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
@@ -2317,6 +2331,9 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                         <Text style={{ fontSize: 13, color: Colors.mutedFg, marginTop: 2 }}>
                           {startT}{endT ? ` ~ ${endT}` : ''}
                         </Text>
+                      </View>
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: Colors.primary + '20', marginRight: 4 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.primary }}>예약됨</Text>
                       </View>
                       <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
                     </TouchableOpacity>

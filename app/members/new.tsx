@@ -240,7 +240,7 @@ async function generateScheduleLessons(params: {
     const endSt = String(Math.floor(endMin / 60)).padStart(2, '0') + ':' + String(endMin % 60).padStart(2, '0') + ':00';
 
     const { data: lesson, error: lErr } = await supabase.from('lessons')
-      .insert({ coach_id: coachId, title: memberName, date, start_time: startSt, end_time: endSt })
+      .insert({ coach_id: coachId, title: memberName, date, start_time: startSt, end_time: endSt, source: 'auto' })
       .select('id').single();
     if (lErr || !lesson) { errors.push(lErr?.message ?? 'unknown'); continue; }
     const { error: lmErr } = await supabase.from('lesson_members').insert({ lesson_id: lesson.id, member_id: memberId });
