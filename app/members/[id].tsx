@@ -377,57 +377,57 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   }
 
   async function loadMember() {
-    const { data } = await supabase.from('members').select('*').eq('id', id).single();
-    if (data) {
-      setMember(data);
-      setName(data.name); setPhone(data.phone);
-      setEmail(data.email ?? ''); setLevel(data.level);
-      setNotes(data.notes ?? '');
-      setScheduleDays((data as any).fixed_schedule_days ?? []);
-      // 요일별 시간 로드 (fixed_schedule_times 우선, 없으면 fixed_schedule_time으로 동일 설정)
-      const fst = (data as any).fixed_schedule_times;
-      if (fst && typeof fst === 'object') {
-        const loaded: DayTimes = {};
-        for (const [k, v] of Object.entries(fst)) {
-          // 하위 호환: 기존 string 값도 배열로 변환
-          loaded[Number(k)] = Array.isArray(v) ? (v as string[]) : [String(v)];
-        }
-        setDayTimes(loaded);
-      } else {
-        const legacyTime = (data as any).fixed_schedule_time?.slice(0, 5);
-        if (legacyTime) {
-          const days: number[] = (data as any).fixed_schedule_days ?? [];
+    try {
+      const { data } = await supabase.from('members').select('*').eq('id', id).single();
+      if (data) {
+        setMember(data);
+        setName(data.name); setPhone(data.phone);
+        setEmail(data.email ?? ''); setLevel(data.level);
+        setNotes(data.notes ?? '');
+        setScheduleDays((data as any).fixed_schedule_days ?? []);
+        const fst = (data as any).fixed_schedule_times;
+        if (fst && typeof fst === 'object') {
           const loaded: DayTimes = {};
-          days.forEach((d: number) => { loaded[d] = [legacyTime]; });
+          for (const [k, v] of Object.entries(fst)) {
+            loaded[Number(k)] = Array.isArray(v) ? (v as string[]) : [String(v)];
+          }
           setDayTimes(loaded);
+        } else {
+          const legacyTime = (data as any).fixed_schedule_time?.slice(0, 5);
+          if (legacyTime) {
+            const days: number[] = (data as any).fixed_schedule_days ?? [];
+            const loaded: DayTimes = {};
+            days.forEach((d: number) => { loaded[d] = [legacyTime]; });
+            setDayTimes(loaded);
+          }
+        }
+        if ((data as any).lesson_package_id) {
+          const { data: pkgData } = await supabase.from('lesson_packages')
+            .select('duration_minutes').eq('id', (data as any).lesson_package_id).maybeSingle();
+          setLessonDuration(String(pkgData?.duration_minutes ?? (data as any).fixed_lesson_duration ?? 60));
+        } else {
+          setLessonDuration(String((data as any).fixed_lesson_duration ?? 60));
+        }
+        setTotalCredits(String((data as any).total_credits ?? 0));
+        setRemainingCredits(String((data as any).remaining_credits ?? 0));
+        const pkgId = (data as any).lesson_package_id;
+        setSelectedPackageId(pkgId || null);
+        if (pkgId) {
+          const { data: pkg } = await supabase.from('lesson_packages').select('title, color, total_credits, price').eq('id', pkgId).maybeSingle();
+          if (pkg) setLessonPackage({ ...pkg, color: pkg.color ?? '#888888', price: pkg.price ?? 0, total_credits: pkg.total_credits ?? 0 });
         }
       }
-      // 레슨 duration은 항상 레슨권에서 읽기
-      if ((data as any).lesson_package_id) {
-        const { data: pkgData } = await supabase.from('lesson_packages')
-          .select('duration_minutes').eq('id', (data as any).lesson_package_id).maybeSingle();
-        setLessonDuration(String(pkgData?.duration_minutes ?? (data as any).fixed_lesson_duration ?? 60));
-      } else {
-        setLessonDuration(String((data as any).fixed_lesson_duration ?? 60));
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: pkgs } = await supabase.from('lesson_packages')
+          .select('*').eq('coach_id', user.id).eq('is_active', true).order('created_at', { ascending: false });
+        setLessonPackages(pkgs ?? []);
       }
-      setTotalCredits(String((data as any).total_credits ?? 0));
-      setRemainingCredits(String((data as any).remaining_credits ?? 0));
-      // 레슨권 정보 로드
-      const pkgId = (data as any).lesson_package_id;
-      setSelectedPackageId(pkgId || null);
-      if (pkgId) {
-        const { data: pkg } = await supabase.from('lesson_packages').select('title, color, total_credits, price').eq('id', pkgId).maybeSingle();
-        if (pkg) setLessonPackage({ ...pkg, color: pkg.color ?? '#888888', price: pkg.price ?? 0, total_credits: pkg.total_credits ?? 0 });
-      }
+    } catch (e) {
+      console.error('[loadMember] error:', e);
+    } finally {
+      setLoading(false);
     }
-    // 레슨권 목록 로드 (수정 모드용)
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data: pkgs } = await supabase.from('lesson_packages')
-        .select('*').eq('coach_id', user.id).eq('is_active', true).order('created_at', { ascending: false });
-      setLessonPackages(pkgs ?? []);
-    }
-    setLoading(false);
   }
 
   async function loadAttendance() {
@@ -1062,14 +1062,10 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     loadNotes();
   }
 
-  if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color={Colors.primary} /></View>;
-  if (!member) return <View style={styles.loader}><Text>회원을 찾을 수 없습니다</Text></View>;
-
   async function loadMessages() {
     const { data } = await supabase.from('messages').select('*')
       .eq('member_id', id).order('created_at', { ascending: true });
     setMessages(data ?? []);
-    // 회원 메시지 읽음 처리
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       await supabase.from('messages').update({ read_at: new Date().toISOString() })
@@ -1089,11 +1085,13 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         coach_id: user.id, member_id: id, sender_type: 'coach', content: text,
       });
       loadMessages();
-      // PN-08: 회원에게 코치 메시지 알림
       notifyMemberMessage(id as string, member?.name ?? '코치').catch(() => {});
     }
     setSendingMsg(false);
   }
+
+  if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color={Colors.primary} /></View>;
+  if (!member) return <View style={styles.loader}><Text>회원을 찾을 수 없습니다</Text></View>;
 
   // 일정 설정 computed values
   const isMemberTrial = (member as any).is_trial;
@@ -2290,20 +2288,23 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                 {/* 레슨 시간 선택 */}
                 <Text style={[styles.spinnerLabelTP, { paddingHorizontal: 16, marginTop: 12, marginBottom: 8, textAlign: 'left' }]}>레슨 시간</Text>
                 <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginBottom: 12 }}>
-                  {[30, 45, 60, 90, 120].map(min => (
-                    <TouchableOpacity
-                      key={min}
-                      onPress={() => setByDateAddTempDuration(min)}
-                      style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center',
-                        backgroundColor: byDateAddTempDuration === min ? Colors.primary : Colors.mutedBg,
-                        borderWidth: byDateAddTempDuration === min ? 0 : 1, borderColor: Colors.border }}
-                    >
-                      <Text style={{ fontSize: 13, fontWeight: '700',
-                        color: byDateAddTempDuration === min ? '#fff' : Colors.mutedFg }}>
-                        {min >= 60 ? `${min / 60}시간` : `${min}분`}{min % 60 !== 0 ? `${min % 60}분` : ''}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                  {[30, 45, 60, 90, 120].map(min => {
+                    const durLabel = min < 60 ? `${min}분` : min % 60 === 0 ? `${min / 60}시간` : `${Math.floor(min / 60)}시간 ${min % 60}분`;
+                    return (
+                      <TouchableOpacity
+                        key={min}
+                        onPress={() => setByDateAddTempDuration(min)}
+                        style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center',
+                          backgroundColor: byDateAddTempDuration === min ? Colors.primary : Colors.mutedBg,
+                          borderWidth: byDateAddTempDuration === min ? 0 : 1, borderColor: Colors.border }}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: '700',
+                          color: byDateAddTempDuration === min ? '#fff' : Colors.mutedFg }}>
+                          {durLabel}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
 
                 {/* 삭제 버튼 (기존 선택된 날짜) */}

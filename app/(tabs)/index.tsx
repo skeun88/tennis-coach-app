@@ -692,7 +692,7 @@ export default function HomeScreen() {
                     <View style={styles.attendBtns}>
                       <TouchableOpacity
                         style={[styles.attendBtn, card.attended && styles.attendBtnActive]}
-                        onPress={() => handleAttend(card)}
+                        onPress={(e) => { e.stopPropagation?.(); handleAttend(card); }}
                       >
                         <Ionicons
                           name={card.attended ? 'checkmark-circle' : 'checkmark-circle-outline'}
@@ -703,7 +703,7 @@ export default function HomeScreen() {
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.absentBtn, card.isAbsent && styles.absentBtnActive]}
-                        onPress={() => handleAbsenceBtn(card)}
+                        onPress={(e) => { e.stopPropagation?.(); handleAbsenceBtn(card); }}
                       >
                         <Ionicons
                           name={card.isAbsent ? 'close-circle' : 'close-circle-outline'}
