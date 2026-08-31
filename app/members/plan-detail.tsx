@@ -447,7 +447,7 @@ const styles = StyleSheet.create({
   drillValue: { fontSize: 14, color: Colors.foreground, lineHeight: 21 },
 
   accordionBox: {
-    borderRadius: 12, borderWidth: 1, borderColor: Colors.border, backgroundColor: '#fff', overflow: 'hidden',
+    borderRadius: 12, borderWidth: 1, borderColor: Colors.border, backgroundColor: '#fff',
   },
   accordionHeader: {
     paddingHorizontal: 16, paddingVertical: 14,

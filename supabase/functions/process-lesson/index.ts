@@ -1,6 +1,87 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+// ── STT 교정 사전 ──
+// Whisper가 실제 transcript에서 오인식한 것으로 확인된 사례만 추가할 것 (자동 추가 금지)
+const STT_CORRECTION_DICT: Array<{ wrong: string; correct: string }> = [
+  { wrong: '고핸드', correct: '포핸드' },
+  { wrong: '코에인드', correct: '포핸드' },
+  { wrong: '맥핸드', correct: '백핸드' },
+  { wrong: '크루스', correct: '크로스' },
+  { wrong: '4핸드', correct: '포핸드' },
+  { wrong: '스포핸드', correct: '포핸드' },
+]
+
+// 코러스는 실재 한국어 단어이므로 조사 결합형까지 명시 처리 (부분 문자열 오치환 방지)
+const KOREOSEU_JOSA = new Set(['', '로', '는', '를', '가', '이', '에서', '에', '도', '만', '부터', '까지', '와', '과', '랑', '이랑', '에게', '한테', '처럼', '으로', '보다', '이고', '이면', '면'])
+
+// 무음·무의미 transcript 감지 — 분석 진행 차단용
+// 비율 기반 차단(정상 레슨 오탐 위험) 제거 후, prompt echo 탐지로 집중
+function detectInvalidTranscript(transcript: string, whisperPrompt: string): string | null {
+  // 1. 구 whisper prompt echo 패턴 ("등의 용어가 나올 수 있습니다" 문구가 포함된 경우)
+  if (transcript.includes('등의 용어가 나올 수 있습니다')) {
+    return '음성이 인식되지 않았습니다. 녹음 상태를 확인해 주세요. (구 whisper prompt 반복 출력 감지)'
+  }
+
+  // 2. 현재 prompt 정확 일치 (공백·문장부호 제거 후 비교)
+  const norm = (s: string) => s.replace(/[.,!?\s]/g, '')
+  const promptNorm = norm(whisperPrompt)
+  const transcriptNorm = norm(transcript)
+  if (promptNorm.length > 5 && transcriptNorm === promptNorm) {
+    return '음성이 인식되지 않았습니다. 녹음 상태를 확인해 주세요. (whisper prompt와 동일한 출력 감지)'
+  }
+
+  // 3. transcript가 prompt 토큰의 반복으로만 구성된 경우 탐지
+  // 예: "테니스 코치 레슨 녹음" × N — 현재/구 prompt 어절과 85% 이상 겹치고 고유 어절이 prompt 크기 이하
+  const promptTokens = whisperPrompt.replace(/[.,!?]/g, ' ').split(/\s+/).filter(w => w.length > 0)
+  const tTokens = transcript.replace(/[.,!?]/g, ' ').split(/\s+/).filter(w => w.length > 0)
+  if (tTokens.length >= 4 && promptTokens.length >= 2) {
+    // prefix-match: prompt 토큰이 transcript 토큰의 prefix이거나 그 반대 (예: "녹음입니다" ↔ "녹음")
+    const matchCount = tTokens.filter(tw =>
+      promptTokens.some(pw => pw.startsWith(tw) || tw.startsWith(pw))
+    ).length
+    const coverageRatio = matchCount / tTokens.length
+    const uniqueInTranscript = new Set(tTokens).size
+    if (coverageRatio >= 0.85 && uniqueInTranscript <= promptTokens.length) {
+      return `음성이 인식되지 않았습니다. 녹음 상태를 확인해 주세요. (whisper prompt 반복 출력 감지: prompt 토큰 일치율 ${Math.round(coverageRatio * 100)}%)`
+    }
+  }
+
+  return null
+}
+
+function applySTTCorrections(text: string): string {
+  if (STT_CORRECTION_DICT.length === 0) return text
+  let result = text
+  const corrected: string[] = []
+  for (const { wrong, correct } of STT_CORRECTION_DICT) {
+    // 한국어는 \b word boundary가 없으므로 lookahead/lookbehind로 처리:
+    // 앞뒤 문자가 한글 자모·영문자가 아닌 경우에만 치환 (조사 제외)
+    // 조사 포함 패턴은 별도 항목으로 추가할 것 (예: { wrong: '코에인드부터', correct: '포핸드부터' })
+    const regex = new RegExp(`(?<![가-힣a-zA-Z])${wrong}(?![가-힣a-zA-Z])`, 'g')
+    const count = (result.match(regex) ?? []).length
+    if (count > 0) {
+      result = result.replace(regex, correct)
+      corrected.push(`${wrong}→${correct} (${count}건)`)
+    }
+  }
+  // 코러스 → 크로스: 실재 단어이므로 단독/조사 결합형만 치환 (다른 단어 일부면 skip)
+  let koreoseuCount = 0
+  result = result.replace(/코러스([가-힣]*)/g, (match, suffix) => {
+    if (KOREOSEU_JOSA.has(suffix)) {
+      koreoseuCount++
+      return '크로스' + suffix
+    }
+    return match
+  })
+  if (koreoseuCount > 0) corrected.push(`코러스→크로스 (${koreoseuCount}건)`)
+
+  if (corrected.length > 0) {
+    console.log('[STT][교정]', corrected.join(', '))
+  }
+  return result
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -232,9 +313,8 @@ serve(async (req) => {
     }
 
     // ── Step 1: Whisper STT + 회원/코치 정보 병렬 ──
-    const tennisTechPrompt =
-      '테니스 레슨 녹음입니다. 포핸드, 백핸드, 서브, 발리, 스매시, 로브, 드롭샷, 풋워크, 스플릿스텝, ' +
-      '탑스핀, 슬라이스, 플랫, 이스턴, 웨스턴, 컨티넨탈, 트로피자세, 팔로스루, 테이크백 등의 용어가 나올 수 있습니다.'
+    console.log(`[AUDIO] size=${audioFile?.size ?? '?'}bytes, duration=${durationSeconds ?? '?'}s`)
+    const tennisTechPrompt = '한국어 테니스 코치 레슨 녹음입니다.'
 
     const whisperForm = new FormData()
     whisperForm.append('file', audioFile, 'audio.m4a')
@@ -274,16 +354,35 @@ serve(async (req) => {
 
     const whisperData = await whisperRes.json()
     T.stt = Date.now()
-    const transcript = (whisperData.text || '').trim()
-    if (!transcript) throw new Error(`음성 변환 실패: ${JSON.stringify(whisperData)}`)
+    const rawTranscript = (whisperData.text || '').trim()
+    if (!rawTranscript) throw new Error(`음성 변환 실패: ${JSON.stringify(whisperData)}`)
+    const transcript = applySTTCorrections(rawTranscript)
 
-    // 인식된 내용이 너무 적으면 분석 거부 (잡음/무음 오디오 필터)
+    // 무음/무의미 transcript 차단
+    const invalidReason = detectInvalidTranscript(transcript, tennisTechPrompt)
+    if (invalidReason) {
+      console.log(`[STT][INVALID] ${invalidReason} | transcript(first 200): ${transcript.slice(0, 200)}`)
+      const failMsg = '음성이 인식되지 않았습니다. 녹음 상태를 확인해 주세요.'
+      if (lessonPlanId) {
+        await supabase.from('lesson_plans')
+          .update({ status: 'failed', error_message: failMsg })
+          .eq('id', lessonPlanId)
+      }
+      return new Response(JSON.stringify({ error: failMsg }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    // 어절 수 최소 기준 검사
     const wordCount = transcript.split(/\s+/).filter((w: string) => w.length > 0).length
     if (wordCount < 10) {
-      return new Response(JSON.stringify({
-        error: `인식된 레슨 내용이 너무 적습니다 (${wordCount}단어). 실제 레슨 음성이 녹음됐는지 확인해 주세요.`,
-        transcript,
-      }), {
+      const failMsg = `인식된 레슨 내용이 너무 적습니다 (${wordCount}단어). 실제 레슨 음성이 녹음됐는지 확인해 주세요.`
+      if (lessonPlanId) {
+        await supabase.from('lesson_plans')
+          .update({ status: 'failed', error_message: failMsg })
+          .eq('id', lessonPlanId)
+      }
+      return new Response(JSON.stringify({ error: failMsg, transcript }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
@@ -348,7 +447,7 @@ ${transcript}`
     try {
       transcriptSummary = JSON.parse(summaryData.choices?.[0]?.message?.content || '{}')
     } catch {
-      transcriptSummary = { lesson_flow: transcript.slice(0, 500) }
+      transcriptSummary = { lesson_flow: transcript }
     }
 
     const transcriptRow = transcriptInsert.data
@@ -632,15 +731,9 @@ ${knowledgeContext || '(없음)'}
         total_ms:         T.member_report - T.start,
       }))
 
-      // ── Step 7: 오디오 파일 삭제 ──
+      // ── Step 7: 오디오 파일 보존 (처리 완료 후 7일 보관, cleanup-audio 함수가 주기적으로 정리) ──
       if (audioStoragePath) {
-        try {
-          const { error: deleteError } = await supabase.storage
-            .from('lesson-audio').remove([audioStoragePath])
-          if (deleteError) console.error('audio_delete_error:', deleteError.message)
-        } catch (e) {
-          console.error('audio_delete_exception:', e)
-        }
+        console.log('audio_preserved_for_retention:', audioStoragePath)
       }
     })()
 
