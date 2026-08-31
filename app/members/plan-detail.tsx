@@ -71,7 +71,14 @@ export default function PlanDetailScreen() {
   function toStringArray(val: unknown): string[] {
     if (Array.isArray(val)) return val.map(String).filter(Boolean);
     if (typeof val === 'string') {
-      return val.replace(/\\n/g, '\n').split('\n')
+      const trimmed = val.trim();
+      if (trimmed.startsWith('[')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+        } catch {}
+      }
+      return trimmed.replace(/\\n/g, '\n').split('\n')
         .map(l => l.replace(/^\s*\d+[\.\)]\s*/, '').trim()).filter(Boolean);
     }
     return [];
