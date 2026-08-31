@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, ActivityIndicator, Platform, Modal, TextInput, KeyboardAvoidingView,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { notifyMemberReport } from '../../lib/notifications';
@@ -30,9 +30,11 @@ export default function PlanDetailScreen() {
   const [editModalLabel, setEditModalLabel] = useState('');
   const [savingSection, setSavingSection] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, [planId]);
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [planId])
+  );
 
   async function loadData() {
     setLoading(true);
@@ -254,7 +256,9 @@ export default function PlanDetailScreen() {
               </View>
             ))
           ) : (
-            <Text style={styles.emptyText}>{report ? '잘한 점이 없습니다' : '리포트 생성 후 표시됩니다'}</Text>
+            <Text style={styles.emptyText}>
+              {report ? '잘한 점이 없습니다' : plan?.status === 'completed' ? 'AI 리포트 생성 중입니다. 잠시 후 화면을 나갔다 다시 확인해 주세요.' : '분석 완료 후 표시됩니다.'}
+            </Text>
           )}
         </View>
 

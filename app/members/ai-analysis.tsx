@@ -65,6 +65,7 @@ export default function AIAnalysisScreen() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [enhancedMode, setEnhancedMode] = useState(false);
   const [analysisStep, setAnalysisStep] = useState(0); // 0 = 대기, 1~4 = 진행중
+  const [uploadPct, setUploadPct] = useState(0);
   const [plans, setPlans] = useState<LessonPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [memberReports, setMemberReports] = useState<Record<string, any>>({});
@@ -547,17 +548,32 @@ export default function AIAnalysisScreen() {
 
         storagePath = `${userId}/${Date.now()}_lesson.m4a`;
         const uploadUrl = `${SUPABASE_URL}/storage/v1/object/lesson-audio/${storagePath}`;
-        const uploadResult = await FileSystem.uploadAsync(uploadUrl, uri, {
-          httpMethod: 'POST',
-          uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'audio/m4a',
-            'x-upsert': 'false',
+        const fileSize = (fileInfo as any).size as number ?? 0;
+        const uploadStart = Date.now();
+        setUploadPct(0);
+        const uploadTask = FileSystem.createUploadTask(
+          uploadUrl, uri,
+          {
+            httpMethod: 'POST',
+            uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'audio/m4a',
+              'x-upsert': 'false',
+            },
           },
-        });
-        if (uploadResult.status >= 400) {
-          throw new Error(`오디오 업로드 실패: ${uploadResult.body}`);
+          (p) => {
+            if (p.totalBytesExpectedToSend > 0) {
+              setUploadPct(Math.round(p.totalBytesSent / p.totalBytesExpectedToSend * 100));
+            }
+          },
+        );
+        const uploadResult = await uploadTask.uploadAsync();
+        const uploadMs = Date.now() - uploadStart;
+        const throughput = uploadMs > 0 ? Math.round(fileSize / uploadMs) : 0;
+        console.log(`[UPLOAD] size=${fileSize}B duration=${uploadMs}ms throughput=${throughput}KB/s`);
+        if (!uploadResult || uploadResult.status >= 400) {
+          throw new Error(`오디오 업로드 실패: ${uploadResult?.body ?? '응답 없음'}`);
         }
       }
 
@@ -828,6 +844,7 @@ export default function AIAnalysisScreen() {
         <ActivityIndicator size="large" color={Colors.primary} />
         <Text style={styles.analyzingText}>
           {current ? `${current.icon} ${current.label}` : 'AI 분석 중...'}
+          {analysisStep === 0 && uploadPct > 0 ? ` (${uploadPct}%)` : ''}
         </Text>
         {/* 단계 도트 */}
         <View style={styles.stepDots}>
