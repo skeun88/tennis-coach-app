@@ -27,6 +27,7 @@ interface ActionMember {
   phone: string;
   type: 'low_credit' | 'unpaid';
   remainingCredits?: number;
+  totalCredits?: number;
   paymentId?: string;
   unpaidAmount?: number;
   dueDate?: string;
@@ -118,7 +119,7 @@ export default function PaymentsScreen() {
 
     const { data: lowCredits } = await supabase
       .from('members')
-      .select('id, name, phone, remaining_credits, lesson_package_id, lesson_packages(id, title, price, total_credits)')
+      .select('id, name, phone, remaining_credits, total_credits, lesson_package_id, lesson_packages(id, title, price, total_credits)')
       .eq('coach_id', user.id)
       .eq('is_active', true)
       .lte('remaining_credits', 3)
@@ -150,6 +151,7 @@ export default function PaymentsScreen() {
           phone: m.phone,
           type: 'low_credit',
           remainingCredits: m.remaining_credits,
+          totalCredits: m.total_credits,
         });
       }
     }
@@ -248,9 +250,10 @@ export default function PaymentsScreen() {
         if (error) { Alert.alert('오류', '결제 저장에 실패했어요.\n' + error.message); setSaving(false); return; }
       }
       if (selectedPackage) {
+        const { data: currentMember } = await supabase.from('members').select('remaining_credits, total_credits').eq('id', memberId).single();
         await supabase.from('members').update({
-          remaining_credits: (payTarget.remainingCredits ?? 0) + selectedPackage.total_credits,
-          total_credits: selectedPackage.total_credits,
+          remaining_credits: (currentMember?.remaining_credits ?? 0) + selectedPackage.total_credits,
+          total_credits: (currentMember?.total_credits ?? 0) + selectedPackage.total_credits,
           lesson_package_id: selectedPackage.id,
         }).eq('id', memberId);
       }
@@ -263,9 +266,10 @@ export default function PaymentsScreen() {
         payment_method: selectedMethod, payment_channel: 'offline',
       });
       if (error) { Alert.alert('오류', '결제 저장에 실패했어요.\n' + error.message); setSaving(false); return; }
+      const { data: freshMember } = await supabase.from('members').select('remaining_credits, total_credits').eq('id', memberId).single();
       await supabase.from('members').update({
-        remaining_credits: (payTarget.remainingCredits ?? 0) + selectedPackage.total_credits,
-        total_credits: selectedPackage.total_credits,
+        remaining_credits: (freshMember?.remaining_credits ?? 0) + selectedPackage.total_credits,
+        total_credits: (freshMember?.total_credits ?? 0) + selectedPackage.total_credits,
         lesson_package_id: selectedPackage.id,
       }).eq('id', memberId);
     }
