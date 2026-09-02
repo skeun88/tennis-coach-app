@@ -2,6 +2,7 @@ import Purchases, { LOG_LEVEL, PurchasesPackage } from 'react-native-purchases';
 import { Platform } from 'react-native';
 
 const IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? '';
+const ANDROID_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ?? '';
 
 export const PLAN_PRODUCT_IDS: Record<string, { monthly: string; annual: string }> = {
   basic: { monthly: 'kerri_basic_monthly', annual: 'kerri_basic_yearly' },
@@ -16,18 +17,19 @@ export const ENTITLEMENT_IDS = {
 export const AI_TOPUP_PRODUCT_ID = 'kerri_ai_10';
 
 export function configurePurchases(): void {
-  if (Platform.OS !== 'ios') return;
+  const apiKey = Platform.OS === 'ios' ? IOS_KEY : ANDROID_KEY;
+  if (!apiKey) return;
   Purchases.setLogLevel(LOG_LEVEL.DEBUG);
-  Purchases.configure({ apiKey: IOS_KEY });
+  Purchases.configure({ apiKey });
 }
 
 export async function loginPurchases(userId: string): Promise<void> {
-  if (Platform.OS !== 'ios') return;
+  if (!IOS_KEY && !ANDROID_KEY) return;
   await Purchases.logIn(userId);
 }
 
 export async function logoutPurchases(): Promise<void> {
-  if (Platform.OS !== 'ios') return;
+  if (!IOS_KEY && !ANDROID_KEY) return;
   try { await Purchases.logOut(); } catch {}
 }
 
