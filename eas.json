@@ -24,7 +24,8 @@
       "autoIncrement": true,
       "channel": "production",
       "env": {
-        "EXPO_PUBLIC_IS_BETA": "false"
+        "EXPO_PUBLIC_IS_BETA": "false",
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY": "goog_tRGWSdVQsvEpDFNYzREOISBzduF"
       }
     }
   },
