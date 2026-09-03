@@ -8,6 +8,7 @@ import {
   getTrialDaysLeft,
   getCurrentSubscription,
 } from '../lib/subscription';
+import { syncRevenueCatToDb } from '../lib/purchases';
 import { IS_BETA } from '../lib/beta';
 
 interface UseSubscriptionResult {
@@ -42,6 +43,8 @@ export function useSubscription(): UseSubscriptionResult {
 
 
   const refresh = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) await syncRevenueCatToDb(user.id);
     const sub = await getCurrentSubscription();
     setSubscription(sub);
     setLoading(false);

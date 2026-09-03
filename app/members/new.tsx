@@ -12,6 +12,7 @@ import { supabase } from '../../lib/supabase';
 import { MemberLevel } from '../../types';
 import { Colors } from '../../lib/theme';
 import { getCurrentSubscription, FREE_MEMBER_LIMIT, getMemberCount, isSubscriptionActive } from '../../lib/subscription';
+import { syncRevenueCatToDb } from '../../lib/purchases';
 import { IS_BETA } from '../../lib/beta';
 
 const LEVELS: MemberLevel[] = ['입문', '초급', '중급', '상급', '선수'];
@@ -633,19 +634,14 @@ export default function NewMemberScreen() {
     // Free 플랜: 회원 3명 초과 시 구독 필요 (IS_BETA에서는 무제한)
     const memberCount = IS_BETA ? 0 : await getMemberCount(user.id);
     if (!IS_BETA && memberCount >= FREE_MEMBER_LIMIT) {
+      // RevenueCat 최신 상태 먼저 동기화
+      await syncRevenueCatToDb(user.id);
       const subscription = await getCurrentSubscription();
       const active = isSubscriptionActive(subscription);
       const isPaidPlan = subscription?.plan_id === 'basic' || subscription?.plan_id === 'pro';
       if (!active || !isPaidPlan) {
         setLoading(false);
-        Alert.alert(
-          '구독이 필요합니다',
-          `Free 플랜은 회원 ${FREE_MEMBER_LIMIT}명까지 등록 가능합니다.\n베이직 또는 프로 플랜으로 업그레이드 후 무제한 등록하세요.`,
-          [
-            { text: '나중에', style: 'cancel' },
-            { text: '플랜 보기', onPress: () => router.push('/subscription/select-plan') },
-          ]
-        );
+        router.push({ pathname: '/subscription/select-plan', params: { reason: 'member_limit' } } as any);
         return;
       }
     }

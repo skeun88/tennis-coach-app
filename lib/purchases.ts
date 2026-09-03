@@ -1,5 +1,6 @@
 import Purchases, { LOG_LEVEL, PurchasesPackage } from 'react-native-purchases';
 import { Platform } from 'react-native';
+import { supabase } from './supabase';
 
 const IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? '';
 const ANDROID_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ?? '';
@@ -54,4 +55,43 @@ export function getPlanProductId(planId: string, isAnnual: boolean): string {
   const map = PLAN_PRODUCT_IDS[planId];
   if (!map) throw new Error(`알 수 없는 플랜: ${planId}`);
   return isAnnual ? map.annual : map.monthly;
+}
+
+/** RevenueCat CustomerInfo → Supabase DB 동기화 (활성 구독이 있을 때만 업데이트) */
+export async function syncRevenueCatToDb(userId: string): Promise<void> {
+  try {
+    const customerInfo = await Purchases.getCustomerInfo();
+    const active = customerInfo.entitlements.active;
+
+    let planId: 'basic' | 'pro' | null = null;
+    let productIdentifier: string | null = null;
+    let expiresDate: string | null = null;
+
+    if (active[ENTITLEMENT_IDS.PRO]) {
+      planId = 'pro';
+      productIdentifier = active[ENTITLEMENT_IDS.PRO].productIdentifier;
+      expiresDate = active[ENTITLEMENT_IDS.PRO].expirationDate ?? null;
+    } else if (active[ENTITLEMENT_IDS.BASIC]) {
+      planId = 'basic';
+      productIdentifier = active[ENTITLEMENT_IDS.BASIC].productIdentifier;
+      expiresDate = active[ENTITLEMENT_IDS.BASIC].expirationDate ?? null;
+    }
+
+    if (!planId) return; // 활성 구독 없으면 DB 그대로 유지
+
+    await supabase
+      .from('subscriptions')
+      .upsert(
+        {
+          coach_id: userId,
+          plan_id: planId,
+          status: 'active',
+          product_id: productIdentifier,
+          expires_at: expiresDate,
+        },
+        { onConflict: 'coach_id' }
+      );
+  } catch (e) {
+    console.warn('[syncRevenueCat] error:', e);
+  }
 }

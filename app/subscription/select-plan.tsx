@@ -9,12 +9,15 @@ import {
   Modal,
   Linking,
   Platform,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { PLANS, ANNUAL_PRICES, TRIAL_DAYS } from '../../lib/subscription';
 import { IS_BETA } from '../../lib/beta';
 import { useSubscription } from '../../hooks/useSubscription';
+import { purchaseProductById, getPlanProductId, ENTITLEMENT_IDS } from '../../lib/purchases';
 
 const CREAM = '#F7F0E9';
 const TERRACOTTA = '#C0755A';
@@ -54,12 +57,19 @@ function FeatureCell({ value }: { value: boolean | string }) {
   return <Text style={s.featureCellText}>{value}</Text>;
 }
 
+const ANNUAL_SAVINGS: Partial<Record<'basic' | 'pro', number>> = {
+  basic: 9800,   // 9,900 × 12 - 109,000
+  pro: 19000,    // 19,000 × 12 - 209,000
+};
+
 export default function SelectPlanScreen() {
   const router = useRouter();
+  const { reason } = useLocalSearchParams<{ reason?: string }>();
 
-  const { subscription, isTrial } = useSubscription();
+  const { subscription, isTrial, refresh } = useSubscription();
   const [billing, setBilling] = useState<BillingCycle>('monthly');
   const [compareVisible, setCompareVisible] = useState(false);
+  const [purchasing, setPurchasing] = useState<string | null>(null); // planId being purchased
 
   const currentPlanId = subscription?.plan_id ?? 'free';
 
@@ -87,11 +97,29 @@ export default function SelectPlanScreen() {
     return `${PLANS[planId].name}으로 변경`;
   }
 
-  function handleSelectPlan(planId: 'basic' | 'pro') {
-    router.push({
-      pathname: '/subscription/confirm-plan',
-      params: { planId, billingType: billing },
-    });
+  async function handleSelectPlan(planId: 'basic' | 'pro') {
+    if (purchasing) return;
+    setPurchasing(planId);
+    try {
+      const productId = getPlanProductId(planId, billing === 'annual');
+      const { customerInfo } = await purchaseProductById(productId);
+      const entId = planId === 'pro' ? ENTITLEMENT_IDS.PRO : ENTITLEMENT_IDS.BASIC;
+      const isActive = !!customerInfo.entitlements.active[entId];
+      await refresh();
+      if (isActive) {
+        router.replace('/subscription/manage');
+      } else {
+        Alert.alert('구독 완료', '구독이 처리 중입니다. 잠시 후 확인해 주세요.', [
+          { text: '확인', onPress: () => router.replace('/subscription/manage') },
+        ]);
+      }
+    } catch (e: any) {
+      if (!e.userCancelled) {
+        Alert.alert('결제 실패', e.message ?? '결제 중 오류가 발생했습니다.');
+      }
+    } finally {
+      setPurchasing(null);
+    }
   }
 
   return (
@@ -136,6 +164,25 @@ export default function SelectPlanScreen() {
         <Text style={s.title}>나에게 맞는 플랜을{'\n'}선택하세요</Text>
         <Text style={s.subtitle}>Basic과 Pro는 신규 구독 시 {TRIAL_DAYS}일 동안 무료로 이용할 수 있어요.</Text>
 
+        {reason === 'member_limit' && (
+          <View style={s.reasonBanner}>
+            <Ionicons name="people-outline" size={14} color={TERRACOTTA} />
+            <Text style={s.reasonBannerText}>Free 플랜에서는 회원을 3명까지 등록할 수 있어요.</Text>
+          </View>
+        )}
+        {reason === 'ai_monthly_limit' && (
+          <View style={s.reasonBanner}>
+            <Ionicons name="mic-outline" size={14} color={TERRACOTTA} />
+            <Text style={s.reasonBannerText}>이번 달 무료 AI 레슨 기록 3개를 모두 사용했어요.</Text>
+          </View>
+        )}
+        {reason === 'paid_feature' && (
+          <View style={s.reasonBanner}>
+            <Ionicons name="lock-closed-outline" size={14} color={TERRACOTTA} />
+            <Text style={s.reasonBannerText}>이 기능은 Basic 또는 Pro 플랜에서 사용할 수 있어요.</Text>
+          </View>
+        )}
+
         {/* 출시가 안내 배너 */}
         <View style={s.launchBanner}>
           <Ionicons name="pricetag-outline" size={13} color={TERRACOTTA} />
@@ -159,7 +206,7 @@ export default function SelectPlanScreen() {
             <Text style={[s.billingBtnText, billing === 'annual' && s.billingBtnTextActive]}>연간</Text>
             {billing !== 'annual' && (
               <View style={s.savingsBadge}>
-                <Text style={s.savingsBadgeText}>1개월 무료</Text>
+                <Text style={s.savingsBadgeText}>최대 19,000원 절약</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -236,7 +283,7 @@ export default function SelectPlanScreen() {
           ) : (
             <View style={s.priceBlock}>
               <Text style={[s.planPrice, s.planPricePaid]}>{ANNUAL_PRICES.basic?.toLocaleString()}원/년</Text>
-              <Text style={s.annualSavings}>월 약 {monthlyEquivalent('basic').toLocaleString()}원 · 1개월 무료</Text>
+              <Text style={s.annualSavings}>월 약 {monthlyEquivalent('basic').toLocaleString()}원 · 연간 {ANNUAL_SAVINGS.basic?.toLocaleString()}원 절약</Text>
             </View>
           )}
           <Text style={s.planDesc}>회원 관리와 기본 AI 분석이 필요한 코치</Text>
@@ -249,12 +296,15 @@ export default function SelectPlanScreen() {
             <FeatureItem icon="add-circle-outline" text="AI 레슨 기록 충전 가능" />
           </View>
           <TouchableOpacity
-            style={[s.paidCta, currentPlanId === 'basic' && s.paidCtaDisabled]}
-            onPress={currentPlanId !== 'basic' ? () => handleSelectPlan('basic') : undefined}
-            disabled={currentPlanId === 'basic'}
+            style={[s.paidCta, (currentPlanId === 'basic' || !!purchasing) && s.paidCtaDisabled]}
+            onPress={currentPlanId !== 'basic' && !purchasing ? () => handleSelectPlan('basic') : undefined}
+            disabled={currentPlanId === 'basic' || !!purchasing}
             activeOpacity={0.85}
           >
-            <Text style={s.paidCtaText}>{getCtaText('basic')}</Text>
+            {purchasing === 'basic'
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={s.paidCtaText}>{getCtaText('basic')}</Text>
+            }
           </TouchableOpacity>
         </View>
 
@@ -291,7 +341,7 @@ export default function SelectPlanScreen() {
           ) : (
             <View style={s.priceBlock}>
               <Text style={[s.planPrice, s.planPricePro]}>{ANNUAL_PRICES.pro?.toLocaleString()}원/년</Text>
-              <Text style={s.annualSavings}>월 약 {monthlyEquivalent('pro').toLocaleString()}원 · 1개월 무료</Text>
+              <Text style={s.annualSavings}>월 약 {monthlyEquivalent('pro').toLocaleString()}원 · 연간 {ANNUAL_SAVINGS.pro?.toLocaleString()}원 절약</Text>
             </View>
           )}
           <Text style={s.planDesc}>AI 분석을 적극적으로 활용하는 전문 코치</Text>
@@ -306,12 +356,15 @@ export default function SelectPlanScreen() {
             <FeatureItem icon="add-circle-outline" text="AI 레슨 기록 충전 가능" />
           </View>
           <TouchableOpacity
-            style={[s.paidCta, s.paidCtaPro, currentPlanId === 'pro' && s.paidCtaDisabled]}
-            onPress={currentPlanId !== 'pro' ? () => handleSelectPlan('pro') : undefined}
-            disabled={currentPlanId === 'pro'}
+            style={[s.paidCta, s.paidCtaPro, (currentPlanId === 'pro' || !!purchasing) && s.paidCtaDisabled]}
+            onPress={currentPlanId !== 'pro' && !purchasing ? () => handleSelectPlan('pro') : undefined}
+            disabled={currentPlanId === 'pro' || !!purchasing}
             activeOpacity={0.85}
           >
-            <Text style={s.paidCtaText}>{getCtaText('pro')}</Text>
+            {purchasing === 'pro'
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={s.paidCtaText}>{getCtaText('pro')}</Text>
+            }
           </TouchableOpacity>
         </View>
 
@@ -434,6 +487,13 @@ const s = StyleSheet.create({
   compareLinkText: { fontSize: 13, color: TERRACOTTA, fontWeight: '600', textDecorationLine: 'underline' },
 
   legalNote: { fontSize: 11, color: WARM_GRAY, textAlign: 'center', lineHeight: 18, marginTop: 4 },
+  reasonBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: TERRACOTTA + '12', borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 10, marginBottom: 16,
+    borderWidth: 1, borderColor: TERRACOTTA + '30',
+  },
+  reasonBannerText: { fontSize: 13, color: TERRACOTTA, fontWeight: '600', flex: 1, lineHeight: 18 },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   compareSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingBottom: 40, maxHeight: '85%' },

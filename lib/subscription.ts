@@ -265,19 +265,22 @@ export async function createTrialSubscription(
   return { subscription: data as Subscription, error: null };
 }
 
-/** Free 구독 생성 (신규 코치 등록 시) */
+/** Free 구독 생성 (신규 코치 등록 시) — 기존 구독이 있으면 절대 덮어쓰지 않음 */
 export async function createFreeSubscription(
   coachId: string
 ): Promise<{ subscription: Subscription | null; error: string | null }> {
+  const existing = await getSubscription(coachId);
+  if (existing) return { subscription: existing, error: null };
+
   const { data, error } = await supabase
     .from('subscriptions')
-    .upsert({
+    .insert({
       coach_id: coachId,
       plan_id: 'free',
       status: 'free',
       trial_starts_at: new Date().toISOString(),
-      trial_ends_at: new Date().toISOString(), // free는 trial 없음
-    }, { onConflict: 'coach_id' })
+      trial_ends_at: new Date().toISOString(),
+    })
     .select()
     .single();
 
