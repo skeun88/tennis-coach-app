@@ -64,17 +64,19 @@ export async function syncRevenueCatToDb(userId: string): Promise<void> {
     const active = customerInfo.entitlements.active;
 
     let planId: 'basic' | 'pro' | null = null;
-    let productIdentifier: string | null = null;
-    let expiresDate: string | null = null;
+    let status: 'active' | 'trial' = 'active';
+    let currentPeriodEnd: string | null = null;
 
     if (active[ENTITLEMENT_IDS.PRO]) {
       planId = 'pro';
-      productIdentifier = active[ENTITLEMENT_IDS.PRO].productIdentifier;
-      expiresDate = active[ENTITLEMENT_IDS.PRO].expirationDate ?? null;
+      const ent = active[ENTITLEMENT_IDS.PRO];
+      currentPeriodEnd = ent.expirationDate ?? null;
+      if (ent.periodType === 'TRIAL') status = 'trial';
     } else if (active[ENTITLEMENT_IDS.BASIC]) {
       planId = 'basic';
-      productIdentifier = active[ENTITLEMENT_IDS.BASIC].productIdentifier;
-      expiresDate = active[ENTITLEMENT_IDS.BASIC].expirationDate ?? null;
+      const ent = active[ENTITLEMENT_IDS.BASIC];
+      currentPeriodEnd = ent.expirationDate ?? null;
+      if (ent.periodType === 'TRIAL') status = 'trial';
     }
 
     if (!planId) return; // 활성 구독 없으면 DB 그대로 유지
@@ -85,9 +87,8 @@ export async function syncRevenueCatToDb(userId: string): Promise<void> {
         {
           coach_id: userId,
           plan_id: planId,
-          status: 'active',
-          product_id: productIdentifier,
-          expires_at: expiresDate,
+          status,
+          current_period_end: currentPeriodEnd,
         },
         { onConflict: 'coach_id' }
       );
