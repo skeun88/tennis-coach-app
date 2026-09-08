@@ -14,6 +14,16 @@ const DARK_BROWN = '#3E2B22';
 const WARM_GRAY = '#9E8E85';
 const WARM_GRAY_BORDER = '#D9CFC9';
 
+const SUBSCRIPTION_EVENT_LABELS: Record<string, string> = {
+  trial_started: '무료 체험 시작',
+  free_started: '무료 플랜 시작',
+  subscription_renewed: '구독 갱신',
+  subscription_upgraded: '플랜 업그레이드',
+  subscription_downgraded: '플랜 다운그레이드',
+  subscription_cancelled: '구독 취소',
+  revenuecat_sync: '구독 동기화',
+};
+
 interface BillingItem {
   id: string;
   type: 'subscription' | 'topup';
@@ -37,13 +47,43 @@ export default function BillingHistoryScreen() {
     if (!subscription?.coach_id) { setLoading(false); return; }
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('subscription_billing_events')
-        .select('id, type, description, amount, created_at')
-        .eq('coach_id', subscription.coach_id)
-        .order('created_at', { ascending: false })
-        .limit(50);
-      if (!error && data) setItems(data as BillingItem[]);
+      const [logsRes, topupRes] = await Promise.all([
+        supabase
+          .from('subscription_logs')
+          .select('id, event_type, amount, created_at')
+          .eq('coach_id', subscription.coach_id)
+          .not('event_type', 'eq', 'revenuecat_sync')
+          .order('created_at', { ascending: false })
+          .limit(40),
+        supabase
+          .from('report_topup_transactions')
+          .select('id, credits_added, amount, created_at')
+          .eq('coach_id', subscription.coach_id)
+          .eq('status', 'completed')
+          .order('created_at', { ascending: false })
+          .limit(20),
+      ]);
+
+      const subItems: BillingItem[] = (logsRes.data ?? []).map((row: any) => ({
+        id: `log_${row.id}`,
+        type: 'subscription',
+        description: SUBSCRIPTION_EVENT_LABELS[row.event_type] ?? row.event_type,
+        amount: row.amount ?? 0,
+        created_at: row.created_at,
+      }));
+
+      const topupItems: BillingItem[] = (topupRes.data ?? []).map((row: any) => ({
+        id: `topup_${row.id}`,
+        type: 'topup',
+        description: `AI 레슨 기록 ${row.credits_added}개 충전`,
+        amount: row.amount ?? 0,
+        created_at: row.created_at,
+      }));
+
+      const merged = [...subItems, ...topupItems].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      setItems(merged);
     } catch {
       // fallback: show empty state
     } finally {

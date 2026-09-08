@@ -79,7 +79,28 @@ export async function syncRevenueCatToDb(userId: string): Promise<void> {
       if (ent.periodType === 'TRIAL') status = 'trial';
     }
 
-    if (!planId) return; // 활성 구독 없으면 DB 그대로 유지
+    if (!planId) {
+      // 활성 RevenueCat 구독 없음 → 만료된 IAP 구독이면 free로 리셋
+      // (Toss 직접결제는 process-billing이 관리하므로 건드리지 않음)
+      const { data: cur } = await supabase
+        .from('subscriptions')
+        .select('status, current_period_end, toss_billing_key')
+        .eq('coach_id', userId)
+        .single();
+      if (
+        cur &&
+        !cur.toss_billing_key &&
+        cur.status !== 'free' &&
+        cur.status !== 'trial' &&
+        (!cur.current_period_end || new Date(cur.current_period_end) <= new Date())
+      ) {
+        await supabase
+          .from('subscriptions')
+          .update({ plan_id: 'free', status: 'free', current_period_end: null })
+          .eq('coach_id', userId);
+      }
+      return;
+    }
 
     await supabase
       .from('subscriptions')
