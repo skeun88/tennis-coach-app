@@ -12,11 +12,14 @@ const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const HOURS = Array.from({ length: 18 }, (_, i) => String(i + 6).padStart(2, '0'));
 const HALF_HOURS = ['00', '30'];
 
+type DaySchedule = { start: string; end: string };
+
 export default function AvailabilityScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [daySchedules, setDaySchedules] = useState<Record<number, DaySchedule>>({});
+  const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [startHour, setStartHour] = useState('09');
   const [startMin, setStartMin] = useState('00');
   const [endHour, setEndHour] = useState('18');
@@ -38,41 +41,45 @@ export default function AvailabilityScreen() {
       .eq('coach_id', user.id)
       .maybeSingle();
     if (data) {
-      setSelectedDays(data.available_days ?? [1,2,3,4,5]);
-      const [sh, sm] = (data.available_start ?? '09:00').slice(0, 5).split(':');
-      const [eh, em] = (data.available_end ?? '18:00').slice(0, 5).split(':');
-      setStartHour(sh); setStartMin(sm);
-      setEndHour(eh); setEndMin(em);
+      const times = (data as any).available_times ?? {};
+      if (Object.keys(times).length > 0) {
+        const schedules: Record<number, DaySchedule> = {};
+        for (const [k, v] of Object.entries(times)) {
+          schedules[Number(k)] = v as DaySchedule;
+        }
+        setDaySchedules(schedules);
+      } else if ((data.available_days ?? []).length > 0) {
+        // 기존 레거시 데이터: 전체 요일에 동일 시간 적용
+        const [sh, sm] = (data.available_start ?? '09:00:00').slice(0, 5).split(':');
+        const [eh, em] = (data.available_end ?? '18:00:00').slice(0, 5).split(':');
+        const schedules: Record<number, DaySchedule> = {};
+        for (const d of (data.available_days as number[])) {
+          schedules[d] = { start: `${sh}:${sm}`, end: `${eh}:${em}` };
+        }
+        setDaySchedules(schedules);
+      }
     }
     setLoading(false);
   }
 
   function toggleDay(idx: number) {
-    setSelectedDays(prev =>
-      prev.includes(idx) ? prev.filter(d => d !== idx) : [...prev, idx].sort()
-    );
+    setSelectedDays(prev => {
+      if (prev.includes(idx)) return prev.filter(d => d !== idx);
+      const next = [...prev, idx].sort();
+      // 이미 저장된 요일이면 그 시간으로 피커 채우기 (단일 선택 시)
+      if (prev.length === 0 && daySchedules[idx]) {
+        const [sh, sm] = daySchedules[idx].start.split(':');
+        const [eh, em] = daySchedules[idx].end.split(':');
+        setStartHour(sh); setStartMin(sm);
+        setEndHour(eh); setEndMin(em);
+      }
+      return next;
+    });
   }
 
-  async function doSave() {
-    setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setSaving(false); return; }
-    const { error } = await supabase.from('coach_availability').upsert({
-      coach_id: user.id,
-      available_days: selectedDays,
-      available_start: `${startHour}:${startMin}:00`,
-      available_end: `${endHour}:${endMin}:00`,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'coach_id' });
-    setSaving(false);
-    if (error) { Alert.alert('오류', '저장에 실패했습니다.'); return; }
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
-  }
-
-  async function handleSave() {
+  function handleAdd() {
     if (selectedDays.length === 0) {
-      Alert.alert('오류', '최소 하나의 요일을 선택해주세요.');
+      Alert.alert('요일 선택', '요일을 먼저 선택해주세요.');
       return;
     }
     const newStartMin = parseInt(startHour) * 60 + parseInt(startMin);
@@ -81,10 +88,42 @@ export default function AvailabilityScreen() {
       Alert.alert('오류', '종료 시간이 시작 시간보다 늦어야 합니다.');
       return;
     }
+    const schedule: DaySchedule = { start: `${startHour}:${startMin}`, end: `${endHour}:${endMin}` };
+    setDaySchedules(prev => {
+      const next = { ...prev };
+      for (const d of selectedDays) next[d] = schedule;
+      return next;
+    });
+    setSelectedDays([]);
+    closeAllPickers();
+  }
+
+  function removeDay(idx: number) {
+    setDaySchedules(prev => {
+      const next = { ...prev };
+      delete next[idx];
+      return next;
+    });
+  }
+
+  function closeAllPickers() {
+    setStartHourOpen(false); setStartMinOpen(false);
+    setEndHourOpen(false); setEndMinOpen(false);
+  }
+
+  async function handleSave() {
+    if (Object.keys(daySchedules).length === 0) {
+      Alert.alert('오류', '최소 하나의 요일을 추가해주세요.');
+      return;
+    }
+    setSaving(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setSaving(false); return; }
+
+    const sortedDays = Object.keys(daySchedules).map(Number).sort();
+    const firstDay = daySchedules[sortedDays[0]];
 
     // 새 가용시간 밖에 잡힌 기존 예약 확인
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
     const todayStr = new Date().toISOString().split('T')[0];
     const { data: futureLessons } = await supabase
       .from('lessons')
@@ -94,18 +133,38 @@ export default function AvailabilityScreen() {
 
     const conflictCount = (futureLessons ?? []).filter((l: any) => {
       const dow = new Date(l.date + 'T00:00:00').getDay();
+      const sched = daySchedules[dow];
+      if (!sched) return !sortedDays.includes(dow);
       const [lh, lm] = l.start_time.slice(0, 5).split(':').map(Number);
       const lStartMin = lh * 60 + lm;
-      return !selectedDays.includes(dow) || lStartMin < newStartMin || lStartMin >= newEndMin;
+      const [sh, sm] = sched.start.split(':').map(Number);
+      const [eh, em] = sched.end.split(':').map(Number);
+      return lStartMin < sh * 60 + sm || lStartMin >= eh * 60 + em;
     }).length;
 
+    const doSave = async () => {
+      const { error } = await supabase.from('coach_availability').upsert({
+        coach_id: user!.id,
+        available_days: sortedDays,
+        available_start: `${firstDay.start}:00`,
+        available_end: `${firstDay.end}:00`,
+        available_times: daySchedules,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'coach_id' });
+      setSaving(false);
+      if (error) { Alert.alert('오류', '저장에 실패했습니다.'); return; }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    };
+
     if (conflictCount > 0) {
+      setSaving(false);
       Alert.alert(
         '기존 예약 안내',
         `설정한 시간 밖에 이미 예약된 레슨이 ${conflictCount}건 있어요.\n기존 예약은 그대로 유지됩니다.`,
         [
           { text: '취소', style: 'cancel' },
-          { text: '저장', onPress: doSave },
+          { text: '저장', onPress: () => { setSaving(true); doSave(); } },
         ]
       );
     } else {
@@ -120,6 +179,8 @@ export default function AvailabilityScreen() {
       </View>
     );
   }
+
+  const sortedScheduleDays = Object.keys(daySchedules).map(Number).sort();
 
   return (
     <View style={styles.container}>
@@ -140,30 +201,47 @@ export default function AvailabilityScreen() {
         <View style={styles.infoBanner}>
           <Ionicons name="information-circle-outline" size={18} color={Colors.info} />
           <Text style={styles.infoText}>
-            회원이 레슨을 신청할 수 있는 요일과 시간대를 설정합니다. 설정된 시간 외에는 레슨 신청이 불가합니다.
+            요일을 선택하고 시간을 설정한 뒤 추가하세요. 요일마다 다른 시간대를 설정할 수 있어요.
           </Text>
         </View>
 
         {/* 요일 선택 */}
-        <Text style={styles.sectionLabel}>레슨 가능 요일</Text>
+        <Text style={styles.sectionLabel}>요일 선택</Text>
         <View style={styles.card}>
           <View style={styles.daysRow}>
             {DAYS.map((day, idx) => {
               const selected = selectedDays.includes(idx);
+              const hasSchedule = !!daySchedules[idx];
               return (
                 <TouchableOpacity
                   key={idx}
-                  style={[styles.dayBtn, selected && styles.dayBtnActive]}
+                  style={[
+                    styles.dayBtn,
+                    selected && styles.dayBtnActive,
+                    !selected && hasSchedule && styles.dayBtnHasSchedule,
+                  ]}
                   onPress={() => toggleDay(idx)}
                 >
-                  <Text style={[styles.dayText, selected && styles.dayTextActive]}>{day}</Text>
+                  <Text style={[
+                    styles.dayText,
+                    selected && styles.dayTextActive,
+                    !selected && hasSchedule && { color: Colors.primary },
+                  ]}>{day}</Text>
+                  {hasSchedule && !selected && (
+                    <View style={styles.dotIndicator} />
+                  )}
                 </TouchableOpacity>
               );
             })}
           </View>
+          {selectedDays.length > 0 && (
+            <Text style={styles.selectedDaysHint}>
+              {selectedDays.map(d => DAYS[d]).join(', ')} 선택됨
+            </Text>
+          )}
         </View>
 
-        {/* 시간대 설정 */}
+        {/* 시간 설정 */}
         <Text style={styles.sectionLabel}>레슨 가능 시간</Text>
         <View style={styles.card}>
           <View style={styles.timeRow}>
@@ -194,7 +272,6 @@ export default function AvailabilityScreen() {
             </View>
           </View>
 
-          {/* 피커들 */}
           {startHourOpen && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pickerRow}>
               {HOURS.map(h => (
@@ -236,36 +313,59 @@ export default function AvailabilityScreen() {
             </ScrollView>
           )}
 
-          <Text style={styles.timeSummary}>
-            {selectedDays.map(d => DAYS[d]).join(', ')}  {startHour}:{startMin} ~ {endHour}:{endMin}
-          </Text>
+          <TouchableOpacity
+            style={[styles.addBtn, selectedDays.length === 0 && styles.addBtnDisabled]}
+            onPress={handleAdd}
+            disabled={selectedDays.length === 0}
+          >
+            <Ionicons name="add-circle-outline" size={18} color={selectedDays.length > 0 ? Colors.primary : Colors.placeholder} />
+            <Text style={[styles.addBtnText, selectedDays.length === 0 && { color: Colors.placeholder }]}>
+              {selectedDays.length > 0
+                ? `${selectedDays.map(d => DAYS[d]).join('·')}요일 추가`
+                : '요일을 먼저 선택하세요'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving}>
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>저장</Text>}
-        </TouchableOpacity>
-
-        {selectedDays.length > 0 && (
-          <View style={{ marginTop: 20 }}>
-            <Text style={styles.sectionLabel}>현재 설정</Text>
+        {/* 추가된 일정 목록 */}
+        {sortedScheduleDays.length > 0 && (
+          <>
+            <Text style={styles.sectionLabel}>설정된 요일 ({sortedScheduleDays.length}개)</Text>
             <View style={styles.card}>
-              {selectedDays.map((dayIdx, i) => (
+              {sortedScheduleDays.map((dayIdx, i) => (
                 <View
                   key={dayIdx}
                   style={{
                     flexDirection: 'row', alignItems: 'center',
-                    justifyContent: 'space-between', paddingVertical: 10,
-                    borderBottomWidth: i < selectedDays.length - 1 ? 1 : 0,
+                    justifyContent: 'space-between', paddingVertical: 12,
+                    borderBottomWidth: i < sortedScheduleDays.length - 1 ? 1 : 0,
                     borderBottomColor: Colors.border,
                   }}
                 >
-                  <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.foreground }}>{DAYS[dayIdx]}요일</Text>
-                  <Text style={{ fontSize: 14, color: Colors.mutedFg }}>{startHour}:{startMin} ~ {endHour}:{endMin}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={styles.dayChip}>
+                      <Text style={styles.dayChipText}>{DAYS[dayIdx]}</Text>
+                    </View>
+                    <Text style={{ fontSize: 14, color: Colors.foreground }}>
+                      {daySchedules[dayIdx].start} ~ {daySchedules[dayIdx].end}
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={() => removeDay(dayIdx)} style={{ padding: 6 }}>
+                    <Ionicons name="close-circle" size={20} color={Colors.destructive} />
+                  </TouchableOpacity>
                 </View>
               ))}
             </View>
-          </View>
+          </>
         )}
+
+        <TouchableOpacity
+          style={[styles.saveBtn, sortedScheduleDays.length === 0 && { backgroundColor: Colors.iconMuted }]}
+          onPress={handleSave}
+          disabled={saving || sortedScheduleDays.length === 0}
+        >
+          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>저장</Text>}
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -307,8 +407,16 @@ const styles = StyleSheet.create({
     alignItems: 'center', backgroundColor: Colors.mutedBg,
   },
   dayBtnActive: { backgroundColor: Colors.primary },
+  dayBtnHasSchedule: { backgroundColor: Colors.primaryLight, borderWidth: 1.5, borderColor: Colors.primary },
   dayText: { fontSize: 14, fontWeight: '600', color: Colors.mutedFg },
   dayTextActive: { color: '#fff' },
+  dotIndicator: {
+    width: 5, height: 5, borderRadius: 3,
+    backgroundColor: Colors.primary, marginTop: 3,
+  },
+  selectedDaysHint: {
+    marginTop: 10, textAlign: 'center', fontSize: 13, color: Colors.primary, fontWeight: '600',
+  },
   timeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingVertical: 4 },
   timePicker: { alignItems: 'center', gap: 6 },
   timeLabel: { fontSize: 12, color: Colors.mutedFg, fontWeight: '600' },
@@ -326,9 +434,18 @@ const styles = StyleSheet.create({
   pickerItemActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   pickerText: { fontSize: 15, fontWeight: '600', color: Colors.foreground },
   pickerTextActive: { color: '#fff' },
-  timeSummary: {
-    textAlign: 'center', color: Colors.mutedFg, fontSize: 13, marginTop: 14, fontWeight: '500',
+  addBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    marginTop: 14, paddingVertical: 10, borderRadius: 10,
+    borderWidth: 1.5, borderColor: Colors.primary, borderStyle: 'dashed',
   },
+  addBtnDisabled: { borderColor: Colors.placeholder },
+  addBtnText: { fontSize: 14, fontWeight: '700', color: Colors.primary },
+  dayChip: {
+    backgroundColor: Colors.primary, borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 4,
+  },
+  dayChipText: { fontSize: 13, fontWeight: '800', color: '#fff' },
   saveBtn: {
     backgroundColor: Colors.primary, borderRadius: 12,
     paddingVertical: 14, alignItems: 'center',

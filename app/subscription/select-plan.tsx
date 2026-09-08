@@ -16,6 +16,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { PLANS, ANNUAL_PRICES, TRIAL_DAYS } from '../../lib/subscription';
 import { IS_BETA } from '../../lib/beta';
+import { supabase } from '../../lib/supabase';
 import { useSubscription } from '../../hooks/useSubscription';
 import { purchaseProductById, getPlanProductId, ENTITLEMENT_IDS } from '../../lib/purchases';
 
@@ -105,6 +106,18 @@ export default function SelectPlanScreen() {
       const { customerInfo } = await purchaseProductById(productId);
       const entId = planId === 'pro' ? ENTITLEMENT_IDS.PRO : ENTITLEMENT_IDS.BASIC;
       const isActive = !!customerInfo.entitlements.active[entId];
+
+      // 결제 완료 → subscription_logs 기록 (결제 내역 화면 반영)
+      if (isActive && subscription) {
+        void supabase.from('subscription_logs').insert({
+          subscription_id: subscription.id,
+          coach_id: subscription.coach_id,
+          event_type: isTrial ? 'trial_started' : 'subscription_renewed',
+          plan_id: planId,
+          amount: billing === 'annual' ? (ANNUAL_PRICES[planId] ?? PLANS[planId].price) : PLANS[planId].price,
+        });
+      }
+
       await refresh();
       if (isActive) {
         router.replace('/subscription/manage');
