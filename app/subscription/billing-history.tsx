@@ -22,6 +22,7 @@ const SUBSCRIPTION_EVENT_LABELS: Record<string, string> = {
   subscription_downgraded: '플랜 다운그레이드',
   subscription_cancelled: '구독 취소',
   revenuecat_sync: '구독 동기화',
+  payment_success: '구독 결제 완료',
 };
 
 interface BillingItem {
