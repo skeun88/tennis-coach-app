@@ -140,23 +140,28 @@ export default function SelectPlanScreen() {
       const { customerInfo } = await purchaseProductById(productId);
       await applySubscription(customerInfo, planId);
     } catch (e: any) {
-      // 코드 6: PRODUCT_ALREADY_PURCHASED_ERROR
-      // 코드 7: RECEIPT_ALREADY_IN_USE_ERROR
-      // 코드 13: RECEIPT_IN_USE_BY_OTHER_SUBSCRIBER_ERROR
       const code = String(e.code ?? '');
-      if (code === '6' || code === '7' || code === '13') {
+      if (code === '6' || code === '7') {
+        // 같은 사용자의 재구매·복원 필요(Apple 결제창 중복, 영수증 갱신 필요) → 자동 복원
+        try {
+          const restored = await restorePurchases();
+          await applySubscription(restored, planId);
+        } catch (restoreErr: any) {
+          Alert.alert('복원 실패', restoreErr.message ?? '구매 복원 중 오류가 발생했습니다.');
+        }
+      } else if (code === '13') {
+        // 다른 계정에서 이미 구독 중 → 자동 복원 금지, 사용자가 명시적으로 선택
         setPurchasing(null);
         Alert.alert(
-          '이미 구독 중인 Apple ID',
-          '이 Apple ID로 이미 구독 중입니다. 구독을 사용하던 계정으로 로그인해주세요.\n이 계정으로 옮기려면 구매 복원을 눌러주세요.',
+          '다른 계정에서 구독 중',
+          '이 Apple ID로 이미 다른 계정에서 구독 중입니다. 해당 계정으로 로그인하거나, 이 계정으로 옮기려면 구매 복원을 직접 눌러주세요.',
           [
             { text: '취소', style: 'cancel' },
             { text: '구매 복원', onPress: () => handleRestoreForPlan(planId) },
           ]
         );
         return;
-      }
-      if (!e.userCancelled) {
+      } else if (!e.userCancelled) {
         Alert.alert('결제 실패', e.message ?? '결제 중 오류가 발생했습니다.');
       }
     } finally {
