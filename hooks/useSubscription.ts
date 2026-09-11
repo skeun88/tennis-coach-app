@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import Purchases from 'react-native-purchases';
 import { supabase } from '../lib/supabase';
 import {
   Subscription,
@@ -9,7 +10,6 @@ import {
   getCurrentSubscription,
 } from '../lib/subscription';
 import { syncRevenueCatToDb } from '../lib/purchases';
-import { IS_BETA } from '../lib/beta';
 
 interface UseSubscriptionResult {
   subscription: Subscription | null;
@@ -23,24 +23,9 @@ interface UseSubscriptionResult {
 }
 
 export function useSubscription(): UseSubscriptionResult {
-  if (IS_BETA) {
-    const betaSub: Subscription = { status: 'active', plan_id: 'pro' } as Subscription;
-    return {
-      subscription: betaSub,
-      loading: false,
-      isActive: true,
-      isBlocked: false,
-      isTrial: false,
-      trialDaysLeft: 0,
-      canUse: () => true,
-      refresh: async () => {},
-    };
-  }
-
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const channelIdRef = useRef(`${Date.now()}-${Math.random().toString(36).slice(2)}`);
-
 
   const refresh = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -53,7 +38,16 @@ export function useSubscription(): UseSubscriptionResult {
   useEffect(() => {
     refresh();
 
-    // Realtime 구독: 플랜 변경 즉시 반영 (채널명 고유화 — 동일 이름 중복 subscribe 방지)
+    // RevenueCat entitlement 변경 즉시 반영 (구매·변경·복원 직후)
+    const rcListener = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) await syncRevenueCatToDb(user.id);
+      const sub = await getCurrentSubscription();
+      setSubscription(sub);
+    };
+    Purchases.addCustomerInfoUpdateListener(rcListener);
+
+    // Supabase Realtime: DB 직접 변경 시 즉시 반영 (채널명 고유화)
     const channelName = `subscription-changes-${channelIdRef.current}`;
     const channel = supabase
       .channel(channelName)
@@ -71,6 +65,7 @@ export function useSubscription(): UseSubscriptionResult {
       .subscribe();
 
     return () => {
+      Purchases.removeCustomerInfoUpdateListener(rcListener);
       supabase.removeChannel(channel);
     };
   }, [refresh]);
