@@ -18,7 +18,7 @@ import { PLANS, ANNUAL_PRICES, TRIAL_DAYS } from '../../lib/subscription';
 import { IS_BETA } from '../../lib/beta';
 import { supabase } from '../../lib/supabase';
 import { useSubscription } from '../../hooks/useSubscription';
-import { purchaseProductById, getPlanProductId, ENTITLEMENT_IDS } from '../../lib/purchases';
+import { purchaseProductById, getPlanProductId, ENTITLEMENT_IDS, restorePurchases } from '../../lib/purchases';
 
 const CREAM = '#F7F0E9';
 const TERRACOTTA = '#C0755A';
@@ -103,11 +103,27 @@ export default function SelectPlanScreen() {
     setPurchasing(planId);
     try {
       const productId = getPlanProductId(planId, billing === 'annual');
-      const { customerInfo } = await purchaseProductById(productId);
+      let customerInfo;
+      try {
+        const result = await purchaseProductById(productId);
+        customerInfo = result.customerInfo;
+      } catch (purchaseError: any) {
+        // Apple ID 레벨에서 이미 구독 중이거나 영수증이 다른 RC 계정에 연결된 경우
+        // 코드 6: PRODUCT_ALREADY_PURCHASED_ERROR
+        // 코드 7: RECEIPT_ALREADY_IN_USE_ERROR
+        // 코드 13: RECEIPT_IN_USE_BY_OTHER_SUBSCRIBER_ERROR
+        const code = String(purchaseError.code ?? '');
+        if (code === '6' || code === '7' || code === '13') {
+          customerInfo = await restorePurchases();
+        } else {
+          throw purchaseError;
+        }
+      }
+
       const entId = planId === 'pro' ? ENTITLEMENT_IDS.PRO : ENTITLEMENT_IDS.BASIC;
       const isActive = !!customerInfo.entitlements.active[entId];
 
-      // 결제 완료 → subscription_logs 기록 (결제 내역 화면 반영)
+      // 결제/복원 완료 → subscription_logs 기록 (결제 내역 화면 반영)
       if (isActive && subscription) {
         void supabase.from('subscription_logs').insert({
           subscription_id: subscription.id,
