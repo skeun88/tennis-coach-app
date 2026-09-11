@@ -98,51 +98,64 @@ export default function SelectPlanScreen() {
     return `${PLANS[planId].name}으로 변경`;
   }
 
+  async function applySubscription(customerInfo: Awaited<ReturnType<typeof restorePurchases>>, planId: 'basic' | 'pro') {
+    const entId = planId === 'pro' ? ENTITLEMENT_IDS.PRO : ENTITLEMENT_IDS.BASIC;
+    const isActive = !!customerInfo.entitlements.active[entId];
+    if (isActive && subscription) {
+      void supabase.from('subscription_logs').insert({
+        subscription_id: subscription.id,
+        coach_id: subscription.coach_id,
+        event_type: isTrial ? 'trial_started' : 'subscription_renewed',
+        plan_id: planId,
+        amount: billing === 'annual' ? (ANNUAL_PRICES[planId] ?? PLANS[planId].price) : PLANS[planId].price,
+      });
+    }
+    await refresh();
+    if (isActive) {
+      router.replace('/subscription/manage');
+    } else {
+      Alert.alert('구독 완료', '구독이 처리 중입니다. 잠시 후 확인해 주세요.', [
+        { text: '확인', onPress: () => router.replace('/subscription/manage') },
+      ]);
+    }
+  }
+
+  async function handleRestoreForPlan(planId: 'basic' | 'pro') {
+    setPurchasing(planId);
+    try {
+      const customerInfo = await restorePurchases();
+      await applySubscription(customerInfo, planId);
+    } catch (e: any) {
+      Alert.alert('복원 실패', e.message ?? '구매 복원 중 오류가 발생했습니다.');
+    } finally {
+      setPurchasing(null);
+    }
+  }
+
   async function handleSelectPlan(planId: 'basic' | 'pro') {
     if (purchasing) return;
     setPurchasing(planId);
     try {
       const productId = getPlanProductId(planId, billing === 'annual');
-      let customerInfo;
-      try {
-        const result = await purchaseProductById(productId);
-        customerInfo = result.customerInfo;
-      } catch (purchaseError: any) {
-        // Apple ID 레벨에서 이미 구독 중이거나 영수증이 다른 RC 계정에 연결된 경우
-        // 코드 6: PRODUCT_ALREADY_PURCHASED_ERROR
-        // 코드 7: RECEIPT_ALREADY_IN_USE_ERROR
-        // 코드 13: RECEIPT_IN_USE_BY_OTHER_SUBSCRIBER_ERROR
-        const code = String(purchaseError.code ?? '');
-        if (code === '6' || code === '7' || code === '13') {
-          customerInfo = await restorePurchases();
-        } else {
-          throw purchaseError;
-        }
-      }
-
-      const entId = planId === 'pro' ? ENTITLEMENT_IDS.PRO : ENTITLEMENT_IDS.BASIC;
-      const isActive = !!customerInfo.entitlements.active[entId];
-
-      // 결제/복원 완료 → subscription_logs 기록 (결제 내역 화면 반영)
-      if (isActive && subscription) {
-        void supabase.from('subscription_logs').insert({
-          subscription_id: subscription.id,
-          coach_id: subscription.coach_id,
-          event_type: isTrial ? 'trial_started' : 'subscription_renewed',
-          plan_id: planId,
-          amount: billing === 'annual' ? (ANNUAL_PRICES[planId] ?? PLANS[planId].price) : PLANS[planId].price,
-        });
-      }
-
-      await refresh();
-      if (isActive) {
-        router.replace('/subscription/manage');
-      } else {
-        Alert.alert('구독 완료', '구독이 처리 중입니다. 잠시 후 확인해 주세요.', [
-          { text: '확인', onPress: () => router.replace('/subscription/manage') },
-        ]);
-      }
+      const { customerInfo } = await purchaseProductById(productId);
+      await applySubscription(customerInfo, planId);
     } catch (e: any) {
+      // 코드 6: PRODUCT_ALREADY_PURCHASED_ERROR
+      // 코드 7: RECEIPT_ALREADY_IN_USE_ERROR
+      // 코드 13: RECEIPT_IN_USE_BY_OTHER_SUBSCRIBER_ERROR
+      const code = String(e.code ?? '');
+      if (code === '6' || code === '7' || code === '13') {
+        setPurchasing(null);
+        Alert.alert(
+          '이미 구독 중인 Apple ID',
+          '이 Apple ID로 이미 구독 중입니다. 구독을 사용하던 계정으로 로그인해주세요.\n이 계정으로 옮기려면 구매 복원을 눌러주세요.',
+          [
+            { text: '취소', style: 'cancel' },
+            { text: '구매 복원', onPress: () => handleRestoreForPlan(planId) },
+          ]
+        );
+        return;
+      }
       if (!e.userCancelled) {
         Alert.alert('결제 실패', e.message ?? '결제 중 오류가 발생했습니다.');
       }
