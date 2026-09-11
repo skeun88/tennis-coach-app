@@ -26,8 +26,14 @@ export function configurePurchases(): void {
 
 export async function loginPurchases(userId: string): Promise<void> {
   if (!IOS_KEY && !ANDROID_KEY) return;
-  try { await Purchases.logOut(); } catch {}
-  await Purchases.logIn(userId);
+  try {
+    const currentId = await Purchases.getAppUserID();
+    if (currentId !== userId) {
+      await Purchases.logIn(userId);
+    }
+  } catch {
+    await Purchases.logIn(userId);
+  }
 }
 
 export async function logoutPurchases(): Promise<void> {
@@ -62,7 +68,9 @@ export function getPlanProductId(planId: string, isAnnual: boolean): string {
 export async function syncRevenueCatToDb(userId: string): Promise<void> {
   try {
     const appUserId = await Purchases.getAppUserID();
-    if (appUserId !== userId) return;
+    if (appUserId !== userId) {
+      await Purchases.logIn(userId);
+    }
 
     const customerInfo = await Purchases.getCustomerInfo();
     const active = customerInfo.entitlements.active;
