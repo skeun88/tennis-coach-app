@@ -150,15 +150,12 @@ export default function SelectPlanScreen() {
           Alert.alert('복원 실패', restoreErr.message ?? '구매 복원 중 오류가 발생했습니다.');
         }
       } else if (code === '13') {
-        // 다른 계정에서 이미 구독 중 → 자동 복원 금지, 사용자가 명시적으로 선택
+        // 다른 계정에서 이미 구독 중 → 복원 시도 없이 안내만
         setPurchasing(null);
         Alert.alert(
           '다른 계정에서 구독 중',
-          '이 Apple ID로 이미 다른 계정에서 구독 중입니다. 해당 계정으로 로그인하거나, 이 계정으로 옮기려면 구매 복원을 직접 눌러주세요.',
-          [
-            { text: '취소', style: 'cancel' },
-            { text: '구매 복원', onPress: () => handleRestoreForPlan(planId) },
-          ]
+          '이 Apple ID는 다른 계정에서 구독 중입니다. 해당 계정으로 로그인해주세요.\n\n어느 계정으로 가입했는지 모르시면 고객센터로 문의해주세요.',
+          [{ text: '확인' }]
         );
         return;
       } else if (!e.userCancelled) {
