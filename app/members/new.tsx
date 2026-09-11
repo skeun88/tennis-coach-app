@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { MemberLevel } from '../../types';
 import { Colors } from '../../lib/theme';
-import { getCurrentSubscription, FREE_MEMBER_LIMIT, getMemberCount, isSubscriptionActive } from '../../lib/subscription';
+import { getCurrentSubscription, canAddMember } from '../../lib/subscription';
 import { syncRevenueCatToDb } from '../../lib/purchases';
 import { IS_BETA } from '../../lib/beta';
 
@@ -631,15 +631,12 @@ export default function NewMemberScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    // Free 플랜: 회원 3명 초과 시 구독 필요 (IS_BETA에서는 무제한)
-    const memberCount = IS_BETA ? 0 : await getMemberCount(user.id);
-    if (!IS_BETA && memberCount >= FREE_MEMBER_LIMIT) {
-      // RevenueCat 최신 상태 먼저 동기화
+    // 플랜별 회원 한도 체크 (IS_BETA에서는 건너뜀)
+    if (!IS_BETA) {
       await syncRevenueCatToDb(user.id);
       const subscription = await getCurrentSubscription();
-      const active = isSubscriptionActive(subscription);
-      const isPaidPlan = subscription?.plan_id === 'basic' || subscription?.plan_id === 'pro';
-      if (!active || !isPaidPlan) {
+      const ok = await canAddMember(user.id, subscription);
+      if (!ok) {
         setLoading(false);
         router.push({ pathname: '/subscription/select-plan', params: { reason: 'member_limit' } } as any);
         return;

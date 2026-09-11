@@ -26,6 +26,7 @@ export function configurePurchases(): void {
 
 export async function loginPurchases(userId: string): Promise<void> {
   if (!IOS_KEY && !ANDROID_KEY) return;
+  try { await Purchases.logOut(); } catch {}
   await Purchases.logIn(userId);
 }
 
@@ -60,6 +61,9 @@ export function getPlanProductId(planId: string, isAnnual: boolean): string {
 /** RevenueCat CustomerInfo → Supabase DB 동기화 (활성 구독이 있을 때만 업데이트) */
 export async function syncRevenueCatToDb(userId: string): Promise<void> {
   try {
+    const appUserId = await Purchases.getAppUserID();
+    if (appUserId !== userId) return;
+
     const customerInfo = await Purchases.getCustomerInfo();
     const active = customerInfo.entitlements.active;
 

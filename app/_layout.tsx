@@ -8,7 +8,7 @@ import { getCurrentSubscription } from '../lib/subscription';
 import { registerCoachPushToken } from '../lib/notifications';
 import { IS_BETA } from '../lib/beta';
 import BrandLoadingScreen from '../components/BrandLoadingScreen';
-import { configurePurchases, loginPurchases, logoutPurchases } from '../lib/purchases';
+import { configurePurchases, loginPurchases, logoutPurchases, syncRevenueCatToDb } from '../lib/purchases';
 import {
   fetchHomeData,
   persistHomeData,
@@ -46,7 +46,10 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (session?.user.id) {
-      loginPurchases(session.user.id).catch(() => {});
+      const userId = session.user.id;
+      loginPurchases(userId)
+        .then(() => syncRevenueCatToDb(userId))
+        .catch(() => {});
     } else {
       logoutPurchases();
     }
