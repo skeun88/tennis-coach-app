@@ -423,6 +423,22 @@ export default function SelectPlanScreen() {
           * 가격은 부가세 포함 · 체험 기간 중 언제든 취소 가능{'\n'}
           * 연간 결제 시 {ANNUAL_PRICES.basic?.toLocaleString()}원 / {ANNUAL_PRICES.pro?.toLocaleString()}원 일괄 결제
         </Text>
+
+        {/* Apple 가이드라인 3.1.2 구독 필수 고지 */}
+        <View style={s.subscriptionDisclosure}>
+          <Text style={s.subscriptionDisclosureText}>
+            구독은 선택한 기간마다 자동으로 갱신되며, 현재 기간 만료 24시간 전까지 취소하지 않으면 갱신됩니다. App Store 계정 설정에서 언제든 관리·해지할 수 있습니다.
+          </Text>
+          <View style={s.subscriptionDisclosureLinks}>
+            <TouchableOpacity onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}>
+              <Text style={s.subscriptionDisclosureLink}>이용약관</Text>
+            </TouchableOpacity>
+            <Text style={s.subscriptionDisclosureSeparator}> · </Text>
+            <TouchableOpacity onPress={() => Linking.openURL('https://skeun88.github.io/tennis-coach-app/privacy-policy.html')}>
+              <Text style={s.subscriptionDisclosureLink}>개인정보처리방침</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -531,6 +547,20 @@ const s = StyleSheet.create({
   compareLinkText: { fontSize: 13, color: TERRACOTTA, fontWeight: '600', textDecorationLine: 'underline' },
 
   legalNote: { fontSize: 11, color: WARM_GRAY, textAlign: 'center', lineHeight: 18, marginTop: 4 },
+  subscriptionDisclosure: {
+    marginTop: 16, paddingTop: 16,
+    borderTopWidth: 1, borderTopColor: WARM_GRAY_BORDER,
+  },
+  subscriptionDisclosureText: {
+    fontSize: 10, color: WARM_GRAY, lineHeight: 15, textAlign: 'center',
+  },
+  subscriptionDisclosureLinks: {
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 8,
+  },
+  subscriptionDisclosureLink: {
+    fontSize: 10, color: TERRACOTTA, textDecorationLine: 'underline',
+  },
+  subscriptionDisclosureSeparator: { fontSize: 10, color: WARM_GRAY },
   reasonBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: TERRACOTTA + '12', borderRadius: 10,
