@@ -1,7 +1,8 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const TOSS_SECRET_KEY = Deno.env.get('TOSS_SECRET_KEY') ?? 'test_sk_nRQoOaPz8LlvM2EMxaam8y47BMw6';
+const TOSS_SECRET_KEY = Deno.env.get('TOSS_SECRET_KEY')!;
+const CRON_SECRET = Deno.env.get('CRON_SECRET')!;
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
@@ -12,7 +13,12 @@ const PLAN_PRICES: Record<string, number> = {
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: { 'Access-Control-Allow-Origin': '*' } });
+    return new Response('Method Not Allowed', { status: 405 });
+  }
+
+  const authHeader = req.headers.get('Authorization');
+  if (authHeader !== `Bearer ${CRON_SECRET}`) {
+    return new Response('Unauthorized', { status: 401 });
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
@@ -38,6 +44,21 @@ serve(async (req) => {
 
     for (const sub of subscriptions ?? []) {
       try {
+        // 선점 로그 삽입 — 중복 시 오늘 이미 처리된 것으로 간주하고 스킵
+        const { error: lockError } = await supabase.from('subscription_logs').insert({
+          subscription_id: sub.id,
+          coach_id: sub.coach_id,
+          event_type: 'payment_attempting',
+          plan_id: sub.plan_id,
+        });
+        if (lockError) {
+          if (lockError.code === '23505') {
+            results.push({ coachId: sub.coach_id, success: true });
+            continue;
+          }
+          throw lockError;
+        }
+
         const amount = PLAN_PRICES[sub.plan_id] ?? 29000;
         const orderId = `sub_${sub.coach_id}_${Date.now()}`;
 

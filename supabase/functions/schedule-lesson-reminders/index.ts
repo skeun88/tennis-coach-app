@@ -1,10 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+const CRON_SECRET = Deno.env.get('CRON_SECRET')!
 
 // KST = UTC+9
 const KST_OFFSET = 9 * 60 * 60 * 1000
@@ -76,7 +73,12 @@ async function sendPush(supabase: any, {
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  if (req.method === 'OPTIONS') return new Response('Method Not Allowed', { status: 405 })
+
+  const authHeader = req.headers.get('Authorization')
+  if (authHeader !== `Bearer ${CRON_SECRET}`) {
+    return new Response('Unauthorized', { status: 401 })
+  }
 
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
   const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
