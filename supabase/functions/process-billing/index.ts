@@ -16,8 +16,7 @@ serve(async (req) => {
     return new Response('Method Not Allowed', { status: 405 });
   }
 
-  const authHeader = req.headers.get('Authorization');
-  if (authHeader !== `Bearer ${CRON_SECRET}`) {
+  if (req.headers.get('x-cron-secret') !== CRON_SECRET) {
     return new Response('Unauthorized', { status: 401 });
   }
 
