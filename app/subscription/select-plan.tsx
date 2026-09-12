@@ -120,13 +120,30 @@ export default function SelectPlanScreen() {
     }
   }
 
+  function showOtherSubscriberAlert() {
+    Alert.alert(
+      '다른 계정에서 구독 중',
+      '이 Apple ID는 다른 계정에서 구독 중입니다. 해당 계정으로 로그인해주세요.\n\n어느 계정으로 가입했는지 모르시면 고객센터로 문의해주세요.',
+      [{ text: '확인' }]
+    );
+  }
+
+  function isOtherSubscriberError(e: any): boolean {
+    return String(e.code ?? '') === '13' ||
+      (typeof e.message === 'string' && e.message.includes('another active subscriber'));
+  }
+
   async function handleRestoreForPlan(planId: 'basic' | 'pro') {
     setPurchasing(planId);
     try {
       const customerInfo = await restorePurchases();
       await applySubscription(customerInfo, planId);
     } catch (e: any) {
-      Alert.alert('복원 실패', e.message ?? '구매 복원 중 오류가 발생했습니다.');
+      if (isOtherSubscriberError(e)) {
+        showOtherSubscriberAlert();
+      } else {
+        Alert.alert('복원 실패', e.message ?? '구매 복원 중 오류가 발생했습니다.');
+      }
     } finally {
       setPurchasing(null);
     }
@@ -147,16 +164,16 @@ export default function SelectPlanScreen() {
           const restored = await restorePurchases();
           await applySubscription(restored, planId);
         } catch (restoreErr: any) {
-          Alert.alert('복원 실패', restoreErr.message ?? '구매 복원 중 오류가 발생했습니다.');
+          if (isOtherSubscriberError(restoreErr)) {
+            showOtherSubscriberAlert();
+          } else {
+            Alert.alert('복원 실패', restoreErr.message ?? '구매 복원 중 오류가 발생했습니다.');
+          }
         }
       } else if (code === '13') {
         // 다른 계정에서 이미 구독 중 → 복원 시도 없이 안내만
         setPurchasing(null);
-        Alert.alert(
-          '다른 계정에서 구독 중',
-          '이 Apple ID는 다른 계정에서 구독 중입니다. 해당 계정으로 로그인해주세요.\n\n어느 계정으로 가입했는지 모르시면 고객센터로 문의해주세요.',
-          [{ text: '확인' }]
-        );
+        showOtherSubscriberAlert();
         return;
       } else if (!e.userCancelled) {
         Alert.alert('결제 실패', e.message ?? '결제 중 오류가 발생했습니다.');
