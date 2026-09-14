@@ -58,6 +58,10 @@ export async function restorePurchases() {
   return Purchases.restorePurchases();
 }
 
+export async function getAppUserID(): Promise<string> {
+  return Purchases.getAppUserID();
+}
+
 export function getPlanProductId(planId: string, isAnnual: boolean): string {
   const map = PLAN_PRODUCT_IDS[planId];
   if (!map) throw new Error(`알 수 없는 플랜: ${planId}`);

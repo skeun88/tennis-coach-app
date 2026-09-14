@@ -18,7 +18,7 @@ import { PLANS, ANNUAL_PRICES, TRIAL_DAYS } from '../../lib/subscription';
 import { IS_BETA } from '../../lib/beta';
 import { supabase } from '../../lib/supabase';
 import { useSubscription } from '../../hooks/useSubscription';
-import { purchaseProductById, getPlanProductId, ENTITLEMENT_IDS, restorePurchases } from '../../lib/purchases';
+import { purchaseProductById, getPlanProductId, ENTITLEMENT_IDS, restorePurchases, getAppUserID } from '../../lib/purchases';
 
 const CREAM = '#F7F0E9';
 const TERRACOTTA = '#C0755A';
@@ -113,11 +113,27 @@ export default function SelectPlanScreen() {
     await refresh();
     if (isActive) {
       router.replace('/subscription/manage');
-    } else {
-      Alert.alert('구독 완료', '구독이 처리 중입니다. 잠시 후 확인해 주세요.', [
-        { text: '확인', onPress: () => router.replace('/subscription/manage') },
-      ]);
+      return;
     }
+
+    // entitlement가 안 붙은 경우: 다른 계정 점유인지 확인
+    const activeIds = Object.keys(customerInfo.entitlements.active ?? {});
+    const boundElsewhere =
+      customerInfo.originalAppUserId &&
+      customerInfo.originalAppUserId !== (await getAppUserID());
+
+    if (activeIds.length === 0 && boundElsewhere) {
+      Alert.alert(
+        '다른 계정에서 구독 중',
+        '이 Apple ID의 구독은 다른 계정에 연결되어 있습니다. 해당 계정으로 로그인해주세요.\n\n어느 계정으로 가입했는지 모르시면 고객센터로 문의해주세요.',
+        [{ text: '확인' }]
+      );
+      return;
+    }
+
+    Alert.alert('처리 중', '구독 반영에 시간이 걸릴 수 있습니다. 잠시 후 다시 확인해 주세요.', [
+      { text: '확인', onPress: () => router.replace('/subscription/manage') },
+    ]);
   }
 
   function showOtherSubscriberAlert() {
