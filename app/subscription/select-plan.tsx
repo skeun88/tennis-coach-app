@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,7 +18,7 @@ import { PLANS, ANNUAL_PRICES, TRIAL_DAYS } from '../../lib/subscription';
 import { IS_BETA } from '../../lib/beta';
 import { supabase } from '../../lib/supabase';
 import { useSubscription } from '../../hooks/useSubscription';
-import { purchaseProductById, getPlanProductId, ENTITLEMENT_IDS, restorePurchases, getAppUserID } from '../../lib/purchases';
+import { purchaseProductById, getPlanProductId, ENTITLEMENT_IDS, restorePurchases, getAppUserID, getCurrentBillingCycle } from '../../lib/purchases';
 
 const CREAM = '#F7F0E9';
 const TERRACOTTA = '#C0755A';
@@ -71,8 +71,14 @@ export default function SelectPlanScreen() {
   const [billing, setBilling] = useState<BillingCycle>('monthly');
   const [compareVisible, setCompareVisible] = useState(false);
   const [purchasing, setPurchasing] = useState<string | null>(null); // planId being purchased
+  const [currentBillingCycle, setCurrentBillingCycle] = useState<'monthly' | 'annual' | null>(null);
 
   const currentPlanId = subscription?.plan_id ?? 'free';
+
+  useEffect(() => {
+    if (currentPlanId === 'free') { setCurrentBillingCycle(null); return; }
+    getCurrentBillingCycle(currentPlanId as 'basic' | 'pro').then(setCurrentBillingCycle);
+  }, [currentPlanId]);
 
   // 신규 유료 구독 자격: Free 플랜이고 trial을 한 번도 사용하지 않은 사용자
   // (createFreeSubscription은 trial_starts_at === trial_ends_at로 기록)
@@ -91,8 +97,17 @@ export default function SelectPlanScreen() {
     return Math.round(annual / 12);
   }
 
+  function isCurrentPlan(planId: 'basic' | 'pro'): boolean {
+    if (currentPlanId !== planId) return false;
+    if (currentBillingCycle === null) return true; // Toss 구독 등 주기 미확인
+    return billing === currentBillingCycle;
+  }
+
   function getCtaText(planId: 'basic' | 'pro'): string {
-    if (currentPlanId === planId) return '현재 플랜';
+    if (currentPlanId === planId) {
+      if (isCurrentPlan(planId)) return '현재 플랜';
+      return billing === 'annual' ? '연간으로 전환' : '월간으로 전환';
+    }
     if (isTrialEligible) return '14일 무료로 시작하기';
     if (currentPlanId === 'free') return `${PLANS[planId].name} 구독하기`;
     return `${PLANS[planId].name}으로 변경`;
@@ -332,7 +347,7 @@ export default function SelectPlanScreen() {
         </View>
 
         {/* Basic 카드 */}
-        <View style={[s.planCard, s.planCardPaid, currentPlanId === 'basic' && s.planCardCurrent]}>
+        <View style={[s.planCard, s.planCardPaid, isCurrentPlan('basic') && s.planCardCurrent]}>
           {isTrialEligible && (
             <View style={s.trialBadge}>
               <Ionicons name="gift-outline" size={12} color={TERRACOTTA} />
@@ -341,7 +356,7 @@ export default function SelectPlanScreen() {
           )}
           <View style={s.planCardHeader}>
             <Text style={[s.planName, s.planNamePaid]}>Basic</Text>
-            {currentPlanId === 'basic' && (
+            {isCurrentPlan('basic') && (
               <View style={s.currentBadge}>
                 <Text style={s.currentBadgeText}>이용 중</Text>
               </View>
@@ -377,9 +392,9 @@ export default function SelectPlanScreen() {
             <FeatureItem icon="add-circle-outline" text="AI 레슨 기록 충전 가능" />
           </View>
           <TouchableOpacity
-            style={[s.paidCta, (currentPlanId === 'basic' || !!purchasing) && s.paidCtaDisabled]}
-            onPress={currentPlanId !== 'basic' && !purchasing ? () => handleSelectPlan('basic') : undefined}
-            disabled={currentPlanId === 'basic' || !!purchasing}
+            style={[s.paidCta, (isCurrentPlan('basic') || !!purchasing) && s.paidCtaDisabled]}
+            onPress={!isCurrentPlan('basic') && !purchasing ? () => handleSelectPlan('basic') : undefined}
+            disabled={isCurrentPlan('basic') || !!purchasing}
             activeOpacity={0.85}
           >
             {purchasing === 'basic'
@@ -390,7 +405,7 @@ export default function SelectPlanScreen() {
         </View>
 
         {/* Pro 카드 (추천) */}
-        <View style={[s.planCard, s.planCardPaid, s.planCardPro, currentPlanId === 'pro' && s.planCardProCurrent]}>
+        <View style={[s.planCard, s.planCardPaid, s.planCardPro, isCurrentPlan('pro') && s.planCardProCurrent]}>
           <View style={[s.trialBadge, s.trialBadgePro]}>
             <Ionicons name="star-outline" size={12} color={DARK_BROWN} />
             <Text style={[s.trialBadgeText, { color: DARK_BROWN }]}>
@@ -399,7 +414,7 @@ export default function SelectPlanScreen() {
           </View>
           <View style={s.planCardHeader}>
             <Text style={[s.planName, s.planNamePro]}>Pro</Text>
-            {currentPlanId === 'pro' && (
+            {isCurrentPlan('pro') && (
               <View style={[s.currentBadge, { backgroundColor: DARK_BROWN }]}>
                 <Text style={s.currentBadgeText}>이용 중</Text>
               </View>
@@ -437,9 +452,9 @@ export default function SelectPlanScreen() {
             <FeatureItem icon="add-circle-outline" text="AI 레슨 기록 충전 가능" />
           </View>
           <TouchableOpacity
-            style={[s.paidCta, s.paidCtaPro, (currentPlanId === 'pro' || !!purchasing) && s.paidCtaDisabled]}
-            onPress={currentPlanId !== 'pro' && !purchasing ? () => handleSelectPlan('pro') : undefined}
-            disabled={currentPlanId === 'pro' || !!purchasing}
+            style={[s.paidCta, s.paidCtaPro, (isCurrentPlan('pro') || !!purchasing) && s.paidCtaDisabled]}
+            onPress={!isCurrentPlan('pro') && !purchasing ? () => handleSelectPlan('pro') : undefined}
+            disabled={isCurrentPlan('pro') || !!purchasing}
             activeOpacity={0.85}
           >
             {purchasing === 'pro'

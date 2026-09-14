@@ -62,6 +62,19 @@ export async function getAppUserID(): Promise<string> {
   return Purchases.getAppUserID();
 }
 
+export async function getCurrentBillingCycle(planId: 'basic' | 'pro'): Promise<'monthly' | 'annual' | null> {
+  try {
+    const info = await Purchases.getCustomerInfo();
+    const entId = planId === 'pro' ? ENTITLEMENT_IDS.PRO : ENTITLEMENT_IDS.BASIC;
+    const productId = info.entitlements.active[entId]?.productIdentifier ?? '';
+    if (!productId) return null;
+    const isAnnual = Object.values(PLAN_PRODUCT_IDS).some(p => p.annual === productId);
+    return isAnnual ? 'annual' : 'monthly';
+  } catch {
+    return null;
+  }
+}
+
 export function getPlanProductId(planId: string, isAnnual: boolean): string {
   const map = PLAN_PRODUCT_IDS[planId];
   if (!map) throw new Error(`알 수 없는 플랜: ${planId}`);
