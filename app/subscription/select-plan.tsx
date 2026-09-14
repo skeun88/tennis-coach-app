@@ -129,8 +129,12 @@ export default function SelectPlanScreen() {
   }
 
   function isOtherSubscriberError(e: any): boolean {
-    return String(e.code ?? '') === '13' ||
-      (typeof e.message === 'string' && e.message.includes('another active subscriber'));
+    const code = String(e?.code ?? '');
+    const msg = String(e?.message ?? e?.underlyingErrorMessage ?? '').toLowerCase();
+    const readable = String(e?.readableErrorCode ?? '').toUpperCase();
+    return code === '13' ||
+      readable === 'RECEIPT_ALREADY_IN_USE' ||
+      msg.includes('another active subscriber');
   }
 
   async function handleRestoreForPlan(planId: 'basic' | 'pro') {
