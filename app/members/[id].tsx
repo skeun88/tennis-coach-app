@@ -255,6 +255,7 @@ export default function MemberDetailScreen() {
   const [msgInput, setMsgInput] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
   const msgListRef = React.useRef<any>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [editing, setEditing] = useState(false);
 
   // Edit state
@@ -487,7 +488,45 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     setByDateAddCalMonth({ year: new Date().getFullYear(), month: new Date().getMonth() });
   }
 
-  useEffect(() => { loadMember(); loadFutureLessons(); }, []);
+  async function loadUnreadCount() {
+    if (!id) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { count } = await supabase
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('member_id', id)
+      .eq('coach_id', user.id)
+      .eq('sender_type', 'member')
+      .is('read_at', null);
+    setUnreadCount(count ?? 0);
+  }
+
+  useEffect(() => { loadMember(); loadFutureLessons(); loadUnreadCount(); }, []);
+
+  // 실시간 새 메시지 구독
+  useEffect(() => {
+    if (!id) return;
+    const channel = supabase
+      .channel(`member-messages-${id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `member_id=eq.${id}`,
+      }, (payload) => {
+        if ((payload.new as any)?.sender_type === 'member') {
+          if (tab !== 'messages') {
+            setUnreadCount(prev => prev + 1);
+          } else {
+            loadMessages();
+          }
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [id, tab]);
+
   useEffect(() => {
     if (tab === 'attendance') loadAttendance();
     if (tab === 'payment') loadPayments();
@@ -1077,6 +1116,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     if (user) {
       await supabase.from('messages').update({ read_at: new Date().toISOString() })
         .eq('member_id', id).eq('coach_id', user.id).eq('sender_type', 'member').is('read_at', null);
+      setUnreadCount(0);
     }
     setTimeout(() => msgListRef.current?.scrollToEnd({ animated: false }), 200);
   }
@@ -1182,7 +1222,14 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         <View style={styles.tabRow}>
           {TABS.map(t => (
             <TouchableOpacity key={t.key} style={[styles.tabBtn, tab === t.key && styles.tabBtnActive]} onPress={() => setTab(t.key)}>
-              <Ionicons name={t.icon as any} size={16} color={tab === t.key ? Colors.primary : Colors.mutedFg} />
+              <View style={{ position: 'relative' }}>
+                <Ionicons name={t.icon as any} size={16} color={tab === t.key ? Colors.primary : Colors.mutedFg} />
+                {t.key === 'messages' && unreadCount > 0 && (
+                  <View style={styles.unreadBadge}>
+                    <Text style={styles.unreadBadgeText}>{unreadCount > 99 ? '99+' : String(unreadCount)}</Text>
+                  </View>
+                )}
+              </View>
               <Text style={[styles.tabLabel, tab === t.key && styles.tabLabelActive]}>{t.label}</Text>
             </TouchableOpacity>
           ))}
@@ -2746,6 +2793,15 @@ const styles = StyleSheet.create({
   confirmBtnTP: { margin: 16, backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   confirmBtnTPDis: { backgroundColor: Colors.iconMuted },
   confirmBtnTPText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  // 메시지 탭 배지
+  unreadBadge: {
+    position: 'absolute', top: -5, right: -7,
+    minWidth: 16, height: 16, borderRadius: 8,
+    backgroundColor: '#C0755A',
+    justifyContent: 'center', alignItems: 'center',
+    paddingHorizontal: 3,
+  },
+  unreadBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
   // 일정 설정 행
   scheduleSectionRow: {
     flexDirection: 'row', alignItems: 'center', paddingVertical: 12,
