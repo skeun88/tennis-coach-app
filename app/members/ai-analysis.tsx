@@ -27,7 +27,7 @@ const ANALYSIS_STEPS = [
   { step: 1, icon: '🎙', label: '음성 변환 중...' },
   { step: 2, icon: '📝', label: '레슨 내용 요약 중...' },
   { step: 3, icon: '🔍', label: '관련 교육 자료 검색 중...' },
-  { step: 4, icon: '🧠', label: 'AI 레슨 분석 중...' },
+  { step: 4, icon: '🧠', label: 'AI 레슨 기록 중...' },
   { step: 5, icon: '💾', label: '분석 결과 저장 중...' },
 ];
 
@@ -631,7 +631,7 @@ export default function AIAnalysisScreen() {
 
       if (!skipMonthlyIncrement) await incrementAiAnalysisUsage(userId);
       await loadPlans();
-      Alert.alert('완료', 'AI 레슨 분석이 완료됐습니다! 🎾');
+      Alert.alert('완료', 'AI 레슨 기록이 완료됐습니다! 🎾');
 
     } catch (e: any) {
       if (e?.message === 'POLL_TIMEOUT') {
@@ -888,7 +888,7 @@ export default function AIAnalysisScreen() {
           <Ionicons name="chevron-back" size={24} color="#fff" />
         </TouchableOpacity>
         <View>
-          <Text style={styles.headerTitle}>AI 레슨 분석</Text>
+          <Text style={styles.headerTitle}>AI 레슨 기록</Text>
           <Text style={styles.headerSub}>{memberName} · {memberLevel}</Text>
         </View>
       </View>

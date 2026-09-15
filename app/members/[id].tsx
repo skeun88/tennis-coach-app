@@ -29,6 +29,13 @@ const LEVEL_COLORS: Record<MemberLevel, string> = {
   '상급': Colors.level.상급,
   '선수': Colors.level.선수,
 };
+const LEVEL_BADGE: Record<string, { bg: string; text: string }> = {
+  '입문': { bg: '#FBF2EF', text: '#C0755A' },
+  '초급': { bg: '#F0E0D6', text: '#A86045' },
+  '중급': { bg: '#E4C8B8', text: '#8A4A34' },
+  '상급': { bg: '#D4A898', text: '#6B3522' },
+  '선수': { bg: '#3E2B22', text: '#F7F0E9' },
+};
 
 const TIME_OPTIONS: string[] = [];
 for (let h = 6; h <= 23; h++) {
@@ -1131,24 +1138,31 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
 
       {/* Profile Header — 메시지 탭에서 숨김 */}
       {tab !== 'messages' && (
-        <View style={styles.profileHeader}>
-          <View style={[styles.bigAvatar, { backgroundColor: LEVEL_COLORS[member.level as MemberLevel] ?? Colors.level.입문 }]}>
-            <Text style={styles.bigAvatarText}>{member.name.slice(0, 1)}</Text>
-          </View>
-          <Text style={styles.profileName}>{member.name}</Text>
-          <View style={styles.profileBadgeRow}>
-            <View style={[styles.levelBadge, { backgroundColor: (LEVEL_COLORS[member.level as MemberLevel] ?? Colors.level.입문) + '33' }]}>
-              <Text style={[styles.levelText, { color: LEVEL_COLORS[member.level as MemberLevel] ?? Colors.level.입문 }]}>{member.level}</Text>
+        <View style={styles.profileHeaderWrap}>
+          <View style={styles.profileCard}>
+            <View style={[styles.memberAvatar, { backgroundColor: LEVEL_BADGE[member.level]?.bg ?? '#FBF2EF' }]}>
+              <Text style={[styles.memberAvatarText, { color: LEVEL_BADGE[member.level]?.text ?? '#C0755A' }]}>
+                {member.name.slice(0, 1)}
+              </Text>
             </View>
-            {!member.is_active && <View style={styles.inactiveBadge}><Text style={styles.inactiveText}>비활성</Text></View>}
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <Text style={styles.profileName}>{member.name}</Text>
+                <View style={[styles.levelBadge, { backgroundColor: LEVEL_BADGE[member.level]?.bg ?? '#FBF2EF' }]}>
+                  <Text style={[styles.levelText, { color: LEVEL_BADGE[member.level]?.text ?? '#C0755A' }]}>{member.level}</Text>
+                </View>
+                {!member.is_active && <View style={styles.inactiveBadge}><Text style={styles.inactiveText}>비활성</Text></View>}
+              </View>
+              <Text style={styles.profilePhone}>{member.phone}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.aiBtn}
+              onPress={() => router.push({ pathname: '/members/ai-analysis', params: { memberId: member.id, memberName: member.name, memberLevel: member.level } })}
+            >
+              <Ionicons name="sparkles" size={13} color="#C0755A" />
+              <Text style={styles.aiBtnText}>AI 레슨 기록</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            style={styles.aiBtn}
-            onPress={() => router.push({ pathname: '/members/ai-analysis', params: { memberId: member.id, memberName: member.name, memberLevel: member.level } })}
-          >
-            <Ionicons name="sparkles" size={14} color="#fff" />
-            <Text style={styles.aiBtnText}>AI 레슨 분석</Text>
-          </TouchableOpacity>
         </View>
       )}
 
@@ -1302,20 +1316,6 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                     <Text style={styles.reregisterBtnText}>재등록 안내 보내기</Text>
                   </TouchableOpacity>
                 )}
-
-                <View style={styles.btnRow}>
-                  <TouchableOpacity style={styles.editBtn} onPress={() => setEditing(true)}>
-                    <Ionicons name="create-outline" size={16} color={Colors.primary} />
-                    <Text style={styles.editBtnText}>수정</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.deactivateBtn, !member.is_active && { borderColor: Colors.primary }]} onPress={handleToggleActive}>
-                    <Text style={[styles.deactivateBtnText, !member.is_active && { color: Colors.primary }]}>{member.is_active ? '비활성화' : '활성화'}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.deletePermBtn} onPress={handlePermanentDelete}>
-                    <Ionicons name="trash-outline" size={15} color={Colors.white} />
-                    <Text style={styles.deletePermBtnText}>영구삭제</Text>
-                  </TouchableOpacity>
-                </View>
               </>
             ) : (
               <>
@@ -1460,6 +1460,23 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                 </View>
               </>
             )}
+          </View>
+        )}
+
+        {/* INFO TAB — 하단 액션 버튼 */}
+        {tab === 'info' && !editing && (
+          <View style={styles.actionBtnSection}>
+            <TouchableOpacity style={styles.editBtn} onPress={() => setEditing(true)}>
+              <Ionicons name="create-outline" size={16} color={Colors.primary} />
+              <Text style={styles.editBtnText}>수정</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.deactivateBtn, !member.is_active && { borderColor: Colors.primary }]} onPress={handleToggleActive}>
+              <Text style={[styles.deactivateBtnText, !member.is_active && { color: Colors.primary }]}>{member.is_active ? '비활성화' : '활성화'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.deletePermBtn} onPress={handlePermanentDelete}>
+              <Ionicons name="trash-outline" size={15} color={Colors.white} />
+              <Text style={styles.deletePermBtnText}>영구삭제</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -2599,34 +2616,40 @@ function InfoRow({ icon, label, value }: { icon: string; label: string; value: s
 
 const styles = StyleSheet.create({
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  profileHeader: { backgroundColor: Colors.primary, alignItems: 'center', paddingVertical: 24, paddingHorizontal: 16 },
-  bigAvatar: { width: 72, height: 72, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 10, backgroundColor: Colors.primary },
-  bigAvatarText: { fontSize: 30, fontWeight: '800', color: '#fff' },
-  profileName: { fontSize: 22, fontWeight: '800', color: '#fff', marginBottom: 8 },
-  profileBadgeRow: { flexDirection: 'row', gap: 8 },
-  levelBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 },
-  levelText: { fontSize: 13, fontWeight: '700' },
-  inactiveBadge: { backgroundColor: 'rgba(239,68,68,0.2)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 },
-  inactiveText: { color: Colors.destructive, fontSize: 13, fontWeight: '700' },
-  aiBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6, marginTop: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
-  aiBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  profileHeaderWrap: { backgroundColor: '#F7F0E9', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
+  profileCard: {
+    backgroundColor: '#fff', borderRadius: 18, padding: 14,
+    flexDirection: 'row', alignItems: 'center',
+    shadowColor: '#3E2B22', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+  },
+  memberAvatar: { width: 52, height: 52, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  memberAvatarText: { fontSize: 22, fontWeight: '800' },
+  profileName: { fontSize: 18, fontWeight: '800', color: '#3E2B22' },
+  profilePhone: { fontSize: 13, color: '#8B7355', marginTop: 3 },
+  levelBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20 },
+  levelText: { fontSize: 12, fontWeight: '700' },
+  inactiveBadge: { backgroundColor: 'rgba(239,68,68,0.12)', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20 },
+  inactiveText: { color: Colors.destructive, fontSize: 12, fontWeight: '700' },
+  aiBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FBF2EF', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: '#EDE0D4' },
+  aiBtnText: { color: '#C0755A', fontSize: 12, fontWeight: '700' },
   tabRow: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: Colors.border },
   tabBtn: { flex: 1, alignItems: 'center', paddingVertical: 10, flexDirection: 'row', justifyContent: 'center', gap: 4 },
   tabBtnActive: { borderBottomWidth: 2, borderBottomColor: Colors.primary },
   tabLabel: { fontSize: 14, color: Colors.mutedFg, fontWeight: '600' },
   tabLabelActive: { color: Colors.primary },
-  content: { flex: 1, backgroundColor: Colors.background },
-  card: { backgroundColor: '#fff', margin: 16, borderRadius: 12, padding: 16 },
+  content: { flex: 1, backgroundColor: '#F7F0E9' },
+  card: { backgroundColor: '#fff', margin: 16, borderRadius: 18, padding: 16, shadowColor: '#3E2B22', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 },
+  actionBtnSection: { flexDirection: 'row', gap: 10, marginHorizontal: 16, marginTop: 4, marginBottom: 8 },
   cardTitle: { fontSize: 15, fontWeight: '700', color: Colors.foreground, marginBottom: 12 },
   infoRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.mutedBg },
   infoLabel: { fontSize: 13, color: Colors.mutedFg, marginBottom: 2 },
   infoValue: { fontSize: 15, color: Colors.foreground, fontWeight: '500' },
   btnRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
-  editBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1.5, borderColor: Colors.primary, borderRadius: 10, paddingVertical: 10 },
-  editBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 14 },
-  deactivateBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: Colors.destructive, borderRadius: 10, paddingVertical: 10 },
-  deactivateBtnText: { color: Colors.destructive, fontWeight: '700', fontSize: 14 },
-  deletePermBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: Colors.destructive, borderRadius: 10, paddingVertical: 10 },
+  editBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#C0755A', borderRadius: 12, paddingVertical: 11 },
+  editBtnText: { color: '#C0755A', fontWeight: '700', fontSize: 14 },
+  deactivateBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#8B7355', borderRadius: 12, paddingVertical: 11 },
+  deactivateBtnText: { color: '#8B7355', fontWeight: '700', fontSize: 14 },
+  deletePermBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: Colors.destructive, borderRadius: 12, paddingVertical: 11 },
   deletePermBtnText: { color: Colors.white, fontWeight: '700', fontSize: 14 },
   inviteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderColor: Colors.primary, borderRadius: 10, paddingVertical: 11, marginBottom: 10 },
   inviteBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 14 },

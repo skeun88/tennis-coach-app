@@ -43,7 +43,7 @@ export default function MemberIssueTags({
 
     const plans = (data ?? []) as LessonPlan[];
     setHasData(plans.length > 0);
-    setTags(extractIssueTags(plans));
+    setTags(extractIssueTags(plans).slice(0, 5));
     setLoading(false);
   }
 
