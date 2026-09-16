@@ -5,19 +5,19 @@
 
 export const Colors = {
   // Brand
-  primary: '#D2755A',       // terracotta
-  primaryLight: '#FBF2EF',  // terracotta light
+  primary: '#C0755A',       // terracotta (KERRI brand)
+  primaryLight: '#F5E8E1',  // terracotta light
   navy: '#1B2E4B',          // deep navy — used for headers / dark surfaces
   accentWarm: '#E89B7E',    // warm coral accent
   mint: '#00C9A7',          // mint accent (kept for legacy)
 
   // Backgrounds
-  background: '#FAFAFA',    // was #f5f7fa
+  background: '#F7F0E9',    // KERRI cream
   card: '#FFFFFF',
   mutedBg: '#F4F6F9',       // was #f5f5f5 / #f0f0f0
 
   // Text
-  foreground: '#2D3340',    // was #1a1a1a / #333
+  foreground: '#3E2B22',    // KERRI dark brown
   mutedFg: '#8B93A5',       // was #888 / #aaa / #555
   placeholder: '#B0B7C3',   // was #bbb / #ccc
 

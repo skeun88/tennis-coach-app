@@ -908,49 +908,14 @@ export default function AIAnalysisScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
         {/* 녹음 시작 카드 */}
         <View style={styles.recordCard}>
+          {/* 1. 제목 */}
           <Text style={styles.recordPrompt}>오늘 레슨을 기록해 볼까요?</Text>
+          {/* 2. 설명 */}
           <Text style={styles.recordDesc}>녹음하면 AI가 핵심 내용을 정리해요</Text>
-
-          {/* 인식 향상 모드 토글 */}
-          {!isRecording && !isPaused && !isAnalyzing && (
-            <TouchableOpacity
-              style={styles.enhancedModeRow}
-              onPress={() => setEnhancedMode(v => !v)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.enhancedModeLeft}>
-                <Ionicons name="sparkles-outline" size={16} color={enhancedMode ? Colors.primary : Colors.mutedFg} />
-                <View>
-                  <Text style={[styles.enhancedModeLabel, enhancedMode && styles.enhancedModeLabelOn]}>
-                    인식 향상 모드
-                  </Text>
-                  <Text style={styles.enhancedModeDesc}>음성 인식 정확도를 높여요</Text>
-                </View>
-              </View>
-              <View style={[styles.enhancedToggle, enhancedMode && styles.enhancedToggleOn]}>
-                <View style={[styles.enhancedThumb, enhancedMode && styles.enhancedThumbOn]} />
-              </View>
-            </TouchableOpacity>
-          )}
-
-          {/* 사용량 한 줄 표시 */}
-          {usageInfo && (
-            <View style={styles.usageSummaryRow}>
-              <Ionicons name="analytics-outline" size={13} color={Colors.mutedFg} />
-              <Text style={styles.usageSummaryText}>
-                {usageInfo.used}/{usageInfo.limit}회 사용
-                {(subscription?.extra_report_credits ?? 0) > 0 ? ` · 추가 ${subscription!.extra_report_credits}회` : ''}
-                {' · '}{Math.max(0, usageInfo.limit - usageInfo.used)}회 남음
-              </Text>
-              <TouchableOpacity onPress={() => setTopupModalVisible(true)}>
-                <Text style={styles.usageTopupLink}>충전</Text>
-              </TouchableOpacity>
-            </View>
-          )}
 
           {/* 인터럽트 토스트 */}
           {interruptToast && (
@@ -960,6 +925,7 @@ export default function AIAnalysisScreen() {
             </View>
           )}
 
+          {/* 3. 중앙 원형 버튼 영역 */}
           {isAnalyzing ? (
             <AnalyzingView />
           ) : (
@@ -984,7 +950,7 @@ export default function AIAnalysisScreen() {
                 >
                   <Ionicons
                     name={isRecording && !isPaused ? 'stop' : isPaused ? 'pause' : 'mic'}
-                    size={26}
+                    size={32}
                     color="#fff"
                   />
                   <Text style={styles.recordBtnText}>
@@ -993,7 +959,6 @@ export default function AIAnalysisScreen() {
                 </TouchableOpacity>
               </Animated.View>
 
-              {/* 이어서 녹음 버튼 (자동 재개 실패 시) */}
               {showResumeBtn && (
                 <TouchableOpacity style={styles.resumeBtn} onPress={resumeRecording}>
                   <Ionicons name="play-circle-outline" size={18} color="#fff" />
@@ -1001,7 +966,6 @@ export default function AIAnalysisScreen() {
                 </TouchableOpacity>
               )}
 
-              {/* 일시정지 중일 때 분석 시작 버튼 */}
               {isPaused && (
                 <TouchableOpacity style={styles.stopAnalyzeBtn} onPress={() => stopAndAnalyze('pause')}>
                   <Ionicons name="stop-circle-outline" size={18} color={Colors.primary} />
@@ -1012,6 +976,50 @@ export default function AIAnalysisScreen() {
               {isRecording && !isPaused && (
                 <Text style={styles.recordHint}>버튼을 눌러 녹음을 멈추고 AI 분석을 시작하세요</Text>
               )}
+            </View>
+          )}
+
+          {/* 4. 인식 향상 모드 스위치 */}
+          <TouchableOpacity
+            style={[styles.enhancedModeRow, (isRecording || isPaused || isAnalyzing) && { opacity: 0.45 }]}
+            onPress={() => !isRecording && !isPaused && !isAnalyzing && setEnhancedMode(v => !v)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.enhancedModeLeft}>
+              <Ionicons name="sparkles-outline" size={16} color={enhancedMode ? Colors.primary : Colors.mutedFg} />
+              <Text style={[styles.enhancedModeLabel, enhancedMode && styles.enhancedModeLabelOn]}>
+                인식 향상 모드
+              </Text>
+            </View>
+            <View style={[styles.enhancedToggle, enhancedMode && styles.enhancedToggleOn]}>
+              <View style={[styles.enhancedThumb, enhancedMode && styles.enhancedThumbOn]} />
+            </View>
+          </TouchableOpacity>
+
+          {/* 5. 프로그레스 바 */}
+          {usageInfo && (
+            <View style={styles.usageBarTrack}>
+              <View
+                style={[
+                  styles.usageBarFill,
+                  { width: `${Math.min(usageInfo.used / Math.max(usageInfo.limit, 1) * 100, 100)}%` as any },
+                ]}
+              />
+            </View>
+          )}
+
+          {/* 6. 사용량 한 줄 */}
+          {usageInfo && (
+            <View style={styles.usageSummaryRow}>
+              <Text style={styles.usageSummaryText}>{usageInfo.used} / {usageInfo.limit}회 사용</Text>
+              {(subscription?.extra_report_credits ?? 0) > 0 && (
+                <View style={styles.extraCreditBadge}>
+                  <Text style={styles.extraCreditText}>추가 {subscription!.extra_report_credits}회</Text>
+                </View>
+              )}
+              <TouchableOpacity onPress={() => setTopupModalVisible(true)} style={{ marginLeft: 'auto' as any }}>
+                <Text style={styles.usageSummaryRemaining}>{Math.max(0, usageInfo.limit - usageInfo.used)}회 남음</Text>
+              </TouchableOpacity>
             </View>
           )}
         </View>
@@ -1263,7 +1271,6 @@ export default function AIAnalysisScreen() {
             ))}
         </View>
 
-        <View style={{ height: 40 }} />
       </ScrollView>
 
       {/* 플랜 업셀 모달 (구독 차단 / 권한 없음) */}
@@ -1382,21 +1389,20 @@ export default function AIAnalysisScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: {
-    backgroundColor: Colors.primaryLight,
+    backgroundColor: Colors.background,
     paddingTop: Platform.OS === 'ios' ? 56 : 20,
     paddingBottom: 14,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
   },
   backBtn: { padding: 4 },
   headerTextWrap: { flex: 1 },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: Colors.foreground },
-  headerSub: { fontSize: 12, color: Colors.mutedFg, marginTop: 1 },
-  scroll: { flex: 1 },
+  headerTitle: { fontSize: 20, fontWeight: '800', color: Colors.foreground },
+  headerSub: { fontSize: 13, color: Colors.mutedFg, marginTop: 2 },
+  scroll: { flex: 1, backgroundColor: Colors.background },
+  scrollContent: { backgroundColor: Colors.background, paddingBottom: 48 },
 
   usageHelpBtn: {
     width: 26, height: 26, borderRadius: 13,
@@ -1456,34 +1462,45 @@ const styles = StyleSheet.create({
   // 녹음 카드
   recordCard: {
     backgroundColor: '#fff',
-    margin: 16,
+    marginHorizontal: 16,
+    marginTop: 8,
     marginBottom: 10,
     borderRadius: 20,
-    padding: 18,
+    padding: 20,
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  recordPrompt: { fontSize: 17, fontWeight: '800', color: Colors.foreground, marginBottom: 4 },
-  recordDesc: { fontSize: 13, color: Colors.mutedFg, lineHeight: 20, marginBottom: 14 },
+  recordPrompt: { fontSize: 20, fontWeight: '800', color: Colors.foreground, marginBottom: 4 },
+  recordDesc: { fontSize: 13, color: Colors.mutedFg, lineHeight: 20, marginBottom: 4 },
   enhancedModeRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 10, paddingHorizontal: 12,
-    backgroundColor: Colors.card, borderRadius: 10,
-    marginBottom: 12, borderWidth: 1, borderColor: Colors.border,
+    paddingVertical: 12, paddingHorizontal: 14,
+    backgroundColor: Colors.background, borderRadius: 12,
+    marginTop: 4, marginBottom: 14, borderWidth: 1, borderColor: Colors.border,
   },
   enhancedModeLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
   enhancedModeLabel: { fontSize: 13, color: Colors.mutedFg, fontWeight: '500' },
   enhancedModeLabelOn: { color: Colors.primary, fontWeight: '600' },
-  enhancedModeDesc: { fontSize: 11, color: Colors.placeholder, marginTop: 1 },
-  usageSummaryRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    marginBottom: 12, paddingHorizontal: 2,
+  usageBarTrack: {
+    height: 4, borderRadius: 2, backgroundColor: Colors.border,
+    marginBottom: 8, overflow: 'hidden',
   },
-  usageSummaryText: { fontSize: 12, color: Colors.mutedFg, flex: 1 },
-  usageTopupLink: { fontSize: 12, color: Colors.primary, fontWeight: '600' },
+  usageBarFill: {
+    height: 4, borderRadius: 2, backgroundColor: Colors.primary,
+  },
+  usageSummaryRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+  },
+  usageSummaryText: { fontSize: 12, color: Colors.mutedFg },
+  extraCreditBadge: {
+    backgroundColor: Colors.primaryLight, borderRadius: 20,
+    paddingHorizontal: 8, paddingVertical: 2,
+  },
+  extraCreditText: { fontSize: 11, fontWeight: '600', color: Colors.primary },
+  usageSummaryRemaining: { fontSize: 12, color: Colors.mutedFg },
   enhancedToggle: {
     width: 40, height: 22, borderRadius: 11,
     backgroundColor: Colors.border, justifyContent: 'center', paddingHorizontal: 2,
@@ -1507,7 +1524,7 @@ const styles = StyleSheet.create({
   stepDotCurrent: { backgroundColor: Colors.primary, width: 20, borderRadius: 4 },
 
   // 녹음 컨트롤
-  recordControls: { alignItems: 'center', gap: 12 },
+  recordControls: { alignItems: 'center', gap: 12, paddingVertical: 20 },
   durationBox: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.destructive },
   recordingDotPaused: { backgroundColor: Colors.mutedFg },
@@ -1538,44 +1555,43 @@ const styles = StyleSheet.create({
   },
   stopAnalyzeBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 14 },
   recordBtn: {
-    width: 82, height: 82, borderRadius: 41,
+    width: 115, height: 115, borderRadius: 57.5,
     backgroundColor: Colors.primary,
     justifyContent: 'center', alignItems: 'center',
-    shadowColor: Colors.primary, shadowOpacity: 0.3, shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 }, elevation: 5, gap: 4,
+    shadowColor: Colors.primary, shadowOpacity: 0.3, shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 }, elevation: 6, gap: 6,
   },
   recordBtnActive: { backgroundColor: Colors.destructive, shadowColor: Colors.destructive },
   recordBtnPaused: { backgroundColor: Colors.mutedFg, shadowColor: Colors.mutedFg },
-  recordBtnText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  recordBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   recordHint: { fontSize: 12, color: Colors.mutedFg, textAlign: 'center', maxWidth: 240 },
 
   // 최근 레슨 기록 섹션
   section: { paddingHorizontal: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: Colors.foreground, marginBottom: 12 },
+  sectionTitle: { fontSize: 22, fontWeight: '800', color: Colors.foreground, marginBottom: 14 },
   filterRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
   filterTab: {
-    paddingHorizontal: 14, paddingVertical: 6,
-    borderRadius: 20, borderWidth: 1, borderColor: Colors.border,
-    backgroundColor: '#fff',
+    paddingHorizontal: 18, paddingVertical: 8,
+    borderRadius: 24, borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: Colors.background,
   },
   filterTabActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  filterTabText: { fontSize: 12, fontWeight: '600', color: Colors.mutedFg },
+  filterTabText: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg },
   filterTabTextActive: { color: '#fff' },
 
   // 직접 작성 액션 카드
   manualReportBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginHorizontal: 16, marginBottom: 16, paddingVertical: 12, paddingHorizontal: 14,
-    backgroundColor: '#fff', borderRadius: 18, borderWidth: 1, borderColor: Colors.border,
-    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1,
+    marginHorizontal: 16, marginBottom: 20, paddingVertical: 14, paddingHorizontal: 16,
+    backgroundColor: Colors.primaryLight, borderRadius: 18,
   },
   manualReportIconWrap: {
-    width: 34, height: 34, borderRadius: 10,
-    backgroundColor: Colors.primaryLight,
+    width: 36, height: 36, borderRadius: 11,
+    backgroundColor: 'rgba(192,117,90,0.15)',
     justifyContent: 'center', alignItems: 'center',
   },
   manualReportBtnTitle: { fontSize: 14, fontWeight: '700', color: Colors.foreground },
-  manualReportBtnSub: { fontSize: 11, color: Colors.mutedFg, marginTop: 2 },
+  manualReportBtnSub: { fontSize: 12, color: Colors.mutedFg, marginTop: 2 },
   manualOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   manualSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '88%', maxHeight: '92%', display: 'flex', flexDirection: 'column' },
   manualHeader: {
@@ -1635,20 +1651,18 @@ const styles = StyleSheet.create({
   // 플랜 카드
   planCard: {
     backgroundColor: '#fff',
-    borderRadius: 18,
+    borderRadius: 16,
     paddingHorizontal: 14,
-    paddingVertical: 11,
+    paddingVertical: 12,
     marginBottom: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
     shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 3,
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
     shadowOffset: { width: 0, height: 1 },
     elevation: 1,
   },
   planTopRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6,
   },
   planDateRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   planDate: { fontSize: 12, color: Colors.mutedFg },
