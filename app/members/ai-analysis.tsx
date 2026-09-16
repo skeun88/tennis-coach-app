@@ -71,6 +71,7 @@ export default function AIAnalysisScreen() {
   const [memberReports, setMemberReports] = useState<Record<string, any>>({});
   const [manualReports, setManualReports] = useState<any[]>([]);
   const [expandedManual, setExpandedManual] = useState<string | null>(null);
+  const [recordFilter, setRecordFilter] = useState<'all' | 'unsent' | 'sent'>('all');
 
   // 타이핑 레슨 기록 모달
   const [manualModalVisible, setManualModalVisible] = useState(false);
@@ -885,49 +886,34 @@ export default function AIAnalysisScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color="#fff" />
+          <Ionicons name="chevron-back" size={24} color={Colors.foreground} />
         </TouchableOpacity>
-        <View>
+        <View style={styles.headerTextWrap}>
           <Text style={styles.headerTitle}>AI 레슨 기록</Text>
           <Text style={styles.headerSub}>{memberName} · {memberLevel}</Text>
         </View>
+        <TouchableOpacity
+          onPress={async () => {
+            setUsageSheetVisible(true);
+            if (!hasSeenUsage) {
+              setHasSeenUsage(true);
+              await AsyncStorage.setItem('ai_lesson_usage_seen', '1');
+            }
+          }}
+          activeOpacity={0.8}
+        >
+          <Animated.View style={[styles.usageHelpBtn, { transform: [{ scale: usagePulseAnim }] }]}>
+            <Text style={styles.usageHelpText}>?</Text>
+          </Animated.View>
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
 
-        {/* 녹음 카드 */}
+        {/* 녹음 시작 카드 */}
         <View style={styles.recordCard}>
-          {/* 카드 헤더: 아이콘 + 제목 + 사용법 버튼 */}
-          <View style={styles.recordTitleRow}>
-            <View style={styles.recordTitleLeft}>
-              {/* 마이크 + Sparkles 복합 아이콘 */}
-              <View style={styles.recordIconWrap}>
-                <Ionicons name="mic-outline" size={22} color={Colors.primary} />
-                <View style={styles.recordSparklesBadge}>
-                  <Ionicons name="sparkles" size={10} color={Colors.primary} />
-                </View>
-              </View>
-              <Text style={styles.recordTitle}>AI 레슨 기록</Text>
-            </View>
-            {/* 사용법 ? 버튼 */}
-            <TouchableOpacity
-              onPress={async () => {
-                setUsageSheetVisible(true);
-                if (!hasSeenUsage) {
-                  setHasSeenUsage(true);
-                  await AsyncStorage.setItem('ai_lesson_usage_seen', '1');
-                }
-              }}
-              activeOpacity={0.8}
-            >
-              <Animated.View style={[styles.usageHelpBtn, { transform: [{ scale: usagePulseAnim }] }]}>
-                <Text style={styles.usageHelpText}>?</Text>
-              </Animated.View>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.recordDesc}>
-            레슨을 기록하면 AI가 핵심 내용을 정리해{'\n'}회원별 맞춤 레슨 리포트를 만들어드려요.
-          </Text>
+          <Text style={styles.recordPrompt}>오늘 레슨을 기록해 볼까요?</Text>
+          <Text style={styles.recordDesc}>녹음하면 AI가 핵심 내용을 정리해요</Text>
 
           {/* 인식 향상 모드 토글 */}
           {!isRecording && !isPaused && !isAnalyzing && (
@@ -938,9 +924,12 @@ export default function AIAnalysisScreen() {
             >
               <View style={styles.enhancedModeLeft}>
                 <Ionicons name="sparkles-outline" size={16} color={enhancedMode ? Colors.primary : Colors.mutedFg} />
-                <Text style={[styles.enhancedModeLabel, enhancedMode && styles.enhancedModeLabelOn]}>
-                  인식 향상 모드
-                </Text>
+                <View>
+                  <Text style={[styles.enhancedModeLabel, enhancedMode && styles.enhancedModeLabelOn]}>
+                    인식 향상 모드
+                  </Text>
+                  <Text style={styles.enhancedModeDesc}>음성 인식 정확도를 높여요</Text>
+                </View>
               </View>
               <View style={[styles.enhancedToggle, enhancedMode && styles.enhancedToggleOn]}>
                 <View style={[styles.enhancedThumb, enhancedMode && styles.enhancedThumbOn]} />
@@ -948,15 +937,18 @@ export default function AIAnalysisScreen() {
             </TouchableOpacity>
           )}
 
-          {/* 사용량 표시 */}
+          {/* 사용량 한 줄 표시 */}
           {usageInfo && (
-            <View style={{ marginBottom: 12 }}>
-              <ReportQuotaBar
-                used={usageInfo.used}
-                limit={usageInfo.limit}
-                extraCredits={subscription?.extra_report_credits ?? 0}
-                onTopupPress={() => setTopupModalVisible(true)}
-              />
+            <View style={styles.usageSummaryRow}>
+              <Ionicons name="analytics-outline" size={13} color={Colors.mutedFg} />
+              <Text style={styles.usageSummaryText}>
+                {usageInfo.used}/{usageInfo.limit}회 사용
+                {(subscription?.extra_report_credits ?? 0) > 0 ? ` · 추가 ${subscription!.extra_report_credits}회` : ''}
+                {' · '}{Math.max(0, usageInfo.limit - usageInfo.used)}회 남음
+              </Text>
+              <TouchableOpacity onPress={() => setTopupModalVisible(true)}>
+                <Text style={styles.usageTopupLink}>충전</Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -992,7 +984,7 @@ export default function AIAnalysisScreen() {
                 >
                   <Ionicons
                     name={isRecording && !isPaused ? 'stop' : isPaused ? 'pause' : 'mic'}
-                    size={32}
+                    size={26}
                     color="#fff"
                   />
                   <Text style={styles.recordBtnText}>
@@ -1024,20 +1016,22 @@ export default function AIAnalysisScreen() {
           )}
         </View>
 
-        {/* 타이핑으로 레슨 기록 버튼 */}
+        {/* 직접 작성 - 얇은 액션 카드 */}
         <TouchableOpacity
           style={styles.manualReportBtn}
           onPress={() => { setPolishedReport(null); setManualContent(''); setManualModalVisible(true); }}
           activeOpacity={0.85}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Ionicons name="pencil-outline" size={20} color={Colors.primary} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={styles.manualReportIconWrap}>
+              <Ionicons name="pencil-outline" size={18} color={Colors.primary} />
+            </View>
             <View>
-              <Text style={styles.manualReportBtnTitle}>타이핑으로 레슨 기록</Text>
-              <Text style={styles.manualReportBtnSub}>녹음을 놓쳤다면 기억나는 내용을 직접 작성해보세요.</Text>
+              <Text style={styles.manualReportBtnTitle}>타이핑으로 기록</Text>
+              <Text style={styles.manualReportBtnSub}>녹음을 놓쳤다면 직접 작성해 보세요</Text>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={Colors.primary} />
+          <Ionicons name="chevron-forward" size={16} color={Colors.mutedFg} />
         </TouchableOpacity>
 
         {/* 타이핑 레슨 기록 모달 */}
@@ -1138,16 +1132,23 @@ export default function AIAnalysisScreen() {
           </KeyboardAvoidingView>
         </Modal>
 
-        {/* 분석 기록 */}
+        {/* 최근 레슨 기록 */}
         <View style={styles.section}>
-          <View style={styles.sectionTitleRow}>
-            <View style={styles.sectionIconWrap}>
-              <Ionicons name="document-text-outline" size={20} color={Colors.foreground} />
-              <View style={styles.sectionSparklesBadge}>
-                <Ionicons name="sparkles" size={9} color={Colors.primary} />
-              </View>
-            </View>
-            <Text style={styles.sectionTitle}>AI 분석 기록</Text>
+          <Text style={styles.sectionTitle}>최근 레슨 기록</Text>
+
+          {/* 필터 탭 */}
+          <View style={styles.filterRow}>
+            {(['all', 'unsent', 'sent'] as const).map(f => (
+              <TouchableOpacity
+                key={f}
+                style={[styles.filterTab, recordFilter === f && styles.filterTabActive]}
+                onPress={() => setRecordFilter(f)}
+              >
+                <Text style={[styles.filterTabText, recordFilter === f && styles.filterTabTextActive]}>
+                  {f === 'all' ? '전체' : f === 'unsent' ? '미전송' : '전송 완료'}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
           {loading && <ActivityIndicator color={Colors.primary} style={{ marginTop: 20 }} />}
@@ -1155,105 +1156,111 @@ export default function AIAnalysisScreen() {
           {!loading && plans.length === 0 && manualReports.length === 0 && (
             <View style={styles.emptyBox}>
               <Ionicons name="analytics-outline" size={40} color={Colors.iconMuted} />
-              <Text style={styles.emptyText}>아직 분석 기록이 없어요</Text>
+              <Text style={styles.emptyText}>아직 레슨 기록이 없어요</Text>
               <Text style={styles.emptySubText}>위에서 레슨을 녹음하고 AI 분석을 받아보세요</Text>
             </View>
           )}
 
-          {plans.map(plan => {
-            const report = memberReports[plan.id];
-            const isSent = !!report;
-            return (
+          {plans
+            .filter(plan => {
+              const isSent = !!memberReports[plan.id];
+              if (recordFilter === 'sent') return isSent;
+              if (recordFilter === 'unsent') return !isSent;
+              return true;
+            })
+            .map(plan => {
+              const report = memberReports[plan.id];
+              const isSent = !!report;
+              return (
+                <TouchableOpacity
+                  key={plan.id}
+                  style={styles.planCard}
+                  onPress={() => router.push({
+                    pathname: '/members/plan-detail',
+                    params: {
+                      planId: plan.id,
+                      memberId: memberId as string,
+                      memberName: memberName as string,
+                      memberLevel: memberLevel as string,
+                    },
+                  } as any)}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.planTopRow}>
+                    <View style={styles.planDateRow}>
+                      <Text style={styles.planDate}>{formatDate(plan.created_at)}</Text>
+                      {plan.duration_minutes ? (
+                        <Text style={styles.planDuration}>· {plan.duration_minutes}분</Text>
+                      ) : null}
+                    </View>
+                    <View style={[styles.sentBadge, isSent ? styles.sentBadgeGreen : styles.sentBadgeTerracotta]}>
+                      <Text style={[styles.sentBadgeText, isSent ? styles.sentBadgeTextGreen : styles.sentBadgeTextTerracotta]}>
+                        {isSent ? '전송 완료' : '미전송'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.planTitleRow}>
+                    <Text style={styles.planTitleText} numberOfLines={2}>
+                      {getPlanTitle(plan)}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={16} color={Colors.mutedFg} />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+
+          {/* 수동 기록 카드 */}
+          {manualReports
+            .filter(() => recordFilter === 'all' || recordFilter === 'sent')
+            .map(report => (
               <TouchableOpacity
-                key={plan.id}
+                key={report.id}
                 style={styles.planCard}
-                onPress={() => router.push({
-                  pathname: '/members/plan-detail',
-                  params: {
-                    planId: plan.id,
-                    memberId: memberId as string,
-                    memberName: memberName as string,
-                    memberLevel: memberLevel as string,
-                  },
-                } as any)}
+                onPress={() => setExpandedManual(expandedManual === report.id ? null : report.id)}
                 activeOpacity={0.8}
               >
-                {/* 상단: 날짜 + 전송 상태 뱃지 */}
                 <View style={styles.planTopRow}>
                   <View style={styles.planDateRow}>
-                    <Text style={styles.planDate}>{formatDate(plan.created_at)}</Text>
-                    {plan.duration_minutes ? (
-                      <Text style={styles.planDuration}>· {plan.duration_minutes}분</Text>
-                    ) : null}
+                    <Text style={styles.planDate}>{formatDate(report.created_at)}</Text>
                   </View>
-                  <View style={[styles.sentBadge, isSent ? styles.sentBadgeGreen : styles.sentBadgeTerracotta]}>
-                    <Text style={[styles.sentBadgeText, isSent ? styles.sentBadgeTextGreen : styles.sentBadgeTextTerracotta]}>
-                      {isSent ? '전송 완료' : '전송 전'}
-                    </Text>
+                  <View style={[styles.sentBadge, styles.sentBadgeGreen]}>
+                    <Text style={[styles.sentBadgeText, styles.sentBadgeTextGreen]}>전송 완료</Text>
                   </View>
                 </View>
-
-                {/* AI 핵심 제목 */}
                 <View style={styles.planTitleRow}>
                   <Text style={styles.planTitleText} numberOfLines={2}>
-                    {getPlanTitle(plan)}
+                    {report.summary || '레슨 기록'}
                   </Text>
-                  <Ionicons name="chevron-forward" size={18} color={Colors.mutedFg} />
+                  <Ionicons
+                    name={expandedManual === report.id ? 'chevron-up' : 'chevron-down'}
+                    size={16}
+                    color={Colors.mutedFg}
+                  />
                 </View>
+
+                {expandedManual === report.id && (
+                  <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border }}>
+                    <Text style={styles.summaryBoxText}>{report.summary}</Text>
+                    {Array.isArray(report.achievements) && report.achievements.length > 0 && (
+                      <View style={{ marginTop: 10 }}>
+                        <Text style={[styles.planSectionTitle, { fontSize: 13, marginBottom: 4 }]}>오늘 잘한 점</Text>
+                        {report.achievements.map((a: string, i: number) => (
+                          <Text key={i} style={[styles.bulletText, { marginBottom: 3 }]}>• {a}</Text>
+                        ))}
+                      </View>
+                    )}
+                    {Array.isArray(report.improvement_points) && report.improvement_points.length > 0 && (
+                      <View style={{ marginTop: 10 }}>
+                        <Text style={[styles.planSectionTitle, { fontSize: 13, marginBottom: 4 }]}>개선 포인트</Text>
+                        {report.improvement_points.map((p: string, i: number) => (
+                          <Text key={i} style={[styles.bulletText, { marginBottom: 3 }]}>• {p}</Text>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                )}
               </TouchableOpacity>
-            );
-          })}
-
-          {/* 수동 기록 카드 (전송하기 / AI 저장 기록) */}
-          {manualReports.map(report => (
-            <TouchableOpacity
-              key={report.id}
-              style={styles.planCard}
-              onPress={() => setExpandedManual(expandedManual === report.id ? null : report.id)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.planTopRow}>
-                <View style={styles.planDateRow}>
-                  <Text style={styles.planDate}>{formatDate(report.created_at)}</Text>
-                </View>
-                <View style={[styles.sentBadge, styles.manualBadge]}>
-                  <Text style={[styles.sentBadgeText, styles.manualBadgeText]}>직접 작성</Text>
-                </View>
-              </View>
-              <View style={styles.planTitleRow}>
-                <Text style={styles.planTitleText} numberOfLines={2}>
-                  {report.summary || '레슨 기록'}
-                </Text>
-                <Ionicons
-                  name={expandedManual === report.id ? 'chevron-up' : 'chevron-down'}
-                  size={18}
-                  color={Colors.mutedFg}
-                />
-              </View>
-
-              {expandedManual === report.id && (
-                <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border }}>
-                  <Text style={styles.summaryBoxText}>{report.summary}</Text>
-                  {Array.isArray(report.achievements) && report.achievements.length > 0 && (
-                    <View style={{ marginTop: 12 }}>
-                      <Text style={[styles.planSectionTitle, { fontSize: 14, marginBottom: 6 }]}>오늘 잘한 점</Text>
-                      {report.achievements.map((a: string, i: number) => (
-                        <Text key={i} style={[styles.bulletText, { marginBottom: 4 }]}>• {a}</Text>
-                      ))}
-                    </View>
-                  )}
-                  {Array.isArray(report.improvement_points) && report.improvement_points.length > 0 && (
-                    <View style={{ marginTop: 12 }}>
-                      <Text style={[styles.planSectionTitle, { fontSize: 14, marginBottom: 6 }]}>개선 포인트</Text>
-                      {report.improvement_points.map((p: string, i: number) => (
-                        <Text key={i} style={[styles.bulletText, { marginBottom: 4 }]}>• {p}</Text>
-                      ))}
-                    </View>
-                  )}
-                </View>
-              )}
-            </TouchableOpacity>
-          ))}
+            ))}
         </View>
 
         <View style={{ height: 40 }} />
@@ -1375,41 +1382,28 @@ export default function AIAnalysisScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryLight,
     paddingTop: Platform.OS === 'ios' ? 56 : 20,
-    paddingBottom: 16,
+    paddingBottom: 14,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
   backBtn: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: '800', color: '#fff' },
-  headerSub: { fontSize: 13, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
+  headerTextWrap: { flex: 1 },
+  headerTitle: { fontSize: 17, fontWeight: '800', color: Colors.foreground },
+  headerSub: { fontSize: 12, color: Colors.mutedFg, marginTop: 1 },
   scroll: { flex: 1 },
 
-  // 녹음 카드 헤더
-  recordTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
-  recordTitleLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  recordIconWrap: { position: 'relative', width: 28, height: 24, justifyContent: 'center', alignItems: 'center' },
-  recordSparklesBadge: { position: 'absolute', top: -2, right: -5 },
-  usageHelpBtnWrap: {
-    width: 36, height: 36, borderRadius: 18,
-    justifyContent: 'center', alignItems: 'center',
-  },
   usageHelpBtn: {
     width: 26, height: 26, borderRadius: 13,
     backgroundColor: Colors.primary,
     justifyContent: 'center', alignItems: 'center',
-    shadowColor: Colors.primary, shadowOpacity: 0.45, shadowRadius: 8, shadowOffset: { width: 0, height: 0 },
-    elevation: 4,
   },
   usageHelpText: { fontSize: 13, fontWeight: '800', color: '#fff', lineHeight: 16 },
-
-  // 섹션 타이틀 with 아이콘
-  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-  sectionIconWrap: { position: 'relative', width: 26, height: 22, justifyContent: 'center', alignItems: 'center' },
-  sectionSparklesBadge: { position: 'absolute', top: -2, right: -5 },
 
   // 사용법 바텀시트
   usageOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
@@ -1463,25 +1457,33 @@ const styles = StyleSheet.create({
   recordCard: {
     backgroundColor: '#fff',
     margin: 16,
-    borderRadius: 16,
-    padding: 20,
+    marginBottom: 10,
+    borderRadius: 20,
+    padding: 18,
     shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
+    elevation: 2,
   },
-  recordTitle: { fontSize: 17, fontWeight: '800', color: Colors.foreground },
-  recordDesc: { fontSize: 13, color: Colors.mutedFg, lineHeight: 20, marginBottom: 12 },
+  recordPrompt: { fontSize: 17, fontWeight: '800', color: Colors.foreground, marginBottom: 4 },
+  recordDesc: { fontSize: 13, color: Colors.mutedFg, lineHeight: 20, marginBottom: 14 },
   enhancedModeRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 10, paddingHorizontal: 14,
+    paddingVertical: 10, paddingHorizontal: 12,
     backgroundColor: Colors.card, borderRadius: 10,
-    marginBottom: 16, borderWidth: 1, borderColor: Colors.border,
+    marginBottom: 12, borderWidth: 1, borderColor: Colors.border,
   },
-  enhancedModeLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  enhancedModeLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
   enhancedModeLabel: { fontSize: 13, color: Colors.mutedFg, fontWeight: '500' },
   enhancedModeLabelOn: { color: Colors.primary, fontWeight: '600' },
+  enhancedModeDesc: { fontSize: 11, color: Colors.placeholder, marginTop: 1 },
+  usageSummaryRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    marginBottom: 12, paddingHorizontal: 2,
+  },
+  usageSummaryText: { fontSize: 12, color: Colors.mutedFg, flex: 1 },
+  usageTopupLink: { fontSize: 12, color: Colors.primary, fontWeight: '600' },
   enhancedToggle: {
     width: 40, height: 22, borderRadius: 11,
     backgroundColor: Colors.border, justifyContent: 'center', paddingHorizontal: 2,
@@ -1536,28 +1538,43 @@ const styles = StyleSheet.create({
   },
   stopAnalyzeBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 14 },
   recordBtn: {
-    width: 100, height: 100, borderRadius: 50,
+    width: 82, height: 82, borderRadius: 41,
     backgroundColor: Colors.primary,
     justifyContent: 'center', alignItems: 'center',
-    shadowColor: Colors.primary, shadowOpacity: 0.3, shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 }, elevation: 6, gap: 4,
+    shadowColor: Colors.primary, shadowOpacity: 0.3, shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 }, elevation: 5, gap: 4,
   },
   recordBtnActive: { backgroundColor: Colors.destructive, shadowColor: Colors.destructive },
   recordBtnPaused: { backgroundColor: Colors.mutedFg, shadowColor: Colors.mutedFg },
   recordBtnText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   recordHint: { fontSize: 12, color: Colors.mutedFg, textAlign: 'center', maxWidth: 240 },
 
-  // 분석 기록
+  // 최근 레슨 기록 섹션
   section: { paddingHorizontal: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: Colors.foreground },
+  sectionTitle: { fontSize: 16, fontWeight: '800', color: Colors.foreground, marginBottom: 12 },
+  filterRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  filterTab: {
+    paddingHorizontal: 14, paddingVertical: 6,
+    borderRadius: 20, borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: '#fff',
+  },
+  filterTabActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  filterTabText: { fontSize: 12, fontWeight: '600', color: Colors.mutedFg },
+  filterTabTextActive: { color: '#fff' },
 
-  // 수동 레포트
+  // 직접 작성 액션 카드
   manualReportBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginHorizontal: 16, marginBottom: 16, padding: 14,
-    backgroundColor: Colors.primaryLight, borderRadius: 12, borderWidth: 1, borderColor: Colors.accentWarm,
+    marginHorizontal: 16, marginBottom: 16, paddingVertical: 12, paddingHorizontal: 14,
+    backgroundColor: '#fff', borderRadius: 18, borderWidth: 1, borderColor: Colors.border,
+    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1,
   },
-  manualReportBtnTitle: { fontSize: 14, fontWeight: '700', color: Colors.primary },
+  manualReportIconWrap: {
+    width: 34, height: 34, borderRadius: 10,
+    backgroundColor: Colors.primaryLight,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  manualReportBtnTitle: { fontSize: 14, fontWeight: '700', color: Colors.foreground },
   manualReportBtnSub: { fontSize: 11, color: Colors.mutedFg, marginTop: 2 },
   manualOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   manualSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '88%', maxHeight: '92%', display: 'flex', flexDirection: 'column' },
@@ -1618,15 +1635,15 @@ const styles = StyleSheet.create({
   // 플랜 카드
   planCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 10,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: Colors.border,
     shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
     shadowOffset: { width: 0, height: 1 },
     elevation: 1,
   },
