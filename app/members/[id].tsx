@@ -342,6 +342,23 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   const [editDeductCredit, setEditDeductCredit] = useState(false);
   const [savingAtt, setSavingAtt] = useState(false);
 
+  // 통합 수정 모달
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editSchedType, setEditSchedType] = useState<'regular' | 'by_date' | 'later'>('later');
+
+  function openEditModal() {
+    const schedType = member ? detectScheduleType(member as any, futureLessons.length > 0) : 'later';
+    setEditSchedType(schedType);
+    setShowEditModal(true);
+  }
+
+  async function handleSaveAll() {
+    if (!name.trim()) { Alert.alert('입력 오류', '이름을 입력해주세요.'); return; }
+    if (!phone.trim()) { Alert.alert('입력 오류', '전화번호를 입력해주세요.'); return; }
+    setShowEditModal(false);
+    handleSave();
+  }
+
   async function saveAttStatus(attId: string, memberId2: string, currentDeductCredit: boolean, currentRemaining: number) {
     setSavingAtt(true);
     const newDbStatus = editStatus2 === '보강예정' ? '결석' : editStatus2;
@@ -851,6 +868,8 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
 
     const { error } = await supabase.from('members').update({
       name, phone, email: email || null, level, notes: notes || null,
+      birth_date: birthDate.trim() || null,
+      join_date: joinDateEdit.trim() || null,
       fixed_schedule_days: scheduleDays,
       fixed_schedule_time: firstDayTime,
       fixed_schedule_times: Object.keys(scheduleTimesJson).length > 0 ? scheduleTimesJson : null,
@@ -1411,7 +1430,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                       <Text style={styles.packageTitle}>{lessonPackage.title}</Text>
                       <Text style={styles.packageMeta}>{lessonPackage.total_credits ?? 0}회 · {(lessonPackage.price ?? 0).toLocaleString()}원</Text>
                     </View>
-                    <TouchableOpacity onPress={() => setEditingPackage(true)}>
+                    <TouchableOpacity onPress={openEditModal}>
                       <Text style={{ fontSize: 13, color: Colors.primary, fontWeight: '600' }}>변경 →</Text>
                     </TouchableOpacity>
                   </>
@@ -1419,7 +1438,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                   <>
                     <Ionicons name="card-outline" size={18} color={Colors.iconMuted} />
                     <Text style={[styles.packageMeta, { color: Colors.placeholder, marginLeft: 8 }]}>연결된 레슨권 없음</Text>
-                    <TouchableOpacity onPress={() => setEditingPackage(true)} style={{ marginLeft: 'auto' }}>
+                    <TouchableOpacity onPress={openEditModal} style={{ marginLeft: 'auto' }}>
                       <Text style={{ fontSize: 14, color: Colors.primary, fontWeight: '600' }}>설정 →</Text>
                     </TouchableOpacity>
                   </>
@@ -1528,7 +1547,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         {/* INFO TAB — 하단 액션 버튼 */}
         {tab === 'info' && !editing && (
           <View style={styles.actionBtnSection}>
-            <TouchableOpacity style={styles.editBtn} onPress={() => setEditing(true)}>
+            <TouchableOpacity style={styles.editBtn} onPress={openEditModal}>
               <Ionicons name="create-outline" size={16} color={Colors.primary} />
               <Text style={styles.editBtnText}>수정</Text>
             </TouchableOpacity>
@@ -1827,6 +1846,218 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
           </View>
         </KeyboardAvoidingView>
       )}
+      {/* ─── 통합 수정 모달 ─── */}
+      <Modal visible={showEditModal} animationType="slide" onRequestClose={() => setShowEditModal(false)}>
+        <View style={{ flex: 1, backgroundColor: Colors.background }}>
+          {/* 헤더 */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: insets.top + 8, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: Colors.border, backgroundColor: '#fff' }}>
+            <TouchableOpacity onPress={() => setShowEditModal(false)} style={{ padding: 4, minWidth: 40 }}>
+              <Ionicons name="close" size={24} color={Colors.mutedFg} />
+            </TouchableOpacity>
+            <Text style={{ flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700', color: Colors.foreground }}>회원 정보 수정</Text>
+            <TouchableOpacity onPress={handleSaveAll} style={{ padding: 4, minWidth: 40, alignItems: 'flex-end' }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.primary }}>저장</Text>
+            </TouchableOpacity>
+          </View>
+
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
+
+              {/* 1. 기본 정보 */}
+              <View style={[styles.card, { marginTop: 16 }]}>
+                <Text style={styles.cardSectionLabel}>기본 정보</Text>
+                <Text style={styles.editLabel}>이름</Text>
+                <TextInput style={styles.editInput} value={name} onChangeText={setName} />
+                <Text style={styles.editLabel}>전화번호</Text>
+                <TextInput style={styles.editInput} value={phone} onChangeText={v => setPhone(formatPhone(v))} keyboardType="phone-pad" />
+                <Text style={styles.editLabel}>이메일</Text>
+                <TextInput style={styles.editInput} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+                <Text style={styles.editLabel}>생년월일</Text>
+                <TextInput style={styles.editInput} value={birthDate} onChangeText={v => setBirthDate(formatDate(v))} placeholder="YYYY-MM-DD" keyboardType="number-pad" />
+                <Text style={styles.editLabel}>가입일</Text>
+                <TextInput style={styles.editInput} value={joinDateEdit} onChangeText={v => setJoinDateEdit(formatDate(v))} placeholder="YYYY-MM-DD" keyboardType="number-pad" />
+                <Text style={styles.editLabel}>레벨</Text>
+                <View style={styles.levelRow}>
+                  {MEMBER_LEVELS.map(l => (
+                    <TouchableOpacity key={l} style={[styles.levelBtn, level === l && styles.levelBtnActive]} onPress={() => setLevel(l)}>
+                      <Text style={[styles.levelBtnText, level === l && styles.levelBtnTextActive]}>{l}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={styles.editLabel}>메모</Text>
+                <TextInput style={[styles.editInput, { minHeight: 80 }]} value={notes} onChangeText={setNotes} multiline textAlignVertical="top" />
+              </View>
+
+              {/* 2. 레슨권 */}
+              <View style={styles.card}>
+                <Text style={styles.cardSectionLabel}>레슨권</Text>
+                {lessonPackage && (
+                  <View style={{ marginBottom: 12, padding: 12, backgroundColor: Colors.background, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={[styles.packageDot, { backgroundColor: lessonPackage.color }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.packageTitle}>{lessonPackage.title}</Text>
+                      <Text style={styles.packageMeta}>{lessonPackage.total_credits}회 · {(lessonPackage.price ?? 0).toLocaleString()}원</Text>
+                      <Text style={{ fontSize: 12, color: Colors.primary, marginTop: 2 }}>잔여 {(member as any).remaining_credits ?? 0}회</Text>
+                    </View>
+                  </View>
+                )}
+                {lessonPackages.length === 0 ? (
+                  <Text style={{ fontSize: 13, color: Colors.placeholder, marginBottom: 12 }}>등록된 레슨권이 없어요</Text>
+                ) : (
+                  <View style={styles.editPkgGrid}>
+                    <TouchableOpacity
+                      style={[styles.editPkgCard, styles.editPkgCardNone, !selectedPackageId && styles.editPkgCardNoneSelected]}
+                      onPress={() => setSelectedPackageId(null)}
+                    >
+                      {!selectedPackageId && <View style={styles.editPkgCheck}><Ionicons name="checkmark" size={10} color="#fff" /></View>}
+                      <Ionicons name="close-circle-outline" size={20} color={!selectedPackageId ? '#fff' : Colors.placeholder} />
+                      <Text style={[styles.editPkgNoneText, !selectedPackageId && { color: '#fff' }]}>없음</Text>
+                    </TouchableOpacity>
+                    {lessonPackages.map(pkg => {
+                      const isSelected = selectedPackageId === pkg.id;
+                      return (
+                        <TouchableOpacity
+                          key={pkg.id}
+                          style={[styles.editPkgCard, { borderColor: pkg.color }, isSelected && { backgroundColor: pkg.color + '18' }]}
+                          onPress={() => handleSelectPackage(pkg)}
+                          activeOpacity={0.8}
+                        >
+                          {isSelected && (
+                            <View style={[styles.editPkgCheck, { backgroundColor: pkg.color }]}>
+                              <Ionicons name="checkmark" size={10} color="#fff" />
+                            </View>
+                          )}
+                          <View style={[styles.editPkgColorBar, { backgroundColor: pkg.color }]} />
+                          <Text style={styles.editPkgTitle} numberOfLines={2}>{pkg.title}</Text>
+                          <Text style={styles.editPkgMeta}>{pkg.duration_minutes}분 · {pkg.total_credits}회</Text>
+                          <Text style={[styles.editPkgPrice, { color: pkg.color ?? Colors.primary }]}>{(pkg.price ?? 0).toLocaleString()}원</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+
+              {/* 3. 레슨 스케줄 */}
+              <View style={styles.card}>
+                <Text style={styles.cardSectionLabel}>레슨 스케줄</Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+                  {(['regular', 'by_date', 'later'] as const).map(type => {
+                    const label = type === 'regular' ? '정기 일정' : type === 'by_date' ? '날짜별 일정' : '나중에 설정';
+                    const isActive = editSchedType === type;
+                    return (
+                      <TouchableOpacity
+                        key={type}
+                        style={{ flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center',
+                          backgroundColor: isActive ? Colors.primary : Colors.mutedBg,
+                          borderWidth: 1.5, borderColor: isActive ? Colors.primary : Colors.border }}
+                        onPress={() => {
+                          setEditSchedType(type);
+                          if (type !== 'regular') {
+                            setScheduleDays([]);
+                            setDayTimes({});
+                          }
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: isActive ? '#fff' : Colors.mutedFg }}>{label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {editSchedType === 'regular' && (
+                  <>
+                    <Text style={styles.editLabel}>요일 선택</Text>
+                    <View style={{ flexDirection: 'row', gap: 6, marginBottom: 16 }}>
+                      {DAYS_KR.map((dayName, dayIdx) => {
+                        const isDaySelected = scheduleDays.includes(dayIdx);
+                        return (
+                          <TouchableOpacity
+                            key={dayIdx}
+                            style={{ flex: 1, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center',
+                              backgroundColor: isDaySelected ? Colors.primary : Colors.mutedBg }}
+                            onPress={() => {
+                              if (isDaySelected) {
+                                setScheduleDays(prev => prev.filter(d => d !== dayIdx));
+                                setDayTimes(prev => { const n = { ...prev }; delete n[dayIdx]; return n; });
+                              } else {
+                                setScheduleDays(prev => [...prev, dayIdx].sort());
+                                fetchAvailableSlots(dayIdx);
+                              }
+                            }}
+                          >
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: isDaySelected ? '#fff' : Colors.mutedFg }}>{dayName}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                    {scheduleDays.length === 0 && (
+                      <Text style={{ fontSize: 13, color: Colors.placeholder, marginBottom: 12 }}>요일을 선택하세요</Text>
+                    )}
+                    {scheduleDays.map(dayIdx => {
+                      const times = dayTimes[dayIdx] ?? [];
+                      return (
+                        <View key={dayIdx} style={{ marginBottom: 12 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6, justifyContent: 'space-between' }}>
+                            <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.foreground }}>{DAYS_KR[dayIdx]}요일</Text>
+                            <TouchableOpacity
+                              onPress={() => {
+                                setEditingDay(dayIdx);
+                                setTempHour('');
+                                setTempMinute('00');
+                                setTimePickerVisible(true);
+                              }}
+                              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: Colors.primaryLight }}
+                            >
+                              <Ionicons name="add" size={14} color={Colors.primary} />
+                              <Text style={{ fontSize: 13, color: Colors.primary, fontWeight: '600' }}>시간 추가</Text>
+                            </TouchableOpacity>
+                          </View>
+                          {times.length === 0 ? (
+                            <Text style={{ fontSize: 13, color: Colors.placeholder }}>시간을 추가해주세요</Text>
+                          ) : (
+                            times.map(t => (
+                              <View key={t} style={[styles.dayTimeRow2, { marginBottom: 4 }]}>
+                                <Ionicons name="time-outline" size={16} color={Colors.primary} />
+                                <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: Colors.foreground }}>{t}</Text>
+                                <TouchableOpacity
+                                  onPress={() => setDayTimes(prev => {
+                                    const next = { ...prev, [dayIdx]: (prev[dayIdx] ?? []).filter(x => x !== t) };
+                                    if (next[dayIdx].length === 0) delete next[dayIdx];
+                                    return next;
+                                  })}
+                                >
+                                  <Ionicons name="close-circle" size={18} color={Colors.destructive} />
+                                </TouchableOpacity>
+                              </View>
+                            ))
+                          )}
+                        </View>
+                      );
+                    })}
+                  </>
+                )}
+
+                {editSchedType === 'by_date' && (
+                  <View style={{ padding: 12, backgroundColor: Colors.background, borderRadius: 10 }}>
+                    <Text style={{ fontSize: 14, color: Colors.foreground, marginBottom: 4 }}>날짜별 일정은 스케줄 관리 화면에서 개별 날짜를 추가·수정합니다.</Text>
+                    <Text style={{ fontSize: 12, color: Colors.mutedFg }}>현재 예정 레슨 {futureLessons.length}개</Text>
+                  </View>
+                )}
+
+                {editSchedType === 'later' && (
+                  <View style={{ padding: 12, backgroundColor: Colors.background, borderRadius: 10 }}>
+                    <Text style={{ fontSize: 14, color: Colors.mutedFg }}>저장 후 일정 설정 화면에서 스케줄을 등록할 수 있습니다.</Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={{ height: 60 }} />
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
       {/* ─── 스케줄 적용 시작일 캘린더 모달 ─── */}
       <Modal visible={startDateModal} transparent animationType="slide" onRequestClose={() => setStartDateModal(false)}>
         <View style={styles.modalOverlayTP}>
@@ -2132,7 +2363,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                     <Text style={styles.scheduleSheetItemText}>새 일정 추가</Text>
                     <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setEditing(true); }}>
+                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); openEditModal(); }}>
                     <Ionicons name="repeat-outline" size={20} color={Colors.primary} />
                     <Text style={styles.scheduleSheetItemText}>정기 일정 변경</Text>
                     <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
@@ -2163,7 +2394,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                     <Text style={styles.scheduleSheetItemText}>일정 추가</Text>
                     <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setEditing(true); }}>
+                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); openEditModal(); }}>
                     <Ionicons name="repeat-outline" size={20} color={Colors.primary} />
                     <Text style={styles.scheduleSheetItemText}>정기 일정으로 변경</Text>
                     <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
@@ -2172,7 +2403,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
               )}
               {detectedScheduleType === 'later' && (
                 <>
-                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); setEditing(true); }}>
+                  <TouchableOpacity style={styles.scheduleSheetItem} onPress={() => { setScheduleSheet(false); openEditModal(); }}>
                     <Ionicons name="repeat-outline" size={20} color={Colors.primary} />
                     <Text style={styles.scheduleSheetItemText}>정기 일정 추가</Text>
                     <Ionicons name="chevron-forward" size={16} color={Colors.iconMuted} />
