@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
   TextInput, ActivityIndicator, KeyboardAvoidingView, Platform,
-  Modal, FlatList, Linking,
+  Modal, FlatList, Linking, Switch,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Link, Stack, useFocusEffect } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
@@ -17,11 +17,12 @@ import MemberIssueTags from '../../components/MemberIssueTags';
 import PlanUpsellModal from '../../components/PlanUpsellModal';
 import { notifyMemberMessage, notifyMemberReregister, notifyMemberAbsent } from '../../lib/notifications';
 import { detectScheduleType, ScheduleType } from '../../lib/scheduleTypeUtils';
+import { buildMemberUpsertPayload, MEMBER_BASIC_FIELD_KEYS, MEMBER_LEVELS } from './member-form';
 
 type DayTimes = Record<number, string[]>;
 type DateEntry = { date: string; startTime: string; duration: number };
 
-const LEVELS: MemberLevel[] = ['입문', '초급', '중급', '상급', '선수'];
+const LEVELS: MemberLevel[] = MEMBER_LEVELS;
 const LEVEL_COLORS: Record<MemberLevel, string> = {
   '입문': Colors.level.입문,
   '초급': Colors.level.초급,
@@ -247,6 +248,7 @@ export default function MemberDetailScreen() {
   const [member, setMember] = useState<Member | null>(null);
   const [tab, setTab] = useState<Tab>('info');
   const [loading, setLoading] = useState(true);
+  const [memberListUnreadCount, setMemberListUnreadCount] = useState(0);
 
   // 결제 완료 모달
   const [payDoneModal, setPayDoneModal] = useState(false);
@@ -337,30 +339,31 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   const [editStatus2, setEditStatus2] = useState<'출석' | '결석' | '보강예정'>('출석');
   const [editReason, setEditReason] = useState('');
   const [editDeduction, setEditDeduction] = useState('');
+  const [editDeductCredit, setEditDeductCredit] = useState(false);
   const [savingAtt, setSavingAtt] = useState(false);
 
   async function saveAttStatus(attId: string, memberId2: string, currentDeductCredit: boolean, currentRemaining: number) {
     setSavingAtt(true);
-    const willDeduct = editStatus2 !== '보강예정'; // 출석/결석 모두 차감, 보강예정은 차감 없음
-    const newDbStatus = editStatus2 === '출석' ? '출석' : '결석';
+    const newDbStatus = editStatus2 === '보강예정' ? '결석' : editStatus2;
     const newDeductionType = editStatus2 === '보강예정' ? '보강예정' : editStatus2 === '결석' ? '정상차감' : null;
     await supabase.from('attendance').update({
       status: newDbStatus,
-      deduct_credit: willDeduct,
+      deduct_credit: editDeductCredit,
       deduction_type: newDeductionType,
     }).eq('id', attId);
-    if (willDeduct && !currentDeductCredit) {
+    // 차감 상태 변경 시에만 크레딧 조정 (중복 차감/복구 방지)
+    if (editDeductCredit && !currentDeductCredit) {
       await supabase.rpc('adjust_remaining_credits', { p_member_id: memberId2, p_delta: -1 });
-    } else if (!willDeduct && currentDeductCredit) {
+    } else if (!editDeductCredit && currentDeductCredit) {
       await supabase.rpc('adjust_remaining_credits', { p_member_id: memberId2, p_delta: 1 });
     }
-    if (newDbStatus === '결석') {
+    if (newDbStatus === '결석' && editStatus2 !== '보강예정') {
       try { await notifyMemberAbsent(memberId2); } catch (e) { console.error('[PUSH] 결석 알림 실패:', e); }
     }
     setSavingAtt(false);
     setEditingAttId(null);
-    loadAttendance();
-    loadMember();
+    await loadAttendance();
+    await loadMember();
   }
 
   async function handleAttendanceSave(
@@ -504,14 +507,21 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     if (!id) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { count } = await supabase
+    const { data: unreadData } = await supabase
       .from('messages')
-      .select('id', { count: 'exact', head: true })
-      .eq('member_id', id)
+      .select('member_id')
       .eq('coach_id', user.id)
       .eq('sender_type', 'member')
       .is('read_at', null);
-    setUnreadCount(count ?? 0);
+
+    const unreadMap: Record<string, number> = {};
+    for (const row of (unreadData ?? []) as { member_id: string }[]) {
+      unreadMap[row.member_id] = (unreadMap[row.member_id] ?? 0) + 1;
+    }
+
+    const memberUnread = unreadMap[id] ?? 0;
+    setUnreadCount(memberUnread);
+    setMemberListUnreadCount(memberUnread);
   }
 
   useEffect(() => { loadMember(); loadFutureLessons(); loadUnreadCount(); }, []);
@@ -731,15 +741,16 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   async function handleSaveBasicInfo() {
     if (!name.trim()) { Alert.alert('입력 오류', '이름을 입력해주세요.'); return; }
     if (!phone.trim()) { Alert.alert('입력 오류', '전화번호를 입력해주세요.'); return; }
-    const { error } = await supabase.from('members').update({
-      name: name.trim(),
-      phone: phone.trim(),
-      email: email.trim() || null,
-      birth_date: birthDate.trim() || null,
-      join_date: joinDateEdit.trim() || member!.join_date,
+    const basicPayload = buildMemberUpsertPayload({
+      name,
+      phone,
+      email,
+      birthDate,
+      joinDate: joinDateEdit.trim() || member!.join_date,
       level,
-      notes: notes.trim() || null,
-    }).eq('id', id!);
+      notes,
+    });
+    const { error } = await supabase.from('members').update(basicPayload).eq('id', id!);
     if (error) { Alert.alert('오류', '저장에 실패했습니다.'); return; }
     setEditing(false);
     loadMember();
@@ -1155,6 +1166,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       await supabase.from('messages').update({ read_at: new Date().toISOString() })
         .eq('member_id', id).eq('coach_id', user.id).eq('sender_type', 'member').is('read_at', null);
       setUnreadCount(0);
+      setMemberListUnreadCount(0);
     }
     setTimeout(() => msgListRef.current?.scrollToEnd({ animated: false }), 200);
   }
@@ -1185,6 +1197,17 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   const futureCount = futureLessons.length;
   const memberRemaining = (member as any).remaining_credits ?? 0;
   const unregisteredCount = Math.max(memberRemaining - futureCount, 0);
+
+  // 출석 회차 계산: 날짜 오름차순으로 정렬 후 순번 부여
+  const attendanceSortedAsc = [...attendance].sort((a, b) => {
+    const aDate = (a as any).lesson?.date ?? '';
+    const bDate = (b as any).lesson?.date ?? '';
+    const aTime = (a as any).lesson?.start_time ?? '';
+    const bTime = (b as any).lesson?.start_time ?? '';
+    return aDate < bDate ? -1 : aDate > bDate ? 1 : aTime < bTime ? -1 : aTime > bTime ? 1 : 0;
+  });
+  const sessionNumMap = new Map(attendanceSortedAsc.map((a, i) => [a.id, i + 1]));
+  const pkgTotalCredits = (member as any).total_credits ?? 0;
 
   const TABS: { key: Tab; label: string; icon: string }[] = [
     { key: 'info', label: '정보', icon: 'person-outline' },
@@ -1232,6 +1255,8 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                 {!member.is_active && <View style={styles.inactiveBadge}><Text style={styles.inactiveText}>비활성</Text></View>}
               </View>
               <Text style={styles.profilePhone}>{member.phone}</Text>
+              <Text style={styles.profileMeta}>{member.email || '이메일 미등록'}</Text>
+              <Text style={styles.profileMeta}>가입일 {member.join_date || '미등록'}</Text>
             </View>
             <TouchableOpacity
               style={styles.aiBtn}
@@ -1262,9 +1287,9 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
             <TouchableOpacity key={t.key} style={[styles.tabBtn, tab === t.key && styles.tabBtnActive]} onPress={() => setTab(t.key)}>
               <View style={{ position: 'relative' }}>
                 <Ionicons name={t.icon as any} size={16} color={tab === t.key ? Colors.primary : Colors.mutedFg} />
-                {t.key === 'messages' && unreadCount > 0 && (
+                {t.key === 'messages' && memberListUnreadCount > 0 && (
                   <View style={styles.unreadBadge}>
-                    <Text style={styles.unreadBadgeText}>{unreadCount > 99 ? '99+' : String(unreadCount)}</Text>
+                    <Text style={styles.unreadBadgeText}>{memberListUnreadCount > 99 ? '99+' : String(memberListUnreadCount)}</Text>
                   </View>
                 )}
               </View>
@@ -1280,6 +1305,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         {tab === 'info' && (
           <View style={styles.card}>
             <Text style={styles.cardSectionLabel}>기본 정보</Text>
+            <Text style={styles.cardSectionCaption}>공통 필드 {MEMBER_BASIC_FIELD_KEYS.length}개를 등록/수정 화면과 동일하게 유지합니다.</Text>
             {!editing ? (
               <>
                 <InfoRow icon="person-outline" label="이름" value={member.name} />
@@ -1288,7 +1314,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                 <InfoRow icon="gift-outline" label="생년월일" value={(member as any).birth_date || '미등록'} />
                 <InfoRow icon="calendar-outline" label="가입일" value={member.join_date || '미등록'} />
                 <InfoRow icon="fitness-outline" label="레벨" value={member.level} />
-                <InfoRow icon="document-text-outline" label="메모" value={member.notes || '미등록'} />
+                <InfoRow icon="document-text-outline" label="메모" value={member.notes || '미등록'} multiline />
               </>
             ) : (
               <>
@@ -1304,7 +1330,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                 <TextInput style={styles.editInput} value={joinDateEdit} onChangeText={v => setJoinDateEdit(formatDate(v))} placeholder="YYYY-MM-DD" keyboardType="number-pad" />
                 <Text style={styles.editLabel}>레벨</Text>
                 <View style={styles.levelRow}>
-                  {LEVELS.map(l => (
+                  {MEMBER_LEVELS.map(l => (
                     <TouchableOpacity key={l} style={[styles.levelBtn, level === l && styles.levelBtnActive]} onPress={() => setLevel(l)}>
                       <Text style={[styles.levelBtnText, level === l && styles.levelBtnTextActive]}>{l}</Text>
                     </TouchableOpacity>
@@ -1527,7 +1553,6 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
               const deductType = (a as any).deduction_type as string | null;
               const absReason = (a as any).absence_reason as string | null;
               const isMakeup = deductType === '보강예정';
-              // 표시용 3가지 상태
               const displayStatus: '출석' | '결석' | '보강예정' = isAbsent
                 ? (isMakeup ? '보강예정' : '결석')
                 : '출석';
@@ -1536,52 +1561,87 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                 : Colors.destructive;
               const dateLabel = formatAttendanceDate(lesson?.date, lesson?.start_time, lesson?.end_time);
               const isEditing = editingAttId === a.id;
+              const sessionNum = sessionNumMap.get(a.id) ?? 0;
+
+              // 수정 중일 때 크레딧 미리보기
+              const creditPreviewAfter = isEditing && editDeductCredit !== a.deduct_credit
+                ? editDeductCredit
+                  ? (member?.remaining_credits ?? 0) - 1
+                  : (member?.remaining_credits ?? 0) + 1
+                : null;
 
               return (
                 <View key={a.id} style={styles.attendanceRow}>
                   <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.foreground, marginBottom: 1 }}>
-                      {dateLabel}
-                    </Text>
+                    {/* 날짜/시간 + 회차 */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.foreground, flex: 1 }}>
+                        {dateLabel}
+                      </Text>
+                      {!isEditing && pkgTotalCredits > 0 && sessionNum > 0 && (
+                        <Text style={{ fontSize: 12, color: Colors.mutedFg, marginLeft: 6 }}>
+                          {sessionNum}회차 / 총 {pkgTotalCredits}회
+                        </Text>
+                      )}
+                    </View>
                     {isAbsent && absReason && !isEditing && (
-                      <Text style={{ fontSize: 13, color: Colors.mutedFg }}>사유: {absReason}</Text>
+                      <Text style={{ fontSize: 12, color: Colors.mutedFg }}>사유: {absReason}</Text>
                     )}
-                    {/* 수정 중: 3개 옵션 인라인 */}
+                    {/* 수정 UI */}
                     {isEditing && (
-                      <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
-                        {(['출석', '결석', '보강예정'] as const).map(opt => {
-                          const col = opt === '출석' ? Colors.primary : opt === '보강예정' ? Colors.accentWarm : Colors.destructive;
-                          const isActive = editStatus2 === opt;
-                          return (
-                            <TouchableOpacity
-                              key={opt}
-                              style={{ flex: 1, paddingVertical: 7, borderRadius: 8, alignItems: 'center',
-                                backgroundColor: isActive ? col : Colors.mutedBg,
-                                borderWidth: 1.5, borderColor: isActive ? col : Colors.border }}
-                              onPress={() => setEditStatus2(opt)}
-                            >
-                              <Text style={{ fontSize: 14, fontWeight: '700', color: isActive ? '#fff' : Colors.mutedFg }}>{opt}</Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
-                    )}
-                    {isEditing && (
-                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-                        <TouchableOpacity
-                          style={{ flex: 1, backgroundColor: Colors.primary, borderRadius: 8, paddingVertical: 8, alignItems: 'center', opacity: savingAtt ? 0.5 : 1 }}
-                          onPress={() => saveAttStatus(a.id, a.member_id, a.deduct_credit, member?.remaining_credits ?? 0)}
-                          disabled={savingAtt}
-                        >
-                          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{savingAtt ? '저장중...' : '저장'}</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={{ flex: 1, backgroundColor: Colors.mutedBg, borderRadius: 8, paddingVertical: 8, alignItems: 'center' }}
-                          onPress={() => setEditingAttId(null)}
-                        >
-                          <Text style={{ color: Colors.mutedFg, fontWeight: '700', fontSize: 13 }}>취소</Text>
-                        </TouchableOpacity>
+                      <View style={{ gap: 8, marginTop: 8 }}>
+                        {/* 출석 상태 버튼 */}
+                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                          {(['출석', '결석', '보강예정'] as const).map(opt => {
+                            const col = opt === '출석' ? Colors.primary : opt === '보강예정' ? Colors.accentWarm : Colors.destructive;
+                            const isActive = editStatus2 === opt;
+                            return (
+                              <TouchableOpacity
+                                key={opt}
+                                style={{ flex: 1, paddingVertical: 7, borderRadius: 8, alignItems: 'center',
+                                  backgroundColor: isActive ? col : Colors.mutedBg,
+                                  borderWidth: 1.5, borderColor: isActive ? col : Colors.border }}
+                                onPress={() => setEditStatus2(opt)}
+                              >
+                                <Text style={{ fontSize: 13, fontWeight: '700', color: isActive ? '#fff' : Colors.mutedFg }}>{opt}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                        {/* 레슨권 횟수 차감 스위치 */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                          backgroundColor: Colors.mutedBg, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 }}>
+                          <Text style={{ fontSize: 13, color: Colors.foreground, fontWeight: '600' }}>레슨권 횟수 차감</Text>
+                          <Switch
+                            value={editDeductCredit}
+                            onValueChange={setEditDeductCredit}
+                            trackColor={{ false: Colors.border, true: Colors.primary }}
+                            thumbColor={'#fff'}
+                          />
+                        </View>
+                        {/* 크레딧 변경 미리보기 */}
+                        {creditPreviewAfter !== null && (
+                          <Text style={{ fontSize: 12, color: Colors.mutedFg, textAlign: 'center' }}>
+                            잔여 {member?.remaining_credits ?? 0}회 → {creditPreviewAfter}회
+                          </Text>
+                        )}
+                        {/* 저장/취소 버튼 */}
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <TouchableOpacity
+                            style={{ flex: 1, backgroundColor: Colors.primary, borderRadius: 8, paddingVertical: 8, alignItems: 'center', opacity: savingAtt ? 0.5 : 1 }}
+                            onPress={() => saveAttStatus(a.id, a.member_id, a.deduct_credit, member?.remaining_credits ?? 0)}
+                            disabled={savingAtt}
+                          >
+                            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{savingAtt ? '저장중...' : '저장'}</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={{ flex: 1, backgroundColor: Colors.mutedBg, borderRadius: 8, paddingVertical: 8, alignItems: 'center' }}
+                            onPress={() => setEditingAttId(null)}
+                          >
+                            <Text style={{ color: Colors.mutedFg, fontWeight: '700', fontSize: 13 }}>취소</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     )}
                   </View>
@@ -1595,7 +1655,11 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                         style={{ flexDirection: 'row', alignItems: 'center', gap: 3,
                           backgroundColor: Colors.primaryLight, borderRadius: 6,
                           paddingHorizontal: 8, paddingVertical: 4 }}
-                        onPress={() => { setEditingAttId(a.id); setEditStatus2(displayStatus); }}
+                        onPress={() => {
+                          setEditingAttId(a.id);
+                          setEditStatus2(displayStatus);
+                          setEditDeductCredit(a.deduct_credit);
+                        }}
                       >
                         <Ionicons name="create-outline" size={12} color={Colors.primary} />
                         <Text style={{ fontSize: 13, color: Colors.primary, fontWeight: '700' }}>수정</Text>
@@ -2638,13 +2702,13 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   );
 }
 
-function InfoRow({ icon, label, value }: { icon: string; label: string; value: string }) {
+function InfoRow({ icon, label, value, multiline = false }: { icon: string; label: string; value: string; multiline?: boolean }) {
   return (
     <View style={styles.infoRow}>
-      <Ionicons name={icon as any} size={16} color={Colors.mutedFg} style={{ marginRight: 10 }} />
+      <Ionicons name={icon as any} size={16} color={Colors.mutedFg} style={{ marginRight: 10, marginTop: multiline ? 2 : 0 }} />
       <View style={{ flex: 1 }}>
         <Text style={styles.infoLabel}>{label}</Text>
-        <Text style={styles.infoValue}>{value}</Text>
+        <Text style={[styles.infoValue, multiline && styles.infoValueMultiline]}>{value}</Text>
       </View>
     </View>
   );
@@ -2662,6 +2726,7 @@ const styles = StyleSheet.create({
   memberAvatarText: { fontSize: 22, fontWeight: '800' },
   profileName: { fontSize: 18, fontWeight: '800', color: '#3E2B22' },
   profilePhone: { fontSize: 13, color: '#8B7355', marginTop: 3 },
+  profileMeta: { fontSize: 12, color: '#B39B83', marginTop: 2 },
   levelBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20 },
   levelText: { fontSize: 12, fontWeight: '700' },
   inactiveBadge: { backgroundColor: 'rgba(239,68,68,0.12)', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20 },
@@ -2678,9 +2743,11 @@ const styles = StyleSheet.create({
   actionBtnSection: { flexDirection: 'row', gap: 10, marginHorizontal: 16, marginTop: 4, marginBottom: 8 },
   cardTitle: { fontSize: 15, fontWeight: '700', color: Colors.foreground, marginBottom: 12 },
   cardSectionLabel: { fontSize: 13, fontWeight: '700', color: '#8B7355', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+  cardSectionCaption: { fontSize: 12, color: Colors.mutedFg, marginTop: -4, marginBottom: 10 },
   infoRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.mutedBg },
   infoLabel: { fontSize: 13, color: Colors.mutedFg, marginBottom: 2 },
   infoValue: { fontSize: 15, color: Colors.foreground, fontWeight: '500' },
+  infoValueMultiline: { lineHeight: 21 },
   btnRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
   editBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#C0755A', borderRadius: 12, paddingVertical: 11 },
   editBtnText: { color: '#C0755A', fontWeight: '700', fontSize: 14 },
