@@ -388,9 +388,18 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
 
   async function savePayEdit() {
     if (!payEditTarget) return;
+    const amountStr = payEditAmount.trim();
+    if (amountStr === '') { Alert.alert('오류', '금액을 입력해주세요.'); return; }
+    const amountParsed = parseInt(amountStr, 10);
+    if (isNaN(amountParsed)) { Alert.alert('오류', '금액은 숫자로 입력해주세요.'); return; }
+    const dueDateStr = payEditDueDate.trim();
+    if (!dueDateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dueDateStr) || isNaN(new Date(dueDateStr).getTime())) {
+      Alert.alert('오류', '납부기한을 YYYY-MM-DD 형식으로 입력해주세요.'); return;
+    }
     setPayEditSaving(true);
-    const amount = parseInt(payEditAmount) || payEditTarget.amount;
-    const paidAmount = payEditStatus === '납부완료' ? amount : payEditStatus === '미납' ? 0 : parseInt(payEditPaidAmount) || payEditTarget.paid_amount;
+    const amount = amountParsed;
+    const paidParsed = parseInt(payEditPaidAmount.trim(), 10);
+    const paidAmount = payEditStatus === '납부완료' ? amount : payEditStatus === '미납' ? 0 : (isNaN(paidParsed) ? payEditTarget.paid_amount : paidParsed);
     const paidDate = payEditStatus === '미납' ? null : (payEditPaidDate || new Date().toISOString().split('T')[0]);
     const { error } = await supabase.from('payments').update({
       description: payEditDesc, amount, paid_amount: paidAmount,
@@ -2944,9 +2953,16 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                     <TextInput style={{ borderWidth: 1.5, borderColor: Colors.mutedBg, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, color: Colors.foreground, backgroundColor: Colors.mutedBg }} value={payEditPaidDate} onChangeText={setPayEditPaidDate} placeholder="2026-06-15" placeholderTextColor={Colors.mutedFg} />
                   </>
                 )}
-                <TouchableOpacity style={{ margin: 16, marginTop: 20, marginBottom: 8, backgroundColor: Colors.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', opacity: payEditSaving ? 0.6 : 1 }} onPress={savePayEdit} disabled={payEditSaving}>
-                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>{payEditSaving ? '저장 중...' : '수정 저장'}</Text>
-                </TouchableOpacity>
+                {(() => {
+                  const amtOk = payEditAmount.trim() !== '' && !isNaN(parseInt(payEditAmount.trim(), 10));
+                  const dtOk = /^\d{4}-\d{2}-\d{2}$/.test(payEditDueDate.trim()) && !isNaN(new Date(payEditDueDate.trim()).getTime());
+                  const isValid = amtOk && dtOk;
+                  return (
+                    <TouchableOpacity style={{ margin: 16, marginTop: 20, marginBottom: 8, backgroundColor: Colors.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', opacity: (payEditSaving || !isValid) ? 0.4 : 1 }} onPress={savePayEdit} disabled={payEditSaving || !isValid}>
+                      <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>{payEditSaving ? '저장 중...' : '수정 저장'}</Text>
+                    </TouchableOpacity>
+                  );
+                })()}
               </ScrollView>
             </TouchableOpacity>
           </TouchableOpacity>
