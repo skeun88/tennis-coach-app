@@ -10,7 +10,7 @@ import { useHeaderHeight } from '@react-navigation/elements';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
-import { Member, MemberLevel, Attendance, Payment, MemberNote } from '../../types';
+import { Member, MemberLevel, Attendance, Payment, PaymentStatus, MemberNote } from '../../types';
 import { Colors } from '../../lib/theme';
 import { useSubscription } from '../../hooks/useSubscription';
 import MemberIssueTags from '../../components/MemberIssueTags';
@@ -346,6 +346,21 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   const [showEditModal, setShowEditModal] = useState(false);
   const [editSchedType, setEditSchedType] = useState<'regular' | 'by_date' | 'later'>('later');
 
+  // 결제 수정 모달
+  type PaymentMethod = '계좌이체' | '카드' | '현금';
+  const PAY_METHODS: PaymentMethod[] = ['계좌이체', '카드', '현금'];
+  const PAY_METHOD_ICONS: Record<PaymentMethod, string> = { '계좌이체': 'phone-portrait-outline', '카드': 'card-outline', '현금': 'cash-outline' };
+  const [payEditModal, setPayEditModal] = useState(false);
+  const [payEditTarget, setPayEditTarget] = useState<Payment | null>(null);
+  const [payEditDesc, setPayEditDesc] = useState('');
+  const [payEditAmount, setPayEditAmount] = useState('');
+  const [payEditPaidAmount, setPayEditPaidAmount] = useState('');
+  const [payEditDueDate, setPayEditDueDate] = useState('');
+  const [payEditPaidDate, setPayEditPaidDate] = useState('');
+  const [payEditStatus, setPayEditStatus] = useState<PaymentStatus>('미납');
+  const [payEditMethod, setPayEditMethod] = useState<PaymentMethod | ''>('');
+  const [payEditSaving, setPayEditSaving] = useState(false);
+
   function openEditModal() {
     const schedType = member ? detectScheduleType(member as any, futureLessons.length > 0) : 'later';
     setEditSchedType(schedType);
@@ -357,6 +372,36 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     if (!phone.trim()) { Alert.alert('입력 오류', '전화번호를 입력해주세요.'); return; }
     setShowEditModal(false);
     handleSave();
+  }
+
+  function openPayEditModal(payment: Payment) {
+    setPayEditTarget(payment);
+    setPayEditDesc(payment.description);
+    setPayEditAmount(String(payment.amount));
+    setPayEditPaidAmount(String(payment.paid_amount));
+    setPayEditDueDate(payment.due_date);
+    setPayEditPaidDate(payment.paid_date ?? '');
+    setPayEditStatus(payment.status);
+    setPayEditMethod(((payment as any).payment_method as PaymentMethod) ?? '');
+    setPayEditModal(true);
+  }
+
+  async function savePayEdit() {
+    if (!payEditTarget) return;
+    setPayEditSaving(true);
+    const amount = parseInt(payEditAmount) || payEditTarget.amount;
+    const paidAmount = payEditStatus === '납부완료' ? amount : payEditStatus === '미납' ? 0 : parseInt(payEditPaidAmount) || payEditTarget.paid_amount;
+    const paidDate = payEditStatus === '미납' ? null : (payEditPaidDate || new Date().toISOString().split('T')[0]);
+    const { error } = await supabase.from('payments').update({
+      description: payEditDesc, amount, paid_amount: paidAmount,
+      due_date: payEditDueDate, paid_date: paidDate, status: payEditStatus,
+      payment_method: payEditMethod || null,
+    }).eq('id', payEditTarget.id).eq('member_id', payEditTarget.member_id);
+    setPayEditSaving(false);
+    if (error) { Alert.alert('오류', '저장에 실패했어요.\n' + error.message); return; }
+    setPayEditModal(false);
+    setPayEditTarget(null);
+    loadPayments();
   }
 
   async function saveAttStatus(attId: string, memberId2: string, currentDeductCredit: boolean, currentRemaining: number) {
@@ -1701,10 +1746,19 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                 <View style={{ flex: 1 }}>
                   <Text style={styles.paymentDesc}>{p.description}</Text>
                   <Text style={styles.paymentDate}>납부기한: {p.due_date}</Text>
+                  {p.paid_date && <Text style={styles.paymentDate}>납부일: {p.paid_date}</Text>}
+                  {(p as any).payment_method && <Text style={styles.paymentDate}>납부방법: {(p as any).payment_method}</Text>}
                 </View>
-                <View style={{ alignItems: 'flex-end' }}>
+                <View style={{ alignItems: 'flex-end', gap: 6 }}>
                   <Text style={styles.paymentAmount}>{p.amount.toLocaleString()}원</Text>
                   <Text style={[styles.paymentStatus, { color: p.status === '납부완료' ? Colors.primary : Colors.destructive }]}>{p.status}</Text>
+                  <TouchableOpacity
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: Colors.mutedBg, borderRadius: 7, paddingVertical: 4, paddingHorizontal: 8 }}
+                    onPress={() => openPayEditModal(p)}
+                  >
+                    <Ionicons name="create-outline" size={11} color={Colors.mutedFg} />
+                    <Text style={{ fontSize: 11, color: Colors.mutedFg, fontWeight: '600' }}>수정</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             ))}
@@ -2846,6 +2900,58 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         context="tagging"
         currentPlanId={subscription?.plan_id ?? 'free'}
       />
+
+      {/* 결제 수정 모달 */}
+      <Modal visible={payEditModal} transparent animationType="slide" onRequestClose={() => { setPayEditModal(false); setPayEditTarget(null); }}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+          <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' }} activeOpacity={1} onPress={() => { setPayEditModal(false); setPayEditTarget(null); }}>
+            <TouchableOpacity style={{ backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: Math.max(32, insets.bottom + 16) }} activeOpacity={1} onPress={() => {}}>
+              <View style={{ width: 40, height: 4, backgroundColor: Colors.mutedBg, borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 4 }} />
+              <Text style={{ fontSize: 18, fontWeight: '800', color: Colors.foreground, textAlign: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.mutedBg }}>결제 수정</Text>
+              <ScrollView style={{ paddingHorizontal: 16 }} keyboardShouldPersistTaps="handled">
+                <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginTop: 14, marginBottom: 6 }}>내용</Text>
+                <TextInput style={{ borderWidth: 1.5, borderColor: Colors.mutedBg, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, color: Colors.foreground, backgroundColor: Colors.mutedBg }} value={payEditDesc} onChangeText={setPayEditDesc} placeholder="레슨권명 등" placeholderTextColor={Colors.mutedFg} />
+                <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginTop: 14, marginBottom: 6 }}>청구금액 (원)</Text>
+                <TextInput style={{ borderWidth: 1.5, borderColor: Colors.mutedBg, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, color: Colors.foreground, backgroundColor: Colors.mutedBg }} value={payEditAmount} onChangeText={setPayEditAmount} keyboardType="numeric" placeholder="예: 150000" placeholderTextColor={Colors.mutedFg} />
+                <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginTop: 14, marginBottom: 6 }}>납부 상태</Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                  {(['미납', '부분납부', '납부완료'] as PaymentStatus[]).map(st => (
+                    <TouchableOpacity key={st} style={[{ flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center', backgroundColor: payEditStatus === st ? Colors.primary : Colors.mutedBg }]} onPress={() => setPayEditStatus(st)}>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: payEditStatus === st ? '#fff' : Colors.mutedFg }}>{st === '납부완료' ? '완납' : st === '부분납부' ? '부분납' : '미납'}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                {payEditStatus === '부분납부' && (
+                  <>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginTop: 14, marginBottom: 6 }}>실납부금액 (원)</Text>
+                    <TextInput style={{ borderWidth: 1.5, borderColor: Colors.mutedBg, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, color: Colors.foreground, backgroundColor: Colors.mutedBg }} value={payEditPaidAmount} onChangeText={setPayEditPaidAmount} keyboardType="numeric" placeholderTextColor={Colors.mutedFg} />
+                  </>
+                )}
+                <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginTop: 14, marginBottom: 6 }}>납부 방법</Text>
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+                  {PAY_METHODS.map(m => (
+                    <TouchableOpacity key={m} style={[{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 12, borderWidth: 1.5, gap: 6 }, payEditMethod === m ? { backgroundColor: Colors.primary, borderColor: Colors.primary } : { backgroundColor: Colors.mutedBg, borderColor: Colors.mutedBg }]} onPress={() => setPayEditMethod(m)}>
+                      <Ionicons name={PAY_METHOD_ICONS[m] as any} size={20} color={payEditMethod === m ? '#fff' : Colors.mutedFg} />
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: payEditMethod === m ? '#fff' : Colors.mutedFg }}>{m}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginTop: 14, marginBottom: 6 }}>납부기한 (YYYY-MM-DD)</Text>
+                <TextInput style={{ borderWidth: 1.5, borderColor: Colors.mutedBg, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, color: Colors.foreground, backgroundColor: Colors.mutedBg }} value={payEditDueDate} onChangeText={setPayEditDueDate} placeholder="2026-06-30" placeholderTextColor={Colors.mutedFg} />
+                {payEditStatus !== '미납' && (
+                  <>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginTop: 14, marginBottom: 6 }}>납부일 (YYYY-MM-DD)</Text>
+                    <TextInput style={{ borderWidth: 1.5, borderColor: Colors.mutedBg, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, color: Colors.foreground, backgroundColor: Colors.mutedBg }} value={payEditPaidDate} onChangeText={setPayEditPaidDate} placeholder="2026-06-15" placeholderTextColor={Colors.mutedFg} />
+                  </>
+                )}
+                <TouchableOpacity style={{ margin: 16, marginTop: 20, marginBottom: 8, backgroundColor: Colors.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', opacity: payEditSaving ? 0.6 : 1 }} onPress={savePayEdit} disabled={payEditSaving}>
+                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>{payEditSaving ? '저장 중...' : '수정 저장'}</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* 결제 완료 모달 */}
       <Modal
