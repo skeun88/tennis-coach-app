@@ -11,11 +11,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { MemberLevel } from '../../types';
 import { Colors } from '../../lib/theme';
+import { buildMemberUpsertPayload, MEMBER_BASIC_FIELD_KEYS, MEMBER_LEVELS } from './member-form';
 import { getCurrentSubscription, canAddMember } from '../../lib/subscription';
 import { syncRevenueCatToDb } from '../../lib/purchases';
 import { IS_BETA } from '../../lib/beta';
 
-const LEVELS: MemberLevel[] = ['입문', '초급', '중급', '상급', '선수'];
+const LEVELS: MemberLevel[] = MEMBER_LEVELS;
 const DAYS_KR = ['일', '월', '화', '수', '목', '금', '토'];
 const HOURS = Array.from({ length: 18 }, (_, i) => String(i + 6).padStart(2, '0')); // 06~23
 const MINUTES = ['00', '10', '20', '30', '40', '50'];
@@ -303,6 +304,7 @@ export default function NewMemberScreen() {
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [level, setLevel] = useState<MemberLevel>('초급');
   const [joinDate, setJoinDate] = useState(toKSTDateStr(new Date()));
@@ -496,10 +498,20 @@ export default function NewMemberScreen() {
       firstDayTime = scheduleDays.length > 0 && dayTimes[scheduleDays[0]]?.[0] ? dayTimes[scheduleDays[0]][0] : null;
     }
 
+    const basicPayload = buildMemberUpsertPayload({
+      name,
+      phone,
+      email,
+      birthDate,
+      joinDate,
+      level,
+      notes,
+    });
+
     const { data: newMember, error } = await supabase.from('members').insert({
-      coach_id: userId, name: name.trim(), phone: phone.trim(),
-      birth_date: birthDate || null,
-      level, join_date: joinDate, notes: notes.trim() || null, is_active: true,
+      coach_id: userId,
+      ...basicPayload,
+      is_active: true,
       fixed_schedule_days: scheduleType === 'regular' ? scheduleDays : [],
       fixed_schedule_time: firstDayTime,
       fixed_schedule_times: scheduleType === 'regular' && Object.keys(scheduleTimesJson).length > 0 ? scheduleTimesJson : null,
@@ -721,10 +733,13 @@ export default function NewMemberScreen() {
         {/* 기본 정보 */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>기본 정보</Text>
+          <Text style={styles.sectionCaption}>공통 필드 {MEMBER_BASIC_FIELD_KEYS.length}개를 등록/수정 화면에서 동일하게 사용합니다.</Text>
           <Text style={styles.label}>이름 *</Text>
           <TextInput style={styles.input} placeholder="홍길동" value={name} onChangeText={setName} />
           <Text style={styles.label}>전화번호 *</Text>
           <TextInput style={styles.input} placeholder="010-0000-0000" value={phone} onChangeText={v => setPhone(formatPhone(v))} keyboardType="phone-pad" />
+          <Text style={styles.label}>이메일</Text>
+          <TextInput style={styles.input} placeholder="example@email.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
           <Text style={styles.label}>생년월일</Text>
           <TextInput style={styles.input} placeholder="YYYY-MM-DD" value={birthDate} onChangeText={v => setBirthDate(formatDate(v))} />
           <Text style={styles.label}>가입일</Text>
@@ -1367,6 +1382,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   section: { backgroundColor: '#fff', borderRadius: 12, margin: 16, marginBottom: 0, padding: 16 },
   sectionTitle: { fontSize: 14, fontWeight: '700', color: Colors.mutedFg, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
+  sectionCaption: { fontSize: 12, color: Colors.mutedFg, marginTop: -4, marginBottom: 12 },
   label: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg, marginBottom: 6 },
   labelHint: { fontSize: 13, fontWeight: '400', color: Colors.placeholder },
   input: { backgroundColor: Colors.mutedBg, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, color: Colors.foreground, marginBottom: 12, borderWidth: 1, borderColor: Colors.border },

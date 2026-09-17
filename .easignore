@@ -1,6 +1,9 @@
-ios/
-android/
-node_modules/
-.git/
-*.tar.gz
+node_modules
+.git
+.expo
+ios/build
+android/build
+android/app/build
 *.log
+.env
+.env.*

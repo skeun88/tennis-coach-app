@@ -5,6 +5,24 @@ const TOSS_SECRET_KEY = Deno.env.get('TOSS_SECRET_KEY')!;
 const CRON_SECRET = Deno.env.get('CRON_SECRET')!;
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const SLACK_WEBHOOK_URL = Deno.env.get('SLACK_WEBHOOK_URL');
+
+async function sendSlackReport(processed: number, results: { coachId: string; success: boolean; error?: string }[], expiredTrials: number) {
+  if (!SLACK_WEBHOOK_URL) return;
+  const successCount = results.filter(r => r.success).length;
+  const failCount = results.filter(r => !r.success).length;
+  const failures = results.filter(r => !r.success).map(r => `• ${r.coachId}: ${r.error}`).join('\n');
+  const text = [
+    `*[process-billing] 결제 처리 완료* (${new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })})`,
+    `결제 성공: ${successCount}건 | 실패: ${failCount}건 | 트라이얼 만료: ${expiredTrials}건`,
+    failCount > 0 ? `\n실패 목록:\n${failures}` : '',
+  ].filter(Boolean).join('\n');
+  await fetch(SLACK_WEBHOOK_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+};
 
 const PLAN_PRICES: Record<string, number> = {
   basic: 29000,
@@ -144,6 +162,8 @@ serve(async (req) => {
         event_type: 'trial_ended',
       });
     }
+
+    await sendSlackReport(results.length, results, (expiredTrials ?? []).length);
 
     return new Response(JSON.stringify({ processed: results.length, results }), {
       headers: { 'Content-Type': 'application/json' },

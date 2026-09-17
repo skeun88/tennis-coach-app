@@ -28,6 +28,7 @@ export default function RootLayout() {
   const [isNavigationReady, setIsNavigationReady] = useState(false);
   const [preloading, setPreloading] = useState(false);
   const loadingStartedAt = useRef(Date.now());
+  const syncPromiseRef = useRef<Promise<void> | null>(null);
   const router = useRouter();
   const segments = useSegments();
 
@@ -47,10 +48,11 @@ export default function RootLayout() {
   useEffect(() => {
     if (session?.user.id) {
       const userId = session.user.id;
-      loginPurchases(userId)
+      syncPromiseRef.current = loginPurchases(userId)
         .then(() => syncRevenueCatToDb(userId))
         .catch(() => {});
     } else {
+      syncPromiseRef.current = null;
       logoutPurchases();
     }
   }, [session?.user.id]);
@@ -129,9 +131,13 @@ export default function RootLayout() {
           }
 
           if (inAuthGroup) {
-            // 구독 체크
+            // 구독 체크: sync 완료 후 읽도록 최대 2.5초 대기. 타임아웃 시 통과.
             if (!IS_BETA) {
               try {
+                await Promise.race([
+                  syncPromiseRef.current ?? Promise.resolve(),
+                  new Promise<void>(res => setTimeout(res, 2500)),
+                ]);
                 const sub = await getCurrentSubscription();
                 if (sub && (sub.status === 'blocked' || sub.status === 'cancelled')) {
                   router.replace('/subscription/blocked');
@@ -165,7 +171,10 @@ export default function RootLayout() {
           }
 
           if (IS_BETA) { setNavReady(); return; }
-          getCurrentSubscription().then((sub) => {
+          Promise.race([
+            syncPromiseRef.current ?? Promise.resolve(),
+            new Promise<void>(res => setTimeout(res, 2500)),
+          ]).catch(() => {}).then(() => getCurrentSubscription()).then((sub) => {
             if (sub && (sub.status === 'blocked' || sub.status === 'cancelled')) {
               router.replace('/subscription/blocked');
             }
