@@ -3,7 +3,7 @@
     "name": "Kerri",
     "slug": "tennis-coach-app",
     "owner": "skeun-2",
-    "version": "1.1.8",
+    "version": "1.1.9",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -17,6 +17,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.kerri.tenniscoach",
+      "buildNumber": "19",
       "icon": "./assets/icon.png",
       "infoPlist": {
         "CFBundleDisplayName": "Kerri",
