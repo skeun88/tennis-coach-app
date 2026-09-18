@@ -270,7 +270,7 @@ export default function AIAnalysisScreen() {
       const planIds = data.map((p: any) => p.id);
       const { data: reports } = await supabase
         .from('member_lesson_reports')
-        .select('*')
+        .select('id, lesson_plan_id, sent_to_member, is_read')
         .in('lesson_plan_id', planIds);
       if (reports) {
         const map: Record<string, any> = {};
@@ -282,7 +282,7 @@ export default function AIAnalysisScreen() {
     // 수동 기록 로드 (lesson_plan_id 없는 member_lesson_reports)
     const { data: manualData } = await supabase
       .from('member_lesson_reports')
-      .select('*')
+      .select('id, member_id, lesson_plan_id, summary, achievements, improvement_points, created_at, sent_to_member, source')
       .eq('member_id', memberId)
       .is('lesson_plan_id', null)
       .order('created_at', { ascending: false })
@@ -379,10 +379,10 @@ export default function AIAnalysisScreen() {
         improvement_points: [],
         practice_plan: [],
         source: 'manual',
+        sent_to_member: false,
       });
       if (error) throw error;
-      try { await notifyMemberReport(memberId as string); } catch (e) { console.error('[PUSH] 리포트 알림 실패:', e); }
-      Alert.alert('전송 완료', '레슨 기록이 회원에게 전송됐어요.');
+      Alert.alert('저장 완료', '레슨 기록이 저장됐어요. 상세 화면에서 전송할 수 있어요.');
       setManualModalVisible(false);
       setManualContent('');
       loadPlans();
@@ -408,10 +408,10 @@ export default function AIAnalysisScreen() {
         improvement_points: polishedReport.improvement_points,
         practice_plan: polishedReport.practice_plan,
         source: 'manual',
+        sent_to_member: false,
       });
       if (error) throw error;
-      try { await notifyMemberReport(memberId as string); } catch (e) { console.error('[PUSH] 리포트 알림 실패:', e); }
-      Alert.alert('저장 완료', '레포트가 저장되었습니다.');
+      Alert.alert('저장 완료', 'AI 레슨 기록이 저장됐어요. 상세 화면에서 전송할 수 있어요.');
       setManualModalVisible(false);
       setPolishedReport(null);
       setManualContent('');
@@ -1171,14 +1171,14 @@ export default function AIAnalysisScreen() {
 
           {plans
             .filter(plan => {
-              const isSent = !!memberReports[plan.id];
+              const isSent = memberReports[plan.id]?.sent_to_member === true;
               if (recordFilter === 'sent') return isSent;
               if (recordFilter === 'unsent') return !isSent;
               return true;
             })
             .map(plan => {
               const report = memberReports[plan.id];
-              const isSent = !!report;
+              const isSent = report?.sent_to_member === true;
               return (
                 <TouchableOpacity
                   key={plan.id}
@@ -1219,8 +1219,15 @@ export default function AIAnalysisScreen() {
 
           {/* 수동 기록 카드 */}
           {manualReports
-            .filter(() => recordFilter === 'all' || recordFilter === 'sent')
-            .map(report => (
+            .filter(report => {
+              const isSent = report.sent_to_member === true;
+              if (recordFilter === 'sent') return isSent;
+              if (recordFilter === 'unsent') return !isSent;
+              return true;
+            })
+            .map(report => {
+              const isSent = report.sent_to_member === true;
+              return (
               <TouchableOpacity
                 key={report.id}
                 style={styles.planCard}
@@ -1231,8 +1238,10 @@ export default function AIAnalysisScreen() {
                   <View style={styles.planDateRow}>
                     <Text style={styles.planDate}>{formatDate(report.created_at)}</Text>
                   </View>
-                  <View style={[styles.sentBadge, styles.sentBadgeGreen]}>
-                    <Text style={[styles.sentBadgeText, styles.sentBadgeTextGreen]}>전송 완료</Text>
+                  <View style={[styles.sentBadge, isSent ? styles.sentBadgeGreen : styles.sentBadgeTerracotta]}>
+                    <Text style={[styles.sentBadgeText, isSent ? styles.sentBadgeTextGreen : styles.sentBadgeTextTerracotta]}>
+                      {isSent ? '전송 완료' : '미전송'}
+                    </Text>
                   </View>
                 </View>
                 <View style={styles.planTitleRow}>
@@ -1268,7 +1277,8 @@ export default function AIAnalysisScreen() {
                   </View>
                 )}
               </TouchableOpacity>
-            ))}
+              );
+            })}
         </View>
 
       </ScrollView>

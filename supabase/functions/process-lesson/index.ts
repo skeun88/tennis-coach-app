@@ -696,21 +696,7 @@ ${knowledgeContext || '(없음)'}
           console.error('member_report_status_skip: no plan id')
         }
 
-        // PN-07: 회원에게 AI 리포트 도착 알림
-        const { data: coachProfile } = await supabase
-          .from('coach_profiles').select('name').eq('coach_id', coachId).maybeSingle()
-        const coachName = coachProfile?.name ?? '코치'
-        await fetch(`${SUPABASE_URL}/functions/v1/send-push`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}` },
-          body: JSON.stringify({
-            recipient_type: 'member', recipient_id: memberId,
-            title: 'AI 레슨 리포트 도착',
-            body: `${coachName} 코치의 레슨 리포트가 도착했습니다.`,
-            data: { screen: 'report', plan_id: plan?.id },
-            notif_id: 'PN-07',
-          }),
-        }).catch((e: any) => console.error('pn07_error:', e))
+        // PN-07: 코치가 명시적으로 "전송" 버튼 눌러야 발송 (plan-detail.tsx sendReportToMember)
       } catch (e: any) {
         console.error('member_report_error:', e)
         // 실패: failed + 에러 메시지 기록
