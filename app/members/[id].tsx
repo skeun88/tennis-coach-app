@@ -1091,7 +1091,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       await supabase.from('members').update({ invite_code: code }).eq('id', member.id);
     }
 
-    const msg = `[KERRI 멤버 초대]\n${member.name} 회원님, 담당 코치가 KERRI 멤버로 초대했어요.\n앱에서 레슨 일정과 횟수, 레슨 기록을 확인해 보세요.\niPhone\n ${APP_STORE_URL}\nAndroid\n ${PLAY_STORE_URL}\n링크로 연결되지 않으면 앱을 다운로드한 후, 아래 초대 코드를 입력해 로그인해 주세요.\n초대 코드\n${code}`;
+    const msg = `[KERRI 멤버 초대]\n\n${member.name} 회원님, 담당 코치가 KERRI 멤버로 초대했어요.\n앱에서 레슨 일정과 횟수, 레슨 기록을 확인해 보세요.\niPhone\n ${APP_STORE_URL}\nAndroid\n ${PLAY_STORE_URL}\n링크로 연결되지 않으면 앱을 다운로드한 후, 아래 초대 코드를 입력해 로그인해 주세요.\n\n초대 코드\n ${code}`;
     const phone = member.phone.replace(/[^0-9]/g, '');
     const smsUrl = `sms:${phone}${Platform.OS === 'ios' ? '&' : '?'}body=${encodeURIComponent(msg)}`;
     const canOpen = await Linking.canOpenURL(smsUrl);
