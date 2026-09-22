@@ -9,6 +9,7 @@ import * as AuthSession from 'expo-auth-session';
 import NaverLogin from '@react-native-seoul/naver-login';
 import { login as kakaoLogin, loginWithKakaoAccount } from '@react-native-seoul/kakao-login';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -50,6 +51,7 @@ const WARM_GRAY = '#9E8E85';
 const WARM_GRAY_BORDER = '#D9CFC9';
 
 export default function LoginScreen() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -392,7 +394,7 @@ export default function LoginScreen() {
             로그인 시{' '}
             <Text style={styles.termsLink}>이용약관</Text>
             {' 및 '}
-            <Text style={styles.termsLink}>개인정보 처리방침</Text>
+            <Text style={styles.termsLink} onPress={() => router.push('/(auth)/privacy-policy')}>개인정보 처리방침</Text>
             {'에 동의합니다.'}
           </Text>
         </View>

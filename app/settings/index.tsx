@@ -143,7 +143,7 @@ export default function SettingsScreen() {
       {/* ── 개인정보 및 보안 ── */}
       <SectionHeader title="개인정보 및 보안" />
       <Group>
-        <SettingRow icon="document-text-outline" label="개인정보 처리방침" onPress={notReady} />
+        <SettingRow icon="document-text-outline" label="개인정보 처리방침" onPress={() => router.push('/(auth)/privacy-policy')} />
         <SettingRow icon="reader-outline" label="이용약관" onPress={notReady} />
         <SettingRow icon="mic-outline" label="AI 및 음성 분석 동의 관리" onPress={notReady} />
         <SettingRow icon="shield-outline" label="데이터 및 계정 관리" onPress={notReady} />
