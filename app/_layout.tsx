@@ -103,6 +103,7 @@ export default function RootLayout() {
     const inAuthGroup = segments[0] === '(auth)';
     const inSubscriptionGroup = segments[0] === 'subscription';
     const inOnboarding = segments[0] === '(auth)' && (segments as string[])[1] === 'onboarding';
+    const inPrivacyPolicy = segments[0] === '(auth)' && (segments as string[])[1] === 'privacy-policy';
     const inResetPassword = (segments as string[])[0] === 'reset-password';
 
     if (!session && !inAuthGroup && !inResetPassword) {
@@ -111,7 +112,7 @@ export default function RootLayout() {
       return;
     }
 
-    if (inOnboarding) {
+    if (inOnboarding || inPrivacyPolicy) {
       setNavReady();
       return;
     }
