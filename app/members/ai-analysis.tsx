@@ -450,7 +450,41 @@ export default function AIAnalysisScreen() {
     ]);
   }
 
+  async function checkGuardianConsent(): Promise<boolean> {
+    if (!memberId) return true;
+    const { data } = await supabase
+      .from('members')
+      .select('birth_date, guardian_consent_at')
+      .eq('id', memberId)
+      .maybeSingle();
+    if (!data?.birth_date) return true;
+    const birthYear = new Date(data.birth_date).getFullYear();
+    const todayYear = new Date().getFullYear();
+    const age = todayYear - birthYear;
+    if (age >= 14) return true;
+    if (data.guardian_consent_at) return true;
+    return new Promise(resolve => {
+      Alert.alert(
+        '보호자 동의 확인',
+        `${memberName || '이 회원'}은 만 14세 미만입니다.\n\n개인정보보호법에 따라 보호자(법정대리인)로부터 개인정보 처리 동의를 받아야 합니다.\n\n동의를 받으셨나요?`,
+        [
+          { text: '아직 못 받았어요', style: 'cancel', onPress: () => resolve(false) },
+          {
+            text: '네, 동의받았습니다',
+            onPress: async () => {
+              await supabase.from('members').update({ guardian_consent_at: new Date().toISOString() }).eq('id', memberId);
+              resolve(true);
+            },
+          },
+        ],
+        { cancelable: false }
+      );
+    });
+  }
+
   async function startRecording() {
+    const consentOk = await checkGuardianConsent();
+    if (!consentOk) return;
     try {
       const status = await AudioModule.requestRecordingPermissionsAsync();
       if (!status.granted) {
