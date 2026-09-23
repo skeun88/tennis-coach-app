@@ -76,6 +76,13 @@ export default function OnboardingScreen() {
       }, { onConflict: 'coach_id' });
 
       if (error) throw error;
+
+      // 신규 가입 시 동의 기록 저장 (법적 증빙용, 실패해도 온보딩은 진행)
+      void supabase.from('consent_logs').insert([
+        { user_id: user.id, consent_type: 'privacy', version: '1.0', platform: 'ios' },
+        { user_id: user.id, consent_type: 'terms', version: '1.0', platform: 'ios' },
+      ]);
+
       router.replace('/(tabs)');
     } catch (e: any) {
       Alert.alert('오류', e.message ?? '저장 중 오류가 발생했습니다.');

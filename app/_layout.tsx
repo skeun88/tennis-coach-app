@@ -118,6 +118,18 @@ export default function RootLayout() {
 
     if (session && !inSubscriptionGroup) {
       registerCoachPushToken().catch(() => {});
+      // 기존 사용자 동의 기록 소급 저장 (없는 경우에만, 실패 무시)
+      void (async () => {
+        try {
+          const { data } = await supabase.from('consent_logs').select('id').eq('user_id', session.user.id).limit(1);
+          if (!data || data.length === 0) {
+            await supabase.from('consent_logs').insert([
+              { user_id: session.user.id, consent_type: 'privacy', version: '1.0', platform: 'ios' },
+              { user_id: session.user.id, consent_type: 'terms', version: '1.0', platform: 'ios' },
+            ]);
+          }
+        } catch {}
+      })();
       supabase
         .from('coach_profiles')
         .select('coach_id')
