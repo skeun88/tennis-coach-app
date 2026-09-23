@@ -38,7 +38,7 @@ const sections: { title: string; body: string }[] = [
 • 코치 프로필 및 회원 관리: 레슨 서비스 제공
 • 스케줄·출결·레슨권 관리: 수업 일정 및 이력 관리
 • 레슨비 납부내역 관리: 결제 및 정산 처리
-• AI 레슨 기록 생성: 음성 → STT 변환 → AI 분석 → 레슨 리포트 생성
+• AI 레슨 기록 생성: 레슨 음성을 분석하여 레슨 기록 자동 생성
 • 코치·회원 간 알림: 일정 알림, 레슨 기록 전송
 • 구독 및 유료 기능 제공: 플랜 관리, 결제 처리
 • 서비스 보안 및 운영: 이상 접근 탐지, 오류 대응`,
@@ -57,26 +57,21 @@ const sections: { title: string; body: string }[] = [
   },
   {
     title: '4. AI 레슨 기록 및 음성 데이터 처리',
-    body: `KERRI의 AI 레슨 기록 기능은 다음과 같이 처리됩니다.
+    body: `레슨 기록 기능을 이용하면 녹음된 음성이 인공지능 서비스를 통해 처리되어 레슨 기록이 생성됩니다.
 
-처리 흐름:
-레슨 녹음 → 음성 임시 저장(Supabase Storage) → STT 변환(OpenAI Whisper) → AI 분석(Anthropic Claude) → 레슨 리포트 생성 → 음성/STT 원본 자동 삭제 → 최종 레슨 기록 보관
+처리에 사용된 음성 데이터는 레슨 기록 생성 완료 후 자동으로 삭제되며, 최종 레슨 기록만 보관됩니다.
 
-외부 AI 업체에 전달되는 정보:
-• STT 변환: 음성 파일 (회원 실명 등 직접 식별정보 포함 가능성 있음)
-• AI 분석: STT 전사 텍스트 (회원명은 익명 처리하는 방향으로 개선 예정)
-
-외부 AI 업체(OpenAI, Anthropic)는 당사의 처리위탁 계약에 따라 서비스 제공 목적 외로 데이터를 사용하지 않으며, 자체 모델 학습에 사용하지 않습니다.`,
+처리를 위탁받은 업체는 서비스 제공 목적 외의 사용 및 자체 모델 학습에 해당 데이터를 사용하지 않습니다.`,
   },
   {
     title: '5. 개인정보 처리위탁',
     body: `KERRI는 서비스 운영을 위해 아래 업체에 개인정보 처리를 위탁합니다.
 
-• Supabase Inc. — 데이터베이스, 인증, 파일 저장, 서버 함수
-• OpenAI, L.L.C. — 음성 STT 변환(Whisper API)
-• Anthropic PBC — AI 레슨 기록 분석(Claude API)
-• RevenueCat Inc. — 구독 및 인앱 결제 관리
-• Apple Inc. / Google LLC — 앱 배포, 인앱 결제 처리
+• Supabase Inc. — 서비스 인프라 운영
+• OpenAI, L.L.C. — AI 기반 서비스 운영
+• Anthropic PBC — AI 기반 서비스 운영
+• RevenueCat Inc. — 구독 및 결제 관리
+• Apple Inc. / Google LLC — 앱 배포 및 결제 처리
 
 각 위탁업체는 위탁 목적 외 개인정보 처리가 금지되며, 개인정보보호법에 따른 보호 조치 의무를 집니다.`,
   },
@@ -84,10 +79,10 @@ const sections: { title: string; body: string }[] = [
     title: '6. 개인정보 국외이전',
     body: `위 위탁업체는 모두 미국 소재 기업으로, 개인정보가 대한민국 외부(미국)로 이전됩니다.
 
-• Supabase Inc. (미국, AWS 인프라): 계정, 레슨 기록, 음성 등 전체 서비스 데이터
-• OpenAI, L.L.C. (미국): 음성 파일 및 STT 처리
-• Anthropic PBC (미국): STT 전사 텍스트 및 레슨 분석
-• RevenueCat Inc. (미국): 구독 상태 및 결제 식별 정보
+• Supabase Inc. (미국): 서비스 운영에 필요한 데이터
+• OpenAI, L.L.C. (미국): AI 서비스 운영에 필요한 데이터
+• Anthropic PBC (미국): AI 서비스 운영에 필요한 데이터
+• RevenueCat Inc. (미국): 구독 및 결제 관련 정보
 
 이전 시기: 서비스 이용 중 실시간 이전
 보유기간: 각 서비스 계약 기간 및 위탁 목적 달성 시까지`,
@@ -132,7 +127,7 @@ const sections: { title: string; body: string }[] = [
 
 • 개인정보 접근 권한을 최소화하고, 권한 변경 이력 관리
 • SSL/TLS 암호화 전송
-• Supabase Row Level Security(RLS)로 데이터 접근 통제
+• 접근 권한 기반의 데이터 보호 체계 운영
 • 개인정보 처리 시스템 접근 로그 기록 및 감시
 
 개인정보 보호책임자:
