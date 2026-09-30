@@ -131,7 +131,8 @@ const SYSTEM_PROMPT = `당신은 USTA/ITF 자격증을 보유한 전문 테니�
 • improvement_points: 정확히 2항목, 각 1문장 (원인→교정법 핵심만)
 • next_goals: 정확히 2항목, 각 1문장
 • drill method/court_adaptation: 각 1문장 이내
-• 전체 출력 950토큰 이내
+• lesson_comparison: 이전 목표가 있을 때만 작성. 없으면 빈 배열([])
+• 전체 출력 1100토큰 이내
 
 {
   "ai_title": "이번 레슨 핵심 주제 (5-8단어, 명사형)",
@@ -153,6 +154,9 @@ const SYSTEM_PROMPT = `당신은 USTA/ITF 자격증을 보유한 전문 테니�
       "reps": "횟수/시간",
       "court_adaptation": "코트 변형 (1문장)"
     }
+  ],
+  "lesson_comparison": [
+    { "point": "이전 목표 내용", "status": "improved", "reason": "근거 1-2문장" }
   ]
 }
 drill_suggestions는 정확히 2개만 포함할 것.`
@@ -415,7 +419,7 @@ serve(async (req) => {
 레슨 전사:
 ${transcript}`
 
-    const [summaryRes, transcriptInsert, historyRes] = await Promise.all([
+    const [summaryRes, transcriptInsert, historyRes, prevPlanRes] = await Promise.all([
       fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
@@ -439,6 +443,16 @@ ${transcript}`
         .eq('member_id', memberId)
         .order('created_at', { ascending: false })
         .limit(3),
+      // 이전 레슨 플랜 (비교용): 현재 분석 중인 플랜을 제외한 가장 최근 플랜
+      supabase.from('lesson_plans')
+        .select('id, next_goals, coach_next_goals, next_goals_saved')
+        .eq('member_id', memberId)
+        .eq('coach_id', coachId)
+        .eq('status', 'completed')
+        .neq('id', lessonPlanId ?? '00000000-0000-0000-0000-000000000000')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ])
 
     const summaryData = await summaryRes.json()
@@ -452,7 +466,17 @@ ${transcript}`
 
     const transcriptRow = transcriptInsert.data
     const recentPlans = historyRes.data
+    const prevPlan = prevPlanRes.data
     const lessonRatio = transcriptSummary.lesson_content_ratio ?? 1.0
+
+    // 이전 목표: coach_next_goals 우선, 없으면 next_goals
+    const prevGoals: string[] = prevPlan
+      ? (
+          (Array.isArray(prevPlan.coach_next_goals) && prevPlan.coach_next_goals.length > 0)
+            ? prevPlan.coach_next_goals
+            : (Array.isArray(prevPlan.next_goals) ? prevPlan.next_goals : [])
+        )
+      : []
 
     // lessonRatio는 참고용으로만 사용 — 비율이 낮아도 분석 진행 (있는 레슨 내용은 그대로 반영)
 
@@ -524,8 +548,12 @@ ${transcript}`
     }
 
     const historyContext = (recentPlans || []).map((p, i) =>
-      `[${i + 1}회 전 - ${new Date(p.created_at).toLocaleDateString('ko-KR')}]\n요약: ${p.summary}\n다음목표: ${p.next_goals}`
+      `[${i + 1}회 전 - ${new Date(p.created_at).toLocaleDateString('ko-KR')}]\n요약: ${p.summary}\n다음목표: ${Array.isArray(p.next_goals) ? p.next_goals.join(', ') : p.next_goals}`
     ).join('\n\n')
+
+    const prevGoalsSection = prevGoals.length > 0
+      ? `\n\n## 이전 레슨 목표 달성도 평가\n이전 목표: ${prevGoals.join(', ')}\n위 목표 각각에 대해 이번 레슨에서의 달성 여부를 lesson_comparison 배열로 평가해주세요.\n(improved=개선됨, same=동일, regressed=퇴보)`
+      : ''
 
     const userPrompt = `## 회원 프로파일
 - 이름: ${member?.name || '미상'} | 레벨: ${member?.level || '초급'} | 누적 레슨: ${member?.lesson_count || 0}회
@@ -556,7 +584,7 @@ ${knowledgeContext || '(없음)'}
 - 레슨 요약에 없는 내용(사적 대화, 일상 잡담, 날씨, 식사 등)은 분석에 절대 반영하지 마세요.
 - 불확실하면 추정하지 말고 레슨 요약에 기반해 작성하세요.
 - 레슨 내용이 짧거나 적어도 있는 내용을 최대한 상세하고 구체적으로 분석하세요. 내용을 줄이거나 심플하게 만들지 마세요.
-- JSON만 출력하고 다른 텍스트는 포함하지 마세요.`
+- JSON만 출력하고 다른 텍스트는 포함하지 마세요.${prevGoalsSection}`
 
     const claudeRes = await fetchClaude({
       model: 'claude-sonnet-4-5',
@@ -617,6 +645,10 @@ ${knowledgeContext || '(없음)'}
       : []
 
     // ── Step 5: DB 저장 (비동기: update / 동기: insert) ──
+    const lessonComparison = Array.isArray(parsed.lesson_comparison) && parsed.lesson_comparison.length > 0
+      ? parsed.lesson_comparison
+      : null
+
     const planPayload = {
       transcript_id: transcriptRow?.id,
       court_type: effectiveCourtType,
@@ -630,6 +662,9 @@ ${knowledgeContext || '(없음)'}
       raw_response: rawResponse,
       transcript_summary: transcriptSummary,
       status: 'completed',
+      lesson_id: lessonId ?? null,
+      lesson_comparison: lessonComparison,
+      compared_lesson_id: (lessonComparison && prevPlan?.id) ? prevPlan.id : null,
     }
 
     let plan: any = null
@@ -645,6 +680,7 @@ ${knowledgeContext || '(없음)'}
       const { data } = await supabase.from('lesson_plans').insert({
         coach_id: coachId,
         member_id: memberId,
+        lesson_id: lessonId ?? null,
         ...planPayload,
       }).select().single()
       plan = data

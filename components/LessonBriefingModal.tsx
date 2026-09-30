@@ -89,7 +89,8 @@ export default function LessonBriefingModal({
 
   /** 집중 포인트: next_goals > session_goals > improvement_points 첫 줄 순 */
   function getFocusPoint(plan: LessonPlan): string {
-    const candidates = [plan.next_goals, plan.session_goals, plan.improvement_points];
+    const nextGoalsText = Array.isArray(plan.next_goals) ? plan.next_goals[0] ?? '' : '';
+    const candidates = [nextGoalsText, plan.session_goals, plan.improvement_points];
     for (const c of candidates) {
       if (c && c.trim().length > 0) {
         const firstLine = c.split(/[\n.]/)[0].trim();

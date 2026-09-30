@@ -95,6 +95,12 @@ export interface DrillSuggestion {
   court_adaptation?: string;
 }
 
+export interface LessonComparison {
+  point: string;
+  status: 'improved' | 'same' | 'regressed';
+  reason: string;
+}
+
 export interface LessonPlan {
   id: string;
   coach_id: string;
@@ -102,7 +108,7 @@ export interface LessonPlan {
   transcript_id?: string;
   summary: string;
   improvement_points: string;
-  next_goals: string;
+  next_goals: string[];
   session_goals?: string;
   drill_suggestions?: DrillSuggestion[];
   transcript_summary?: { lesson_flow?: string; [key: string]: any };
@@ -114,6 +120,11 @@ export interface LessonPlan {
   audio_storage_path?: string;
   error_message?: string;
   member_report_status?: string;
+  lesson_id?: string;
+  lesson_comparison?: LessonComparison[];
+  coach_next_goals?: string[];
+  next_goals_saved?: boolean;
+  compared_lesson_id?: string;
   created_at: string;
   updated_at: string;
 }
