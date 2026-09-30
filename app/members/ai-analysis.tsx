@@ -32,10 +32,11 @@ const ANALYSIS_STEPS = [
 ];
 
 export default function AIAnalysisScreen() {
-  const { memberId, memberName, memberLevel } = useLocalSearchParams<{
+  const { memberId, memberName, memberLevel, lessonId } = useLocalSearchParams<{
     memberId: string;
     memberName: string;
     memberLevel: string;
+    lessonId?: string;
   }>();
   const router = useRouter();
   const { canUse, subscription, loading: subLoading } = useSubscription();
@@ -617,7 +618,7 @@ export default function AIAnalysisScreen() {
         setAnalysisStep(1);
         const { data: pending, error: planError } = await supabase
           .from('lesson_plans')
-          .insert({ coach_id: userId, member_id: memberId, status: 'pending', audio_storage_path: storagePath })
+          .insert({ coach_id: userId, member_id: memberId, status: 'pending', audio_storage_path: storagePath, lesson_id: lessonId ?? null })
           .select('id')
           .single();
         if (planError || !pending) throw new Error('분석 초기화 실패');
@@ -636,6 +637,7 @@ export default function AIAnalysisScreen() {
           coach_id: userId,
           duration_seconds: duration,
           enhanced_mode: enhancedMode,
+          lesson_id: lessonId ?? null,
         }),
       }).then(async (res) => {
         if (res.status >= 400 && capturedPlanId) {

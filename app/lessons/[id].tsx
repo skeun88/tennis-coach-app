@@ -146,30 +146,56 @@ export default function LessonDetailScreen() {
     }
   }
 
-  async function loadBriefings(memberIds: string[], lessonDate: string) {
+  async function loadBriefings(memberIds: string[], _lessonDate: string) {
     const results: Record<string, MemberBriefing> = {};
     await Promise.all(memberIds.map(async (memberId) => {
-      const { data: plans } = await supabase
+      // 이번 레슨 플랜 (AI 분석 완료 시) — lesson_comparison 포함
+      const { data: currentPlan } = await supabase
         .from('lesson_plans')
-        .select('id, next_goals, coach_next_goals, next_goals_saved, lesson_comparison, lesson_id')
+        .select('id, lesson_comparison, compared_lesson_id')
         .eq('member_id', memberId)
+        .eq('lesson_id', id)
         .eq('status', 'completed')
-        .neq('lesson_id', id)
-        .order('created_at', { ascending: false })
-        .limit(5);
+        .maybeSingle();
 
-      const prev = plans?.find(p => p.lesson_id !== id) ?? null;
-      if (!prev) {
+      // 이전 플랜 조회: compared_lesson_id 있으면 그것을, 없으면 최근 플랜 (이번 레슨 제외)
+      let prevPlan: any = null;
+      if (currentPlan?.compared_lesson_id) {
+        const { data } = await supabase
+          .from('lesson_plans')
+          .select('id, next_goals, coach_next_goals, next_goals_saved')
+          .eq('id', currentPlan.compared_lesson_id)
+          .maybeSingle();
+        prevPlan = data;
+      }
+      if (!prevPlan) {
+        const { data } = await supabase
+          .from('lesson_plans')
+          .select('id, next_goals, coach_next_goals, next_goals_saved')
+          .eq('member_id', memberId)
+          .eq('status', 'completed')
+          .neq('lesson_id', id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        prevPlan = data;
+      }
+
+      if (!prevPlan) {
         results[memberId] = { prevGoals: [], comparison: null, isFirst: true };
         return;
       }
-      const goals: string[] = (prev.next_goals_saved && Array.isArray(prev.coach_next_goals) && prev.coach_next_goals.length > 0)
-        ? prev.coach_next_goals
-        : (Array.isArray(prev.next_goals) ? prev.next_goals : []);
+
+      const goals: string[] = (
+        prevPlan.next_goals_saved && Array.isArray(prevPlan.coach_next_goals) && prevPlan.coach_next_goals.length > 0
+          ? prevPlan.coach_next_goals
+          : (Array.isArray(prevPlan.next_goals) ? prevPlan.next_goals : [])
+      );
+
       results[memberId] = {
         prevGoals: goals,
-        comparison: Array.isArray(prev.lesson_comparison) && prev.lesson_comparison.length > 0
-          ? prev.lesson_comparison
+        comparison: currentPlan && Array.isArray(currentPlan.lesson_comparison) && currentPlan.lesson_comparison.length > 0
+          ? currentPlan.lesson_comparison
           : null,
         isFirst: false,
       };
