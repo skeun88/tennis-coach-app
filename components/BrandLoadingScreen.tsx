@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Animated, StyleSheet, StatusBar, useWindowDimensions, TouchableOpacity } from 'react-native';
+import { View, Text, Animated, Easing, StyleSheet, StatusBar, useWindowDimensions, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const CREAM = '#F7F0E9';
@@ -28,6 +28,7 @@ export default function BrandLoadingScreen({ retry, onRetry }: Props) {
       Animated.timing(rotateAnim, {
         toValue: 1,
         duration: 900,
+        easing: Easing.linear,
         useNativeDriver: true,
       })
     );

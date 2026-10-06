@@ -20,7 +20,6 @@ if ((Text as any).defaultProps == null) (Text as any).defaultProps = {};
 (Text as any).defaultProps.allowFontScaling = false;
 
 const PRELOAD_TIMEOUT_MS = 8000;
-const MIN_LOADING_MS = 600;
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
@@ -28,28 +27,21 @@ export default function RootLayout() {
   const [isNavigationReady, setIsNavigationReady] = useState(false);
   const [startupError, setStartupError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
-  const loadingStartedAt = useRef(Date.now());
   const syncPromiseRef = useRef<Promise<void> | null>(null);
   const router = useRouter();
   const segments = useSegments();
 
-  // Enforces minimum 600ms display time for the loading screen
   const setNavReady = useCallback(() => {
-    const elapsed = Date.now() - loadingStartedAt.current;
-    const remaining = MIN_LOADING_MS - elapsed;
-    if (remaining > 0) {
-      setTimeout(() => setIsNavigationReady(true), remaining);
-    } else {
-      setIsNavigationReady(true);
-    }
+    setIsNavigationReady(true);
   }, []);
 
   const handleRetry = useCallback(() => {
     setStartupError(false);
     setIsNavigationReady(false);
-    loadingStartedAt.current = Date.now();
     setRetryCount(c => c + 1);
   }, []);
+
+
 
   useEffect(() => { configurePurchases(); }, []);
 
