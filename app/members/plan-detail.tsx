@@ -331,6 +331,31 @@ export default function PlanDetailScreen() {
           </View>
         )}
 
+        {/* 4.5 이전 레슨 대비 변화 */}
+        {Array.isArray(plan.lesson_comparison) && plan.lesson_comparison.length > 0 && (
+          <View style={[s.card, s.cardComparison]}>
+            <View style={s.cardTitleRow}>
+              <Ionicons name="swap-vertical-outline" size={18} color="#0EA5E9" />
+              <Text style={[s.cardTitle, { color: '#0369A1' }]}>이전 레슨 대비 변화</Text>
+            </View>
+            {plan.lesson_comparison.map((c: any, i: number) => {
+              const isImproved = c.status === 'improved';
+              const isRegressed = c.status === 'regressed';
+              const color = isImproved ? '#16a34a' : isRegressed ? '#dc2626' : '#64748b';
+              const icon = isImproved ? 'arrow-up-circle-outline' : isRegressed ? 'arrow-down-circle-outline' : 'remove-circle-outline';
+              return (
+                <View key={i} style={s.compRow}>
+                  <Ionicons name={icon as any} size={18} color={color} style={{ marginTop: 1 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.compPoint, { color }]}>{c.point}</Text>
+                    <Text style={s.compReason}>{c.reason}</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
         {/* 5. 다음 레슨 목표 */}
         {(toStringArray(plan.next_goals).length > 0 || (plan.coach_next_goals && plan.coach_next_goals.length > 0)) && (
           <View style={[s.card, s.cardGoals]}>
@@ -575,6 +600,10 @@ const s = StyleSheet.create({
   },
   cardSage: { backgroundColor: SAGE_BG },
   cardWarm: { backgroundColor: WARM_BG },
+  cardComparison: { backgroundColor: '#F0F9FF', borderLeftWidth: 3, borderLeftColor: '#0EA5E9' },
+  compRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 10 },
+  compPoint: { fontSize: 14, fontWeight: '700', lineHeight: 20 },
+  compReason: { fontSize: 13, color: '#64748b', lineHeight: 18, marginTop: 2 },
   cardGoals: { backgroundColor: '#F5F0FF', borderLeftWidth: 3, borderLeftColor: '#8B5CF6' },
   goalsBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 12 },
   goalsBadgeTextDraft: { fontSize: 11, color: '#8B5CF6', fontWeight: '600' },
