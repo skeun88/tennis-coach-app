@@ -104,6 +104,13 @@ export default function PlanDetailScreen() {
         const lines = value.split('\n').map(l => l.trim()).filter(Boolean);
         await supabase.from('member_lesson_reports').update({ achievements: lines }).eq('lesson_plan_id', plan.id);
         setReport((prev: any) => ({ ...prev, achievements: lines }));
+      } else if (section === 'coach_next_goals') {
+        const lines = value.split('\n').map(l => l.trim()).filter(Boolean);
+        await supabase.from('lesson_plans').update({
+          coach_next_goals: lines,
+          next_goals_saved: true,
+        }).eq('id', plan.id);
+        setPlan(prev => prev ? { ...prev, coach_next_goals: lines, next_goals_saved: true } : prev);
       } else {
         await supabase.from('lesson_plans').update({ [section]: value }).eq('id', plan.id);
         setPlan(prev => prev ? { ...prev, [section]: value } : prev);
@@ -324,7 +331,47 @@ export default function PlanDetailScreen() {
           </View>
         )}
 
-        {/* 5. 레슨 전체 내용 보기 */}
+        {/* 5. 다음 레슨 목표 */}
+        {(toStringArray(plan.next_goals).length > 0 || (plan.coach_next_goals && plan.coach_next_goals.length > 0)) && (
+          <View style={[s.card, s.cardGoals]}>
+            <View style={s.cardTitleRow}>
+              <Ionicons name="flag-outline" size={18} color="#8B5CF6" />
+              <Text style={[s.cardTitle, { color: '#8B5CF6' }]}>다음 레슨 목표</Text>
+              <TouchableOpacity
+                style={s.cardEditIcon}
+                onPress={() => {
+                  const currentGoals = (plan.next_goals_saved && plan.coach_next_goals?.length)
+                    ? plan.coach_next_goals
+                    : toStringArray(plan.next_goals);
+                  openEdit('coach_next_goals', '다음 레슨 목표 수정 (줄바꿈으로 구분)', currentGoals.join('\n'));
+                }}
+              >
+                <Ionicons name="pencil-outline" size={13} color={Colors.mutedFg} />
+              </TouchableOpacity>
+            </View>
+            {plan.next_goals_saved ? (
+              <View style={s.goalsBadgeRow}>
+                <Ionicons name="checkmark-circle-outline" size={12} color="#22c55e" />
+                <Text style={s.goalsBadgeTextSaved}>코치 확정 목표</Text>
+              </View>
+            ) : (
+              <View style={s.goalsBadgeRow}>
+                <Ionicons name="sparkles-outline" size={12} color="#8B5CF6" />
+                <Text style={s.goalsBadgeTextDraft}>AI 초안 — 수정 버튼으로 확정하세요</Text>
+              </View>
+            )}
+            {(plan.next_goals_saved ? (plan.coach_next_goals ?? []) : toStringArray(plan.next_goals)).map((goal, i) => (
+              <View key={i} style={s.goalRow}>
+                <View style={s.goalIndex}>
+                  <Text style={s.goalIndexText}>{i + 1}</Text>
+                </View>
+                <Text style={s.goalText}>{goal}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* 6. 레슨 전체 내용 보기 */}
         {plan.transcript_summary?.lesson_flow ? (
           <View style={s.card}>
             <TouchableOpacity
@@ -528,6 +575,18 @@ const s = StyleSheet.create({
   },
   cardSage: { backgroundColor: SAGE_BG },
   cardWarm: { backgroundColor: WARM_BG },
+  cardGoals: { backgroundColor: '#F5F0FF', borderLeftWidth: 3, borderLeftColor: '#8B5CF6' },
+  goalsBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 12 },
+  goalsBadgeTextDraft: { fontSize: 11, color: '#8B5CF6', fontWeight: '600' },
+  goalsBadgeTextSaved: { fontSize: 11, color: '#22c55e', fontWeight: '600' },
+  goalRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 8 },
+  goalIndex: {
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: '#8B5CF620', alignItems: 'center', justifyContent: 'center',
+    marginTop: 1,
+  },
+  goalIndexText: { fontSize: 11, color: '#8B5CF6', fontWeight: '700' },
+  goalText: { flex: 1, fontSize: 14, color: DARK_BROWN, lineHeight: 21 },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
   cardTitle: { fontSize: 16, fontWeight: '800', color: DARK_BROWN, flex: 1 },
   cardEditIcon: {
