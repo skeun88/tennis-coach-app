@@ -81,6 +81,7 @@
       ],
       "expo-font",
       "expo-asset",
+      "expo-splash-screen",
       "expo-web-browser",
       [
         "@react-native-seoul/naver-login",
@@ -100,7 +101,8 @@
     },
     "runtimeVersion": "1.1.8",
     "updates": {
-      "url": "https://u.expo.dev/1ed6ab94-326e-4ac4-8436-7463181a3c34"
+      "url": "https://u.expo.dev/1ed6ab94-326e-4ac4-8436-7463181a3c34",
+      "checkAutomatically": "NEVER"
     }
   }
 }

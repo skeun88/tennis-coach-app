@@ -2,12 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { Session } from '@supabase/supabase-js';
 import * as Linking from 'expo-linking';
+import * as SplashScreen from 'expo-splash-screen';
+import * as Updates from 'expo-updates';
 import { supabase } from '../lib/supabase';
 import { Text } from 'react-native';
 import { getCurrentSubscription } from '../lib/subscription';
 import { registerCoachPushToken } from '../lib/notifications';
 import { IS_BETA } from '../lib/beta';
 import BrandLoadingScreen from '../components/BrandLoadingScreen';
+
+SplashScreen.preventAutoHideAsync().catch(() => {});
 import { configurePurchases, loginPurchases, logoutPurchases, syncRevenueCatToDb } from '../lib/purchases';
 import {
   fetchHomeData,
@@ -27,9 +31,34 @@ export default function RootLayout() {
   const [isNavigationReady, setIsNavigationReady] = useState(false);
   const [startupError, setStartupError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [updateChecked, setUpdateChecked] = useState(false);
   const syncPromiseRef = useRef<Promise<void> | null>(null);
   const router = useRouter();
   const segments = useSegments();
+
+  // Check for OTA update before showing any UI; reload immediately if found.
+  // Native splash stays visible throughout (preventAutoHideAsync above).
+  useEffect(() => {
+    if (__DEV__) { setUpdateChecked(true); return; }
+    (async () => {
+      try {
+        const result = await Promise.race([
+          Updates.checkForUpdateAsync(),
+          new Promise<{ isAvailable: boolean }>(res => setTimeout(() => res({ isAvailable: false }), 3000)),
+        ]);
+        if (result.isAvailable) {
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync();
+          return;
+        }
+      } catch {}
+      setUpdateChecked(true);
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (updateChecked) SplashScreen.hideAsync().catch(() => {});
+  }, [updateChecked]);
 
   const setNavReady = useCallback(() => {
     setIsNavigationReady(true);
