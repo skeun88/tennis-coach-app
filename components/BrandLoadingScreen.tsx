@@ -1,83 +1,77 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Animated, StyleSheet, StatusBar, useWindowDimensions } from 'react-native';
+import { View, Text, Animated, StyleSheet, StatusBar, useWindowDimensions, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const TERRA = '#C0755A';
 const CREAM = '#F7F0E9';
-const CREAM_DIM = 'rgba(247,240,233,0.65)';
-const CREAM_FAINT = 'rgba(247,240,233,0.45)';
+const TERRA = '#C0755A';
+const TERRA_LIGHT = 'rgba(192,117,90,0.18)';
+const WARM_GRAY = '#9E9289';
+const HINT_DELAY_MS = 3000;
+const SPINNER_SIZE = 26;
+const SPINNER_STROKE = 2.5;
 
-// Show status text and dots only after this delay to prevent momentary flash
-const STATUS_DELAY_MS = 400;
+interface Props {
+  retry?: boolean;
+  onRetry?: () => void;
+}
 
-export default function BrandLoadingScreen() {
+export default function BrandLoadingScreen({ retry, onRetry }: Props) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const breathAnim = useRef(new Animated.Value(0.9)).current;
-  const dot1 = useRef(new Animated.Value(0.35)).current;
-  const dot2 = useRef(new Animated.Value(0.35)).current;
-  const dot3 = useRef(new Animated.Value(0.35)).current;
-  const [showStatus, setShowStatus] = useState(false);
-
-  // Logo at 45% of screen width, capped at 200px — matches native splash proportions
-  const logoSize = Math.min(width * 0.45, 200);
+  const rotateAnim = useRef(new Animated.Value(0)).current;
+  const [showHint, setShowHint] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => setShowStatus(true), STATUS_DELAY_MS);
+    const timer = setTimeout(() => setShowHint(true), HINT_DELAY_MS);
 
-    const breath = Animated.loop(
-      Animated.sequence([
-        Animated.timing(breathAnim, { toValue: 1, duration: 2000, useNativeDriver: true }),
-        Animated.timing(breathAnim, { toValue: 0.9, duration: 2000, useNativeDriver: true }),
-      ])
+    const spin = Animated.loop(
+      Animated.timing(rotateAnim, {
+        toValue: 1,
+        duration: 900,
+        useNativeDriver: true,
+      })
     );
-    breath.start();
-
-    const dots = Animated.loop(
-      Animated.sequence([
-        Animated.timing(dot1, { toValue: 1, duration: 350, useNativeDriver: true }),
-        Animated.timing(dot2, { toValue: 1, duration: 350, useNativeDriver: true }),
-        Animated.timing(dot3, { toValue: 1, duration: 350, useNativeDriver: true }),
-        Animated.delay(400),
-        Animated.parallel([
-          Animated.timing(dot1, { toValue: 0.35, duration: 200, useNativeDriver: true }),
-          Animated.timing(dot2, { toValue: 0.35, duration: 200, useNativeDriver: true }),
-          Animated.timing(dot3, { toValue: 0.35, duration: 200, useNativeDriver: true }),
-        ]),
-      ])
-    );
-    dots.start();
+    spin.start();
 
     return () => {
       clearTimeout(timer);
-      breath.stop();
-      dots.stop();
+      spin.stop();
     };
   }, []);
 
+  const rotate = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 20) }]}>
-      <StatusBar barStyle="light-content" backgroundColor={TERRA} />
+      <StatusBar barStyle="dark-content" backgroundColor={CREAM} />
 
       <View style={styles.center}>
-        <Animated.Image
-          source={require('../assets/splash-icon.png')}
-          style={[{ width: logoSize, height: logoSize, tintColor: CREAM, marginBottom: 12 }, { opacity: breathAnim }]}
-          resizeMode="contain"
-        />
-        <Text style={styles.wordmark}>KERRI</Text>
-      </View>
+        <Text
+          style={[styles.wordmark, { width: width * 0.81 }]}
+          adjustsFontSizeToFit
+          numberOfLines={1}
+        >
+          KERRI
+        </Text>
 
-      {showStatus && (
-        <View style={styles.bottom}>
-          <Text style={styles.status}>오늘의 레슨을 준비하고 있어요</Text>
-          <View style={styles.dots}>
-            <Animated.View style={[styles.dot, { opacity: dot1 }]} />
-            <Animated.View style={[styles.dot, { opacity: dot2 }]} />
-            <Animated.View style={[styles.dot, { opacity: dot3 }]} />
-          </View>
+        <View style={styles.spinnerContainer}>
+          <View style={styles.spinnerTrack} />
+          <Animated.View style={[styles.spinnerArc, { transform: [{ rotate }] }]} />
         </View>
-      )}
+
+        <View style={styles.hintReserved}>
+          {retry ? (
+            <TouchableOpacity onPress={onRetry} style={styles.retryButton}>
+              <Text style={styles.retryText}>재시도</Text>
+            </TouchableOpacity>
+          ) : showHint ? (
+            <Text style={styles.hint}>잠시만 기다려 주세요</Text>
+          ) : null}
+        </View>
+      </View>
     </View>
   );
 }
@@ -85,39 +79,63 @@ export default function BrandLoadingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: TERRA,
+    backgroundColor: CREAM,
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
   },
   center: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
   },
   wordmark: {
-    fontSize: 36,
-    fontWeight: '800',
-    color: CREAM,
-    letterSpacing: 8,
+    fontSize: 180,
+    fontWeight: '900',
+    color: TERRA,
+    letterSpacing: -2,
+    textAlign: 'center',
   },
-  bottom: {
+  spinnerContainer: {
+    width: SPINNER_SIZE,
+    height: SPINNER_SIZE,
+    marginTop: 44,
     alignItems: 'center',
-    paddingBottom: 20,
-    minHeight: 50,
+    justifyContent: 'center',
   },
-  status: {
-    fontSize: 13,
-    color: CREAM_DIM,
-    marginBottom: 14,
+  spinnerTrack: {
+    position: 'absolute',
+    width: SPINNER_SIZE,
+    height: SPINNER_SIZE,
+    borderRadius: SPINNER_SIZE / 2,
+    borderWidth: SPINNER_STROKE,
+    borderColor: TERRA_LIGHT,
   },
-  dots: {
-    flexDirection: 'row',
-    gap: 7,
+  spinnerArc: {
+    position: 'absolute',
+    width: SPINNER_SIZE,
+    height: SPINNER_SIZE,
+    borderRadius: SPINNER_SIZE / 2,
+    borderWidth: SPINNER_STROKE,
+    borderTopColor: TERRA,
+    borderRightColor: 'transparent',
+    borderBottomColor: 'transparent',
+    borderLeftColor: 'transparent',
   },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: CREAM_FAINT,
+  hintReserved: {
+    height: 32,
+    marginTop: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hint: {
+    fontSize: 14,
+    color: WARM_GRAY,
+  },
+  retryButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+  },
+  retryText: {
+    fontSize: 14,
+    color: TERRA,
+    fontWeight: '600',
   },
 });

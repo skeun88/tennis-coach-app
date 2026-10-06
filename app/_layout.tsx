@@ -26,7 +26,8 @@ export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isNavigationReady, setIsNavigationReady] = useState(false);
-  const [preloading, setPreloading] = useState(false);
+  const [startupError, setStartupError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const loadingStartedAt = useRef(Date.now());
   const syncPromiseRef = useRef<Promise<void> | null>(null);
   const router = useRouter();
@@ -41,6 +42,13 @@ export default function RootLayout() {
     } else {
       setIsNavigationReady(true);
     }
+  }, []);
+
+  const handleRetry = useCallback(() => {
+    setStartupError(false);
+    setIsNavigationReady(false);
+    loadingStartedAt.current = Date.now();
+    setRetryCount(c => c + 1);
   }, []);
 
   useEffect(() => { configurePurchases(); }, []);
@@ -105,6 +113,8 @@ export default function RootLayout() {
     const inOnboarding = segments[0] === '(auth)' && (segments as string[])[1] === 'onboarding';
     const inPrivacyPolicy = segments[0] === '(auth)' && (segments as string[])[1] === 'privacy-policy';
     const inResetPassword = (segments as string[])[0] === 'reset-password';
+    // True on first launch before any navigation has resolved
+    const atRoot = !segments[0];
 
     if (!session && !inAuthGroup && !inResetPassword) {
       router.replace('/(auth)/login');
@@ -136,14 +146,23 @@ export default function RootLayout() {
         .select('coach_id')
         .eq('coach_id', session.user.id)
         .maybeSingle()
-        .then(async ({ data }) => {
+        .then(async ({ data, error }) => {
+          // Network/Supabase error — show retry rather than log out
+          if (error) {
+            setStartupError(true);
+            return;
+          }
+          setStartupError(false);
+
           if (!data) {
             router.replace('/(auth)/onboarding');
             setNavReady();
             return;
           }
 
-          if (inAuthGroup) {
+          // inAuthGroup: returning from a login/signup flow
+          // atRoot: fresh app launch before any route resolves
+          if (inAuthGroup || atRoot) {
             // 구독 체크: sync 완료 후 읽도록 최대 2.5초 대기. 타임아웃 시 통과.
             if (!IS_BETA) {
               try {
@@ -160,23 +179,20 @@ export default function RootLayout() {
               } catch {}
             }
 
-            // 홈 데이터 프리로드 (캐시 없거나 stale일 때만)
-            setPreloading(true);
-            try {
-              const uid = session.user.id;
-              const cached = await loadCachedHomeData(uid);
-              if (!cached) {
-                const result = await Promise.race<any>([
-                  fetchHomeData(uid, session.user.email ?? ''),
-                  new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), PRELOAD_TIMEOUT_MS)),
-                ]);
-                await persistHomeData(uid, result);
-              }
-            } catch {
-              // 오류 시 캐시 있으면 사용, 없으면 home에서 직접 로드
-            } finally {
-              setPreloading(false);
-            }
+            // Background preload — does not delay navigation; home handles its own loading
+            void (async () => {
+              try {
+                const uid = session.user.id;
+                const cached = await loadCachedHomeData(uid);
+                if (!cached) {
+                  const result = await Promise.race<any>([
+                    fetchHomeData(uid, session.user.email ?? ''),
+                    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), PRELOAD_TIMEOUT_MS)),
+                  ]);
+                  await persistHomeData(uid, result);
+                }
+              } catch {}
+            })();
 
             router.replace('/(tabs)');
             setNavReady();
@@ -200,10 +216,10 @@ export default function RootLayout() {
     }
 
     setNavReady();
-  }, [session, loading, segments]);
+  }, [session, loading, segments, retryCount]);
 
-  if (loading || !isNavigationReady || preloading) {
-    return <BrandLoadingScreen />;
+  if (loading || !isNavigationReady || startupError) {
+    return <BrandLoadingScreen retry={startupError} onRetry={handleRetry} />;
   }
 
   return (
