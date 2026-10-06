@@ -258,6 +258,39 @@ export default function PlanDetailScreen() {
           <Text style={s.summaryText}>{cleanSummary(plan.summary) || '-'}</Text>
         </View>
 
+        {/* 1.5 이전 레슨 대비 변화 */}
+        {Array.isArray(plan.lesson_comparison) && plan.lesson_comparison.length > 0 && (
+          <View style={[s.card, s.cardComparison]}>
+            <View style={s.cardTitleRow}>
+              <Ionicons name="swap-vertical-outline" size={18} color="#0EA5E9" />
+              <View style={{ flex: 1 }}>
+                <Text style={[s.cardTitle, { color: '#0369A1' }]}>이전 레슨 대비 변화</Text>
+                <Text style={s.compSubtitle}>지난 기록과 비교</Text>
+              </View>
+            </View>
+            {plan.lesson_comparison.slice(0, 3).map((c: any, i: number) => {
+              const isImproved = c.status === 'improved';
+              const isRegressed = c.status === 'regressed';
+              const badgeColor = isImproved ? '#16a34a' : isRegressed ? '#dc2626' : '#64748b';
+              const badgeBg = isImproved ? '#dcfce7' : isRegressed ? '#fee2e2' : '#f1f5f9';
+              const badgeLabel = isImproved ? '개선 중' : isRegressed ? '반복 확인' : '유지';
+              return (
+                <View key={i} style={s.compRow}>
+                  <View style={{ flex: 1 }}>
+                    <View style={s.compTopRow}>
+                      <Text style={s.compPoint}>{c.point}</Text>
+                      <View style={[s.compBadge, { backgroundColor: badgeBg }]}>
+                        <Text style={[s.compBadgeText, { color: badgeColor }]}>{badgeLabel}</Text>
+                      </View>
+                    </View>
+                    <Text style={s.compReason}>{c.reason}</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
         {/* 2. 오늘 잘한 점 */}
         <View style={[s.card, s.cardSage]}>
           <View style={s.cardTitleRow}>
@@ -328,31 +361,6 @@ export default function PlanDetailScreen() {
             {plan.drill_suggestions.map((drill: DrillSuggestion, i: number) => (
               <DrillCardComponent key={i} drill={drill} />
             ))}
-          </View>
-        )}
-
-        {/* 4.5 이전 레슨 대비 변화 */}
-        {Array.isArray(plan.lesson_comparison) && plan.lesson_comparison.length > 0 && (
-          <View style={[s.card, s.cardComparison]}>
-            <View style={s.cardTitleRow}>
-              <Ionicons name="swap-vertical-outline" size={18} color="#0EA5E9" />
-              <Text style={[s.cardTitle, { color: '#0369A1' }]}>이전 레슨 대비 변화</Text>
-            </View>
-            {plan.lesson_comparison.map((c: any, i: number) => {
-              const isImproved = c.status === 'improved';
-              const isRegressed = c.status === 'regressed';
-              const color = isImproved ? '#16a34a' : isRegressed ? '#dc2626' : '#64748b';
-              const icon = isImproved ? 'arrow-up-circle-outline' : isRegressed ? 'arrow-down-circle-outline' : 'remove-circle-outline';
-              return (
-                <View key={i} style={s.compRow}>
-                  <Ionicons name={icon as any} size={18} color={color} style={{ marginTop: 1 }} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[s.compPoint, { color }]}>{c.point}</Text>
-                    <Text style={s.compReason}>{c.reason}</Text>
-                  </View>
-                </View>
-              );
-            })}
           </View>
         )}
 
@@ -601,9 +609,13 @@ const s = StyleSheet.create({
   cardSage: { backgroundColor: SAGE_BG },
   cardWarm: { backgroundColor: WARM_BG },
   cardComparison: { backgroundColor: '#F0F9FF', borderLeftWidth: 3, borderLeftColor: '#0EA5E9' },
-  compRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 10 },
-  compPoint: { fontSize: 14, fontWeight: '700', lineHeight: 20 },
-  compReason: { fontSize: 13, color: '#64748b', lineHeight: 18, marginTop: 2 },
+  compSubtitle: { fontSize: 11, color: '#64748b', marginTop: 1 },
+  compRow: { marginBottom: 12 },
+  compTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 },
+  compPoint: { fontSize: 14, fontWeight: '700', color: DARK_BROWN, flex: 1 },
+  compBadge: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
+  compBadgeText: { fontSize: 11, fontWeight: '700' },
+  compReason: { fontSize: 13, color: '#64748b', lineHeight: 18 },
   cardGoals: { backgroundColor: '#F5F0FF', borderLeftWidth: 3, borderLeftColor: '#8B5CF6' },
   goalsBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 12 },
   goalsBadgeTextDraft: { fontSize: 11, color: '#8B5CF6', fontWeight: '600' },
