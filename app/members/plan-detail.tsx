@@ -328,7 +328,9 @@ export default function PlanDetailScreen() {
           contentContainerStyle={s.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
         >
+          <Animated.View style={{ opacity: fadeAnim }}>
           {/* 레슨 기본 정보 카드 */}
           <View style={s.infoCard}>
             <View style={s.infoMetaRow}>
@@ -460,9 +462,11 @@ export default function PlanDetailScreen() {
             </View>
             {editingSection === 'achievements' ? (
               <TextInput
-                style={s.inlineInput}
+                style={[s.inlineInput, inputFocused && s.inlineInputFocused]}
                 value={editingValue}
                 onChangeText={setEditingValue}
+                onFocus={() => setInputFocused(true)}
+                onBlur={() => setInputFocused(false)}
                 multiline
                 autoFocus
                 textAlignVertical="top"
@@ -499,9 +503,11 @@ export default function PlanDetailScreen() {
             </View>
             {editingSection === 'improvement_points' ? (
               <TextInput
-                style={s.inlineInput}
+                style={[s.inlineInput, inputFocused && s.inlineInputFocused]}
                 value={editingValue}
                 onChangeText={setEditingValue}
+                onFocus={() => setInputFocused(true)}
+                onBlur={() => setInputFocused(false)}
                 multiline
                 autoFocus
                 textAlignVertical="top"
@@ -561,9 +567,11 @@ export default function PlanDetailScreen() {
               </View>
               {editingSection === 'coach_next_goals' ? (
                 <TextInput
-                  style={s.inlineInput}
+                  style={[s.inlineInput, inputFocused && s.inlineInputFocused]}
                   value={editingValue}
                   onChangeText={setEditingValue}
+                  onFocus={() => setInputFocused(true)}
+                  onBlur={() => setInputFocused(false)}
                   multiline
                   autoFocus
                   textAlignVertical="top"
@@ -621,6 +629,7 @@ export default function PlanDetailScreen() {
           ) : null}
 
           <View style={{ height: editingSection ? 20 : 100 }} />
+          </Animated.View>
         </ScrollView>
 
         {/* 편집 중 키보드 위 액션바 */}
