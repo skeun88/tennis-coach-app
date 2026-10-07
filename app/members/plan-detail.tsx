@@ -48,15 +48,8 @@ export default function PlanDetailScreen() {
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  function animateEditTransition(toEditing: boolean, callback?: () => void) {
-    Animated.timing(fadeAnim, {
-      toValue: 0, duration: 100, useNativeDriver: true,
-    }).start(() => {
-      callback?.();
-      Animated.timing(fadeAnim, {
-        toValue: 1, duration: 120, useNativeDriver: true,
-      }).start();
-    });
+  function animateEditTransition(_toEditing: boolean, callback?: () => void) {
+    callback?.();
   }
 
   const hasUnsavedChanges = editingSection === 'drill_suggestions'
@@ -216,7 +209,8 @@ export default function PlanDetailScreen() {
         await supabase.from('lesson_plans').update({ [editingSection]: editingValue }).eq('id', plan.id);
         setPlan(prev => prev ? { ...prev, [editingSection!]: editingValue } : prev);
       }
-      animateEditTransition(false, () => { setInputFocused(false); setEditingSection(null); });
+      setInputFocused(false);
+      setEditingSection(null);
     } catch {
       setSaveError(true);
     } finally {
@@ -330,7 +324,6 @@ export default function PlanDetailScreen() {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
         >
-          <Animated.View style={{ opacity: fadeAnim }}>
           {/* 레슨 기본 정보 카드 */}
           <View style={s.infoCard}>
             <View style={s.infoMetaRow}>
@@ -629,7 +622,6 @@ export default function PlanDetailScreen() {
           ) : null}
 
           <View style={{ height: editingSection ? 20 : 100 }} />
-          </Animated.View>
         </ScrollView>
 
         {/* 편집 중 키보드 위 액션바 */}
