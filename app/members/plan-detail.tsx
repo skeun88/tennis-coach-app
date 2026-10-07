@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Alert, ActivityIndicator, Platform, Modal, TextInput,
-  KeyboardAvoidingView, SafeAreaView,
+  Alert, ActivityIndicator, Platform, TextInput,
+  KeyboardAvoidingView, SafeAreaView, BackHandler, Animated,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,13 +17,17 @@ const DARK_BROWN = '#3E2B22';
 const SAGE_BG = '#EEF5EE';
 const SAGE_TEXT = '#4A7A4A';
 const WARM_BG = '#FDF3ED';
+const INPUT_BG = '#FCF9F6';
+const WARM_GRAY = '#9E9289';
+
+type EditSection =
+  | 'ai_title' | 'summary' | 'achievements'
+  | 'improvement_points' | 'coach_next_goals' | 'drill_suggestions'
+  | null;
 
 export default function PlanDetailScreen() {
   const { planId, memberId, memberName, memberLevel } = useLocalSearchParams<{
-    planId: string;
-    memberId: string;
-    memberName: string;
-    memberLevel: string;
+    planId: string; memberId: string; memberName: string; memberLevel: string;
   }>();
   const router = useRouter();
 
@@ -33,17 +37,33 @@ export default function PlanDetailScreen() {
   const [expandedTranscript, setExpandedTranscript] = useState(false);
   const [sending, setSending] = useState(false);
 
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const [editingSection, setEditingSection] = useState<string>('');
+  const [editingSection, setEditingSection] = useState<EditSection>(null);
   const [editingValue, setEditingValue] = useState('');
-  const [editModalLabel, setEditModalLabel] = useState('');
+  const [originalValue, setOriginalValue] = useState('');
+  const [editingDrills, setEditingDrills] = useState<DrillSuggestion[]>([]);
+  const [originalDrillsJson, setOriginalDrillsJson] = useState('');
   const [savingSection, setSavingSection] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [planId])
-  );
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+
+  function animateEditTransition(toEditing: boolean, callback?: () => void) {
+    Animated.timing(fadeAnim, {
+      toValue: 0, duration: 100, useNativeDriver: true,
+    }).start(() => {
+      callback?.();
+      Animated.timing(fadeAnim, {
+        toValue: 1, duration: 120, useNativeDriver: true,
+      }).start();
+    });
+  }
+
+  const hasUnsavedChanges = editingSection === 'drill_suggestions'
+    ? JSON.stringify(editingDrills) !== originalDrillsJson
+    : editingValue !== originalValue;
+
+  useFocusEffect(useCallback(() => { loadData(); }, [planId]));
 
   async function loadData() {
     setLoading(true);
@@ -55,6 +75,19 @@ export default function PlanDetailScreen() {
     setReport(reportRes.data ?? null);
     setLoading(false);
   }
+
+  // Android back button guard
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const handler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (editingSection && hasUnsavedChanges) {
+        showDiscardAlert(() => router.back());
+        return true;
+      }
+      return false;
+    });
+    return () => handler.remove();
+  }, [editingSection, hasUnsavedChanges]);
 
   function formatDate(dateStr: string) {
     const d = new Date(dateStr);
@@ -96,31 +129,103 @@ export default function PlanDetailScreen() {
     return [];
   }
 
-  async function saveSectionEdit(section: string, value: string) {
-    if (!plan) return;
+  function showDiscardAlert(onDiscard: () => void) {
+    Alert.alert('수정한 내용을 저장하지 않고 나갈까요?', '', [
+      { text: '계속 수정', style: 'cancel' },
+      { text: '나가기', onPress: onDiscard },
+    ]);
+  }
+
+  function startEdit(section: EditSection, value: string) {
+    setSaveError(false);
+    if (editingSection !== null && hasUnsavedChanges) {
+      showDiscardAlert(() => animateEditTransition(true, () => applyStartEdit(section, value)));
+      return;
+    }
+    animateEditTransition(true, () => applyStartEdit(section, value));
+  }
+
+  function applyStartEdit(section: EditSection, value: string) {
+    setInputFocused(false);
+    setEditingSection(section);
+    setEditingValue(value);
+    setOriginalValue(value);
+  }
+
+  function startEditDrills() {
+    setSaveError(false);
+    const drills = (plan?.drill_suggestions ?? []).map(d => ({ ...d }));
+    if (editingSection !== null && hasUnsavedChanges) {
+      showDiscardAlert(() => animateEditTransition(true, () => applyStartEditDrills(drills)));
+      return;
+    }
+    animateEditTransition(true, () => applyStartEditDrills(drills));
+  }
+
+  function applyStartEditDrills(drills: DrillSuggestion[]) {
+    setInputFocused(false);
+    setEditingSection('drill_suggestions');
+    setEditingDrills(drills);
+    setOriginalDrillsJson(JSON.stringify(drills));
+  }
+
+  function handleCancel() {
+    if (hasUnsavedChanges) {
+      showDiscardAlert(() => animateEditTransition(false, () => { setInputFocused(false); setEditingSection(null); }));
+    } else {
+      animateEditTransition(false, () => { setInputFocused(false); setEditingSection(null); });
+    }
+  }
+
+  function handleBack() {
+    if (editingSection && hasUnsavedChanges) {
+      showDiscardAlert(() => router.back());
+    } else {
+      router.back();
+    }
+  }
+
+  async function handleSave() {
+    if (!plan || savingSection || !hasUnsavedChanges) return;
     setSavingSection(true);
+    setSaveError(false);
     try {
-      if (section === 'achievements') {
-        const lines = value.split('\n').map(l => l.trim()).filter(Boolean);
+      if (editingSection === 'ai_title') {
+        const trimmed = editingValue.trim();
+        if (!trimmed) {
+          Alert.alert('제목을 입력해 주세요.');
+          setSavingSection(false);
+          return;
+        }
+        await supabase.from('lesson_plans').update({ ai_title: trimmed }).eq('id', plan.id);
+        setPlan(prev => prev ? { ...prev, ai_title: trimmed } : prev);
+      } else if (editingSection === 'achievements') {
+        const lines = editingValue.split('\n').map(l => l.trim()).filter(Boolean);
         await supabase.from('member_lesson_reports').update({ achievements: lines }).eq('lesson_plan_id', plan.id);
         setReport((prev: any) => ({ ...prev, achievements: lines }));
-      } else if (section === 'coach_next_goals') {
-        const lines = value.split('\n').map(l => l.trim()).filter(Boolean);
+      } else if (editingSection === 'coach_next_goals') {
+        const lines = editingValue.split('\n').map(l => l.trim()).filter(Boolean);
         await supabase.from('lesson_plans').update({
-          coach_next_goals: lines,
-          next_goals_saved: true,
+          coach_next_goals: lines, next_goals_saved: true,
         }).eq('id', plan.id);
         setPlan(prev => prev ? { ...prev, coach_next_goals: lines, next_goals_saved: true } : prev);
-      } else {
-        await supabase.from('lesson_plans').update({ [section]: value }).eq('id', plan.id);
-        setPlan(prev => prev ? { ...prev, [section]: value } : prev);
+      } else if (editingSection === 'drill_suggestions') {
+        await supabase.from('lesson_plans').update({ drill_suggestions: editingDrills }).eq('id', plan.id);
+        setPlan(prev => prev ? { ...prev, drill_suggestions: editingDrills } : prev);
+      } else if (editingSection === 'summary' || editingSection === 'improvement_points') {
+        await supabase.from('lesson_plans').update({ [editingSection]: editingValue }).eq('id', plan.id);
+        setPlan(prev => prev ? { ...prev, [editingSection!]: editingValue } : prev);
       }
+      animateEditTransition(false, () => { setInputFocused(false); setEditingSection(null); });
     } catch {
-      Alert.alert('오류', '저장에 실패했습니다.');
+      setSaveError(true);
     } finally {
       setSavingSection(false);
-      setEditModalVisible(false);
     }
+  }
+
+  function updateDrill(idx: number, field: keyof DrillSuggestion, value: string) {
+    setEditingDrills(prev => prev.map((d, i) => i === idx ? { ...d, [field]: value } : d));
   }
 
   async function sendReportToMember() {
@@ -137,7 +242,7 @@ export default function PlanDetailScreen() {
       await supabase.from('member_lesson_reports')
         .update({ sent_to_member: true, is_read: false })
         .eq('id', report.id);
-      try { await notifyMemberReport(plan.member_id); } catch (e) { console.error('[PUSH] 리포트 알림 실패:', e); }
+      try { await notifyMemberReport(plan.member_id); } catch (e) { console.error('[PUSH]', e); }
       setReport((prev: any) => ({ ...prev, sent_to_member: true }));
       Alert.alert('전송 완료', '회원이 앱을 열면 리포트를 확인할 수 있어요.');
     } catch {
@@ -145,13 +250,6 @@ export default function PlanDetailScreen() {
     } finally {
       setSending(false);
     }
-  }
-
-  function openEdit(section: string, label: string, value: string) {
-    setEditingSection(section);
-    setEditModalLabel(label);
-    setEditingValue(value);
-    setEditModalVisible(true);
   }
 
   if (loading) {
@@ -185,12 +283,28 @@ export default function PlanDetailScreen() {
   const isSent = report?.sent_to_member === true;
   const hasReport = !!report;
 
+  const EditBadge = () => (
+    <View style={s.editingBadge}>
+      <Text style={s.editingBadgeText}>수정 중</Text>
+    </View>
+  );
+
+  const PencilBtn = ({ onPress }: { onPress: () => void }) => (
+    <TouchableOpacity
+      style={s.pencilBtn}
+      onPress={onPress}
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+    >
+      <Ionicons name="pencil-outline" size={14} color={Colors.mutedFg} />
+    </TouchableOpacity>
+  );
+
   return (
     <View style={s.container}>
-      {/* 헤더 */}
+      {/* Header */}
       <SafeAreaView style={s.safeHeader}>
         <View style={s.header}>
-          <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+          <TouchableOpacity onPress={handleBack} style={s.backBtn}>
             <Ionicons name="chevron-back" size={24} color={DARK_BROWN} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
@@ -205,309 +319,376 @@ export default function PlanDetailScreen() {
         </View>
       </SafeAreaView>
 
-      <ScrollView
-        style={s.scroll}
-        contentContainerStyle={s.scrollContent}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {/* 레슨 기본 정보 카드 */}
-        <View style={s.infoCard}>
-          <View style={s.infoCardTop}>
-            <View style={{ flex: 1 }}>
-              <View style={s.infoMetaRow}>
-                <Ionicons name="calendar-outline" size={13} color={Colors.mutedFg} />
-                <Text style={s.infoMetaText}>{formatDate(plan.created_at)}</Text>
-                {plan.duration_minutes ? (
-                  <>
-                    <Text style={s.infoMetaDot}>·</Text>
-                    <Ionicons name="time-outline" size={13} color={Colors.mutedFg} />
-                    <Text style={s.infoMetaText}>{plan.duration_minutes}분</Text>
-                  </>
-                ) : null}
-              </View>
-              {plan.ai_title ? (
-                <Text style={s.infoTitle}>{plan.ai_title}</Text>
-              ) : null}
-              <View style={s.sourceRow}>
-                <Ionicons
-                  name={(plan as any).source === 'manual' ? 'pencil-outline' : 'mic-outline'}
-                  size={13}
-                  color={TERRACOTTA}
-                />
-                <Text style={s.sourceText}>
-                  {(plan as any).source === 'manual' ? '직접 작성' : '음성 기록'}
-                </Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              style={s.editRoundBtn}
-              onPress={() => openEdit('summary', '레슨 요약 수정', cleanSummary(plan.summary))}
-            >
-              <Ionicons name="pencil-outline" size={15} color={TERRACOTTA} />
-              <Text style={s.editRoundBtnText}>수정</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* 1. 오늘 레슨 요약 */}
-        <View style={s.card}>
-          <View style={s.cardTitleRow}>
-            <Ionicons name="document-text-outline" size={18} color={TERRACOTTA} />
-            <Text style={s.cardTitle}>오늘 레슨 요약</Text>
-          </View>
-          <Text style={s.summaryText}>{cleanSummary(plan.summary) || '-'}</Text>
-        </View>
-
-        {/* 1.5 이전 레슨 대비 변화 */}
-        {Array.isArray(plan.lesson_comparison) && plan.lesson_comparison.length > 0 && (
-          <View style={[s.card, s.cardComparison]}>
-            <View style={s.cardTitleRow}>
-              <Ionicons name="swap-vertical-outline" size={18} color="#0EA5E9" />
-              <View style={{ flex: 1 }}>
-                <Text style={[s.cardTitle, { color: '#0369A1' }]}>이전 레슨 대비 변화</Text>
-                <Text style={s.compSubtitle}>지난 기록과 비교</Text>
-              </View>
-            </View>
-            {plan.lesson_comparison.slice(0, 3).map((c: any, i: number) => {
-              const isImproved = c.status === 'improved';
-              const isRegressed = c.status === 'regressed';
-              const badgeColor = isImproved ? '#16a34a' : isRegressed ? '#dc2626' : '#64748b';
-              const badgeBg = isImproved ? '#dcfce7' : isRegressed ? '#fee2e2' : '#f1f5f9';
-              const badgeLabel = isImproved ? '개선 중' : isRegressed ? '반복 확인' : '유지';
-              return (
-                <View key={i} style={s.compRow}>
-                  <View style={{ flex: 1 }}>
-                    <View style={s.compTopRow}>
-                      <Text style={s.compPoint}>{c.point}</Text>
-                      <View style={[s.compBadge, { backgroundColor: badgeBg }]}>
-                        <Text style={[s.compBadgeText, { color: badgeColor }]}>{badgeLabel}</Text>
-                      </View>
-                    </View>
-                    <Text style={s.compReason}>{c.reason}</Text>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        )}
-
-        {/* 2. 오늘 잘한 점 */}
-        <View style={[s.card, s.cardSage]}>
-          <View style={s.cardTitleRow}>
-            <Ionicons name="checkmark-circle-outline" size={18} color={SAGE_TEXT} />
-            <Text style={[s.cardTitle, { color: SAGE_TEXT }]}>오늘 잘한 점</Text>
-            {hasReport && (
-              <TouchableOpacity
-                style={s.cardEditIcon}
-                onPress={() => openEdit('achievements', '잘한 점 수정 (줄바꿈으로 구분)', achievements.join('\n'))}
-              >
-                <Ionicons name="pencil-outline" size={13} color={Colors.mutedFg} />
-              </TouchableOpacity>
-            )}
-          </View>
-          {achievements.length > 0 ? (
-            achievements.map((item, i) => (
-              <View key={i} style={s.checkRow}>
-                <View style={s.checkIcon}>
-                  <Ionicons name="checkmark" size={12} color={SAGE_TEXT} />
-                </View>
-                <Text style={s.checkText}>{item}</Text>
-              </View>
-            ))
-          ) : (
-            <Text style={s.emptyText}>
-              {hasReport
-                ? '잘한 점이 없습니다'
-                : plan?.status === 'completed'
-                ? 'AI 리포트 생성 중입니다. 잠시 후 다시 확인해 주세요.'
-                : '분석 완료 후 표시됩니다.'}
-            </Text>
-          )}
-        </View>
-
-        {/* 3. 주의 포인트 (DB key: improvement_points) */}
-        <View style={[s.card, s.cardWarm]}>
-          <View style={s.cardTitleRow}>
-            <Ionicons name="radio-button-on-outline" size={18} color={TERRACOTTA} />
-            <Text style={[s.cardTitle, { color: TERRACOTTA }]}>주의 포인트</Text>
-            <TouchableOpacity
-              style={s.cardEditIcon}
-              onPress={() => openEdit('improvement_points', '주의 포인트 수정 (줄바꿈으로 구분)', improvementPoints.join('\n'))}
-            >
-              <Ionicons name="pencil-outline" size={13} color={Colors.mutedFg} />
-            </TouchableOpacity>
-          </View>
-          {improvementPoints.length > 0 ? (
-            improvementPoints.map((item, i) => (
-              <View key={i} style={s.targetRow}>
-                <View style={s.targetIcon}>
-                  <Ionicons name="navigate-circle-outline" size={16} color={TERRACOTTA} />
-                </View>
-                <Text style={s.targetText}>{item}</Text>
-              </View>
-            ))
-          ) : (
-            <Text style={s.emptyText}>주의 포인트가 없습니다</Text>
-          )}
-        </View>
-
-        {/* 4. 개인 맞춤 연습 플랜 */}
-        {Array.isArray(plan.drill_suggestions) && plan.drill_suggestions.length > 0 && (
-          <View style={s.drillSection}>
-            <View style={s.drillSectionTitle}>
-              <Ionicons name="barbell-outline" size={18} color={TERRACOTTA} />
-              <Text style={s.cardTitle}>개인 맞춤 연습 플랜</Text>
-            </View>
-            {plan.drill_suggestions.map((drill: DrillSuggestion, i: number) => (
-              <DrillCardComponent key={i} drill={drill} />
-            ))}
-          </View>
-        )}
-
-        {/* 5. 다음 레슨 목표 */}
-        {(toStringArray(plan.next_goals).length > 0 || (plan.coach_next_goals && plan.coach_next_goals.length > 0)) && (
-          <View style={[s.card, s.cardGoals]}>
-            <View style={s.cardTitleRow}>
-              <Ionicons name="flag-outline" size={18} color="#8B5CF6" />
-              <Text style={[s.cardTitle, { color: '#8B5CF6' }]}>다음 레슨 목표</Text>
-              <TouchableOpacity
-                style={s.cardEditIcon}
-                onPress={() => {
-                  const currentGoals = (plan.next_goals_saved && plan.coach_next_goals?.length)
-                    ? plan.coach_next_goals
-                    : toStringArray(plan.next_goals);
-                  openEdit('coach_next_goals', '다음 레슨 목표 수정 (줄바꿈으로 구분)', currentGoals.join('\n'));
-                }}
-              >
-                <Ionicons name="pencil-outline" size={13} color={Colors.mutedFg} />
-              </TouchableOpacity>
-            </View>
-            {plan.next_goals_saved ? (
-              <View style={s.goalsBadgeRow}>
-                <Ionicons name="checkmark-circle-outline" size={12} color="#22c55e" />
-                <Text style={s.goalsBadgeTextSaved}>코치 확정 목표</Text>
-              </View>
-            ) : (
-              <View style={s.goalsBadgeRow}>
-                <Ionicons name="sparkles-outline" size={12} color="#8B5CF6" />
-                <Text style={s.goalsBadgeTextDraft}>AI 초안 — 수정 버튼으로 확정하세요</Text>
-              </View>
-            )}
-            {(plan.next_goals_saved ? (plan.coach_next_goals ?? []) : toStringArray(plan.next_goals)).map((goal, i) => (
-              <View key={i} style={s.goalRow}>
-                <View style={s.goalIndex}>
-                  <Text style={s.goalIndexText}>{i + 1}</Text>
-                </View>
-                <Text style={s.goalText}>{goal}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* 6. 레슨 전체 내용 보기 */}
-        {plan.transcript_summary?.lesson_flow ? (
-          <View style={s.card}>
-            <TouchableOpacity
-              style={s.accordionHeader}
-              onPress={() => setExpandedTranscript(v => !v)}
-              activeOpacity={0.7}
-            >
-              <Text style={s.accordionTitle}>레슨 전체 내용 보기</Text>
-              <Ionicons
-                name={expandedTranscript ? 'chevron-up' : 'chevron-down'}
-                size={18}
-                color={Colors.mutedFg}
-              />
-            </TouchableOpacity>
-            {expandedTranscript && (
-              <View style={s.accordionContent}>
-                <Text style={s.transcriptText}>{plan.transcript_summary.lesson_flow}</Text>
-              </View>
-            )}
-          </View>
-        ) : null}
-
-        <View style={{ height: 100 }} />
-      </ScrollView>
-
-      {/* 하단 고정 전송 버튼 */}
-      <View style={s.bottomBar}>
-        <SafeAreaView>
-          {!hasReport ? (
-            <View style={[s.sendBtn, s.sendBtnDisabled]}>
-              <Text style={s.sendBtnTextDisabled}>리포트 생성 중...</Text>
-            </View>
-          ) : isSent ? (
-            <View style={[s.sendBtn, s.sendBtnDone]}>
-              <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
-              <Text style={[s.sendBtnText, { color: Colors.success }]}>전송 완료</Text>
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={[s.sendBtn, sending && s.sendBtnLoading]}
-              onPress={sendReportToMember}
-              disabled={sending}
-              activeOpacity={0.85}
-            >
-              {sending ? (
+        <ScrollView
+          style={s.scroll}
+          contentContainerStyle={s.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* 레슨 기본 정보 카드 */}
+          <View style={s.infoCard}>
+            <View style={s.infoMetaRow}>
+              <Ionicons name="calendar-outline" size={13} color={Colors.mutedFg} />
+              <Text style={s.infoMetaText}>{formatDate(plan.created_at)}</Text>
+              {plan.duration_minutes ? (
                 <>
-                  <ActivityIndicator size="small" color="#fff" />
-                  <Text style={s.sendBtnText}>전송 중...</Text>
+                  <Text style={s.infoMetaDot}>·</Text>
+                  <Ionicons name="time-outline" size={13} color={Colors.mutedFg} />
+                  <Text style={s.infoMetaText}>{plan.duration_minutes}분</Text>
                 </>
+              ) : null}
+            </View>
+
+            {/* 레슨 제목 — 인라인 편집 */}
+            {editingSection === 'ai_title' ? (
+              <>
+                <View style={s.inlineLabelRow}>
+                  <Text style={s.inlineSectionLabel}>레슨 제목</Text>
+                  <EditBadge />
+                </View>
+                <TextInput
+                  style={[s.inlineInput, inputFocused && s.inlineInputFocused]}
+                  value={editingValue}
+                  onChangeText={setEditingValue}
+                  onFocus={() => setInputFocused(true)}
+                  onBlur={() => setInputFocused(false)}
+                  multiline
+                  autoFocus
+                  textAlignVertical="top"
+                  scrollEnabled={false}
+                />
+              </>
+            ) : (
+              <View style={s.titleRow}>
+                <Text style={s.infoTitle}>{plan.ai_title || '(제목 없음)'}</Text>
+                <TouchableOpacity
+                  style={s.titleEditBtn}
+                  onPress={() => startEdit('ai_title', plan.ai_title || '')}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="pencil-outline" size={13} color={TERRACOTTA} />
+                  <Text style={s.titleEditBtnText}>제목 수정</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <View style={s.sourceRow}>
+              <Ionicons
+                name={(plan as any).source === 'manual' ? 'pencil-outline' : 'mic-outline'}
+                size={13}
+                color={TERRACOTTA}
+              />
+              <Text style={s.sourceText}>
+                {(plan as any).source === 'manual' ? '직접 작성' : '음성 기록'}
+              </Text>
+            </View>
+          </View>
+
+          {/* 1. 오늘 레슨 요약 */}
+          <View style={s.card}>
+            <View style={s.cardTitleRow}>
+              <Ionicons name="document-text-outline" size={18} color={TERRACOTTA} />
+              <Text style={s.cardTitle}>오늘 레슨 요약</Text>
+              {editingSection === 'summary'
+                ? <EditBadge />
+                : <PencilBtn onPress={() => startEdit('summary', cleanSummary(plan.summary))} />}
+            </View>
+            {editingSection === 'summary' ? (
+              <TextInput
+                style={[s.inlineInput, inputFocused && s.inlineInputFocused]}
+                value={editingValue}
+                onChangeText={setEditingValue}
+                onFocus={() => setInputFocused(true)}
+                onBlur={() => setInputFocused(false)}
+                multiline
+                autoFocus
+                textAlignVertical="top"
+                scrollEnabled={false}
+              />
+            ) : (
+              <Text style={s.summaryText}>{cleanSummary(plan.summary) || '-'}</Text>
+            )}
+          </View>
+
+          {/* 1.5 이전 레슨 대비 변화 */}
+          {Array.isArray(plan.lesson_comparison) && plan.lesson_comparison.length > 0 && (
+            <View style={[s.card, s.cardComparison]}>
+              <View style={s.cardTitleRow}>
+                <Ionicons name="swap-vertical-outline" size={18} color="#0EA5E9" />
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.cardTitle, { color: '#0369A1' }]}>이전 레슨 대비 변화</Text>
+                  <Text style={s.compSubtitle}>지난 기록과 비교</Text>
+                </View>
+              </View>
+              {plan.lesson_comparison.slice(0, 3).map((c: any, i: number) => {
+                const isImproved = c.status === 'improved';
+                const isRegressed = c.status === 'regressed';
+                const badgeColor = isImproved ? '#16a34a' : isRegressed ? '#dc2626' : '#64748b';
+                const badgeBg = isImproved ? '#dcfce7' : isRegressed ? '#fee2e2' : '#f1f5f9';
+                const badgeLabel = isImproved ? '개선 중' : isRegressed ? '반복 확인' : '유지';
+                return (
+                  <View key={i} style={s.compRow}>
+                    <View style={{ flex: 1 }}>
+                      <View style={s.compTopRow}>
+                        <Text style={s.compPoint}>{c.point}</Text>
+                        <View style={[s.compBadge, { backgroundColor: badgeBg }]}>
+                          <Text style={[s.compBadgeText, { color: badgeColor }]}>{badgeLabel}</Text>
+                        </View>
+                      </View>
+                      <Text style={s.compReason}>{c.reason}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {/* 2. 오늘 잘한 점 */}
+          <View style={[s.card, s.cardSage]}>
+            <View style={s.cardTitleRow}>
+              <Ionicons name="checkmark-circle-outline" size={18} color={SAGE_TEXT} />
+              <Text style={[s.cardTitle, { color: SAGE_TEXT }]}>오늘 잘한 점</Text>
+              {hasReport && (
+                editingSection === 'achievements'
+                  ? <EditBadge />
+                  : <PencilBtn onPress={() => startEdit('achievements', achievements.join('\n'))} />
+              )}
+            </View>
+            {editingSection === 'achievements' ? (
+              <TextInput
+                style={s.inlineInput}
+                value={editingValue}
+                onChangeText={setEditingValue}
+                multiline
+                autoFocus
+                textAlignVertical="top"
+                placeholder="각 항목을 줄바꿈으로 구분하세요"
+                placeholderTextColor={WARM_GRAY}
+                scrollEnabled={false}
+              />
+            ) : achievements.length > 0 ? (
+              achievements.map((item, i) => (
+                <View key={i} style={s.checkRow}>
+                  <View style={s.checkIcon}>
+                    <Ionicons name="checkmark" size={12} color={SAGE_TEXT} />
+                  </View>
+                  <Text style={s.checkText}>{item}</Text>
+                </View>
+              ))
+            ) : (
+              <Text style={s.emptyText}>
+                {hasReport ? '잘한 점이 없습니다'
+                  : plan?.status === 'completed' ? 'AI 리포트 생성 중입니다. 잠시 후 다시 확인해 주세요.'
+                  : '분석 완료 후 표시됩니다.'}
+              </Text>
+            )}
+          </View>
+
+          {/* 3. 주의 포인트 */}
+          <View style={[s.card, s.cardWarm]}>
+            <View style={s.cardTitleRow}>
+              <Ionicons name="radio-button-on-outline" size={18} color={TERRACOTTA} />
+              <Text style={[s.cardTitle, { color: TERRACOTTA }]}>주의 포인트</Text>
+              {editingSection === 'improvement_points'
+                ? <EditBadge />
+                : <PencilBtn onPress={() => startEdit('improvement_points', improvementPoints.join('\n'))} />}
+            </View>
+            {editingSection === 'improvement_points' ? (
+              <TextInput
+                style={s.inlineInput}
+                value={editingValue}
+                onChangeText={setEditingValue}
+                multiline
+                autoFocus
+                textAlignVertical="top"
+                placeholder="각 항목을 줄바꿈으로 구분하세요"
+                placeholderTextColor={WARM_GRAY}
+                scrollEnabled={false}
+              />
+            ) : improvementPoints.length > 0 ? (
+              improvementPoints.map((item, i) => (
+                <View key={i} style={s.targetRow}>
+                  <View style={s.targetIcon}>
+                    <Ionicons name="navigate-circle-outline" size={16} color={TERRACOTTA} />
+                  </View>
+                  <Text style={s.targetText}>{item}</Text>
+                </View>
+              ))
+            ) : (
+              <Text style={s.emptyText}>주의 포인트가 없습니다</Text>
+            )}
+          </View>
+
+          {/* 4. 개인 맞춤 연습 플랜 */}
+          {Array.isArray(plan.drill_suggestions) && plan.drill_suggestions.length > 0 && (
+            <View style={s.drillSection}>
+              <View style={s.drillSectionHeader}>
+                <Ionicons name="barbell-outline" size={18} color={TERRACOTTA} />
+                <Text style={[s.cardTitle, { flex: 1 }]}>개인 맞춤 연습 플랜</Text>
+                {editingSection === 'drill_suggestions'
+                  ? <EditBadge />
+                  : <PencilBtn onPress={startEditDrills} />}
+              </View>
+              {editingSection === 'drill_suggestions'
+                ? editingDrills.map((drill, i) => (
+                  <DrillEditCard key={i} drill={drill} onChange={(f, v) => updateDrill(i, f, v)} />
+                ))
+                : plan.drill_suggestions.map((drill, i) => (
+                  <DrillCardComponent key={i} drill={drill} />
+                ))
+              }
+            </View>
+          )}
+
+          {/* 5. 다음 레슨 목표 */}
+          {(toStringArray(plan.next_goals).length > 0 || (plan.coach_next_goals && plan.coach_next_goals.length > 0)) && (
+            <View style={[s.card, s.cardGoals]}>
+              <View style={s.cardTitleRow}>
+                <Ionicons name="flag-outline" size={18} color="#8B5CF6" />
+                <Text style={[s.cardTitle, { color: '#8B5CF6' }]}>다음 레슨 목표</Text>
+                {editingSection === 'coach_next_goals' ? <EditBadge /> : (
+                  <PencilBtn onPress={() => {
+                    const currentGoals = (plan.next_goals_saved && plan.coach_next_goals?.length)
+                      ? plan.coach_next_goals
+                      : toStringArray(plan.next_goals);
+                    startEdit('coach_next_goals', currentGoals.join('\n'));
+                  }} />
+                )}
+              </View>
+              {editingSection === 'coach_next_goals' ? (
+                <TextInput
+                  style={s.inlineInput}
+                  value={editingValue}
+                  onChangeText={setEditingValue}
+                  multiline
+                  autoFocus
+                  textAlignVertical="top"
+                  placeholder="각 목표를 줄바꿈으로 구분하세요"
+                  placeholderTextColor={WARM_GRAY}
+                  scrollEnabled={false}
+                />
               ) : (
                 <>
-                  <Ionicons name="paper-plane-outline" size={18} color="#fff" />
-                  <Text style={s.sendBtnText}>회원에게 전송</Text>
+                  {plan.next_goals_saved ? (
+                    <View style={s.goalsBadgeRow}>
+                      <Ionicons name="checkmark-circle-outline" size={12} color="#22c55e" />
+                      <Text style={s.goalsBadgeTextSaved}>코치 확정 목표</Text>
+                    </View>
+                  ) : (
+                    <View style={s.goalsBadgeRow}>
+                      <Ionicons name="sparkles-outline" size={12} color="#8B5CF6" />
+                      <Text style={s.goalsBadgeTextDraft}>AI 초안 — 수정 버튼으로 확정하세요</Text>
+                    </View>
+                  )}
+                  {(plan.next_goals_saved ? (plan.coach_next_goals ?? []) : toStringArray(plan.next_goals)).map((goal, i) => (
+                    <View key={i} style={s.goalRow}>
+                      <View style={s.goalIndex}>
+                        <Text style={s.goalIndexText}>{i + 1}</Text>
+                      </View>
+                      <Text style={s.goalText}>{goal}</Text>
+                    </View>
+                  ))}
                 </>
               )}
-            </TouchableOpacity>
-          )}
-        </SafeAreaView>
-      </View>
-
-      {/* 섹션 편집 모달 */}
-      <Modal
-        visible={editModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setEditModalVisible(false)}
-      >
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <TouchableOpacity
-            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }}
-            activeOpacity={1}
-            onPress={() => setEditModalVisible(false)}
-          />
-          <View style={s.editSheet}>
-            <View style={s.editHeader}>
-              <Text style={s.editTitle}>{editModalLabel}</Text>
-              <TouchableOpacity onPress={() => setEditModalVisible(false)}>
-                <Ionicons name="close" size={22} color={Colors.mutedFg} />
-              </TouchableOpacity>
             </View>
-            <TextInput
-              style={s.editInput}
-              value={editingValue}
-              onChangeText={setEditingValue}
-              multiline
-              autoFocus
-              textAlignVertical="top"
-            />
-            <View style={s.editBtnRow}>
-              <TouchableOpacity style={s.editCancelBtn} onPress={() => setEditModalVisible(false)}>
-                <Text style={s.editCancelText}>취소</Text>
-              </TouchableOpacity>
+          )}
+
+          {/* 6. 레슨 전체 내용 보기 */}
+          {plan.transcript_summary?.lesson_flow ? (
+            <View style={s.card}>
               <TouchableOpacity
-                style={s.editSaveBtn}
-                onPress={() => saveSectionEdit(editingSection, editingValue)}
+                style={s.accordionHeader}
+                onPress={() => setExpandedTranscript(v => !v)}
+                activeOpacity={0.7}
+              >
+                <Text style={s.accordionTitle}>레슨 전체 내용 보기</Text>
+                <Ionicons
+                  name={expandedTranscript ? 'chevron-up' : 'chevron-down'}
+                  size={18}
+                  color={Colors.mutedFg}
+                />
+              </TouchableOpacity>
+              {expandedTranscript && (
+                <View style={s.accordionContent}>
+                  <Text style={s.transcriptText}>{plan.transcript_summary.lesson_flow}</Text>
+                </View>
+              )}
+            </View>
+          ) : null}
+
+          <View style={{ height: editingSection ? 20 : 100 }} />
+        </ScrollView>
+
+        {/* 편집 중 키보드 위 액션바 */}
+        {editingSection && (
+          <View style={s.actionBar}>
+            {saveError && (
+              <Text style={s.saveErrorMsg}>저장하지 못했어요. 다시 시도해 주세요.</Text>
+            )}
+            <View style={s.actionBarButtons}>
+              <TouchableOpacity
+                style={s.cancelBtn}
+                onPress={handleCancel}
                 disabled={savingSection}
               >
-                <Text style={s.editSaveText}>{savingSection ? '저장 중...' : '저장'}</Text>
+                <Text style={s.cancelBtnText}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.saveBtn, (!hasUnsavedChanges || savingSection) && s.saveBtnDisabled]}
+                onPress={handleSave}
+                disabled={!hasUnsavedChanges || savingSection}
+                activeOpacity={0.85}
+              >
+                {savingSection
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Text style={s.saveBtnText}>저장</Text>
+                }
               </TouchableOpacity>
             </View>
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        )}
+      </KeyboardAvoidingView>
+
+      {/* 하단 전송 버튼 — 편집 중 숨김 */}
+      {!editingSection && (
+        <View style={s.bottomBar}>
+          <SafeAreaView>
+            {!hasReport ? (
+              <View style={[s.sendBtn, s.sendBtnDisabled]}>
+                <Text style={s.sendBtnTextDisabled}>리포트 생성 중...</Text>
+              </View>
+            ) : isSent ? (
+              <View style={[s.sendBtn, s.sendBtnDone]}>
+                <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
+                <Text style={[s.sendBtnText, { color: Colors.success }]}>전송 완료</Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[s.sendBtn, sending && s.sendBtnLoading]}
+                onPress={sendReportToMember}
+                disabled={sending}
+                activeOpacity={0.85}
+              >
+                {sending ? (
+                  <>
+                    <ActivityIndicator size="small" color="#fff" />
+                    <Text style={s.sendBtnText}>전송 중...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="paper-plane-outline" size={18} color="#fff" />
+                    <Text style={s.sendBtnText}>회원에게 전송</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+          </SafeAreaView>
+        </View>
+      )}
     </View>
   );
 }
@@ -547,6 +728,71 @@ function DrillCardComponent({ drill }: { drill: DrillSuggestion }) {
   );
 }
 
+function DrillEditCard({
+  drill, onChange,
+}: { drill: DrillSuggestion; onChange: (field: keyof DrillSuggestion, value: string) => void }) {
+  return (
+    <View style={[s.drillCard, s.drillCardEditing]}>
+      <TextInput
+        style={[s.drillEditField, s.drillEditName]}
+        value={drill.name}
+        onChangeText={v => onChange('name', v)}
+        placeholder="드릴 이름"
+        placeholderTextColor={WARM_GRAY}
+        scrollEnabled={false}
+      />
+      <View style={s.drillRow}>
+        <Text style={s.drillLabel}>목적</Text>
+        <TextInput
+          style={[s.drillEditField, { flex: 1 }]}
+          value={drill.purpose}
+          onChangeText={v => onChange('purpose', v)}
+          multiline
+          textAlignVertical="top"
+          placeholder="목적을 입력하세요"
+          placeholderTextColor={WARM_GRAY}
+          scrollEnabled={false}
+        />
+      </View>
+      <View style={s.drillRow}>
+        <Text style={s.drillLabel}>방법</Text>
+        <TextInput
+          style={[s.drillEditField, { flex: 1 }]}
+          value={drill.method}
+          onChangeText={v => onChange('method', v)}
+          multiline
+          textAlignVertical="top"
+          placeholder="방법을 입력하세요"
+          placeholderTextColor={WARM_GRAY}
+          scrollEnabled={false}
+        />
+      </View>
+      <View style={s.drillRow}>
+        <Text style={s.drillLabel}>코트 위치</Text>
+        <TextInput
+          style={[s.drillEditField, { flex: 1 }]}
+          value={drill.court_adaptation ?? ''}
+          onChangeText={v => onChange('court_adaptation', v)}
+          placeholder="코트 위치 (선택)"
+          placeholderTextColor={WARM_GRAY}
+          scrollEnabled={false}
+        />
+      </View>
+      <View style={s.drillRow}>
+        <Text style={s.drillLabel}>횟수/시간</Text>
+        <TextInput
+          style={[s.drillEditField, { flex: 1 }]}
+          value={drill.reps}
+          onChangeText={v => onChange('reps', v)}
+          placeholder="횟수 또는 시간"
+          placeholderTextColor={WARM_GRAY}
+          scrollEnabled={false}
+        />
+      </View>
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: CREAM },
   safeHeader: { backgroundColor: CREAM },
@@ -565,10 +811,7 @@ const s = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: '800', color: DARK_BROWN },
   headerSub: { fontSize: 12, color: Colors.mutedFg, marginTop: 1 },
 
-  statusBadge: {
-    borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
-    borderWidth: 1,
-  },
+  statusBadge: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1 },
   statusBadgeSent: { backgroundColor: Colors.successLight, borderColor: Colors.successBorder },
   statusBadgeUnsent: { backgroundColor: Colors.primaryLight, borderColor: '#E8C4B4' },
   statusBadgeText: { fontSize: 11, fontWeight: '700' },
@@ -578,31 +821,57 @@ const s = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { padding: 16, gap: 12 },
 
+  // Info card
   infoCard: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 18,
+    backgroundColor: '#fff', borderRadius: 18, padding: 18, gap: 8,
     shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 }, elevation: 2,
   },
-  infoCardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  infoMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 },
+  infoMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   infoMetaText: { fontSize: 12, color: Colors.mutedFg },
   infoMetaDot: { fontSize: 12, color: Colors.placeholder, marginHorizontal: 2 },
-  infoTitle: { fontSize: 17, fontWeight: '800', color: DARK_BROWN, lineHeight: 24, marginBottom: 8 },
+  titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  infoTitle: { fontSize: 17, fontWeight: '800', color: DARK_BROWN, lineHeight: 24, flex: 1 },
+  titleEditBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: Colors.primaryLight, borderRadius: 16,
+    paddingHorizontal: 10, paddingVertical: 5, marginTop: 2,
+  },
+  titleEditBtnText: { fontSize: 11, fontWeight: '700', color: TERRACOTTA },
+  inlineLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  inlineSectionLabel: { fontSize: 12, fontWeight: '600', color: Colors.mutedFg },
   sourceRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   sourceText: { fontSize: 12, color: TERRACOTTA, fontWeight: '600' },
-  editRoundBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: Colors.primaryLight, borderRadius: 20,
-    paddingHorizontal: 12, paddingVertical: 6,
+
+  // Editing badge
+  editingBadge: {
+    backgroundColor: Colors.primaryLight, borderRadius: 12,
+    paddingHorizontal: 8, paddingVertical: 3,
   },
-  editRoundBtnText: { fontSize: 12, fontWeight: '700', color: TERRACOTTA },
+  editingBadgeText: { fontSize: 11, fontWeight: '700', color: TERRACOTTA },
+
+  // Pencil button (44×44 effective touch area via hitSlop)
+  pencilBtn: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: '#fff', borderWidth: 1, borderColor: Colors.border,
+    justifyContent: 'center', alignItems: 'center',
+  },
+
+  // Inline text input
+  inlineInput: {
+    backgroundColor: INPUT_BG,
+    borderWidth: 1, borderColor: '#D5CCC7',
+    borderRadius: 14, padding: 14,
+    fontSize: 16, color: DARK_BROWN, lineHeight: 24,
+    textAlignVertical: 'top',
+    minHeight: 80,
+  },
+  inlineInputFocused: {
+    borderColor: TERRACOTTA,
+  },
 
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
+    backgroundColor: '#fff', borderRadius: 20, padding: 20,
     shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 5,
     shadowOffset: { width: 0, height: 1 }, elevation: 1,
   },
@@ -623,18 +892,13 @@ const s = StyleSheet.create({
   goalRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 8 },
   goalIndex: {
     width: 22, height: 22, borderRadius: 11,
-    backgroundColor: '#8B5CF620', alignItems: 'center', justifyContent: 'center',
-    marginTop: 1,
+    backgroundColor: '#8B5CF620', alignItems: 'center', justifyContent: 'center', marginTop: 1,
   },
   goalIndexText: { fontSize: 11, color: '#8B5CF6', fontWeight: '700' },
   goalText: { flex: 1, fontSize: 14, color: DARK_BROWN, lineHeight: 21 },
+
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
   cardTitle: { fontSize: 16, fontWeight: '800', color: DARK_BROWN, flex: 1 },
-  cardEditIcon: {
-    width: 26, height: 26, borderRadius: 13,
-    backgroundColor: '#fff', borderWidth: 1, borderColor: Colors.border,
-    justifyContent: 'center', alignItems: 'center',
-  },
 
   summaryText: { fontSize: 16, color: DARK_BROWN, lineHeight: 26 },
   emptyText: { fontSize: 14, color: Colors.placeholder, fontStyle: 'italic' },
@@ -652,36 +916,68 @@ const s = StyleSheet.create({
   targetText: { fontSize: 16, color: DARK_BROWN, lineHeight: 26, flex: 1 },
 
   drillSection: { gap: 10 },
-  drillSectionTitle: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
+  drillSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
   drillCard: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 18,
+    backgroundColor: '#fff', borderRadius: 18, padding: 18,
     shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 5,
     shadowOffset: { width: 0, height: 1 }, elevation: 1,
   },
+  drillCardEditing: { borderWidth: 1, borderColor: TERRACOTTA },
   drillName: { fontSize: 16, fontWeight: '800', color: DARK_BROWN, marginBottom: 12 },
+  drillEditName: { fontWeight: '800', marginBottom: 12 },
+  drillEditField: {
+    fontSize: 15, color: DARK_BROWN, lineHeight: 22,
+    backgroundColor: INPUT_BG, borderRadius: 10, padding: 10,
+    borderWidth: 0,
+  },
   drillRow: { marginBottom: 10 },
-  drillLabel: { fontSize: 12, fontWeight: '600', color: Colors.mutedFg, marginBottom: 3 },
+  drillLabel: { fontSize: 12, fontWeight: '600', color: Colors.mutedFg, marginBottom: 4 },
   drillValue: { fontSize: 15, color: DARK_BROWN, lineHeight: 23 },
   drillMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
   drillMetaBadge: {
-    backgroundColor: Colors.primaryLight, borderRadius: 20,
-    paddingHorizontal: 10, paddingVertical: 4,
+    backgroundColor: Colors.primaryLight, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
   },
   drillMetaText: { fontSize: 12, fontWeight: '700', color: TERRACOTTA },
 
   accordionHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 4,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4,
   },
   accordionTitle: { fontSize: 16, fontWeight: '700', color: DARK_BROWN },
   accordionContent: {
-    marginTop: 14, paddingTop: 14,
-    borderTopWidth: 1, borderTopColor: Colors.border,
+    marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: Colors.border,
   },
   transcriptText: { fontSize: 15, color: DARK_BROWN, lineHeight: 25 },
 
+  // Action bar (stays above keyboard via KeyboardAvoidingView)
+  actionBar: {
+    backgroundColor: '#fff',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 10,
+  },
+  saveErrorMsg: {
+    fontSize: 13, color: '#dc2626', textAlign: 'center', marginBottom: 8,
+  },
+  actionBarButtons: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  },
+  cancelBtn: {
+    paddingVertical: 14, paddingHorizontal: 16,
+    justifyContent: 'center', alignItems: 'center',
+    minHeight: 46,
+  },
+  cancelBtnText: { fontSize: 15, color: Colors.mutedFg, fontWeight: '600' },
+  saveBtn: {
+    width: 110, backgroundColor: TERRACOTTA, borderRadius: 12,
+    paddingVertical: 14, alignItems: 'center', justifyContent: 'center',
+    minHeight: 46,
+  },
+  saveBtnDisabled: { opacity: 0.4 },
+  saveBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+
+  // Bottom send bar (hidden during editing)
   bottomBar: {
     backgroundColor: '#fff',
     borderTopWidth: 1,
@@ -700,30 +996,4 @@ const s = StyleSheet.create({
   sendBtnDone: { backgroundColor: Colors.successLight, borderWidth: 1, borderColor: Colors.successBorder },
   sendBtnText: { fontSize: 16, fontWeight: '800', color: '#fff' },
   sendBtnTextDisabled: { fontSize: 15, fontWeight: '600', color: Colors.mutedFg },
-
-  editSheet: {
-    backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    padding: 20, paddingBottom: 36, maxHeight: '70%',
-  },
-  editHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12,
-  },
-  editTitle: { fontSize: 15, fontWeight: '700', color: DARK_BROWN },
-  editInput: {
-    borderWidth: 1, borderColor: TERRACOTTA, borderRadius: 10,
-    padding: 12, fontSize: 15, color: DARK_BROWN,
-    minHeight: 120, textAlignVertical: 'top', lineHeight: 22,
-    backgroundColor: '#fff', marginBottom: 12,
-  },
-  editBtnRow: { flexDirection: 'row', gap: 10 },
-  editCancelBtn: {
-    flex: 1, borderWidth: 1, borderColor: Colors.border, borderRadius: 10,
-    paddingVertical: 12, alignItems: 'center',
-  },
-  editCancelText: { fontSize: 14, color: DARK_BROWN },
-  editSaveBtn: {
-    flex: 2, backgroundColor: TERRACOTTA, borderRadius: 10,
-    paddingVertical: 12, alignItems: 'center',
-  },
-  editSaveText: { fontSize: 14, fontWeight: '700', color: '#fff' },
 });

@@ -1,11 +1,11 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, ActivityIndicator, Platform, Animated, Modal, TextInput, KeyboardAvoidingView,
   AppState, AppStateStatus,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorderState } from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -127,6 +127,9 @@ export default function AIAnalysisScreen() {
       usagePulseAnim.setValue(1);
     }
   }, [hasSeenUsage]);
+
+  // plan-detail에서 돌아올 때 목록 새로고침 (제목 변경 반영)
+  useFocusEffect(useCallback(() => { loadPlans(); }, []));
 
   useEffect(() => {
     loadPlans();
