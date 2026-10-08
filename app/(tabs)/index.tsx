@@ -93,7 +93,6 @@ export default function HomeScreen() {
 
   // ③ 관심 회원 (member_interest)
   const [interestList, setInterestList] = useState<InterestMember[]>([]);
-  const [interestModal, setInterestModal] = useState(false);
 
   function hydrateFromData(data: HomeData) {
     setCoachEmail(data.coachEmail);
@@ -147,17 +146,14 @@ export default function HomeScreen() {
   async function handleAutoGenLessons() {
     if (!userId || autoGenSuggestion.length === 0) return;
     for (const s of autoGenSuggestion) {
+      const startTime = s.time;
+      if (!startTime) continue;
       const { data: member } = await supabase
         .from('members')
-        .select('fixed_schedule_time, fixed_lesson_duration')
+        .select('fixed_lesson_duration')
         .eq('id', s.memberId)
         .single();
-      if (!member) continue;
-      const todayDow2 = new Date(Date.now() + 9 * 3600 * 1000).getUTCDay();
-      const fst2 = (member as any).fixed_schedule_times;
-      const startTime = fst2?.[String(todayDow2)] ?? (member.fixed_schedule_time as string | null)?.slice(0, 5);
-      if (!startTime) continue;
-      const durationMins = (member.fixed_lesson_duration as number) ?? 60;
+      const durationMins = (member?.fixed_lesson_duration as number) ?? 60;
       const [h, m] = startTime.split(':').map(Number);
       const endDate = new Date(2000, 0, 1, h, m + durationMins);
       const endTime = `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}:00`;
@@ -492,6 +488,9 @@ export default function HomeScreen() {
                 <Ionicons name="qr-code-outline" size={22} color="#3E2B22" />
               </TouchableOpacity>
             ) : null}
+            <TouchableOpacity onPress={() => router.push('/settings/availability')} style={styles.iconBtn}>
+              <Ionicons name="time-outline" size={22} color="#3E2B22" />
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => router.push('/settings/notifications')} style={styles.iconBtn}>
               <Ionicons name="notifications-outline" size={22} color="#3E2B22" />
             </TouchableOpacity>
@@ -543,28 +542,6 @@ export default function HomeScreen() {
         </View>
 
         {/* ── 섹션3: 알림 카드들 ── */}
-        {interestList.length > 0 && (
-          <TouchableOpacity style={styles.alertCard} onPress={() => setInterestModal(true)} activeOpacity={0.85}>
-            <View style={[styles.alertIconWrap, { backgroundColor: '#EDE0D4' }]}>
-              <Ionicons name="person-add" size={18} color="#C0755A" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.alertTitle}>관심 회원 {interestList.length}명</Text>
-              <Text style={styles.alertSub}>QR 스캔 후 레슨권 선택한 회원</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color="#8B7355" />
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity style={styles.alertCard} onPress={() => router.push('/settings/availability')} activeOpacity={0.85}>
-          <View style={[styles.alertIconWrap, { backgroundColor: '#EDE0D4' }]}>
-            <Ionicons name="time-outline" size={18} color="#C0755A" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.alertTitle}>레슨 가능 시간</Text>
-            <Text style={styles.alertSub}>요일·시간 설정하기</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color="#8B7355" />
-        </TouchableOpacity>
         {trialCount > 0 && (
           <TouchableOpacity style={styles.alertCard} onPress={() => setTrialModal(true)} activeOpacity={0.85}>
             <View style={[styles.alertIconWrap, { backgroundColor: '#FEF3C7' }]}>
@@ -831,59 +808,6 @@ export default function HomeScreen() {
           </View>
         </Modal>
 
-        {/* 관심 회원 모달 */}
-        <Modal visible={interestModal} transparent animationType="slide" onRequestClose={() => setInterestModal(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalSheet, { paddingBottom: Math.max(40, insets.bottom + 20) }]}>
-              <View style={styles.modalHeader}>
-                <View>
-                  <Text style={styles.modalTitle}>관심 회원</Text>
-                  <Text style={{ fontSize: 14, color: '#8B7355', marginTop: 2 }}>QR 스캔 후 레슨권 선택한 회원</Text>
-                </View>
-                <TouchableOpacity onPress={() => setInterestModal(false)}>
-                  <Ionicons name="close" size={22} color="#8B7355" />
-                </TouchableOpacity>
-              </View>
-              <FlatList
-                data={interestList}
-                keyExtractor={item => item.id}
-                style={{ maxHeight: 440 }}
-                ListEmptyComponent={<Text style={{ fontSize: 14, color: '#C4B49E', padding: 20, textAlign: 'center' }}>관심 회원이 없어요</Text>}
-                renderItem={({ item }) => (
-                  <View style={styles.modalMemberRow}>
-                    <View style={[styles.modalMemberAvatar, { backgroundColor: '#C0755A' }]}>
-                      <Ionicons name="person" size={16} color="#fff" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.modalMemberName}>{item.name ?? '이름 미입력'}</Text>
-                      <Text style={styles.modalMemberSub}>{item.package_title ?? '레슨권 미선택'}</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', gap: 6 }}>
-                      <TouchableOpacity
-                        style={styles.interestRegBtn}
-                        onPress={() => {
-                          setInterestModal(false);
-                          router.push({ pathname: '/members/new', params: { fromInterestId: item.id, packageId: item.packageId ?? '' } } as any);
-                        }}
-                      >
-                        <Text style={styles.interestRegBtnText}>등록</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.interestDismissBtn}
-                        onPress={async () => {
-                          await supabase.from('member_interest').update({ status: 'dismissed' }).eq('id', item.id);
-                          setInterestList(prev => prev.filter(i => i.id !== item.id));
-                        }}
-                      >
-                        <Text style={styles.interestDismissBtnText}>무시</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-              />
-            </View>
-          </View>
-        </Modal>
       </ScrollView>
 
       {/* FAB */}

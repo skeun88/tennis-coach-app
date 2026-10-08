@@ -17,7 +17,7 @@ import MemberIssueTags from '../../components/MemberIssueTags';
 import PlanUpsellModal from '../../components/PlanUpsellModal';
 import { notifyMemberMessage, notifyMemberReregister, notifyMemberAbsent } from '../../lib/notifications';
 import { detectScheduleType, ScheduleType } from '../../lib/scheduleTypeUtils';
-import { buildMemberUpsertPayload, MEMBER_BASIC_FIELD_KEYS, MEMBER_LEVELS } from './member-form';
+import { buildMemberUpsertPayload, MEMBER_LEVELS } from './member-form';
 
 type DayTimes = Record<number, string[]>;
 type DateEntry = { date: string; startTime: string; duration: number };
@@ -1327,8 +1327,6 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                 </View>
                 {!member.is_active && <View style={styles.inactiveBadge}><Text style={styles.inactiveText}>비활성</Text></View>}
               </View>
-              <Text style={styles.profilePhone}>{member.phone}</Text>
-              <Text style={styles.profileMeta}>{member.email || '이메일 미등록'}</Text>
               <Text style={styles.profileMeta}>가입일 {member.join_date || '미등록'}</Text>
             </View>
             <TouchableOpacity
@@ -1378,15 +1376,10 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         {tab === 'info' && (
           <View style={styles.card}>
             <Text style={styles.cardSectionLabel}>기본 정보</Text>
-            <Text style={styles.cardSectionCaption}>공통 필드 {MEMBER_BASIC_FIELD_KEYS.length}개를 등록/수정 화면과 동일하게 유지합니다.</Text>
             {!editing ? (
               <>
                 <InfoRow icon="person-outline" label="이름" value={member.name} />
                 <InfoRow icon="call-outline" label="전화번호" value={member.phone} />
-                <InfoRow icon="mail-outline" label="이메일" value={member.email || '미등록'} />
-                <InfoRow icon="gift-outline" label="생년월일" value={(member as any).birth_date || '미등록'} />
-                <InfoRow icon="calendar-outline" label="가입일" value={member.join_date || '미등록'} />
-                <InfoRow icon="fitness-outline" label="레벨" value={member.level} />
                 <InfoRow icon="document-text-outline" label="메모" value={member.notes || '미등록'} multiline />
               </>
             ) : (

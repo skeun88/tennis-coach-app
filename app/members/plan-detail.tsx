@@ -26,10 +26,11 @@ type EditSection =
   | null;
 
 export default function PlanDetailScreen() {
-  const { planId, memberId, memberName, memberLevel } = useLocalSearchParams<{
-    planId: string; memberId: string; memberName: string; memberLevel: string;
+  const { planId, reportId, memberId, memberName, memberLevel } = useLocalSearchParams<{
+    planId: string; reportId: string; memberId: string; memberName: string; memberLevel: string;
   }>();
   const router = useRouter();
+  const isManual = !!reportId;
 
   const [plan, setPlan] = useState<LessonPlan | null>(null);
   const [report, setReport] = useState<any>(null);
@@ -56,17 +57,46 @@ export default function PlanDetailScreen() {
     ? JSON.stringify(editingDrills) !== originalDrillsJson
     : editingValue !== originalValue;
 
-  useFocusEffect(useCallback(() => { loadData(); }, [planId]));
+  useFocusEffect(useCallback(() => { loadData(); }, [planId, reportId]));
 
   async function loadData() {
     setLoading(true);
-    const [planRes, reportRes] = await Promise.all([
-      supabase.from('lesson_plans').select('*').eq('id', planId).single(),
-      supabase.from('member_lesson_reports').select('*').eq('lesson_plan_id', planId).maybeSingle(),
-    ]);
-    setPlan(planRes.data ?? null);
-    setReport(reportRes.data ?? null);
+    if (isManual) {
+      const { data: rep } = await supabase
+        .from('member_lesson_reports').select('*').eq('id', reportId).maybeSingle();
+      setReport(rep ?? null);
+      setPlan(rep ? (planFromManualReport(rep) as LessonPlan) : null);
+    } else {
+      const [planRes, reportRes] = await Promise.all([
+        supabase.from('lesson_plans').select('*').eq('id', planId).single(),
+        supabase.from('member_lesson_reports').select('*').eq('lesson_plan_id', planId).maybeSingle(),
+      ]);
+      setPlan(planRes.data ?? null);
+      setReport(reportRes.data ?? null);
+    }
     setLoading(false);
+  }
+
+  function planFromManualReport(rep: any): any {
+    return {
+      id: rep.id,
+      member_id: rep.member_id,
+      ai_title: '',
+      summary: rep.summary ?? '',
+      improvement_points: Array.isArray(rep.improvement_points)
+        ? rep.improvement_points.join('\n')
+        : (rep.improvement_points ?? ''),
+      drill_suggestions: [],
+      next_goals: [],
+      coach_next_goals: [],
+      next_goals_saved: false,
+      lesson_comparison: [],
+      transcript_summary: null,
+      source: 'manual',
+      created_at: rep.created_at,
+      duration_minutes: null,
+      status: 'completed',
+    };
   }
 
   // Android back button guard
@@ -194,8 +224,9 @@ export default function PlanDetailScreen() {
         setPlan(prev => prev ? { ...prev, ai_title: trimmed } : prev);
       } else if (editingSection === 'achievements') {
         const lines = editingValue.split('\n').map(l => l.trim()).filter(Boolean);
-        await supabase.from('member_lesson_reports').update({ achievements: lines }).eq('lesson_plan_id', plan.id);
-        setReport((prev: any) => ({ ...prev, achievements: lines }));
+        if (!report?.id) { setSavingSection(false); return; }
+        await supabase.from('member_lesson_reports').update({ achievements: lines }).eq('id', report.id);
+        setReport((prev: any) => prev ? { ...prev, achievements: lines } : prev);
       } else if (editingSection === 'coach_next_goals') {
         const lines = editingValue.split('\n').map(l => l.trim()).filter(Boolean);
         await supabase.from('lesson_plans').update({
@@ -205,9 +236,27 @@ export default function PlanDetailScreen() {
       } else if (editingSection === 'drill_suggestions') {
         await supabase.from('lesson_plans').update({ drill_suggestions: editingDrills }).eq('id', plan.id);
         setPlan(prev => prev ? { ...prev, drill_suggestions: editingDrills } : prev);
-      } else if (editingSection === 'summary' || editingSection === 'improvement_points') {
-        await supabase.from('lesson_plans').update({ [editingSection]: editingValue }).eq('id', plan.id);
-        setPlan(prev => prev ? { ...prev, [editingSection!]: editingValue } : prev);
+      } else if (editingSection === 'summary') {
+        if (isManual) {
+          if (!report?.id) { setSavingSection(false); return; }
+          await supabase.from('member_lesson_reports').update({ summary: editingValue }).eq('id', report.id);
+          setReport((prev: any) => prev ? { ...prev, summary: editingValue } : prev);
+          setPlan(prev => prev ? { ...prev, summary: editingValue } : prev);
+        } else {
+          await supabase.from('lesson_plans').update({ summary: editingValue }).eq('id', plan.id);
+          setPlan(prev => prev ? { ...prev, summary: editingValue } : prev);
+        }
+      } else if (editingSection === 'improvement_points') {
+        if (isManual) {
+          if (!report?.id) { setSavingSection(false); return; }
+          const lines = editingValue.split('\n').map(l => l.trim()).filter(Boolean);
+          await supabase.from('member_lesson_reports').update({ improvement_points: lines }).eq('id', report.id);
+          setReport((prev: any) => prev ? { ...prev, improvement_points: lines } : prev);
+          setPlan(prev => prev ? { ...prev, improvement_points: lines.join('\n') } : prev);
+        } else {
+          await supabase.from('lesson_plans').update({ improvement_points: editingValue }).eq('id', plan.id);
+          setPlan(prev => prev ? { ...prev, improvement_points: editingValue } : prev);
+        }
       }
       setInputFocused(false);
       setEditingSection(null);
@@ -338,8 +387,8 @@ export default function PlanDetailScreen() {
               ) : null}
             </View>
 
-            {/* 레슨 제목 — 인라인 편집 */}
-            {editingSection === 'ai_title' ? (
+            {/* 레슨 제목 — 인라인 편집 (음성 기록만) */}
+            {isManual ? null : editingSection === 'ai_title' ? (
               <>
                 <View style={s.inlineLabelRow}>
                   <Text style={s.inlineSectionLabel}>레슨 제목</Text>

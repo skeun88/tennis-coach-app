@@ -71,7 +71,6 @@ export default function AIAnalysisScreen() {
   const [loading, setLoading] = useState(true);
   const [memberReports, setMemberReports] = useState<Record<string, any>>({});
   const [manualReports, setManualReports] = useState<any[]>([]);
-  const [expandedManual, setExpandedManual] = useState<string | null>(null);
   const [recordFilter, setRecordFilter] = useState<'all' | 'unsent' | 'sent'>('all');
 
   // 타이핑 레슨 기록 모달
@@ -1270,7 +1269,15 @@ export default function AIAnalysisScreen() {
               <TouchableOpacity
                 key={report.id}
                 style={styles.planCard}
-                onPress={() => setExpandedManual(expandedManual === report.id ? null : report.id)}
+                onPress={() => router.push({
+                  pathname: '/members/plan-detail',
+                  params: {
+                    reportId: report.id,
+                    memberId: memberId as string,
+                    memberName: memberName as string,
+                    memberLevel: memberLevel as string,
+                  },
+                } as any)}
                 activeOpacity={0.8}
               >
                 <View style={styles.planTopRow}>
@@ -1287,34 +1294,8 @@ export default function AIAnalysisScreen() {
                   <Text style={styles.planTitleText} numberOfLines={2}>
                     {report.summary || '레슨 기록'}
                   </Text>
-                  <Ionicons
-                    name={expandedManual === report.id ? 'chevron-up' : 'chevron-down'}
-                    size={16}
-                    color={Colors.mutedFg}
-                  />
+                  <Ionicons name="chevron-forward" size={16} color={Colors.mutedFg} />
                 </View>
-
-                {expandedManual === report.id && (
-                  <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.border }}>
-                    <Text style={styles.summaryBoxText}>{report.summary}</Text>
-                    {Array.isArray(report.achievements) && report.achievements.length > 0 && (
-                      <View style={{ marginTop: 10 }}>
-                        <Text style={[styles.planSectionTitle, { fontSize: 13, marginBottom: 4 }]}>오늘 잘한 점</Text>
-                        {report.achievements.map((a: string, i: number) => (
-                          <Text key={i} style={[styles.bulletText, { marginBottom: 3 }]}>• {a}</Text>
-                        ))}
-                      </View>
-                    )}
-                    {Array.isArray(report.improvement_points) && report.improvement_points.length > 0 && (
-                      <View style={{ marginTop: 10 }}>
-                        <Text style={[styles.planSectionTitle, { fontSize: 13, marginBottom: 4 }]}>개선 포인트</Text>
-                        {report.improvement_points.map((p: string, i: number) => (
-                          <Text key={i} style={[styles.bulletText, { marginBottom: 3 }]}>• {p}</Text>
-                        ))}
-                      </View>
-                    )}
-                  </View>
-                )}
               </TouchableOpacity>
               );
             })}

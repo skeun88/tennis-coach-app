@@ -241,7 +241,9 @@ export async function fetchAutoGenSuggestion(uid: string): Promise<AutoGenSugges
     .filter(m => m.fixed_schedule_days && m.fixed_schedule_days.includes(todayDayOfWeek))
     .map(m => {
       const fst = (m as any).fixed_schedule_times;
-      const time = fst?.[String(todayDayOfWeek)] ?? (m.fixed_schedule_time as string | null)?.slice(0, 5) ?? null;
+      const perDay = fst?.[String(todayDayOfWeek)];
+      const perDayTime = Array.isArray(perDay) ? perDay[0] : perDay;
+      const time = (perDayTime ?? (m.fixed_schedule_time as string | null)?.slice(0, 5)) ?? null;
       if (!time) return null;
       return { memberId: m.id, name: m.name, time };
     })

@@ -120,6 +120,10 @@ export default function MembersScreen() {
           <Text style={styles.headerTitle}>회원</Text>
           <Text style={styles.headerSub}>총 {members.length}명</Text>
         </View>
+        <TouchableOpacity style={styles.registerBtn} onPress={() => router.push('/members/new')}>
+          <Ionicons name="person-add" size={18} color="#fff" />
+          <Text style={styles.registerBtnText}>회원 등록</Text>
+        </TouchableOpacity>
       </View>
 
       {/* 레슨권 관리 카드 */}
@@ -244,10 +248,6 @@ export default function MembersScreen() {
         }}
       />
 
-      {/* FAB */}
-      <TouchableOpacity style={[styles.fab, { bottom: insets.bottom + 16 }]} onPress={() => router.push('/members/new')}>
-        <Ionicons name="person-add" size={24} color="#fff" />
-      </TouchableOpacity>
     </View>
   );
 }
@@ -256,10 +256,18 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F7F0E9' },
 
   header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20, paddingTop: 16, paddingBottom: 14,
   },
   headerTitle: { fontSize: 28, fontWeight: '800', color: '#3E2B22' },
   headerSub: { fontSize: 14, color: '#8B7355', marginTop: 2 },
+  registerBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#C0755A',
+    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20,
+    shadowColor: '#C0755A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 3,
+  },
+  registerBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 
   packageCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -340,10 +348,4 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', padding: 60 },
   emptyText: { fontSize: 15, color: '#C4B49E', fontWeight: '500', marginTop: 12 },
 
-  fab: {
-    position: 'absolute', right: 20,
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: '#C0755A', justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#C0755A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 5,
-  },
 });
