@@ -3,10 +3,10 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   Alert, ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Colors } from '../../lib/theme';
+import SettingsHeader from '../../components/SettingsHeader';
 
 const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const HOURS = Array.from({ length: 18 }, (_, i) => String(i + 6).padStart(2, '0'));
@@ -15,7 +15,6 @@ const HALF_HOURS = ['00', '30'];
 type DaySchedule = { start: string; end: string };
 
 export default function AvailabilityScreen() {
-  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [daySchedules, setDaySchedules] = useState<Record<number, DaySchedule>>({});
@@ -99,11 +98,23 @@ export default function AvailabilityScreen() {
   }
 
   function removeDay(idx: number) {
-    setDaySchedules(prev => {
-      const next = { ...prev };
-      delete next[idx];
-      return next;
-    });
+    // 실제 삭제는 확인창을 거친다(위험 동작 표시).
+    Alert.alert(
+      '시간대 삭제',
+      `${DAYS[idx]}요일 설정을 삭제할까요?`,
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '삭제',
+          style: 'destructive',
+          onPress: () => setDaySchedules(prev => {
+            const next = { ...prev };
+            delete next[idx];
+            return next;
+          }),
+        },
+      ]
+    );
   }
 
   function closeAllPickers() {
@@ -184,22 +195,19 @@ export default function AvailabilityScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={Colors.foreground} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>레슨 가능 시간</Text>
-        {saved ? (
+      <SettingsHeader
+        title="레슨 가능 시간"
+        right={saved ? (
           <View style={styles.savedBadge}>
             <Ionicons name="checkmark" size={14} color={Colors.primary} />
             <Text style={styles.savedText}>저장됨</Text>
           </View>
-        ) : <View style={{ width: 60 }} />}
-      </View>
+        ) : null}
+      />
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.infoBanner}>
-          <Ionicons name="information-circle-outline" size={18} color={Colors.info} />
+          <Ionicons name="information-circle-outline" size={18} color={Colors.primary} />
           <Text style={styles.infoText}>
             요일을 선택하고 시간을 설정한 뒤 추가하세요. 요일마다 다른 시간대를 설정할 수 있어요.
           </Text>
@@ -350,8 +358,12 @@ export default function AvailabilityScreen() {
                       {daySchedules[dayIdx].start} ~ {daySchedules[dayIdx].end}
                     </Text>
                   </View>
-                  <TouchableOpacity onPress={() => removeDay(dayIdx)} style={{ padding: 6 }}>
-                    <Ionicons name="close-circle" size={20} color={Colors.destructive} />
+                  <TouchableOpacity
+                    onPress={() => removeDay(dayIdx)}
+                    style={{ padding: 6 }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="trash-outline" size={18} color={Colors.mutedFg} />
                   </TouchableOpacity>
                 </View>
               ))}
@@ -373,32 +385,25 @@ export default function AvailabilityScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#fff', paddingTop: 56, paddingBottom: 14, paddingHorizontal: 16,
-    borderBottomWidth: 1, borderBottomColor: Colors.border,
-  },
-  backBtn: { padding: 4 },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: Colors.foreground },
   savedBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: Colors.primaryLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12,
   },
-  savedText: { fontSize: 12, color: Colors.navy, fontWeight: '600' },
+  savedText: { fontSize: 12, color: Colors.primary, fontWeight: '600' },
   content: { padding: 16, paddingBottom: 48 },
   infoBanner: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    backgroundColor: Colors.primaryLight, borderRadius: 10, padding: 12, marginBottom: 20,
-    borderWidth: 1, borderColor: '#bfdbfe',
+    backgroundColor: Colors.primaryLight, borderRadius: 12, padding: 12, marginBottom: 20,
+    borderWidth: 1, borderColor: Colors.primary + '33',
   },
-  infoText: { flex: 1, fontSize: 13, color: Colors.info, lineHeight: 18 },
+  infoText: { flex: 1, fontSize: 13, color: Colors.foreground, lineHeight: 18 },
   sectionLabel: {
     fontSize: 13, fontWeight: '700', color: Colors.mutedFg,
     textTransform: 'uppercase', letterSpacing: 0.5,
     marginBottom: 8, marginTop: 4,
   },
   card: {
-    backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 20,
+    backgroundColor: '#fff', borderRadius: 20, padding: 16, marginBottom: 20,
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
   },
   daysRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 4 },

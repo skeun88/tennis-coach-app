@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, Switch, ScrollView, TouchableOpacity, Alert, ActivityIndicator,
+  View, Text, StyleSheet, Switch, ScrollView, Alert, ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Colors } from '../../lib/theme';
+import SettingsHeader from '../../components/SettingsHeader';
 
 interface NotificationSettings {
   lesson_day_before: boolean;
@@ -61,7 +61,6 @@ const NOTIFICATION_ITEMS: NotificationItem[] = [
 ];
 
 export default function NotificationsScreen() {
-  const router = useRouter();
   const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
@@ -123,24 +122,19 @@ export default function NotificationsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={Colors.foreground} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>알림 설정</Text>
-        {saved ? (
+      <SettingsHeader
+        title="알림 설정"
+        right={saved ? (
           <View style={styles.savedBadge}>
             <Ionicons name="checkmark" size={14} color={Colors.primary} />
             <Text style={styles.savedText}>저장됨</Text>
           </View>
-        ) : (
-          <View style={{ width: 60 }} />
-        )}
-      </View>
+        ) : null}
+      />
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.infoBanner}>
-          <Ionicons name="information-circle-outline" size={18} color={Colors.info} />
+          <Ionicons name="information-circle-outline" size={18} color={Colors.primary} />
           <Text style={styles.infoText}>
             알림 설정은 서버에 저장되며 모든 기기에 동일하게 적용됩니다.
           </Text>
@@ -170,22 +164,6 @@ export default function NotificationsScreen() {
             </View>
           ))}
         </View>
-
-        <Text style={styles.sectionLabel}>현재 설정 요약</Text>
-        <View style={styles.summaryCard}>
-          {NOTIFICATION_ITEMS.map(item => (
-            <View key={item.key} style={styles.summaryRow}>
-              <Ionicons
-                name={settings[item.key] ? 'checkmark-circle' : 'close-circle'}
-                size={16}
-                color={settings[item.key] ? Colors.primary : Colors.iconMuted}
-              />
-              <Text style={[styles.summaryText, !settings[item.key] && styles.summaryTextOff]}>
-                {item.title}
-              </Text>
-            </View>
-          ))}
-        </View>
       </ScrollView>
     </View>
   );
@@ -193,26 +171,18 @@ export default function NotificationsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#fff', paddingTop: 56, paddingBottom: 14,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1, borderBottomColor: Colors.border,
-  },
-  backBtn: { padding: 4 },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: Colors.foreground },
   savedBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: Colors.primaryLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12,
   },
-  savedText: { fontSize: 12, color: Colors.navy, fontWeight: '600' },
+  savedText: { fontSize: 12, color: Colors.primary, fontWeight: '600' },
   content: { padding: 16, paddingBottom: 48 },
   infoBanner: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    backgroundColor: Colors.primaryLight, borderRadius: 10, padding: 12, marginBottom: 20,
-    borderWidth: 1, borderColor: '#bfdbfe',
+    backgroundColor: Colors.primaryLight, borderRadius: 12, padding: 12, marginBottom: 20,
+    borderWidth: 1, borderColor: Colors.primary + '33',
   },
-  infoText: { flex: 1, fontSize: 13, color: Colors.info, lineHeight: 18 },
+  infoText: { flex: 1, fontSize: 13, color: Colors.foreground, lineHeight: 18 },
   sectionLabel: {
     fontSize: 13, fontWeight: '700', color: Colors.mutedFg,
     textTransform: 'uppercase', letterSpacing: 0.5,
@@ -235,11 +205,4 @@ const styles = StyleSheet.create({
   settingTitle: { fontSize: 15, fontWeight: '600', color: Colors.foreground, marginBottom: 2 },
   settingSubtitle: { fontSize: 12, color: Colors.mutedFg, lineHeight: 16 },
   divider: { height: 1, backgroundColor: Colors.mutedBg, marginLeft: 66 },
-  summaryCard: {
-    backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 20, gap: 10,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
-  },
-  summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  summaryText: { fontSize: 14, color: Colors.foreground, fontWeight: '500' },
-  summaryTextOff: { color: Colors.placeholder },
 });
