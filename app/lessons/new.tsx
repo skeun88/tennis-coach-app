@@ -3,11 +3,12 @@ import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Modal,
 } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Member } from '../../types';
 import { Colors } from '../../lib/theme';
+import SettingsHeader from '../../components/SettingsHeader';
 
 const HOURS = Array.from({ length: 18 }, (_, i) => String(i + 6).padStart(2, '0'));
 const MINUTES = ['00', '10', '15', '20', '30', '40', '45', '50'];
@@ -99,17 +100,10 @@ export default function NewLessonScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Stack.Screen options={{
-        title: '레슨 추가',
-        headerLeft: () => (
-          <TouchableOpacity
-            onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/schedule')}
-            style={{ paddingLeft: 4, paddingRight: 8 }}
-          >
-            <Ionicons name="chevron-back" size={26} color={Colors.navy} />
-          </TouchableOpacity>
-        ),
-      }} />
+      <SettingsHeader
+        title="레슨 추가"
+        onBack={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/schedule')}
+      />
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>레슨 정보</Text>

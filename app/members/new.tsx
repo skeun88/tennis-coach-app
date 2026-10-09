@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { MemberLevel } from '../../types';
 import { Colors } from '../../lib/theme';
+import SettingsHeader from '../../components/SettingsHeader';
 import { buildMemberUpsertPayload, MEMBER_BASIC_FIELD_KEYS, MEMBER_LEVELS } from './member-form';
 import { getCurrentSubscription, canAddMember } from '../../lib/subscription';
 import { syncRevenueCatToDb } from '../../lib/purchases';
@@ -718,6 +719,7 @@ export default function NewMemberScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <SettingsHeader title="회원 등록" />
       <ScrollView ref={scrollViewRef} style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
 
         {/* 정규 / 체험 토글 */}

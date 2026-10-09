@@ -5,7 +5,8 @@ import {
   TextInput, ActivityIndicator, KeyboardAvoidingView, Platform,
   Modal, FlatList, Linking, Switch,
 } from 'react-native';
-import { useLocalSearchParams, useRouter, Link, Stack, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useRouter, Link, useFocusEffect } from 'expo-router';
+import SettingsHeader from '../../components/SettingsHeader';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -1295,20 +1296,12 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   return (
     <View style={{ flex: 1 }}>
       {/* 메시지 탭: 헤더 제목 변경 + 뒤로가기 → 탭 복귀 */}
-      <Stack.Screen options={{
-        title: tab === 'messages' ? member.name : '회원 상세',
-        headerLeft: () => (
-          <TouchableOpacity
-            onPress={tab === 'messages'
-              ? () => setTab('info')
-              : () => router.canGoBack() ? router.back() : router.replace('/(tabs)/members')
-            }
-            style={{ paddingLeft: 4, paddingRight: 8 }}
-          >
-            <Ionicons name="chevron-back" size={26} color={Colors.primary} />
-          </TouchableOpacity>
-        ),
-      }} />
+      <SettingsHeader
+        title={tab === 'messages' ? member.name : '회원 상세'}
+        onBack={tab === 'messages'
+          ? () => setTab('info')
+          : () => (router.canGoBack() ? router.back() : router.replace('/(tabs)/members'))}
+      />
 
       {/* Profile Header — 메시지 탭에서 숨김 */}
       {tab !== 'messages' && (
