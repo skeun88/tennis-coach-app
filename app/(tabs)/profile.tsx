@@ -19,6 +19,7 @@ import { PLANS } from '../../lib/subscription';
 import { Colors, Radius, Shadow } from '../../lib/theme';
 import CoachQRModal from '../../components/CoachQRModal';
 import TerracottaRefreshControl from '../../components/TerracottaRefreshControl';
+import { FLOATING_TAB_BAR_SPACE } from '../../components/GlassTabBar';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SPORTS = ['테니스', '배드민턴', '스쿼시', '탁구', '골프', '기타'];
@@ -429,7 +430,7 @@ export default function ProfileScreen() {
           />
         }
       >
-        <View style={styles.body}>
+        <View style={[styles.body, { paddingBottom: insets.bottom + FLOATING_TAB_BAR_SPACE + 24 }]}>
 
           {/* ── 브랜딩 카드 ── */}
           <View style={styles.brandCard}>

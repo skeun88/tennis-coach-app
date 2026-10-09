@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Colors, Radius, Shadow } from '../../lib/theme';
 import TerracottaRefreshControl from '../../components/TerracottaRefreshControl';
+import { FLOATING_TAB_BAR_SPACE } from '../../components/GlassTabBar';
 import { useSubscription } from '../../hooks/useSubscription';
 import { notifyMemberAbsent, notifyReregister, notifyLessonCountUpdate } from '../../lib/notifications';
 import PlanUpsellModal from "../../components/PlanUpsellModal";
@@ -465,7 +466,7 @@ export default function HomeScreen() {
     <View style={[styles.screenWrapper, { paddingTop: insets.top }]}>
       <ScrollView
         style={styles.container}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + FLOATING_TAB_BAR_SPACE + 24 }}
         refreshControl={
           <TerracottaRefreshControl
             refreshing={refreshing}
@@ -818,7 +819,7 @@ export default function HomeScreen() {
 
       {/* FAB */}
       {showChatHint && (
-        <View style={[styles.chatHintBubble, { bottom: insets.bottom + 92 }]}>
+        <View style={[styles.chatHintBubble, { bottom: insets.bottom + FLOATING_TAB_BAR_SPACE + 84 }]}>
           <View style={{ flex: 1 }}>
             <Text style={styles.chatHintText}>앱 사용법 외에도 드릴·테니스 이론 등</Text>
             <Text style={styles.chatHintText}>무엇이든 물어보세요</Text>
@@ -828,7 +829,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       )}
-      <TouchableOpacity style={[styles.chatFab, { bottom: insets.bottom + 24 }]} onPress={() => { dismissChatHint(); router.push('/(tabs)/chat'); }}>
+      <TouchableOpacity style={[styles.chatFab, { bottom: insets.bottom + FLOATING_TAB_BAR_SPACE + 16 }]} onPress={() => { dismissChatHint(); router.push('/(tabs)/chat'); }}>
         <Ionicons name="chatbubble-ellipses" size={24} color="#fff" />
       </TouchableOpacity>
 

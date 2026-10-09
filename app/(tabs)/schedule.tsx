@@ -13,6 +13,7 @@ import * as Notifications from 'expo-notifications';
 import { Lesson } from '../../types';
 import { Colors, Radius } from '../../lib/theme';
 import TerracottaRefreshControl from '../../components/TerracottaRefreshControl';
+import { FLOATING_TAB_BAR_SPACE } from '../../components/GlassTabBar';
 
 type ViewTab = '일일' | '주간' | '월간';
 
@@ -821,6 +822,7 @@ ${rejectMsg.trim()}`
 
     return (
       <ScrollView ref={dayScrollRef} style={{ flex: 1, backgroundColor: S_GRID_BG }} showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + FLOATING_TAB_BAR_SPACE + 24 }}
         scrollEnabled={draggingId === null}
         refreshControl={<TerracottaRefreshControl refreshing={refreshing} onRefresh={async () => {
           setRefreshing(true);
@@ -1030,6 +1032,7 @@ ${rejectMsg.trim()}`
         <ScrollView
           ref={dayScrollRef}
           style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + FLOATING_TAB_BAR_SPACE + 24 }}
           showsVerticalScrollIndicator={false}
           scrollEnabled={weekDraggingId === null}
           onScroll={(e) => { weekScrollYRef.current = e.nativeEvent.contentOffset.y; }}
@@ -1207,6 +1210,7 @@ ${rejectMsg.trim()}`
 
     return (
       <ScrollView style={{ flex: 1, backgroundColor: S_BG }} showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + FLOATING_TAB_BAR_SPACE + 24 }}
         refreshControl={<TerracottaRefreshControl refreshing={refreshing} onRefresh={async () => {
           setRefreshing(true);
           try {
@@ -1380,7 +1384,7 @@ ${rejectMsg.trim()}`
 
       {/* FAB — Android 하단 nav bar 높이 반영 */}
       <Pressable
-        style={({ pressed }) => [styles.fab, { bottom: insets.bottom + 24, backgroundColor: pressed ? '#A9624B' : S_TERRA }]}
+        style={({ pressed }) => [styles.fab, { bottom: insets.bottom + FLOATING_TAB_BAR_SPACE + 16, backgroundColor: pressed ? '#A9624B' : S_TERRA }]}
         onPress={() => router.push('/lessons/new')}
       >
         <Ionicons name="add" size={28} color="#fff" />

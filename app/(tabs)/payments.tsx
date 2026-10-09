@@ -11,6 +11,7 @@ import { supabase } from '../../lib/supabase';
 import { Payment, PaymentStatus } from '../../types';
 import { Colors, Radius } from '../../lib/theme';
 import TerracottaRefreshControl from '../../components/TerracottaRefreshControl';
+import { FLOATING_TAB_BAR_SPACE } from '../../components/GlassTabBar';
 
 const TERRA = '#C0755A';
 const DARK_BROWN = '#3E2B22';
@@ -394,7 +395,7 @@ export default function PaymentsScreen() {
     <View style={[s.container, { paddingTop: insets.top }]}>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 90 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + FLOATING_TAB_BAR_SPACE + 24 }}
         refreshControl={<TerracottaRefreshControl refreshing={refreshing} onRefresh={async () => {
           setRefreshing(true);
           try {

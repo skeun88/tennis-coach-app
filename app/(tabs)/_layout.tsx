@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { Colors } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
+import GlassTabBar from '../../components/GlassTabBar';
 
 // ── 전역 예약 요청 토스트 ─────────────────────────────────────
 function RequestToast({
@@ -135,22 +136,10 @@ export default function TabsLayout() {
   return (
     <View style={{ flex: 1 }}>
       <Tabs
+        tabBar={(props) => <GlassTabBar {...props} />}
         screenOptions={{
           tabBarActiveTintColor: Colors.primary,
           tabBarInactiveTintColor: Colors.mutedFg,
-          tabBarStyle: {
-            borderTopWidth: 1,
-            borderTopColor: Colors.border,
-            paddingTop: 8,
-            paddingBottom: 20,
-            backgroundColor: Colors.white,
-            height: 83,
-          },
-          tabBarLabelStyle: {
-            fontSize: 11,
-            fontWeight: '500',
-            marginTop: 2,
-          },
           headerShown: false,
         }}
       >

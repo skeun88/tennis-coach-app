@@ -11,6 +11,7 @@ import { supabase } from '../../lib/supabase';
 import { Member, MemberLevel } from '../../types';
 import { Colors } from '../../lib/theme';
 import TerracottaRefreshControl from '../../components/TerracottaRefreshControl';
+import { FLOATING_TAB_BAR_SPACE } from '../../components/GlassTabBar';
 
 interface MemberWithUnread extends Member {
   unread_count?: number;
@@ -191,7 +192,7 @@ export default function MembersScreen() {
       <FlatList
         data={filtered}
         keyExtractor={item => item.id}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + FLOATING_TAB_BAR_SPACE + 24 }]}
         refreshControl={
           <TerracottaRefreshControl
             refreshing={refreshing}
