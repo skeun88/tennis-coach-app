@@ -369,11 +369,25 @@ export default function NewMemberScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoadingSlots(false); return; }
 
-    const { data: existingLessons } = await supabase
-      .from('lessons')
-      .select('start_time, end_time')
-      .eq('coach_id', user.id)
-      .eq('date', dateStr);
+    const [{ data: existingLessons }, { data: availData }] = await Promise.all([
+      supabase.from('lessons').select('start_time, end_time').eq('coach_id', user.id).eq('date', dateStr),
+      supabase.from('coach_availability').select('*').eq('coach_id', user.id).maybeSingle(),
+    ]);
+
+    // 요일별 가용 시간 범위 결정 (available_times 우선, 레거시 폴백)
+    let availStartMin: number | null = null;
+    let availEndMin: number | null = null;
+    if (availData) {
+      const times = (availData as any).available_times as Record<number, { start: string; end: string }> | null | undefined;
+      const dayTime = times?.[day];
+      if (dayTime) {
+        availStartMin = timeToMinutes(dayTime.start);
+        availEndMin = timeToMinutes(dayTime.end);
+      } else if ((availData.available_days ?? []).includes(day)) {
+        availStartMin = timeToMinutes((availData.available_start ?? '09:00:00').slice(0, 5));
+        availEndMin = timeToMinutes((availData.available_end ?? '18:00:00').slice(0, 5));
+      }
+    }
 
     const selectedPkg = lessonPackages.find(p => p.id === selectedPackageId);
     const dur = selectedPkg?.duration_minutes ?? (parseInt(lessonDuration) || 60);
@@ -390,7 +404,10 @@ export default function NewMemberScreen() {
           const le = timeToMinutes(l.end_time);
           return startMin < le && endMin > ls;
         });
-        slots.push({ time: timeStr, available: !hasConflict });
+        const outsideAvail = availStartMin !== null && availEndMin !== null
+          ? (startMin < availStartMin || endMin > availEndMin)
+          : false;
+        slots.push({ time: timeStr, available: !hasConflict && !outsideAvail });
       }
     }
     setSlotsData(slots);
