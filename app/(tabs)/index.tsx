@@ -107,14 +107,15 @@ export default function HomeScreen() {
     setAutoGenSuggestion(data.autoGenSuggestion);
   }
 
-  async function loadAll(targetDate?: string) {
+  async function loadAll(targetDate?: string, force = false) {
     const date = targetDate ?? today;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // 캐시가 fresh하고 날짜가 같으면 바로 반환 (중복 조회 방지)
+    // 캐시가 fresh하고 날짜가 같으면 바로 반환 (중복 조회 방지).
+    // 단, 당겨서 새로고침(force)이면 캐시를 건너뛰고 서버에서 다시 조회한다.
     const cached = getMemCache(user.id);
-    if (cached && isFresh(cached) && cached.today === date) {
+    if (!force && cached && isFresh(cached) && cached.today === date) {
       hydrateFromData(cached);
       return;
     }
@@ -467,8 +468,14 @@ export default function HomeScreen() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={async () => { setRefreshing(true); await loadAll(); setRefreshing(false); }}
+            onRefresh={async () => {
+              setRefreshing(true);
+              try { await loadAll(undefined, true); }
+              catch (e) { console.error('[홈] 새로고침 실패:', e); Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.'); }
+              finally { setRefreshing(false); }
+            }}
             tintColor="#C0755A"
+            colors={['#C0755A']}
           />
         }
       >

@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, ActivityIndicator, Platform, Animated, Modal, TextInput, KeyboardAvoidingView,
-  AppState, AppStateStatus,
+  AppState, AppStateStatus, RefreshControl,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
@@ -69,6 +69,7 @@ export default function AIAnalysisScreen() {
   const [uploadPct, setUploadPct] = useState(0);
   const [plans, setPlans] = useState<LessonPlan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [memberReports, setMemberReports] = useState<Record<string, any>>({});
   const [manualReports, setManualReports] = useState<any[]>([]);
   const [recordFilter, setRecordFilter] = useState<'all' | 'unsent' | 'sent'>('all');
@@ -259,12 +260,13 @@ export default function AIAnalysisScreen() {
   }
 
   async function loadPlans() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('lesson_plans')
       .select('*')
       .eq('member_id', memberId)
       .order('created_at', { ascending: false })
       .limit(10);
+    if (error) { console.error('[AI 레슨 기록] 조회 실패:', error); setLoading(false); return false; }
     setPlans(data ?? []);
     setLoading(false);
 
@@ -946,7 +948,26 @@ export default function AIAnalysisScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => {
+              setRefreshing(true);
+              try {
+                const ok = await loadPlans();
+                if (ok === false) Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.');
+              } catch (e) { console.error('[AI 레슨 기록] 새로고침 실패:', e); Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.'); }
+              finally { setRefreshing(false); }
+            }}
+            tintColor={Colors.primary}
+            colors={[Colors.primary]}
+          />
+        }
+      >
 
         {/* 녹음 시작 카드 */}
         <View style={styles.recordCard}>

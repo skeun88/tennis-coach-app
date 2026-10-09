@@ -110,11 +110,12 @@ export default function PaymentsScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { data: paymentsData } = await supabase
+    const { data: paymentsData, error: paymentsError } = await supabase
       .from('payments')
       .select('*, member:members(name, phone)')
       .eq('coach_id', user.id)
       .order('due_date', { ascending: false });
+    if (paymentsError) { console.error('[결제] 조회 실패:', paymentsError); return false; }
     setPayments(paymentsData ?? []);
 
     const { data: lowCredits } = await supabase
@@ -393,7 +394,14 @@ export default function PaymentsScreen() {
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: insets.bottom + 90 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadData(); setRefreshing(false); }} tintColor={TERRA} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => {
+          setRefreshing(true);
+          try {
+            const ok = await loadData();
+            if (ok === false) Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.');
+          } catch (e) { console.error('[결제] 새로고침 실패:', e); Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.'); }
+          finally { setRefreshing(false); }
+        }} tintColor={TERRA} colors={[TERRA]} />}
       >
         {/* Header */}
         <View style={[s.header, { paddingTop: insets.top + 12 }]}>

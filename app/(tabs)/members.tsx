@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, RefreshControl, ScrollView,
+  TextInput, RefreshControl, ScrollView, Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -43,7 +43,8 @@ export default function MembersScreen() {
     if (!user) return;
     let query = supabase.from('members').select('*').eq('coach_id', user.id).order('name');
     if (filter !== '전체') query = query.eq('is_active', true);
-    const { data: rawMembers } = await query;
+    const { data: rawMembers, error } = await query;
+    if (error) { console.error('[회원] 목록 조회 실패:', error); return false; }
     if (!rawMembers) { setMembers([]); return; }
 
     const { data: unreadData } = await supabase
@@ -193,8 +194,16 @@ export default function MembersScreen() {
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={async () => { setRefreshing(true); await loadMembers(); setRefreshing(false); }}
+            onRefresh={async () => {
+              setRefreshing(true);
+              try {
+                const ok = await loadMembers();
+                if (ok === false) Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.');
+              } catch (e) { console.error('[회원] 새로고침 실패:', e); Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.'); }
+              finally { setRefreshing(false); }
+            }}
             tintColor="#C0755A"
+            colors={['#C0755A']}
           />
         }
         ListEmptyComponent={

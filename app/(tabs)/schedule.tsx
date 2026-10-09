@@ -291,7 +291,8 @@ ${rejectMsg.trim()}`
   async function loadDayLessons(date: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data } = await supabase.from('lessons').select('*').eq('coach_id', user.id).eq('date', date).order('start_time');
+    const { data, error } = await supabase.from('lessons').select('*').eq('coach_id', user.id).eq('date', date).order('start_time');
+    if (error) { console.error('[스케줄/일] 조회 실패:', error); return false; }
     const withNames = await attachMemberNames(data ?? []);
     setLessons(withNames);
 
@@ -330,8 +331,9 @@ ${rejectMsg.trim()}`
   async function loadWeekLessons(wDates: string[]) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data } = await supabase.from('lessons').select('*').eq('coach_id', user.id)
+    const { data, error } = await supabase.from('lessons').select('*').eq('coach_id', user.id)
       .gte('date', wDates[0]).lte('date', wDates[6]).order('start_time');
+    if (error) { console.error('[스케줄/주] 조회 실패:', error); return false; }
     const withNames = await attachMemberNames(data ?? []);
     const map = new Map<string, LessonWithMembers[]>();
     for (const d of wDates) map.set(d, []);
@@ -364,8 +366,9 @@ ${rejectMsg.trim()}`
     const firstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`;
     const lastDay = new Date(year, month + 1, 0);
     const lastDayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`;
-    const { data } = await supabase.from('lessons').select('*')
+    const { data, error } = await supabase.from('lessons').select('*')
       .eq('coach_id', user.id).gte('date', firstDay).lte('date', lastDayStr).order('start_time');
+    if (error) { console.error('[스케줄/월] 조회 실패:', error); return false; }
     const withNames = await attachMemberNames(data ?? []);
     const map = new Map<string, LessonWithMembers[]>();
     for (const l of withNames) {
@@ -811,7 +814,14 @@ ${rejectMsg.trim()}`
     return (
       <ScrollView ref={dayScrollRef} style={{ flex: 1, backgroundColor: S_GRID_BG }} showsVerticalScrollIndicator={false}
         scrollEnabled={draggingId === null}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadDayLessons(selectedDate); setRefreshing(false); }} tintColor={Colors.navy} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => {
+          setRefreshing(true);
+          try {
+            const ok = await loadDayLessons(selectedDate);
+            if (ok === false) Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.');
+          } catch (e) { console.error('[스케줄/일] 새로고침 실패:', e); Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.'); }
+          finally { setRefreshing(false); }
+        }} tintColor={S_TERRA} colors={[S_TERRA]} />}
       >
         <View style={{ height: gridHeight + 20, position: 'relative' }}>
           {/* 현재 시간 표시선 (오늘만) */}
@@ -1016,8 +1026,15 @@ ${rejectMsg.trim()}`
           onScroll={(e) => { weekScrollYRef.current = e.nativeEvent.contentOffset.y; }}
           scrollEventThrottle={16}
           refreshControl={<RefreshControl refreshing={refreshing}
-            onRefresh={async () => { setRefreshing(true); await loadWeekLessons(displayDates); setRefreshing(false); }}
-            tintColor={S_TERRA} />}
+            onRefresh={async () => {
+              setRefreshing(true);
+              try {
+                const ok = await loadWeekLessons(displayDates);
+                if (ok === false) Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.');
+              } catch (e) { console.error('[스케줄/주] 새로고침 실패:', e); Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.'); }
+              finally { setRefreshing(false); }
+            }}
+            tintColor={S_TERRA} colors={[S_TERRA]} />}
         >
           <View style={{ height: gridHeight + 20, position: 'relative', flexDirection: 'row' }}>
             {/* 시간 라벨 컬럼 */}
@@ -1180,7 +1197,14 @@ ${rejectMsg.trim()}`
 
     return (
       <ScrollView style={{ flex: 1, backgroundColor: S_BG }} showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadMonthLessons(year, month); setRefreshing(false); }} tintColor={S_TERRA} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => {
+          setRefreshing(true);
+          try {
+            const ok = await loadMonthLessons(year, month);
+            if (ok === false) Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.');
+          } catch (e) { console.error('[스케줄/월] 새로고침 실패:', e); Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.'); }
+          finally { setRefreshing(false); }
+        }} tintColor={S_TERRA} colors={[S_TERRA]} />}
       >
         {/* 요일 헤더 */}
         <View style={styles.monthDayHeaders}>
