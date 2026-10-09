@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Alert, RefreshControl, Modal, TextInput, ActivityIndicator,
+  Alert, Modal, TextInput, ActivityIndicator,
   Image, Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +18,7 @@ import { useSubscription } from '../../hooks/useSubscription';
 import { PLANS } from '../../lib/subscription';
 import { Colors, Radius, Shadow } from '../../lib/theme';
 import CoachQRModal from '../../components/CoachQRModal';
+import TerracottaRefreshControl from '../../components/TerracottaRefreshControl';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SPORTS = ['테니스', '배드민턴', '스쿼시', '탁구', '골프', '기타'];
@@ -422,10 +423,9 @@ export default function ProfileScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
+          <TerracottaRefreshControl
             refreshing={refreshing}
             onRefresh={async () => { setRefreshing(true); await loadProfile(); setRefreshing(false); }}
-            tintColor={TERRA}
           />
         }
       >

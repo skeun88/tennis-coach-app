@@ -391,7 +391,7 @@ export default function PaymentsScreen() {
   const monthNum = parseInt(selectedMonth.split('-')[1]);
 
   return (
-    <View style={s.container}>
+    <View style={[s.container, { paddingTop: insets.top }]}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: insets.bottom + 90 }}
@@ -405,7 +405,7 @@ export default function PaymentsScreen() {
         }} />}
       >
         {/* Header */}
-        <View style={[s.header, { paddingTop: insets.top + 12 }]}>
+        <View style={[s.header, { paddingTop: 12 }]}>
           <Text style={s.headerTitle}>결제</Text>
           <Text style={s.headerSubtitle}>레슨비 매출을 한눈에 확인하세요</Text>
         </View>

@@ -462,7 +462,7 @@ export default function HomeScreen() {
   }
 
   return (
-    <View style={styles.screenWrapper}>
+    <View style={[styles.screenWrapper, { paddingTop: insets.top }]}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={{ paddingBottom: 120 }}
@@ -479,7 +479,7 @@ export default function HomeScreen() {
         }
       >
         {/* ── 헤더 ── */}
-        <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+        <View style={[styles.header, { paddingTop: 16 }]}>
           <View>
             <Text style={styles.headerDate}>
               {new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}
