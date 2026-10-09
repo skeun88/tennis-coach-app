@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, ActivityIndicator, Platform, Animated, Modal, TextInput, KeyboardAvoidingView,
-  AppState, AppStateStatus, RefreshControl,
+  AppState, AppStateStatus,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
@@ -13,6 +13,7 @@ import { supabase } from '../../lib/supabase';
 import { notifyMemberReport } from '../../lib/notifications';
 import { LessonPlan, DrillSuggestion } from '../../types';
 import { Colors } from '../../lib/theme';
+import TerracottaRefreshControl from '../../components/TerracottaRefreshControl';
 import { useSubscription } from '../../hooks/useSubscription';
 import { checkAiAnalysisLimit, incrementAiAnalysisUsage } from '../../lib/subscription';
 import PlanUpsellModal, { UpsellContext } from '../../components/PlanUpsellModal';
@@ -953,7 +954,7 @@ export default function AIAnalysisScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
+          <TerracottaRefreshControl
             refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
@@ -963,8 +964,6 @@ export default function AIAnalysisScreen() {
               } catch (e) { console.error('[AI 레슨 기록] 새로고침 실패:', e); Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.'); }
               finally { setRefreshing(false); }
             }}
-            tintColor={Colors.primary}
-            colors={[Colors.primary]}
           />
         }
       >

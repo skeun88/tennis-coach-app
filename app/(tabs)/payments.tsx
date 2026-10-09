@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, Modal, FlatList, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { Payment, PaymentStatus } from '../../types';
 import { Colors, Radius } from '../../lib/theme';
+import TerracottaRefreshControl from '../../components/TerracottaRefreshControl';
 
 const TERRA = '#C0755A';
 const DARK_BROWN = '#3E2B22';
@@ -394,14 +395,14 @@ export default function PaymentsScreen() {
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: insets.bottom + 90 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => {
+        refreshControl={<TerracottaRefreshControl refreshing={refreshing} onRefresh={async () => {
           setRefreshing(true);
           try {
             const ok = await loadData();
             if (ok === false) Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.');
           } catch (e) { console.error('[결제] 새로고침 실패:', e); Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.'); }
           finally { setRefreshing(false); }
-        }} tintColor={TERRA} colors={[TERRA]} />}
+        }} />}
       >
         {/* Header */}
         <View style={[s.header, { paddingTop: insets.top + 12 }]}>

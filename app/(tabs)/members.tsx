@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, RefreshControl, ScrollView, Alert,
+  TextInput, ScrollView, Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { Member, MemberLevel } from '../../types';
 import { Colors } from '../../lib/theme';
+import TerracottaRefreshControl from '../../components/TerracottaRefreshControl';
 
 interface MemberWithUnread extends Member {
   unread_count?: number;
@@ -192,7 +193,7 @@ export default function MembersScreen() {
         keyExtractor={item => item.id}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl
+          <TerracottaRefreshControl
             refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
@@ -202,8 +203,6 @@ export default function MembersScreen() {
               } catch (e) { console.error('[회원] 새로고침 실패:', e); Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.'); }
               finally { setRefreshing(false); }
             }}
-            tintColor="#C0755A"
-            colors={['#C0755A']}
           />
         }
         ListEmptyComponent={

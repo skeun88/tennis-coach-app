@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Pressable, ScrollView, FlatList,
-  RefreshControl, Alert, Modal, TextInput, ActivityIndicator,
+  Alert, Modal, TextInput, ActivityIndicator,
   PanResponder, Animated, Dimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -12,6 +12,7 @@ import { supabase } from '../../lib/supabase';
 import * as Notifications from 'expo-notifications';
 import { Lesson } from '../../types';
 import { Colors, Radius } from '../../lib/theme';
+import TerracottaRefreshControl from '../../components/TerracottaRefreshControl';
 
 type ViewTab = '일일' | '주간' | '월간';
 
@@ -814,14 +815,14 @@ ${rejectMsg.trim()}`
     return (
       <ScrollView ref={dayScrollRef} style={{ flex: 1, backgroundColor: S_GRID_BG }} showsVerticalScrollIndicator={false}
         scrollEnabled={draggingId === null}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => {
+        refreshControl={<TerracottaRefreshControl refreshing={refreshing} onRefresh={async () => {
           setRefreshing(true);
           try {
             const ok = await loadDayLessons(selectedDate);
             if (ok === false) Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.');
           } catch (e) { console.error('[스케줄/일] 새로고침 실패:', e); Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.'); }
           finally { setRefreshing(false); }
-        }} tintColor={S_TERRA} colors={[S_TERRA]} />}
+        }} />}
       >
         <View style={{ height: gridHeight + 20, position: 'relative' }}>
           {/* 현재 시간 표시선 (오늘만) */}
@@ -1025,7 +1026,7 @@ ${rejectMsg.trim()}`
           scrollEnabled={weekDraggingId === null}
           onScroll={(e) => { weekScrollYRef.current = e.nativeEvent.contentOffset.y; }}
           scrollEventThrottle={16}
-          refreshControl={<RefreshControl refreshing={refreshing}
+          refreshControl={<TerracottaRefreshControl refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
               try {
@@ -1034,7 +1035,7 @@ ${rejectMsg.trim()}`
               } catch (e) { console.error('[스케줄/주] 새로고침 실패:', e); Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.'); }
               finally { setRefreshing(false); }
             }}
-            tintColor={S_TERRA} colors={[S_TERRA]} />}
+          />}
         >
           <View style={{ height: gridHeight + 20, position: 'relative', flexDirection: 'row' }}>
             {/* 시간 라벨 컬럼 */}
@@ -1197,14 +1198,14 @@ ${rejectMsg.trim()}`
 
     return (
       <ScrollView style={{ flex: 1, backgroundColor: S_BG }} showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => {
+        refreshControl={<TerracottaRefreshControl refreshing={refreshing} onRefresh={async () => {
           setRefreshing(true);
           try {
             const ok = await loadMonthLessons(year, month);
             if (ok === false) Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.');
           } catch (e) { console.error('[스케줄/월] 새로고침 실패:', e); Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.'); }
           finally { setRefreshing(false); }
-        }} tintColor={S_TERRA} colors={[S_TERRA]} />}
+        }} />}
       >
         {/* 요일 헤더 */}
         <View style={styles.monthDayHeaders}>

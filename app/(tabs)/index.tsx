@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity,
-  Alert, RefreshControl, ActivityIndicator, Modal, AppState,
+  Alert, ActivityIndicator, Modal, AppState,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Colors, Radius, Shadow } from '../../lib/theme';
+import TerracottaRefreshControl from '../../components/TerracottaRefreshControl';
 import { useSubscription } from '../../hooks/useSubscription';
 import { notifyMemberAbsent, notifyReregister, notifyLessonCountUpdate } from '../../lib/notifications';
 import PlanUpsellModal from "../../components/PlanUpsellModal";
@@ -466,7 +467,7 @@ export default function HomeScreen() {
         style={styles.container}
         contentContainerStyle={{ paddingBottom: 120 }}
         refreshControl={
-          <RefreshControl
+          <TerracottaRefreshControl
             refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
@@ -474,8 +475,6 @@ export default function HomeScreen() {
               catch (e) { console.error('[홈] 새로고침 실패:', e); Alert.alert('새로고침 실패', '네트워크 상태를 확인하고 다시 시도해 주세요.'); }
               finally { setRefreshing(false); }
             }}
-            tintColor="#C0755A"
-            colors={['#C0755A']}
           />
         }
       >
