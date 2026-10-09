@@ -251,10 +251,10 @@ export default function RootLayout() {
       <Stack.Screen name="members/new" options={{ headerShown: false }} />
       <Stack.Screen name="lessons/[id]" options={{ headerShown: true, title: '레슨 상세', headerBackTitle: '뒤로' }} />
       <Stack.Screen name="lessons/new" options={{ headerShown: false }} />
-      <Stack.Screen name="lesson-packages/index" options={{ headerShown: true, title: '레슨권 관리', headerBackTitle: '뒤로' }} />
+      <Stack.Screen name="lesson-packages/index" options={{ headerShown: false }} />
       <Stack.Screen name="lesson-packages/new" options={{ headerShown: true, title: '레슨권 등록', headerBackTitle: '뒤로' }} />
       <Stack.Screen name="members/ai-analysis" options={{ headerShown: false }} />
-      <Stack.Screen name="settings/index" options={{ headerShown: true, title: '설정', headerBackTitle: '뒤로' }} />
+      <Stack.Screen name="settings/index" options={{ headerShown: false }} />
       <Stack.Screen name="settings/notifications" options={{ headerShown: false }} />
       <Stack.Screen name="settings/availability" options={{ headerShown: false }} />
       <Stack.Screen name="subscription" options={{ headerShown: false }} />

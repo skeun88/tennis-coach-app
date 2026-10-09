@@ -9,6 +9,7 @@ import { useSubscription } from '../../hooks/useSubscription';
 import { PLANS } from '../../lib/subscription';
 import { supabase } from '../../lib/supabase';
 import { Colors, Radius } from '../../lib/theme';
+import SettingsHeader from '../../components/SettingsHeader';
 
 const TERRA = '#C0755A';
 const DARK = '#3E2B22';
@@ -118,7 +119,9 @@ export default function SettingsScreen() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <View style={styles.container}>
+      <SettingsHeader title="설정" />
+      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
 
       {/* ── 계정 및 프로필 ── */}
       <SectionHeader title="계정 및 프로필" />
@@ -182,11 +185,13 @@ export default function SettingsScreen() {
       </TouchableOpacity>
 
       <View style={{ height: 40 }} />
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#F7F0E9' },
   screen: { flex: 1, backgroundColor: '#F7F0E9' },
   content: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20 },
 

@@ -8,6 +8,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Colors } from '../../lib/theme';
+import SettingsHeader from '../../components/SettingsHeader';
 
 const DAYS_KR = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -119,6 +120,7 @@ export default function LessonPackagesScreen() {
 
   return (
     <View style={styles.container}>
+      <SettingsHeader title="레슨권 관리" />
       <FlatList
         data={packages}
         keyExtractor={item => item.id}
