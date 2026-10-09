@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Image, Animated, Easing, StyleSheet, StatusBar, TouchableOpacity } from 'react-native';
+import { View, Text, Animated, Easing, StyleSheet, StatusBar, useWindowDimensions, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const CREAM = '#F7F0E9';
 const TERRA = '#C0755A';
@@ -9,23 +10,14 @@ const HINT_DELAY_MS = 3000;
 const SPINNER_SIZE = 26;
 const SPINNER_STROKE = 2.5;
 
-// 네이티브 스플래시(expo-splash-screen)와 반드시 동일하게 유지할 것.
-// app.json의 "imageWidth"와 아래 WORDMARK_WIDTH가 같아야 네이티브→React 전환 시
-// 워드마크가 움직이지 않는다. 에셋 실제 비율 2663x726.
-const WORDMARK = require('../assets/kerri-wordmark.png');
-const WORDMARK_WIDTH = 240; // == app.json expo-splash-screen imageWidth
-const WORDMARK_ASPECT = 2663 / 726;
-const WORDMARK_HEIGHT = WORDMARK_WIDTH / WORDMARK_ASPECT;
-// 워드마크는 화면 정중앙(네이티브와 동일). 스피너/힌트는 그 아래에 절대배치해
-// 워드마크 위치를 밀어올리지 않는다.
-const BELOW_OFFSET = WORDMARK_HEIGHT / 2 + 44;
-
 interface Props {
   retry?: boolean;
   onRetry?: () => void;
 }
 
 export default function BrandLoadingScreen({ retry, onRetry }: Props) {
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const [showHint, setShowHint] = useState(false);
 
@@ -54,36 +46,31 @@ export default function BrandLoadingScreen({ retry, onRetry }: Props) {
   });
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 20) }]}>
       <StatusBar barStyle="dark-content" backgroundColor={CREAM} />
 
-      {/* 워드마크: 화면 정중앙 (네이티브 스플래시와 동일 위치/크기) */}
-      <View style={styles.centerFill} pointerEvents="none">
-        <Image
-          source={WORDMARK}
-          style={{ width: WORDMARK_WIDTH, height: WORDMARK_HEIGHT }}
-          resizeMode="contain"
-          fadeDuration={0}
-        />
-      </View>
+      <View style={styles.center}>
+        <Text
+          style={[styles.wordmark, { width: width * 0.81 }]}
+          adjustsFontSizeToFit
+          numberOfLines={1}
+        >
+          KERRI
+        </Text>
 
-      {/* 스피너 + 힌트: 워드마크 아래에 절대배치 */}
-      <View style={styles.centerFill} pointerEvents="box-none">
-        <View style={{ transform: [{ translateY: BELOW_OFFSET }], alignItems: 'center' }}>
-          <View style={styles.spinnerContainer}>
-            <View style={styles.spinnerTrack} />
-            <Animated.View style={[styles.spinnerArc, { transform: [{ rotate }] }]} />
-          </View>
+        <View style={styles.spinnerContainer}>
+          <View style={styles.spinnerTrack} />
+          <Animated.View style={[styles.spinnerArc, { transform: [{ rotate }] }]} />
+        </View>
 
-          <View style={styles.hintReserved}>
-            {retry ? (
-              <TouchableOpacity onPress={onRetry} style={styles.retryButton}>
-                <Text style={styles.retryText}>재시도</Text>
-              </TouchableOpacity>
-            ) : showHint ? (
-              <Text style={styles.hint}>잠시만 기다려 주세요</Text>
-            ) : null}
-          </View>
+        <View style={styles.hintReserved}>
+          {retry ? (
+            <TouchableOpacity onPress={onRetry} style={styles.retryButton}>
+              <Text style={styles.retryText}>재시도</Text>
+            </TouchableOpacity>
+          ) : showHint ? (
+            <Text style={styles.hint}>잠시만 기다려 주세요</Text>
+          ) : null}
         </View>
       </View>
     </View>
@@ -94,15 +81,23 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: CREAM,
-  },
-  centerFill: {
-    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  center: {
+    alignItems: 'center',
+  },
+  wordmark: {
+    fontSize: 180,
+    fontWeight: '900',
+    color: TERRA,
+    letterSpacing: -2,
+    textAlign: 'center',
   },
   spinnerContainer: {
     width: SPINNER_SIZE,
     height: SPINNER_SIZE,
+    marginTop: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
