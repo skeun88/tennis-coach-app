@@ -50,7 +50,10 @@ export default function PlanDetailScreen() {
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
   function animateEditTransition(_toEditing: boolean, callback?: () => void) {
-    callback?.();
+    Animated.timing(fadeAnim, { toValue: 0, duration: 120, useNativeDriver: true }).start(() => {
+      callback?.();
+      Animated.timing(fadeAnim, { toValue: 1, duration: 150, useNativeDriver: true }).start();
+    });
   }
 
   const hasUnsavedChanges = editingSection === 'drill_suggestions'
@@ -366,6 +369,7 @@ export default function PlanDetailScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
+        <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
         <ScrollView
           style={s.scroll}
           contentContainerStyle={s.scrollContent}
@@ -672,6 +676,7 @@ export default function PlanDetailScreen() {
 
           <View style={{ height: editingSection ? 20 : 100 }} />
         </ScrollView>
+        </Animated.View>
 
         {/* 편집 중 키보드 위 액션바 */}
         {editingSection && (
