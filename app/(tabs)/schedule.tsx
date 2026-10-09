@@ -181,7 +181,7 @@ export default function ScheduleScreen() {
   const [weekDragTargetMin, setWeekDragTargetMin] = useState(0);
   const [weekDragTargetColIdx, setWeekDragTargetColIdx] = useState(-1);
   const [weekAttendanceMap, setWeekAttendanceMap] = useState<Map<string, 'scheduled' | 'completed' | 'absent'>>(new Map());
-  const [availability, setAvailability] = useState<{ days: number[]; start: string; end: string } | null>(null);
+  const [availability, setAvailability] = useState<{ days: number[]; start: string; end: string; times?: Record<number, { start: string; end: string }> } | null>(null);
   const dayScrollRef = useRef<any>(null);
   const weekScrollYRef = useRef(0);
   const weekAutoScrollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -215,11 +215,18 @@ export default function ScheduleScreen() {
     if (!user) return;
     const { data } = await supabase.from('coach_availability').select('*').eq('coach_id', user.id).maybeSingle();
     if (data) {
-      setAvailability({
-        days: data.available_days ?? [],
-        start: (data.available_start ?? '09:00').slice(0, 5),
-        end: (data.available_end ?? '18:00').slice(0, 5),
-      });
+      const times = (data as any).available_times as Record<number, { start: string; end: string }> | null | undefined;
+      if (times && Object.keys(times).length > 0) {
+        const days = Object.keys(times).map(Number);
+        const firstDay = times[days[0]];
+        setAvailability({ days, start: firstDay.start, end: firstDay.end, times });
+      } else {
+        setAvailability({
+          days: data.available_days ?? [],
+          start: (data.available_start ?? '09:00').slice(0, 5),
+          end: (data.available_end ?? '18:00').slice(0, 5),
+        });
+      }
     }
   }
 
@@ -845,8 +852,9 @@ ${rejectMsg.trim()}`
           {availability && (() => {
             const dow = new Date(selectedDate + 'T12:00:00+09:00').getDay();
             if (!availability.days.includes(dow)) return null;
-            const startMin = timeToMinutes(availability.start);
-            const endMin = timeToMinutes(availability.end);
+            const dayTime = availability.times?.[dow] ?? { start: availability.start, end: availability.end };
+            const startMin = timeToMinutes(dayTime.start);
+            const endMin = timeToMinutes(dayTime.end);
             const top = Math.max(0, (startMin - START_HOUR * 60) / 60 * HOUR_HEIGHT);
             const height = (endMin - startMin) / 60 * HOUR_HEIGHT;
             return (
@@ -1060,8 +1068,9 @@ ${rejectMsg.trim()}`
                   {availability && (() => {
                     const dow = new Date(date + 'T12:00:00+09:00').getDay();
                     if (!availability.days.includes(dow)) return null;
-                    const startMin = timeToMinutes(availability.start);
-                    const endMin = timeToMinutes(availability.end);
+                    const dayTime = availability.times?.[dow] ?? { start: availability.start, end: availability.end };
+                    const startMin = timeToMinutes(dayTime.start);
+                    const endMin = timeToMinutes(dayTime.end);
                     const top = Math.max(0, (startMin - START_HOUR * 60) / 60 * HOUR_HEIGHT);
                     const height = (endMin - startMin) / 60 * HOUR_HEIGHT;
                     return (
