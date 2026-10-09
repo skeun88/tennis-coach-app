@@ -8,16 +8,11 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#F7F0E9"
-    },
     "privacyPolicyUrl": "https://skeun88.github.io/tennis-coach-app/privacy-policy.html",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.kerri.tenniscoach",
-      "buildNumber": "20",
+      "buildNumber": "21",
       "icon": "./assets/icon.png",
       "infoPlist": {
         "CFBundleDisplayName": "Kerri",
@@ -81,7 +76,15 @@
       ],
       "expo-font",
       "expo-asset",
-      "expo-splash-screen",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F7F0E9",
+          "image": "./assets/kerri-wordmark.png",
+          "imageWidth": 240,
+          "resizeMode": "contain"
+        }
+      ],
       "expo-web-browser",
       [
         "@react-native-seoul/naver-login",
