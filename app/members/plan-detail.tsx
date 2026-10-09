@@ -50,10 +50,9 @@ export default function PlanDetailScreen() {
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
   function animateEditTransition(_toEditing: boolean, callback?: () => void) {
-    Animated.timing(fadeAnim, { toValue: 0, duration: 120, useNativeDriver: true }).start(() => {
-      callback?.();
-      Animated.timing(fadeAnim, { toValue: 1, duration: 150, useNativeDriver: true }).start();
-    });
+    callback?.();
+    fadeAnim.setValue(0.82);
+    Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
   }
 
   const hasUnsavedChanges = editingSection === 'drill_suggestions'
