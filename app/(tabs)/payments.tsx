@@ -11,6 +11,7 @@ import { supabase } from '../../lib/supabase';
 import { Payment, PaymentStatus } from '../../types';
 import { Colors, Radius } from '../../lib/theme';
 import TerracottaRefreshControl from '../../components/TerracottaRefreshControl';
+import SkeletonBox from '../../components/SkeletonBox';
 import { FLOATING_TAB_BAR_SPACE } from '../../components/GlassTabBar';
 
 const TERRA = '#C0755A';
@@ -89,6 +90,8 @@ export default function PaymentsScreen() {
   const [filter, setFilter] = useState<FilterTab>('미납');
   const [selectedMonth, setSelectedMonth] = useState(() => getMonthKey(new Date()));
   const [actionMembers, setActionMembers] = useState<ActionMember[]>([]);
+  const [initialLoaded, setInitialLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   const [payModal, setPayModal] = useState(false);
   const [payTarget, setPayTarget] = useState<ActionMember | null>(null);
@@ -111,13 +114,17 @@ export default function PaymentsScreen() {
   async function loadData() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+    const currentUserId = user.id;
 
     const { data: paymentsData, error: paymentsError } = await supabase
       .from('payments')
       .select('*, member:members(name, phone)')
       .eq('coach_id', user.id)
       .order('due_date', { ascending: false });
-    if (paymentsError) { console.error('[결제] 조회 실패:', paymentsError); return false; }
+    if (paymentsError) { console.error('[결제] 조회 실패:', paymentsError); if (!initialLoaded) setLoadError(true); return false; }
+    // fetch 완료 후 로그아웃 등으로 user가 바뀌었으면 버림
+    const { data: { user: nowUser } } = await supabase.auth.getUser();
+    if (nowUser?.id !== currentUserId) return;
     setPayments(paymentsData ?? []);
 
     const { data: lowCredits } = await supabase
@@ -159,9 +166,23 @@ export default function PaymentsScreen() {
       }
     }
     setActionMembers(combined);
+    setInitialLoaded(true);
+    setLoadError(false);
   }
 
   useFocusEffect(useCallback(() => { loadData(); }, []));
+
+  useEffect(() => {
+    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setInitialLoaded(false);
+        setLoadError(false);
+        setPayments([]);
+        setActionMembers([]);
+      }
+    });
+    return () => authSub.unsubscribe();
+  }, []);
 
   function prevMonth() {
     const [y, m] = selectedMonth.split('-').map(Number);
@@ -390,6 +411,46 @@ export default function PaymentsScreen() {
   }
 
   const monthNum = parseInt(selectedMonth.split('-')[1]);
+
+  if (!initialLoaded) {
+    return (
+      <View style={[s.container, { paddingTop: insets.top }]}>
+        <View style={[s.header, { paddingTop: 12 }]}>
+          <SkeletonBox width={80} height={28} borderRadius={8} />
+        </View>
+        {loadError ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Text style={{ fontSize: 15, color: '#8B7355', fontWeight: '500' }}>정보를 불러오지 못했어요</Text>
+            <TouchableOpacity
+              style={{ backgroundColor: '#C0755A', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 }}
+              onPress={() => { setLoadError(false); loadData(); }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>다시 시도</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={{ paddingHorizontal: 16, gap: 14 }}>
+            {/* 상단 요약 금액 영역 스켈레톤 */}
+            <SkeletonBox width="100%" height={80} borderRadius={16} />
+            {/* 결제 목록 행 4개 스켈레톤 */}
+            {[0, 1, 2, 3].map(i => (
+              <View key={i} style={{ backgroundColor: '#fff', borderRadius: 14, padding: 14, gap: 10, borderWidth: 1, borderColor: '#EDE0D4' }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <SkeletonBox width={80} height={16} borderRadius={6} />
+                  <SkeletonBox width={70} height={16} borderRadius={6} />
+                </View>
+                <SkeletonBox width="60%" height={13} borderRadius={6} />
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  <SkeletonBox width={50} height={20} borderRadius={8} />
+                  <SkeletonBox width={50} height={20} borderRadius={8} />
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    );
+  }
 
   return (
     <View style={[s.container, { paddingTop: insets.top }]}>

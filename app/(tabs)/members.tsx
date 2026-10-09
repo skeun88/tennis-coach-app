@@ -11,6 +11,7 @@ import { supabase } from '../../lib/supabase';
 import { Member, MemberLevel } from '../../types';
 import { Colors } from '../../lib/theme';
 import TerracottaRefreshControl from '../../components/TerracottaRefreshControl';
+import SkeletonBox from '../../components/SkeletonBox';
 import { FLOATING_TAB_BAR_SPACE } from '../../components/GlassTabBar';
 
 interface MemberWithUnread extends Member {
@@ -39,15 +40,21 @@ export default function MembersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterType>('활성');
   const [packageCount, setPackageCount] = useState(0);
+  const [initialLoaded, setInitialLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   async function loadMembers() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+    const currentUserId = user.id;
     let query = supabase.from('members').select('*').eq('coach_id', user.id).order('name');
     if (filter !== '전체') query = query.eq('is_active', true);
     const { data: rawMembers, error } = await query;
-    if (error) { console.error('[회원] 목록 조회 실패:', error); return false; }
-    if (!rawMembers) { setMembers([]); return; }
+    if (error) { console.error('[회원] 목록 조회 실패:', error); if (!initialLoaded) setLoadError(true); return false; }
+    if (!rawMembers) { setMembers([]); setInitialLoaded(true); return; }
+    // fetch 완료 후 로그아웃 등으로 user가 바뀌었으면 버림
+    const { data: { user: nowUser } } = await supabase.auth.getUser();
+    if (nowUser?.id !== currentUserId) return;
 
     const { data: unreadData } = await supabase
       .from('messages')
@@ -88,6 +95,8 @@ export default function MembersScreen() {
     });
 
     setMembers(enriched);
+    setInitialLoaded(true);
+    setLoadError(false);
   }
 
   async function loadPackageCount() {
@@ -107,6 +116,17 @@ export default function MembersScreen() {
   }, [filter]));
 
   useEffect(() => {
+    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setInitialLoaded(false);
+        setLoadError(false);
+        setMembers([]);
+      }
+    });
+    return () => authSub.unsubscribe();
+  }, []);
+
+  useEffect(() => {
     const q = search.toLowerCase();
     let base = members;
     if (filter === '체험') base = members.filter(m => (m as any).is_trial);
@@ -114,6 +134,57 @@ export default function MembersScreen() {
     else if (filter === '만료예정') base = members.filter(m => !(m as any).is_trial && (m.remaining_credits ?? 0) > 0 && (m.remaining_credits ?? 0) <= 2);
     setFiltered(q ? base.filter(m => m.name.toLowerCase().includes(q) || m.phone.includes(q)) : base);
   }, [search, members, filter]);
+
+  if (!initialLoaded) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <View style={styles.header}>
+          <View>
+            <SkeletonBox width={80} height={28} borderRadius={8} style={{ marginBottom: 6 }} />
+            <SkeletonBox width={60} height={14} borderRadius={6} />
+          </View>
+        </View>
+        {loadError ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Text style={{ fontSize: 15, color: '#8B7355', fontWeight: '500' }}>정보를 불러오지 못했어요</Text>
+            <TouchableOpacity
+              style={{ backgroundColor: '#C0755A', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 }}
+              onPress={() => { setLoadError(false); loadMembers(); }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>다시 시도</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={{ paddingHorizontal: 16, gap: 0 }}>
+            {/* 회원 행 5개 스켈레톤 */}
+            {[0, 1, 2, 3, 4].map(i => (
+              <View
+                key={i}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
+                  paddingHorizontal: 16, paddingVertical: 14, minHeight: 76,
+                  borderTopLeftRadius: i === 0 ? 20 : 0,
+                  borderTopRightRadius: i === 0 ? 20 : 0,
+                  borderBottomLeftRadius: i === 4 ? 20 : 0,
+                  borderBottomRightRadius: i === 4 ? 20 : 0,
+                  borderBottomWidth: i < 4 ? 1 : 0, borderBottomColor: '#EDE0D4',
+                }}
+              >
+                <SkeletonBox width={44} height={44} borderRadius={22} style={{ marginRight: 12 }} />
+                <View style={{ flex: 1, gap: 8 }}>
+                  <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                    <SkeletonBox width={80} height={16} borderRadius={6} />
+                    <SkeletonBox width={36} height={20} borderRadius={6} />
+                  </View>
+                  <SkeletonBox width={100} height={13} borderRadius={6} />
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>

@@ -13,6 +13,7 @@ import * as Notifications from 'expo-notifications';
 import { Lesson } from '../../types';
 import { Colors, Radius } from '../../lib/theme';
 import TerracottaRefreshControl from '../../components/TerracottaRefreshControl';
+import SkeletonBox from '../../components/SkeletonBox';
 import { FLOATING_TAB_BAR_SPACE } from '../../components/GlassTabBar';
 
 type ViewTab = '일일' | '주간' | '월간';
@@ -115,6 +116,7 @@ export default function ScheduleScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<ViewTab>('주간');
+  const [initialLoaded, setInitialLoaded] = useState(false);
   const [lessons, setLessons] = useState<LessonWithMembers[]>([]);
   const [weekData, setWeekData] = useState<WeekLesson[]>([]);
   const [monthLessons, setMonthLessons] = useState<Map<string, LessonWithMembers[]>>(new Map());
@@ -323,6 +325,7 @@ ${rejectMsg.trim()}`
       setAttendanceMap(new Map());
     }
 
+    setInitialLoaded(true);
     // 오늘이면 현재 시간으로 스크롤, 다른 날이면 첫 레슨으로 스크롤
     const todayStr = toKSTDateStr(new Date());
     if (date === todayStr) {
@@ -366,6 +369,8 @@ ${rejectMsg.trim()}`
     } else {
       setWeekAttendanceMap(new Map());
     }
+
+    setInitialLoaded(true);
   }
 
 
@@ -399,6 +404,7 @@ ${rejectMsg.trim()}`
     const { data: activeMembers } = await supabase
       .from('members').select('id').eq('coach_id', user.id).eq('is_active', true);
     setActiveMemberIds(new Set((activeMembers ?? []).map((m: any) => m.id)));
+    setInitialLoaded(true);
   }
 
   // 알림 응답 리스너 (출석 체크 확인 팝업)
@@ -494,6 +500,19 @@ ${rejectMsg.trim()}`
     }, 15000);
     return () => clearInterval(pollInterval);
   }, [activeTab]));
+
+  // 로그아웃/계정 변경 시 상태 초기화
+  useEffect(() => {
+    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setInitialLoaded(false);
+        setLessons([]);
+        setWeekData([]);
+        setMonthLessons(new Map());
+      }
+    });
+    return () => authSub.unsubscribe();
+  }, []);
 
   // lesson_requests Realtime 구독 - 새 예약 요청 즉시 감지
   useEffect(() => {
@@ -1305,6 +1324,28 @@ ${rejectMsg.trim()}`
         })()}
         <View style={{ height: 100 }} />
       </ScrollView>
+    );
+  }
+
+  if (!initialLoaded) {
+    return (
+      <View style={[styles.container, { backgroundColor: S_BG }]}>
+        <View style={[styles.unifiedHeader, { paddingTop: insets.top + 8 }]}>
+          <View style={styles.unifiedTitleRow}>
+            <SkeletonBox width={80} height={28} borderRadius={8} />
+          </View>
+          {/* 탭 세그먼트 스켈레톤 */}
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+            <SkeletonBox width={60} height={32} borderRadius={16} />
+            <SkeletonBox width={60} height={32} borderRadius={16} />
+            <SkeletonBox width={60} height={32} borderRadius={16} />
+          </View>
+        </View>
+        {/* 그리드 위에 ActivityIndicator 오버레이 */}
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color={S_TERRA} />
+        </View>
+      </View>
     );
   }
 

@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Colors, Radius, Shadow } from '../../lib/theme';
 import TerracottaRefreshControl from '../../components/TerracottaRefreshControl';
+import SkeletonBox from '../../components/SkeletonBox';
 import { FLOATING_TAB_BAR_SPACE } from '../../components/GlassTabBar';
 import { useSubscription } from '../../hooks/useSubscription';
 import { notifyMemberAbsent, notifyReregister, notifyLessonCountUpdate } from '../../lib/notifications';
@@ -68,6 +69,8 @@ export default function HomeScreen() {
 
   // today를 state로 관리: 한국 시간(KST) 기준, 자정이 지나면 자동 갱신
   const [today, setToday] = useState(() => getKSTDateString());
+  const [initialLoaded, setInitialLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   // 미납/만료 모달 상태
   const [unpaidModal, setUnpaidModal] = useState(false);
@@ -113,12 +116,15 @@ export default function HomeScreen() {
     const date = targetDate ?? today;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+    const currentUserId = user.id;
 
     // 캐시가 fresh하고 날짜가 같으면 바로 반환 (중복 조회 방지).
     // 단, 당겨서 새로고침(force)이면 캐시를 건너뛰고 서버에서 다시 조회한다.
     const cached = getMemCache(user.id);
     if (!force && cached && isFresh(cached) && cached.today === date) {
       hydrateFromData(cached);
+      setInitialLoaded(true);
+      setLoadError(false);
       return;
     }
 
@@ -135,9 +141,19 @@ export default function HomeScreen() {
       if ((pkgCount ?? 0) === 0) setNoPackageModal(true);
     }
 
-    const data = await fetchHomeData(user.id, user.email ?? '', date);
-    await persistHomeData(user.id, data);
-    hydrateFromData(data);
+    try {
+      const data = await fetchHomeData(user.id, user.email ?? '', date);
+      // fetch 완료 후 로그아웃 등으로 user가 바뀌었으면 버림
+      const { data: { user: nowUser } } = await supabase.auth.getUser();
+      if (nowUser?.id !== currentUserId) return;
+      await persistHomeData(user.id, data);
+      hydrateFromData(data);
+      setInitialLoaded(true);
+      setLoadError(false);
+    } catch (e) {
+      console.error('[홈] 데이터 로드 실패:', e);
+      if (!initialLoaded) setLoadError(true);
+    }
   }
 
   async function loadTodayCards(uid: string, targetDate?: string) {
@@ -260,6 +276,22 @@ export default function HomeScreen() {
     setShowChatHint(false);
     AsyncStorage.setItem('chat_hint_dismissed', '1');
   }
+
+  // 로그아웃/계정 변경 시 상태 초기화
+  useEffect(() => {
+    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setInitialLoaded(false);
+        setLoadError(false);
+        setStats({ totalMembers: 0, todayLessons: 0, unpaidMembers: 0, expiringMembers: 0 });
+        setTodayCards([]);
+        setChurnRiskList([]);
+        setTrialMembers([]);
+        setInterestList([]);
+      }
+    });
+    return () => authSub.unsubscribe();
+  }, []);
 
   // Realtime: lessons/members 변경 시 홈 즉시 갱신 (새 회원 등록 등)
   useEffect(() => {
@@ -460,6 +492,57 @@ export default function HomeScreen() {
     }
     const next = unprocessedToday[0];
     return `다음 레슨 ${next.startTime.slice(0, 5)} · ${next.memberName}`;
+  }
+
+  if (!initialLoaded) {
+    return (
+      <View style={[styles.screenWrapper, { paddingTop: insets.top }]}>
+        <View style={[styles.header, { paddingTop: 16 }]}>
+          <View>
+            <SkeletonBox width={120} height={16} borderRadius={8} style={{ marginBottom: 8 }} />
+            <SkeletonBox width={160} height={26} borderRadius={8} />
+          </View>
+        </View>
+        {loadError ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <Text style={{ fontSize: 15, color: '#8B7355', fontWeight: '500' }}>정보를 불러오지 못했어요</Text>
+            <TouchableOpacity
+              style={{ backgroundColor: '#C0755A', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10 }}
+              onPress={() => { setLoadError(false); loadAll(); }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>다시 시도</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={{ paddingHorizontal: 16, gap: 14 }}>
+            {/* 오늘 레슨 배너 스켈레톤 */}
+            <SkeletonBox width="100%" height={100} borderRadius={20} />
+            {/* 스탯 카드 3개 스켈레톤 */}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <SkeletonBox width="31%" height={72} borderRadius={16} />
+              <SkeletonBox width="31%" height={72} borderRadius={16} />
+              <SkeletonBox width="31%" height={72} borderRadius={16} />
+            </View>
+            {/* 섹션 타이틀 */}
+            <SkeletonBox width={80} height={18} borderRadius={6} style={{ marginTop: 8 }} />
+            {/* 레슨 카드 스켈레톤 3개 */}
+            {[0, 1, 2].map(i => (
+              <View key={i} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, padding: 14, gap: 12, borderWidth: 1, borderColor: '#EDE0D4' }}>
+                <SkeletonBox width={48} height={18} borderRadius={6} />
+                <View style={{ width: 1, alignSelf: 'stretch', backgroundColor: '#D9CFC7', marginHorizontal: 4 }} />
+                <View style={{ flex: 1, gap: 8 }}>
+                  <SkeletonBox width="60%" height={16} borderRadius={6} />
+                  <SkeletonBox width="80%" height={13} borderRadius={6} />
+                </View>
+                <View style={{ gap: 6 }}>
+                  <SkeletonBox width={52} height={48} borderRadius={12} />
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    );
   }
 
   return (
