@@ -123,6 +123,7 @@ export default function ScheduleScreen() {
   const [monthAbsenceCount, setMonthAbsenceCount] = useState(0);
   const [activeMemberIds, setActiveMemberIds] = useState<Set<string>>(new Set());
   const [monthYear, setMonthYear] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
+  const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [today, setToday] = useState(getTodayKST);
   const [selectedDate, setSelectedDate] = useState(getTodayKST);
@@ -303,7 +304,7 @@ ${rejectMsg.trim()}`
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const { data, error } = await supabase.from('lessons').select('*').eq('coach_id', user.id).eq('date', date).order('start_time');
-    if (error) { console.error('[스케줄/일] 조회 실패:', error); return false; }
+    if (error) { console.error('[스케줄/일] 조회 실패:', error); setLoadError(true); return false; }
     const withNames = await attachMemberNames(data ?? []);
     setLessons(withNames);
 
@@ -325,6 +326,7 @@ ${rejectMsg.trim()}`
       setAttendanceMap(new Map());
     }
 
+    setLoadError(false);
     setInitialLoaded(true);
     // 오늘이면 현재 시간으로 스크롤, 다른 날이면 첫 레슨으로 스크롤
     const todayStr = toKSTDateStr(new Date());
@@ -345,7 +347,7 @@ ${rejectMsg.trim()}`
     if (!user) return;
     const { data, error } = await supabase.from('lessons').select('*').eq('coach_id', user.id)
       .gte('date', wDates[0]).lte('date', wDates[6]).order('start_time');
-    if (error) { console.error('[스케줄/주] 조회 실패:', error); return false; }
+    if (error) { console.error('[스케줄/주] 조회 실패:', error); setLoadError(true); return false; }
     const withNames = await attachMemberNames(data ?? []);
     const map = new Map<string, LessonWithMembers[]>();
     for (const d of wDates) map.set(d, []);
@@ -370,6 +372,7 @@ ${rejectMsg.trim()}`
       setWeekAttendanceMap(new Map());
     }
 
+    setLoadError(false);
     setInitialLoaded(true);
   }
 
@@ -382,7 +385,7 @@ ${rejectMsg.trim()}`
     const lastDayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`;
     const { data, error } = await supabase.from('lessons').select('*')
       .eq('coach_id', user.id).gte('date', firstDay).lte('date', lastDayStr).order('start_time');
-    if (error) { console.error('[스케줄/월] 조회 실패:', error); return false; }
+    if (error) { console.error('[스케줄/월] 조회 실패:', error); setLoadError(true); return false; }
     const withNames = await attachMemberNames(data ?? []);
     const map = new Map<string, LessonWithMembers[]>();
     for (const l of withNames) {
@@ -404,6 +407,7 @@ ${rejectMsg.trim()}`
     const { data: activeMembers } = await supabase
       .from('members').select('id').eq('coach_id', user.id).eq('is_active', true);
     setActiveMemberIds(new Set((activeMembers ?? []).map((m: any) => m.id)));
+    setLoadError(false);
     setInitialLoaded(true);
   }
 
@@ -506,6 +510,7 @@ ${rejectMsg.trim()}`
     const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') {
         setInitialLoaded(false);
+        setLoadError(false);
         setLessons([]);
         setWeekData([]);
         setMonthLessons(new Map());
@@ -1324,6 +1329,27 @@ ${rejectMsg.trim()}`
         })()}
         <View style={{ height: 100 }} />
       </ScrollView>
+    );
+  }
+
+  if (loadError && !initialLoaded) {
+    return (
+      <View style={[styles.container, { backgroundColor: S_BG, justifyContent: 'center', alignItems: 'center', gap: 12 }]}>
+        <Ionicons name="alert-circle-outline" size={48} color={S_TEXT_MUTED} />
+        <Text style={{ fontSize: 16, fontWeight: '600', color: S_TEXT }}>정보를 불러오지 못했어요</Text>
+        <Text style={{ fontSize: 14, color: S_TEXT_MUTED }}>네트워크 상태를 확인하고 다시 시도해 주세요</Text>
+        <TouchableOpacity
+          style={{ marginTop: 8, backgroundColor: S_TERRA, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}
+          onPress={() => {
+            setLoadError(false);
+            if (activeTab === '일일') loadDayLessons(selectedDate);
+            else if (activeTab === '주간') loadWeekLessons(getOffsetWeekDates(weekOffset));
+            else loadMonthLessons(monthYear.year, monthYear.month);
+          }}
+        >
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>다시 시도</Text>
+        </TouchableOpacity>
+      </View>
     );
   }
 
