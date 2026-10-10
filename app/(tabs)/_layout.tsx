@@ -182,8 +182,8 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="profile"
           options={{
-            title: '내 프로필',
-            tabBarLabel: '프로필',
+            title: '마이',
+            tabBarLabel: '마이',
             tabBarIcon: ({ color, focused, size }) => <Ionicons name={focused ? 'person' : 'person-outline'} size={size} color={color} />,
             headerShown: false,
           }}
