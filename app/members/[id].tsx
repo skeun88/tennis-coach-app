@@ -5,6 +5,7 @@ import {
   TextInput, ActivityIndicator, KeyboardAvoidingView, Platform,
   Modal, FlatList, Linking, Switch,
 } from 'react-native';
+import SkeletonBox from '../../components/SkeletonBox';
 import { useLocalSearchParams, useRouter, Link, useFocusEffect } from 'expo-router';
 import SettingsHeader from '../../components/SettingsHeader';
 import { useHeaderHeight } from '@react-navigation/elements';
@@ -249,6 +250,7 @@ export default function MemberDetailScreen() {
   const [member, setMember] = useState<Member | null>(null);
   const [tab, setTab] = useState<Tab>('info');
   const [loading, setLoading] = useState(true);
+  const [tabLoading, setTabLoading] = useState<Tab | null>(null);
   const [memberListUnreadCount, setMemberListUnreadCount] = useState(0);
 
   // 결제 완료 모달
@@ -622,10 +624,24 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   }, [id, tab]);
 
   useEffect(() => {
-    if (tab === 'attendance') loadAttendance();
-    if (tab === 'payment') loadPayments();
-    if (tab === 'notes') loadNotes();
-    if (tab === 'messages') loadMessages();
+    async function loadTab() {
+      if (tab === 'attendance') {
+        if (attendance.length === 0) setTabLoading('attendance');
+        await loadAttendance();
+        setTabLoading(null);
+      } else if (tab === 'payment') {
+        if (payments.length === 0) setTabLoading('payment');
+        await loadPayments();
+        setTabLoading(null);
+      } else if (tab === 'notes') {
+        if (memberNotes.length === 0) setTabLoading('notes');
+        await loadNotes();
+        setTabLoading(null);
+      } else if (tab === 'messages') {
+        await loadMessages();
+      }
+    }
+    loadTab();
   }, [tab]);
 
   // 시간이 없는 요일은 자동으로 scheduleDays에서 제거
@@ -1261,8 +1277,66 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     setSendingMsg(false);
   }
 
-  if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color={Colors.primary} /></View>;
-  if (!member) return <View style={styles.loader}><Text>회원을 찾을 수 없습니다</Text></View>;
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#F7F0E9' }}>
+        <SettingsHeader title="회원 상세" onBack={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/members'))} />
+        {/* 상단 회원 정보 스켈레톤 */}
+        <View style={styles.profileHeaderWrap}>
+          <View style={styles.profileCard}>
+            <SkeletonBox width={50} height={50} borderRadius={25} />
+            <View style={{ flex: 1, marginLeft: 14, gap: 8 }}>
+              <SkeletonBox width={100} height={18} borderRadius={6} />
+              <SkeletonBox width={72} height={14} borderRadius={6} />
+            </View>
+          </View>
+        </View>
+        {/* 탭 스켈레톤 */}
+        <View style={styles.tabRow}>
+          {['정보','출석','결제','메모','메시지'].map((label, i) => (
+            <View key={i} style={[styles.tabBtn, { alignItems: 'center', gap: 4 }]}>
+              <SkeletonBox width={16} height={16} borderRadius={4} />
+              <SkeletonBox width={24} height={11} borderRadius={3} />
+            </View>
+          ))}
+        </View>
+        {/* 레슨권·잔여 횟수·다음 레슨 스켈레톤 */}
+        <ScrollView style={styles.content}>
+          <View style={styles.card}>
+            <SkeletonBox width={80} height={14} borderRadius={6} style={{ marginBottom: 16 }} />
+            {[0,1,2].map(i => (
+              <View key={i} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 11, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: '#F0EAE4', gap: 12 }}>
+                <SkeletonBox width={18} height={18} borderRadius={4} />
+                <SkeletonBox width={60} height={13} borderRadius={4} />
+                <SkeletonBox width="45%" height={13} borderRadius={4} style={{ marginLeft: 'auto' }} />
+              </View>
+            ))}
+          </View>
+          <View style={styles.card}>
+            <SkeletonBox width={80} height={14} borderRadius={6} style={{ marginBottom: 16 }} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, backgroundColor: '#F7F0E9', borderRadius: 12 }}>
+              <SkeletonBox width={44} height={44} borderRadius={22} />
+              <View style={{ gap: 8 }}>
+                <SkeletonBox width={120} height={14} borderRadius={6} />
+                <SkeletonBox width={80} height={12} borderRadius={4} />
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+  if (!member) return (
+    <View style={styles.loader}>
+      <Text style={{ fontSize: 15, color: Colors.mutedFg, marginBottom: 16 }}>정보를 불러오지 못했어요</Text>
+      <TouchableOpacity
+        style={{ backgroundColor: Colors.primary, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 20 }}
+        onPress={() => { setLoading(true); loadMember(); loadFutureLessons(); loadUnreadCount(); }}
+      >
+        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>다시 시도</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   // 일정 설정 computed values
   const isMemberTrial = (member as any).is_trial;
@@ -1602,7 +1676,21 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         )}
 
         {/* ATTENDANCE TAB — 출석/결석/보강예정 표시 + 수정 가능 */}
-        {tab === 'attendance' && (
+        {tab === 'attendance' && tabLoading === 'attendance' && (
+          <View style={styles.card}>
+            {[0,1,2,3].map(i => (
+              <View key={i} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: '#F0EAE4', gap: 12 }}>
+                <SkeletonBox width={8} height={8} borderRadius={4} />
+                <View style={{ flex: 1, gap: 6 }}>
+                  <SkeletonBox width="55%" height={13} borderRadius={4} />
+                  <SkeletonBox width="35%" height={11} borderRadius={4} />
+                </View>
+                <SkeletonBox width={40} height={24} borderRadius={8} />
+              </View>
+            ))}
+          </View>
+        )}
+        {tab === 'attendance' && tabLoading !== 'attendance' && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>출석 기록 ({attendance.length}건)</Text>
             {attendance.length === 0 && <Text style={styles.emptyText}>출석 기록이 없습니다</Text>}
@@ -1732,7 +1820,18 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         )}
 
         {/* PAYMENT TAB */}
-        {tab === 'payment' && (
+        {tab === 'payment' && tabLoading === 'payment' && (
+          <View style={styles.card}>
+            {[0,1,2].map(i => (
+              <View key={i} style={{ paddingVertical: 12, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: '#F0EAE4', gap: 6 }}>
+                <SkeletonBox width="65%" height={14} borderRadius={4} />
+                <SkeletonBox width="40%" height={12} borderRadius={4} />
+                <SkeletonBox width={70} height={20} borderRadius={6} />
+              </View>
+            ))}
+          </View>
+        )}
+        {tab === 'payment' && tabLoading !== 'payment' && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>결제 내역 ({payments.length}건)</Text>
             {payments.length === 0 && <Text style={styles.emptyText}>결제 내역이 없습니다</Text>}
@@ -1761,7 +1860,17 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         )}
 
         {/* NOTES TAB */}
-        {tab === 'notes' && (
+        {tab === 'notes' && tabLoading === 'notes' && (
+          <View style={styles.card}>
+            {[0,1].map(i => (
+              <View key={i} style={{ paddingVertical: 12, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: '#F0EAE4', gap: 6 }}>
+                <SkeletonBox width="75%" height={14} borderRadius={4} />
+                <SkeletonBox width="50%" height={12} borderRadius={4} />
+              </View>
+            ))}
+          </View>
+        )}
+        {tab === 'notes' && tabLoading !== 'notes' && (
           <View>
             <View style={styles.noteInputCard}>
               <TextInput

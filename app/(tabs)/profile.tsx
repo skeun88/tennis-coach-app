@@ -5,6 +5,7 @@ import {
   Alert, Modal, TextInput, ActivityIndicator,
   Image, Switch,
 } from 'react-native';
+import SkeletonBox from '../../components/SkeletonBox';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
@@ -18,6 +19,7 @@ import { useSubscription } from '../../hooks/useSubscription';
 import { PLANS } from '../../lib/subscription';
 import { Colors, Radius, Shadow } from '../../lib/theme';
 import CoachQRModal from '../../components/CoachQRModal';
+import { FEATURE_SHARED_QR } from '../../lib/featureFlags';
 import TerracottaRefreshControl from '../../components/TerracottaRefreshControl';
 import { FLOATING_TAB_BAR_SPACE } from '../../components/GlassTabBar';
 
@@ -135,6 +137,7 @@ export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [statDetail, setStatDetail] = useState<null | 'lessons' | 'retention' | 'satisfaction' | 'reports'>(null);
+  const [initialLoaded, setInitialLoaded] = useState(false);
 
   const [perf, setPerf] = useState<Performance>({
     totalLessons: 0, avgRetentionMonths: null,
@@ -268,6 +271,7 @@ export default function ProfileScreen() {
     setKnowledgeList(kListRes.data || []);
     setKnowledgeCount(kListRes.data?.length || 0);
     setVoiceUsedSeconds(voiceRes.data?.used_seconds ?? 0);
+    setInitialLoaded(true);
   }
 
   useFocusEffect(useCallback(() => { loadProfile(); }, []));
@@ -431,6 +435,56 @@ export default function ProfileScreen() {
         }
       >
         <View style={[styles.body, { paddingBottom: insets.bottom + FLOATING_TAB_BAR_SPACE + 24 }]}>
+
+          {/* ── 스켈레톤 (최초 로딩 전) ── */}
+          {!initialLoaded && (
+            <>
+              {/* 브랜딩 카드 스켈레톤 */}
+              <View style={[styles.brandCard, { alignItems: 'center', gap: 10, paddingVertical: 28 }]}>
+                <SkeletonBox width={80} height={80} borderRadius={40} style={{ backgroundColor: 'rgba(255,255,255,0.3)' }} />
+                <SkeletonBox width={120} height={20} borderRadius={8} style={{ backgroundColor: 'rgba(255,255,255,0.3)' }} />
+                <SkeletonBox width={90} height={14} borderRadius={6} style={{ backgroundColor: 'rgba(255,255,255,0.3)' }} />
+              </View>
+              {/* 코칭 실적 카드 스켈레톤 */}
+              <View style={styles.sectionCard}>
+                <SkeletonBox width={100} height={16} borderRadius={6} style={{ marginBottom: 16 }} />
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                  {[0,1,2,3].map(i => (
+                    <View key={i} style={{ width: '50%', paddingVertical: 18, paddingHorizontal: 16, alignItems: 'center', gap: 6 }}>
+                      <SkeletonBox width={60} height={22} borderRadius={6} />
+                      <SkeletonBox width={50} height={12} borderRadius={4} />
+                    </View>
+                  ))}
+                </View>
+              </View>
+              {/* 코치 소개 카드 스켈레톤 */}
+              <View style={styles.sectionCard}>
+                <SkeletonBox width={80} height={16} borderRadius={6} style={{ marginBottom: 16 }} />
+                {[0,1,2].map(i => (
+                  <View key={i} style={{ flexDirection: 'row', paddingVertical: 10, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: '#F0EAE4' }}>
+                    <SkeletonBox width={60} height={13} borderRadius={4} style={{ marginRight: 12 }} />
+                    <SkeletonBox width="55%" height={13} borderRadius={4} />
+                  </View>
+                ))}
+              </View>
+              {/* 구독 카드 스켈레톤 */}
+              <View style={styles.actionRow}>
+                <View style={[styles.actionCard, { gap: 8 }]}>
+                  <SkeletonBox width={36} height={36} borderRadius={18} />
+                  <SkeletonBox width={80} height={15} borderRadius={6} />
+                  <SkeletonBox width={60} height={12} borderRadius={4} />
+                </View>
+                <View style={[styles.actionCard, { gap: 8 }]}>
+                  <SkeletonBox width={36} height={36} borderRadius={18} />
+                  <SkeletonBox width={80} height={15} borderRadius={6} />
+                  <SkeletonBox width={60} height={12} borderRadius={4} />
+                </View>
+              </View>
+            </>
+          )}
+
+          {/* ── 실제 콘텐츠 (최초 로딩 후) ── */}
+          {initialLoaded && <>
 
           {/* ── 브랜딩 카드 ── */}
           <View style={styles.brandCard}>
@@ -629,7 +683,7 @@ export default function ProfileScreen() {
             {coachId ? (
               <TouchableOpacity
                 style={styles.actionCard}
-                onPress={() => setQrModalVisible(true)}
+                onPress={() => (FEATURE_SHARED_QR ? router.push('/connect/qr') : setQrModalVisible(true))}
                 activeOpacity={0.8}
               >
                 <Ionicons name="qr-code-outline" size={22} color={TERRA} style={{ marginBottom: 8 }} />
@@ -646,6 +700,7 @@ export default function ProfileScreen() {
           </View>
 
           <View style={{ height: 24 }} />
+          </>}
         </View>
       </ScrollView>
 
