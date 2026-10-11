@@ -5,7 +5,6 @@ import {
   Alert, Modal, TextInput, ActivityIndicator,
   Image, Switch,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import SkeletonBox from '../../components/SkeletonBox';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -502,13 +501,10 @@ export default function ProfileScreen() {
 
           {/* ── 코치 프로필 카드 ── */}
           <View style={styles.profileCard}>
-            {/* 상단 그라데이션 커버 */}
-            <LinearGradient
-              colors={['#F8E6DE', '#FCEFEA', '#FFF9F5']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.profileCover}
-            />
+            {/* 상단 커버 (웜 그라데이션 시뮬레이션) */}
+            <View style={styles.profileCover}>
+              <View style={styles.profileCoverInner} />
+            </View>
 
             {/* 수정 버튼 (우측 상단, 커버 위) */}
             <TouchableOpacity style={styles.profileEditBtn} onPress={openProfileEdit} activeOpacity={0.7}>
@@ -550,12 +546,12 @@ export default function ProfileScreen() {
               {/* 한 줄 소개 */}
               {profile.bio ? (
                 <View style={styles.profileBioBox}>
-                  <Ionicons name="chatbubble-ellipses-outline" size={13} color={TERRA} style={{ marginTop: 2 }} />
+                  <Text style={styles.profileBioQuote}>{'“'}</Text>
                   <Text style={styles.profileBio} numberOfLines={2}>{profile.bio}</Text>
                 </View>
               ) : (
                 <TouchableOpacity onPress={openProfileEdit} activeOpacity={0.7} style={styles.profileBioBox}>
-                  <Ionicons name="chatbubble-ellipses-outline" size={13} color={Colors.placeholder} style={{ marginTop: 2 }} />
+                  <Text style={[styles.profileBioQuote, { color: Colors.placeholder }]}>{'“'}</Text>
                   <Text style={styles.profileBioEmpty}>나만의 코칭 방향을 소개해보세요.</Text>
                 </TouchableOpacity>
               )}
@@ -1160,6 +1156,16 @@ const styles = StyleSheet.create({
   },
   profileCover: {
     height: 88,
+    backgroundColor: '#F8E6DE',
+    overflow: 'hidden',
+  },
+  profileCoverInner: {
+    position: 'absolute',
+    top: 0, right: 0,
+    width: '70%', height: '100%',
+    backgroundColor: '#FFF9F5',
+    opacity: 0.55,
+    borderTopLeftRadius: 80,
   },
   profileEditBtn: {
     position: 'absolute',
@@ -1207,6 +1213,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'flex-start', gap: 7,
     paddingVertical: 2,
     marginBottom: 16,
+  },
+  profileBioQuote: {
+    fontSize: 20, fontWeight: '800', color: TERRA,
+    lineHeight: 22, marginTop: -1,
   },
   profileBio: {
     flex: 1, fontSize: 13, color: DARK, lineHeight: 20,
