@@ -1266,13 +1266,13 @@ const styles = StyleSheet.create({
   profilePrimaryBtn: {
     flexDirection: 'row',
     backgroundColor: `${TERRA}12`,
-    borderRadius: 15,
-    height: 48, paddingHorizontal: 16,
+    borderRadius: 12,
+    height: 44, paddingHorizontal: 14,
     alignItems: 'center',
-    gap: 8,
-    marginHorizontal: 6,
+    gap: 6,
+    marginHorizontal: 4,
   },
-  profilePrimaryBtnText: { color: TERRA, fontSize: 15, fontWeight: '600', flex: 1 },
+  profilePrimaryBtnText: { color: TERRA, fontSize: 14, fontWeight: '600', flex: 1 },
 
   // Section cards
   sectionCard: {
