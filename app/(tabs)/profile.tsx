@@ -5,6 +5,7 @@ import {
   Alert, Modal, TextInput, ActivityIndicator,
   Image, Switch,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import SkeletonBox from '../../components/SkeletonBox';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -441,19 +442,22 @@ export default function ProfileScreen() {
             <>
               {/* 브랜딩 카드 스켈레톤 */}
               <View style={styles.profileCard}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 14 }}>
-                  <SkeletonBox width={84} height={84} borderRadius={42} />
-                  <View style={{ flex: 1, gap: 8 }}>
-                    <SkeletonBox width={110} height={20} borderRadius={8} />
-                    <SkeletonBox width={85} height={13} borderRadius={6} />
-                    <SkeletonBox width={65} height={12} borderRadius={6} />
+                <SkeletonBox width="100%" height={88} borderRadius={0} />
+                <View style={{ backgroundColor: '#fff', paddingHorizontal: 20, paddingBottom: 18 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 14, marginTop: -38, marginBottom: 14 }}>
+                    <SkeletonBox width={92} height={92} borderRadius={46} />
+                    <View style={{ flex: 1, gap: 8, paddingTop: 4 }}>
+                      <SkeletonBox width={110} height={20} borderRadius={8} />
+                      <SkeletonBox width={85} height={13} borderRadius={6} />
+                      <SkeletonBox width={65} height={12} borderRadius={6} />
+                    </View>
                   </View>
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+                    <SkeletonBox width={16} height={14} borderRadius={4} />
+                    <SkeletonBox width="80%" height={14} borderRadius={6} />
+                  </View>
+                  <SkeletonBox width="100%" height={54} borderRadius={16} />
                 </View>
-                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-                  <SkeletonBox width={16} height={14} borderRadius={4} />
-                  <SkeletonBox width="80%" height={14} borderRadius={6} />
-                </View>
-                <SkeletonBox width="100%" height={50} borderRadius={14} />
               </View>
               {/* 코칭 실적 카드 스켈레톤 */}
               <View style={styles.sectionCard}>
@@ -498,63 +502,75 @@ export default function ProfileScreen() {
 
           {/* ── 코치 프로필 카드 ── */}
           <View style={styles.profileCard}>
-            {/* 수정 버튼 (우측 상단) */}
+            {/* 상단 그라데이션 커버 */}
+            <LinearGradient
+              colors={['#F8E6DE', '#FCEFEA', '#FFF9F5']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.profileCover}
+            />
+
+            {/* 수정 버튼 (우측 상단, 커버 위) */}
             <TouchableOpacity style={styles.profileEditBtn} onPress={openProfileEdit} activeOpacity={0.7}>
-              <Ionicons name="create-outline" size={16} color={TERRA} />
+              <Ionicons name="create-outline" size={17} color={TERRA} />
             </TouchableOpacity>
 
-            {/* 아바타 + 기본 정보 */}
-            <View style={styles.profileInfoRow}>
-              {/* 이중 링 + 아바타 */}
-              <View style={styles.profileAvatarOuter}>
-                <View style={styles.profileAvatarInner}>
-                  {profile.avatar_url ? (
-                    <Image source={{ uri: profile.avatar_url }} style={styles.profileAvatarImg} />
-                  ) : (
-                    <Text style={styles.profileAvatarInitial}>{initial}</Text>
+            {/* 화이트 정보 영역 */}
+            <View style={styles.profileInfoArea}>
+              {/* 아바타 + 기본 정보 */}
+              <View style={styles.profileInfoRow}>
+                {/* 아바타 (커버/정보 경계에 걸치도록 marginTop 음수) */}
+                <View style={styles.profileAvatarOuter}>
+                  <View style={styles.profileAvatarInner}>
+                    {profile.avatar_url ? (
+                      <Image source={{ uri: profile.avatar_url }} style={styles.profileAvatarImg} />
+                    ) : (
+                      <Text style={styles.profileAvatarInitial}>{initial}</Text>
+                    )}
+                  </View>
+                </View>
+
+                {/* 이름·종목·지역 */}
+                <View style={{ flex: 1, gap: 4, paddingTop: 4 }}>
+                  <Text style={styles.profileName}>{profile.name || '코치'} 코치</Text>
+                  {!!(profile.sport || profile.center_name) && (
+                    <Text style={styles.profileMeta}>
+                      {[profile.sport, profile.center_name].filter(Boolean).join(' · ')}
+                    </Text>
+                  )}
+                  {!!regionLabel && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                      <Ionicons name="location-outline" size={12} color={Colors.placeholder} />
+                      <Text style={styles.profileRegion}>{regionLabel}</Text>
+                    </View>
                   )}
                 </View>
               </View>
 
-              {/* 이름·종목·지역 */}
-              <View style={{ flex: 1, gap: 4 }}>
-                <Text style={styles.profileName}>{profile.name || '코치'} 코치</Text>
-                {!!(profile.sport || profile.center_name) && (
-                  <Text style={styles.profileMeta}>
-                    {[profile.sport, profile.center_name].filter(Boolean).join(' · ')}
-                  </Text>
-                )}
-                {!!regionLabel && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                    <Ionicons name="location-outline" size={12} color={Colors.placeholder} />
-                    <Text style={styles.profileRegion}>{regionLabel}</Text>
-                  </View>
-                )}
-              </View>
-            </View>
+              {/* 한 줄 소개 */}
+              {profile.bio ? (
+                <View style={styles.profileBioBox}>
+                  <Ionicons name="chatbubble-ellipses-outline" size={13} color={TERRA} style={{ marginTop: 2 }} />
+                  <Text style={styles.profileBio} numberOfLines={2}>{profile.bio}</Text>
+                </View>
+              ) : (
+                <TouchableOpacity onPress={openProfileEdit} activeOpacity={0.7} style={styles.profileBioBox}>
+                  <Ionicons name="chatbubble-ellipses-outline" size={13} color={Colors.placeholder} style={{ marginTop: 2 }} />
+                  <Text style={styles.profileBioEmpty}>나만의 코칭 방향을 소개해보세요.</Text>
+                </TouchableOpacity>
+              )}
 
-            {/* 한 줄 소개 박스 */}
-            {profile.bio ? (
-              <View style={styles.profileBioBox}>
-                <Ionicons name="chatbubble-ellipses-outline" size={13} color={TERRA} style={{ marginTop: 1 }} />
-                <Text style={styles.profileBio} numberOfLines={2}>{profile.bio}</Text>
-              </View>
-            ) : (
-              <TouchableOpacity onPress={openProfileEdit} activeOpacity={0.7} style={styles.profileBioBox}>
-                <Ionicons name="chatbubble-ellipses-outline" size={13} color={Colors.placeholder} style={{ marginTop: 1 }} />
-                <Text style={styles.profileBioEmpty}>나만의 코칭 방향을 소개해보세요.</Text>
+              {/* 회원에게 보이는 프로필 확인 버튼 */}
+              <TouchableOpacity
+                style={styles.profilePrimaryBtn}
+                onPress={() => Alert.alert('내 프로필 미리보기', '회원에게 공개되는 코치 프로필입니다.\n(준비 중입니다)')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="eye-outline" size={17} color={TERRA} />
+                <Text style={styles.profilePrimaryBtnText}>회원에게 보이는 프로필 확인</Text>
+                <Ionicons name="chevron-forward" size={15} color={TERRA} style={{ marginLeft: 'auto' }} />
               </TouchableOpacity>
-            )}
-
-            {/* 주 버튼 1개 */}
-            <TouchableOpacity
-              style={styles.profilePrimaryBtn}
-              onPress={() => Alert.alert('내 프로필 미리보기', '회원에게 공개되는 코치 프로필입니다.\n(준비 중입니다)')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.profilePrimaryBtnText}>회원에게 보이는 프로필</Text>
-              <Ionicons name="chevron-forward" size={16} color="#fff" />
-            </TouchableOpacity>
+            </View>
           </View>
 
           {/* ── 코칭 실적 ── */}
@@ -1130,56 +1146,67 @@ const styles = StyleSheet.create({
 
   body: { paddingHorizontal: 16, paddingBottom: 20 },
 
-  // Profile card (compact)
+  // Profile card (redesigned)
   profileCard: {
     backgroundColor: '#fff',
     borderRadius: 22,
-    padding: 20,
     marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#EEE5DE',
+    overflow: 'hidden',
     shadowColor: '#C0755A',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
     elevation: 2,
+  },
+  profileCover: {
+    height: 88,
   },
   profileEditBtn: {
     position: 'absolute',
-    top: 16,
-    right: 16,
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: TERRA_LIGHT,
+    top: 14,
+    right: 14,
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: 'rgba(252,239,234,0.92)',
     justifyContent: 'center', alignItems: 'center',
-    zIndex: 1,
+    zIndex: 2,
+  },
+  profileInfoArea: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingBottom: 18,
   },
   profileInfoRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 12,
-    marginTop: 2,
+    flexDirection: 'row', alignItems: 'flex-end', gap: 14,
+    marginTop: -38,
+    marginBottom: 14,
   },
   profileAvatarOuter: {
-    width: 84, height: 84, borderRadius: 42,
-    borderWidth: 2, borderColor: `${TERRA}40`,
+    width: 92, height: 92, borderRadius: 46,
+    borderWidth: 3, borderColor: '#FFFFFF',
     justifyContent: 'center', alignItems: 'center',
-    backgroundColor: CREAM,
+    backgroundColor: '#FFFFFF',
+    shadowColor: `${TERRA}`,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 2,
   },
   profileAvatarInner: {
-    width: 76, height: 76, borderRadius: 38,
-    borderWidth: 2, borderColor: '#EEE5DE',
+    width: 84, height: 84, borderRadius: 42,
+    borderWidth: 1.5, borderColor: '#EEE5DE',
     overflow: 'hidden',
     justifyContent: 'center', alignItems: 'center',
     backgroundColor: TERRA_LIGHT,
   },
-  profileAvatarImg: { width: 76, height: 76, borderRadius: 38 },
-  profileAvatarInitial: { fontSize: 26, fontWeight: '800', color: TERRA },
-  profileName: { fontSize: 23, fontWeight: '800', color: DARK },
+  profileAvatarImg: { width: 84, height: 84, borderRadius: 42 },
+  profileAvatarInitial: { fontSize: 28, fontWeight: '800', color: TERRA },
+  profileName: { fontSize: 20, fontWeight: '800', color: DARK },
   profileMeta: { fontSize: 13, color: Colors.mutedFg, fontWeight: '500' },
   profileRegion: { fontSize: 12, color: Colors.placeholder },
   profileBioBox: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 7,
-    backgroundColor: CREAM,
-    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10,
-    marginBottom: 14,
+    paddingVertical: 2,
+    marginBottom: 16,
   },
   profileBio: {
     flex: 1, fontSize: 13, color: DARK, lineHeight: 20,
@@ -1189,11 +1216,13 @@ const styles = StyleSheet.create({
   },
   profilePrimaryBtn: {
     flexDirection: 'row',
-    backgroundColor: TERRA, borderRadius: 14,
-    minHeight: 50, justifyContent: 'center', alignItems: 'center',
-    gap: 6,
+    backgroundColor: `${TERRA}12`,
+    borderRadius: 16,
+    minHeight: 54, paddingHorizontal: 18,
+    alignItems: 'center',
+    gap: 10,
   },
-  profilePrimaryBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  profilePrimaryBtnText: { color: TERRA, fontSize: 14, fontWeight: '700', flex: 1 },
 
   // Section cards
   sectionCard: {
