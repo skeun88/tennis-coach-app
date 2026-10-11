@@ -31,7 +31,7 @@ const TABS: TabDef[] = [
   { name: 'members', label: '회원', icon: 'people', iconOutline: 'people-outline' },
   { name: 'schedule', label: '스케줄', icon: 'calendar', iconOutline: 'calendar-outline' },
   { name: 'payments', label: '결제', icon: 'card', iconOutline: 'card-outline' },
-  { name: 'profile', label: '프로필', icon: 'person', iconOutline: 'person-outline' },
+  { name: 'profile', label: '마이', icon: 'person', iconOutline: 'person-outline' },
 ];
 
 export default function GlassTabBar({ state, navigation }: BottomTabBarProps) {
