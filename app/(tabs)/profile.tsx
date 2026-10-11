@@ -503,7 +503,7 @@ export default function ProfileScreen() {
           <View style={styles.profileCard}>
             {/* 상단 커버 */}
             <View style={styles.profileCover}>
-              <Text style={styles.profileCoverLabel}>KERRI COACH</Text>
+              <Text style={styles.profileCoverLabel}>KERRI</Text>
               <TouchableOpacity style={styles.profileEditBtn} onPress={openProfileEdit} activeOpacity={0.7}>
                 <Ionicons name="create-outline" size={17} color="#fff" />
               </TouchableOpacity>
@@ -524,8 +524,8 @@ export default function ProfileScreen() {
                   </View>
                 </View>
 
-                {/* 이름·종목·지역 */}
-                <View style={{ flex: 1, gap: 4, paddingTop: 4 }}>
+                {/* 이름·종목·지역 (흰색 영역 안에서만 표시) */}
+                <View style={{ flex: 1, gap: 4, paddingTop: 46 }}>
                   <Text style={styles.profileName}>{profile.name || '코치'} 코치</Text>
                   {!!(profile.sport || profile.center_name) && (
                     <Text style={styles.profileMeta}>
@@ -1163,9 +1163,9 @@ const styles = StyleSheet.create({
   },
   profileCoverLabel: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
-    letterSpacing: 1.2,
+    letterSpacing: 2,
   },
   profileEditBtn: {
     width: 44, height: 44, borderRadius: 22,
@@ -1178,8 +1178,8 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
   },
   profileInfoRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    marginTop: -34,
+    flexDirection: 'row', alignItems: 'flex-start', gap: 24,
+    marginTop: -46,
     marginBottom: 10,
   },
   profileAvatarOuter: {
