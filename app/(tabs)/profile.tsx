@@ -31,10 +31,10 @@ const CREAM = '#F7F0E9';
 const TERRA_LIGHT = '#FBF2EF';
 const DARK = '#3E2B22';
 
-const PHOTO_SIZE = 96;
-const COVER_H = 150;
+const PHOTO_SIZE = 92;
+const COVER_H = 115;
 const CARD_PAD_H = 18;
-const PHOTO_GAP = 20;
+const PHOTO_GAP = 16;
 
 interface Performance {
   totalLessons: number;
@@ -508,7 +508,7 @@ export default function ProfileScreen() {
 
           {/* ── 코치 프로필 카드 ── */}
           <View style={styles.profileCard}>
-            {/* 1. 테라코타 커버: KERRI + 수정버튼 (상단) / 코치이름 (하단) */}
+            {/* 1. 테라코타 커버: KERRI + 수정버튼 (상단) / 코치이름 (하단 중앙) */}
             <View style={styles.profileCover}>
               <View style={styles.coverTopRow}>
                 <Text style={styles.profileCoverLabel}>KERRI</Text>
@@ -516,28 +516,17 @@ export default function ProfileScreen() {
                   <Ionicons name="create-outline" size={17} color="#fff" />
                 </TouchableOpacity>
               </View>
-              <View style={styles.coverNameRow}>
-                <View style={{ width: PHOTO_SIZE + PHOTO_GAP }} />
-                <Text style={styles.coverCoachName} numberOfLines={1}>
-                  {profile.name || '코치'} 코치
-                </Text>
-              </View>
-            </View>
-
-            {/* 2. 프로필 사진 (absolute — cover/white 경계에 걸침, 음수 margin 없음) */}
-            <View style={styles.profileAvatarFloat}>
-              <View style={styles.profileAvatarOuter}>
-                <View style={styles.profileAvatarInner}>
-                  {profile.avatar_url ? (
-                    <Image source={{ uri: profile.avatar_url }} style={styles.profileAvatarImg} />
-                  ) : (
-                    <Text style={styles.profileAvatarInitial}>{initial}</Text>
-                  )}
+              <View style={styles.coverMiddle}>
+                <View style={styles.coverNameRow}>
+                  <View style={{ width: PHOTO_SIZE + PHOTO_GAP }} />
+                  <Text style={styles.coverCoachName} numberOfLines={1}>
+                    {profile.name || '코치'} 코치
+                  </Text>
                 </View>
               </View>
             </View>
 
-            {/* 3. 흰색 정보 영역 */}
+            {/* 2. 흰색 정보 영역 (먼저 렌더링, z-index 낮음) */}
             <View style={styles.profileInfoArea}>
               {/* 종목·센터 / 지역 (사진 우측) */}
               <View style={styles.profileInfoRow}>
@@ -579,6 +568,19 @@ export default function ProfileScreen() {
                 <Text style={styles.profilePrimaryBtnText}>회원에게 보이는 프로필 확인</Text>
                 <Ionicons name="chevron-forward" size={15} color={TERRA} />
               </TouchableOpacity>
+            </View>
+
+            {/* 3. 프로필 사진 — 마지막에 렌더링해야 흰색 영역 위에 표시됨 */}
+            <View style={styles.profileAvatarFloat}>
+              <View style={styles.profileAvatarOuter}>
+                <View style={styles.profileAvatarInner}>
+                  {profile.avatar_url ? (
+                    <Image source={{ uri: profile.avatar_url }} style={styles.profileAvatarImg} />
+                  ) : (
+                    <Text style={styles.profileAvatarInitial}>{initial}</Text>
+                  )}
+                </View>
+              </View>
             </View>
           </View>
 
@@ -1172,13 +1174,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#D99278',
     paddingHorizontal: CARD_PAD_H,
     paddingTop: 20,
-    paddingBottom: 14,
-    justifyContent: 'space-between',
   },
   coverTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  coverMiddle: {
+    flex: 1,
+    justifyContent: 'center',
   },
   coverNameRow: {
     flexDirection: 'row',
@@ -1186,7 +1190,7 @@ const styles = StyleSheet.create({
   },
   coverCoachName: {
     flex: 1,
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800',
     color: '#fff',
   },
@@ -1201,11 +1205,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
     marginRight: -10,
   },
-  // photo: absolute, straddles cover/white boundary
+  // photo: absolute, rendered LAST so it appears above white area
   profileAvatarFloat: {
     position: 'absolute',
     top: COVER_H - PHOTO_SIZE / 2,
     left: CARD_PAD_H,
+    zIndex: 10,
+    elevation: 10,
   },
   profileAvatarOuter: {
     width: PHOTO_SIZE, height: PHOTO_SIZE, borderRadius: PHOTO_SIZE / 2,
@@ -1231,6 +1237,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     paddingHorizontal: CARD_PAD_H,
     paddingBottom: 16,
+    zIndex: 1,
   },
   // info row: spacer (photo width) + sport/region
   profileInfoRow: {
