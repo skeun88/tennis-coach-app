@@ -441,7 +441,7 @@ export default function ProfileScreen() {
             <>
               {/* 브랜딩 카드 스켈레톤 */}
               <View style={styles.profileCard}>
-                <SkeletonBox width="100%" height={100} borderRadius={0} />
+                <SkeletonBox width="100%" height={64} borderRadius={0} />
                 <View style={{ backgroundColor: '#fff', paddingHorizontal: 20, paddingBottom: 18 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 14, marginTop: -38, marginBottom: 14 }}>
                     <SkeletonBox width={92} height={92} borderRadius={46} />
@@ -1153,13 +1153,13 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   profileCover: {
-    height: 100,
+    height: 64,
     backgroundColor: '#D99278',
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingHorizontal: 14,
+    paddingTop: 12,
   },
   profileCoverLabel: {
     color: '#fff',
@@ -1170,16 +1170,17 @@ const styles = StyleSheet.create({
   profileEditBtn: {
     width: 44, height: 44, borderRadius: 22,
     justifyContent: 'center', alignItems: 'center',
+    marginTop: -4,
   },
   profileInfoArea: {
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingBottom: 18,
+    paddingHorizontal: 18,
+    paddingBottom: 14,
   },
   profileInfoRow: {
-    flexDirection: 'row', alignItems: 'flex-end', gap: 14,
-    marginTop: -38,
-    marginBottom: 14,
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    marginTop: -34,
+    marginBottom: 10,
   },
   profileAvatarOuter: {
     width: 92, height: 92, borderRadius: 46,
@@ -1206,8 +1207,8 @@ const styles = StyleSheet.create({
   profileRegion: { fontSize: 12, color: Colors.placeholder },
   profileBioBox: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 7,
-    paddingVertical: 2,
-    marginBottom: 16,
+    paddingVertical: 0,
+    marginBottom: 10,
   },
   profileBioQuote: {
     fontSize: 20, fontWeight: '800', color: TERRA,
@@ -1222,8 +1223,8 @@ const styles = StyleSheet.create({
   profilePrimaryBtn: {
     flexDirection: 'row',
     backgroundColor: `${TERRA}12`,
-    borderRadius: 16,
-    minHeight: 54, paddingHorizontal: 18,
+    borderRadius: 14,
+    minHeight: 46, paddingHorizontal: 16,
     alignItems: 'center',
     gap: 10,
   },
