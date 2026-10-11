@@ -566,7 +566,7 @@ export default function ProfileScreen() {
                 activeOpacity={0.8}
               >
                 <Text style={styles.profilePrimaryBtnText}>회원에게 보이는 프로필 확인</Text>
-                <Ionicons name="chevron-forward" size={15} color={TERRA} />
+                <Ionicons name="chevron-forward" size={18} color={TERRA} />
               </TouchableOpacity>
             </View>
 
@@ -1236,7 +1236,7 @@ const styles = StyleSheet.create({
   profileInfoArea: {
     backgroundColor: '#FFFFFF',
     paddingHorizontal: CARD_PAD_H,
-    paddingBottom: 16,
+    paddingBottom: 12,
     zIndex: 1,
   },
   // info row: spacer (photo width) + sport/region
@@ -1251,7 +1251,7 @@ const styles = StyleSheet.create({
   profileRegion: { fontSize: 14, color: Colors.placeholder },
   profileBioBox: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 7,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   profileBioQuote: {
     fontSize: 20, fontWeight: '800', color: TERRA,
@@ -1266,12 +1266,13 @@ const styles = StyleSheet.create({
   profilePrimaryBtn: {
     flexDirection: 'row',
     backgroundColor: `${TERRA}12`,
-    borderRadius: 14,
-    height: 56, paddingHorizontal: 16,
+    borderRadius: 15,
+    height: 48, paddingHorizontal: 16,
     alignItems: 'center',
     gap: 8,
+    marginHorizontal: 6,
   },
-  profilePrimaryBtnText: { color: TERRA, fontSize: 14, fontWeight: '700', flex: 1 },
+  profilePrimaryBtnText: { color: TERRA, fontSize: 15, fontWeight: '600', flex: 1 },
 
   // Section cards
   sectionCard: {
