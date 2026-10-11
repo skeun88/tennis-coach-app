@@ -441,7 +441,7 @@ export default function ProfileScreen() {
             <>
               {/* 브랜딩 카드 스켈레톤 */}
               <View style={styles.profileCard}>
-                <SkeletonBox width="100%" height={88} borderRadius={0} />
+                <SkeletonBox width="100%" height={100} borderRadius={0} />
                 <View style={{ backgroundColor: '#fff', paddingHorizontal: 20, paddingBottom: 18 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 14, marginTop: -38, marginBottom: 14 }}>
                     <SkeletonBox width={92} height={92} borderRadius={46} />
@@ -501,15 +501,13 @@ export default function ProfileScreen() {
 
           {/* ── 코치 프로필 카드 ── */}
           <View style={styles.profileCard}>
-            {/* 상단 커버 (웜 그라데이션 시뮬레이션) */}
+            {/* 상단 커버 */}
             <View style={styles.profileCover}>
-              <View style={styles.profileCoverInner} />
+              <Text style={styles.profileCoverLabel}>KERRI COACH</Text>
+              <TouchableOpacity style={styles.profileEditBtn} onPress={openProfileEdit} activeOpacity={0.7}>
+                <Ionicons name="create-outline" size={17} color="#fff" />
+              </TouchableOpacity>
             </View>
-
-            {/* 수정 버튼 (우측 상단, 커버 위) */}
-            <TouchableOpacity style={styles.profileEditBtn} onPress={openProfileEdit} activeOpacity={0.7}>
-              <Ionicons name="create-outline" size={17} color={TERRA} />
-            </TouchableOpacity>
 
             {/* 화이트 정보 영역 */}
             <View style={styles.profileInfoArea}>
@@ -1155,26 +1153,23 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   profileCover: {
-    height: 88,
-    backgroundColor: '#F8E6DE',
-    overflow: 'hidden',
+    height: 100,
+    backgroundColor: '#D99278',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
-  profileCoverInner: {
-    position: 'absolute',
-    top: 0, right: 0,
-    width: '70%', height: '100%',
-    backgroundColor: '#FFF9F5',
-    opacity: 0.55,
-    borderTopLeftRadius: 80,
+  profileCoverLabel: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 1.2,
   },
   profileEditBtn: {
-    position: 'absolute',
-    top: 14,
-    right: 14,
     width: 44, height: 44, borderRadius: 22,
-    backgroundColor: 'rgba(252,239,234,0.92)',
     justifyContent: 'center', alignItems: 'center',
-    zIndex: 2,
   },
   profileInfoArea: {
     backgroundColor: '#FFFFFF',
@@ -1191,15 +1186,15 @@ const styles = StyleSheet.create({
     borderWidth: 3, borderColor: '#FFFFFF',
     justifyContent: 'center', alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    shadowColor: `${TERRA}`,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
     elevation: 2,
   },
   profileAvatarInner: {
     width: 84, height: 84, borderRadius: 42,
-    borderWidth: 1.5, borderColor: '#EEE5DE',
+    borderWidth: 1.5, borderColor: '#F1C9BA',
     overflow: 'hidden',
     justifyContent: 'center', alignItems: 'center',
     backgroundColor: TERRA_LIGHT,
