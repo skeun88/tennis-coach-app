@@ -32,7 +32,7 @@ const TERRA_LIGHT = '#FBF2EF';
 const DARK = '#3E2B22';
 
 const PHOTO_SIZE = 92;
-const COVER_H = 115;
+const COVER_H = 99;
 const CARD_PAD_H = 18;
 const PHOTO_GAP = 16;
 
@@ -1173,7 +1173,7 @@ const styles = StyleSheet.create({
     height: COVER_H,
     backgroundColor: '#D99278',
     paddingHorizontal: CARD_PAD_H,
-    paddingTop: 20,
+    paddingTop: 12,
   },
   coverTopRow: {
     flexDirection: 'row',
