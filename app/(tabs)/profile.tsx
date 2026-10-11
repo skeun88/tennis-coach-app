@@ -31,6 +31,11 @@ const CREAM = '#F7F0E9';
 const TERRA_LIGHT = '#FBF2EF';
 const DARK = '#3E2B22';
 
+const PHOTO_SIZE = 96;
+const COVER_H = 150;
+const CARD_PAD_H = 18;
+const PHOTO_GAP = 20;
+
 interface Performance {
   totalLessons: number;
   avgRetentionMonths: number | null;
@@ -441,21 +446,23 @@ export default function ProfileScreen() {
             <>
               {/* 브랜딩 카드 스켈레톤 */}
               <View style={styles.profileCard}>
-                <SkeletonBox width="100%" height={64} borderRadius={0} />
-                <View style={{ backgroundColor: '#fff', paddingHorizontal: 20, paddingBottom: 18 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 14, marginTop: -38, marginBottom: 14 }}>
-                    <SkeletonBox width={92} height={92} borderRadius={46} />
-                    <View style={{ flex: 1, gap: 8, paddingTop: 4 }}>
-                      <SkeletonBox width={110} height={20} borderRadius={8} />
-                      <SkeletonBox width={85} height={13} borderRadius={6} />
-                      <SkeletonBox width={65} height={12} borderRadius={6} />
+                <SkeletonBox width="100%" height={COVER_H} borderRadius={0} />
+                <View style={{ position: 'absolute', top: COVER_H - PHOTO_SIZE / 2, left: CARD_PAD_H }}>
+                  <SkeletonBox width={PHOTO_SIZE} height={PHOTO_SIZE} borderRadius={PHOTO_SIZE / 2} />
+                </View>
+                <View style={{ backgroundColor: '#fff', paddingHorizontal: CARD_PAD_H, paddingBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', height: PHOTO_SIZE / 2 + 10, alignItems: 'center', marginBottom: 10 }}>
+                    <View style={{ width: PHOTO_SIZE + PHOTO_GAP }} />
+                    <View style={{ flex: 1, gap: 6 }}>
+                      <SkeletonBox width={110} height={15} borderRadius={6} />
+                      <SkeletonBox width={75} height={12} borderRadius={5} />
                     </View>
                   </View>
-                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
                     <SkeletonBox width={16} height={14} borderRadius={4} />
-                    <SkeletonBox width="80%" height={14} borderRadius={6} />
+                    <SkeletonBox width="75%" height={13} borderRadius={6} />
                   </View>
-                  <SkeletonBox width="100%" height={54} borderRadius={16} />
+                  <SkeletonBox width="100%" height={56} borderRadius={14} />
                 </View>
               </View>
               {/* 코칭 실적 카드 스켈레톤 */}
@@ -501,32 +508,41 @@ export default function ProfileScreen() {
 
           {/* ── 코치 프로필 카드 ── */}
           <View style={styles.profileCard}>
-            {/* 상단 커버 */}
+            {/* 1. 테라코타 커버: KERRI + 수정버튼 (상단) / 코치이름 (하단) */}
             <View style={styles.profileCover}>
-              <Text style={styles.profileCoverLabel}>KERRI</Text>
-              <TouchableOpacity style={styles.profileEditBtn} onPress={openProfileEdit} activeOpacity={0.7}>
-                <Ionicons name="create-outline" size={17} color="#fff" />
-              </TouchableOpacity>
+              <View style={styles.coverTopRow}>
+                <Text style={styles.profileCoverLabel}>KERRI</Text>
+                <TouchableOpacity style={styles.profileEditBtn} onPress={openProfileEdit} activeOpacity={0.7}>
+                  <Ionicons name="create-outline" size={17} color="#fff" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.coverNameRow}>
+                <View style={{ width: PHOTO_SIZE + PHOTO_GAP }} />
+                <Text style={styles.coverCoachName} numberOfLines={1}>
+                  {profile.name || '코치'} 코치
+                </Text>
+              </View>
             </View>
 
-            {/* 화이트 정보 영역 */}
-            <View style={styles.profileInfoArea}>
-              {/* 아바타 + 기본 정보 */}
-              <View style={styles.profileInfoRow}>
-                {/* 아바타 (커버/정보 경계에 걸치도록 marginTop 음수) */}
-                <View style={styles.profileAvatarOuter}>
-                  <View style={styles.profileAvatarInner}>
-                    {profile.avatar_url ? (
-                      <Image source={{ uri: profile.avatar_url }} style={styles.profileAvatarImg} />
-                    ) : (
-                      <Text style={styles.profileAvatarInitial}>{initial}</Text>
-                    )}
-                  </View>
+            {/* 2. 프로필 사진 (absolute — cover/white 경계에 걸침, 음수 margin 없음) */}
+            <View style={styles.profileAvatarFloat}>
+              <View style={styles.profileAvatarOuter}>
+                <View style={styles.profileAvatarInner}>
+                  {profile.avatar_url ? (
+                    <Image source={{ uri: profile.avatar_url }} style={styles.profileAvatarImg} />
+                  ) : (
+                    <Text style={styles.profileAvatarInitial}>{initial}</Text>
+                  )}
                 </View>
+              </View>
+            </View>
 
-                {/* 이름·종목·지역 (흰색 영역 안에서만 표시) */}
-                <View style={{ flex: 1, gap: 4, paddingTop: 46 }}>
-                  <Text style={styles.profileName}>{profile.name || '코치'} 코치</Text>
+            {/* 3. 흰색 정보 영역 */}
+            <View style={styles.profileInfoArea}>
+              {/* 종목·센터 / 지역 (사진 우측) */}
+              <View style={styles.profileInfoRow}>
+                <View style={{ width: PHOTO_SIZE + PHOTO_GAP }} />
+                <View style={{ flex: 1, gap: 4, justifyContent: 'center' }}>
                   {!!(profile.sport || profile.center_name) && (
                     <Text style={styles.profileMeta}>
                       {[profile.sport, profile.center_name].filter(Boolean).join(' · ')}
@@ -541,28 +557,27 @@ export default function ProfileScreen() {
                 </View>
               </View>
 
-              {/* 한 줄 소개 */}
+              {/* 한 줄 소개 (사진 아래, 전체 너비) */}
               {profile.bio ? (
                 <View style={styles.profileBioBox}>
-                  <Text style={styles.profileBioQuote}>{'“'}</Text>
+                  <Text style={styles.profileBioQuote}>{'"'}</Text>
                   <Text style={styles.profileBio} numberOfLines={2}>{profile.bio}</Text>
                 </View>
               ) : (
                 <TouchableOpacity onPress={openProfileEdit} activeOpacity={0.7} style={styles.profileBioBox}>
-                  <Text style={[styles.profileBioQuote, { color: Colors.placeholder }]}>{'“'}</Text>
+                  <Text style={[styles.profileBioQuote, { color: Colors.placeholder }]}>{'"'}</Text>
                   <Text style={styles.profileBioEmpty}>나만의 코칭 방향을 소개해보세요.</Text>
                 </TouchableOpacity>
               )}
 
-              {/* 회원에게 보이는 프로필 확인 버튼 */}
+              {/* 프로필 확인 버튼 (눈 아이콘 제거) */}
               <TouchableOpacity
                 style={styles.profilePrimaryBtn}
                 onPress={() => Alert.alert('내 프로필 미리보기', '회원에게 공개되는 코치 프로필입니다.\n(준비 중입니다)')}
                 activeOpacity={0.8}
               >
-                <Ionicons name="eye-outline" size={17} color={TERRA} />
                 <Text style={styles.profilePrimaryBtnText}>회원에게 보이는 프로필 확인</Text>
-                <Ionicons name="chevron-forward" size={15} color={TERRA} style={{ marginLeft: 'auto' }} />
+                <Ionicons name="chevron-forward" size={15} color={TERRA} />
               </TouchableOpacity>
             </View>
           </View>
@@ -1140,7 +1155,7 @@ const styles = StyleSheet.create({
 
   body: { paddingHorizontal: 16, paddingBottom: 20 },
 
-  // Profile card (redesigned)
+  // Profile card (structural redesign)
   profileCard: {
     backgroundColor: '#fff',
     borderRadius: 22,
@@ -1153,13 +1168,27 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   profileCover: {
-    height: 64,
+    height: COVER_H,
     backgroundColor: '#D99278',
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    paddingHorizontal: CARD_PAD_H,
+    paddingTop: 20,
+    paddingBottom: 14,
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingTop: 12,
+  },
+  coverTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  coverNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  coverCoachName: {
+    flex: 1,
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#fff',
   },
   profileCoverLabel: {
     color: '#fff',
@@ -1168,22 +1197,18 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
   profileEditBtn: {
-    width: 44, height: 44, borderRadius: 22,
+    width: 44, height: 44,
     justifyContent: 'center', alignItems: 'center',
-    marginTop: -4,
+    marginRight: -10,
   },
-  profileInfoArea: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 18,
-    paddingBottom: 14,
-  },
-  profileInfoRow: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 24,
-    marginTop: -46,
-    marginBottom: 10,
+  // photo: absolute, straddles cover/white boundary
+  profileAvatarFloat: {
+    position: 'absolute',
+    top: COVER_H - PHOTO_SIZE / 2,
+    left: CARD_PAD_H,
   },
   profileAvatarOuter: {
-    width: 92, height: 92, borderRadius: 46,
+    width: PHOTO_SIZE, height: PHOTO_SIZE, borderRadius: PHOTO_SIZE / 2,
     borderWidth: 3, borderColor: '#FFFFFF',
     justifyContent: 'center', alignItems: 'center',
     backgroundColor: '#FFFFFF',
@@ -1194,21 +1219,32 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   profileAvatarInner: {
-    width: 84, height: 84, borderRadius: 42,
+    width: PHOTO_SIZE - 8, height: PHOTO_SIZE - 8, borderRadius: (PHOTO_SIZE - 8) / 2,
     borderWidth: 1.5, borderColor: '#F1C9BA',
     overflow: 'hidden',
     justifyContent: 'center', alignItems: 'center',
     backgroundColor: TERRA_LIGHT,
   },
-  profileAvatarImg: { width: 84, height: 84, borderRadius: 42 },
+  profileAvatarImg: { width: PHOTO_SIZE - 8, height: PHOTO_SIZE - 8, borderRadius: (PHOTO_SIZE - 8) / 2 },
   profileAvatarInitial: { fontSize: 28, fontWeight: '800', color: TERRA },
+  profileInfoArea: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: CARD_PAD_H,
+    paddingBottom: 16,
+  },
+  // info row: spacer (photo width) + sport/region
+  profileInfoRow: {
+    flexDirection: 'row',
+    height: PHOTO_SIZE / 2 + 10,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
   profileName: { fontSize: 20, fontWeight: '800', color: DARK },
-  profileMeta: { fontSize: 13, color: Colors.mutedFg, fontWeight: '500' },
-  profileRegion: { fontSize: 12, color: Colors.placeholder },
+  profileMeta: { fontSize: 16, color: Colors.mutedFg, fontWeight: '500' },
+  profileRegion: { fontSize: 14, color: Colors.placeholder },
   profileBioBox: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 7,
-    paddingVertical: 0,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   profileBioQuote: {
     fontSize: 20, fontWeight: '800', color: TERRA,
@@ -1224,9 +1260,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: `${TERRA}12`,
     borderRadius: 14,
-    minHeight: 46, paddingHorizontal: 16,
+    height: 56, paddingHorizontal: 16,
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   profilePrimaryBtnText: { color: TERRA, fontSize: 14, fontWeight: '700', flex: 1 },
 
