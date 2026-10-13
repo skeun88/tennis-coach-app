@@ -149,6 +149,10 @@ export default function ProfileScreen() {
   });
   const [membersCount, setMembersCount] = useState(0);
   const [joinedMonths, setJoinedMonths] = useState<number | null>(null);
+  const [journeyPublic, setJourneyPublic] = useState(false);
+  const [journeyVisibilityModal, setJourneyVisibilityModal] = useState(false);
+  const [journeyVisibilityDraft, setJourneyVisibilityDraft] = useState(false);
+  const [savingJourneyVisibility, setSavingJourneyVisibility] = useState(false);
 
   const [profile, setProfile] = useState<ProfileInfo>({
     name: '', avatar_url: '', sport: '테니스',
@@ -250,6 +254,7 @@ export default function ProfileScreen() {
       const months = Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24 * 30.44));
       setJoinedMonths(Math.max(0, months));
     }
+    setJourneyPublic(p?.show_coaching_journey ?? false);
     setProfile({
       name: p?.display_name ?? user.email?.split('@')[0] ?? '코치',
       avatar_url: p?.avatar_url ?? '',
@@ -410,6 +415,28 @@ export default function ProfileScreen() {
 
   const openProfileEdit = () => { setEditProfile({ ...profile }); setProfileModal(true); };
   const openCareerEdit = () => { setEditCareer({ ...career }); setCareerModal(true); };
+
+  function openJourneyVisibility() {
+    setJourneyVisibilityDraft(journeyPublic);
+    setJourneyVisibilityModal(true);
+  }
+
+  async function saveJourneyVisibility(newValue: boolean) {
+    setSavingJourneyVisibility(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setSavingJourneyVisibility(false); return; }
+    const snapshot = newValue
+      ? { members_count: membersCount, lessons_count: perf.totalLessons, reports_count: perf.totalReports }
+      : null;
+    const { error } = await supabase.from('coach_profiles').upsert(
+      { coach_id: user.id, show_coaching_journey: newValue, journey_snapshot: snapshot, updated_at: new Date().toISOString() },
+      { onConflict: 'coach_id' }
+    );
+    setSavingJourneyVisibility(false);
+    if (error) { Alert.alert('오류', '저장에 실패했습니다.'); return; }
+    setJourneyPublic(newValue);
+    setJourneyVisibilityModal(false);
+  }
 
   // Coach intro rows
   const introRows = [
@@ -600,10 +627,20 @@ export default function ProfileScreen() {
                 <Ionicons name="trail-sign-outline" size={15} color={TERRA} />
                 <Text style={styles.sectionTitle}>나의 코칭 여정</Text>
               </View>
-              <View style={styles.journeyPrivateBadge}>
-                <Ionicons name="lock-closed" size={10} color={TERRA} />
-                <Text style={styles.journeyPrivateBadgeText}>나만 보기</Text>
-              </View>
+              <TouchableOpacity
+                style={journeyPublic ? styles.journeyPublicBadge : styles.journeyPrivateBadge}
+                onPress={openJourneyVisibility}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={journeyPublic ? 'people-outline' : 'lock-closed'}
+                  size={10}
+                  color={journeyPublic ? '#059669' : TERRA}
+                />
+                <Text style={journeyPublic ? styles.journeyPublicBadgeText : styles.journeyPrivateBadgeText}>
+                  {journeyPublic ? '회원 공개' : '나만 보기'}
+                </Text>
+              </TouchableOpacity>
             </View>
             <View style={stat.grid}>
               <StatCell value={`${membersCount}명`} label="함께한 회원" right />
@@ -1015,6 +1052,86 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
+      {/* ── 코칭 여정 공개 설정 바텀시트 ── */}
+      <Modal
+        visible={journeyVisibilityModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setJourneyVisibilityModal(false)}
+      >
+        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setJourneyVisibilityModal(false)}>
+          <TouchableOpacity
+            style={[styles.sheet, { paddingBottom: insets.bottom + 8 }]}
+            activeOpacity={1}
+            onPress={() => {}}
+          >
+            <View style={styles.handle} />
+            <Text style={styles.modalTitle}>코칭 여정 공개 설정</Text>
+            <Text style={styles.journeyModalDesc}>
+              {'코칭 여정에 표시된 숫자를 회원에게 공개할지 선택할 수 있어요.'}
+            </Text>
+
+            <TouchableOpacity
+              style={[styles.journeyOption, journeyVisibilityDraft === false && styles.journeyOptionSelected]}
+              onPress={() => setJourneyVisibilityDraft(false)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.journeyOptionIcon, { backgroundColor: TERRA_LIGHT }]}>
+                <Ionicons name="lock-closed" size={18} color={TERRA} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.journeyOptionTitle}>나만 보기</Text>
+                <Text style={styles.journeyOptionDesc}>코치님만 확인할 수 있어요.</Text>
+              </View>
+              {journeyVisibilityDraft === false && (
+                <Ionicons name="checkmark-circle" size={22} color={TERRA} />
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.journeyOption, journeyVisibilityDraft === true && styles.journeyOptionSelected]}
+              onPress={() => setJourneyVisibilityDraft(true)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.journeyOptionIcon, { backgroundColor: '#F0FDF4' }]}>
+                <Ionicons name="people-outline" size={18} color="#059669" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.journeyOptionTitle}>회원에게 공개</Text>
+                <Text style={styles.journeyOptionDesc}>{'회원에게 보이는 코치 프로필에 함께 표시돼요.'}</Text>
+              </View>
+              {journeyVisibilityDraft === true && (
+                <Ionicons name="checkmark-circle" size={22} color="#059669" />
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.saveBtn, savingJourneyVisibility && { opacity: 0.6 }]}
+              disabled={savingJourneyVisibility}
+              onPress={() => {
+                if (journeyVisibilityDraft === true && !journeyPublic) {
+                  Alert.alert(
+                    '코칭 여정을 회원에게 공개할까요?',
+                    '함께한 회원, 진행한 레슨, 남긴 레슨 기록 등의 숫자가 회원 프로필에 표시됩니다.',
+                    [
+                      { text: '취소', style: 'cancel' },
+                      { text: '공개하기', onPress: () => saveJourneyVisibility(true) },
+                    ]
+                  );
+                } else {
+                  saveJourneyVisibility(journeyVisibilityDraft);
+                }
+              }}
+            >
+              {savingJourneyVisibility
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.saveBtnTxt}>설정 저장</Text>
+              }
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       <PlanUpsellModal
         visible={upsellVisible}
         onClose={() => setUpsellVisible(false)}
@@ -1208,6 +1325,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8, paddingVertical: 3,
   },
   journeyPrivateBadgeText: { fontSize: 10, fontWeight: '700', color: TERRA },
+  journeyPublicBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: '#F0FDF4', borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 3,
+  },
+  journeyPublicBadgeText: { fontSize: 10, fontWeight: '700', color: '#059669' },
+  journeyModalDesc: {
+    fontSize: 13, color: Colors.mutedFg, lineHeight: 19,
+    marginBottom: 20, marginTop: -4,
+  },
+  journeyOption: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    borderWidth: 1.5, borderColor: Colors.borderLight,
+    borderRadius: 14, padding: 14, marginBottom: 10,
+  },
+  journeyOptionSelected: {
+    borderColor: TERRA, backgroundColor: TERRA_LIGHT,
+  },
+  journeyOptionIcon: {
+    width: 40, height: 40, borderRadius: 20,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  journeyOptionTitle: { fontSize: 14, fontWeight: '700', color: DARK, marginBottom: 2 },
+  journeyOptionDesc: { fontSize: 12, color: Colors.mutedFg, lineHeight: 17 },
   journeyDivider: {
     height: 1, backgroundColor: Colors.borderLight, marginTop: 4, marginBottom: 10,
   },
