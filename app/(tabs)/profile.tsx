@@ -3,7 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, Modal, TextInput, ActivityIndicator,
-  Image, Switch, Pressable, Vibration,
+  Image, Switch, Pressable,
 } from 'react-native';
 import SkeletonBox from '../../components/SkeletonBox';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,8 +31,8 @@ const JOURNEY_INFO: Record<JourneyPopupKey, {
   members:  { icon: 'people-outline',            title: '함께한 회원',       desc: 'KERRI에서 코치님이 지금까지 등록한 누적 회원 수예요.',       badge: '현재 등록 회원 기준' },
   lessons:  { icon: 'calendar-outline',          title: '진행한 레슨',       desc: '출석 처리가 완료된 레슨이 차곡차곡 쌓여요.',                 badge: '출석 완료 기준' },
   reports:  { icon: 'document-text-outline',     title: '남긴 레슨 기록',    desc: '코치님이 회원의 성장을 위해 남긴 레슨 기록이에요.',           badge: '기록 작성 기준' },
-  reviews:  { icon: 'chatbubble-ellipses-outline', title: '받은 회원 후기', desc: '회원이 남긴 소중한 후기가 이곳에 쌓일 예정이에요.',           badge: '후기 기능 준비 중' },
-  duration: { icon: 'medal-outline',             title: 'KERRI와 함께한 시간', desc: '코치님이 KERRI와 함께 코칭을 기록해온 시간이에요.',         badge: 'KERRI 프로필 생성일 기준' },
+  reviews:  { icon: 'heart-outline',              title: '받은 회원 후기',   desc: '회원이 남긴 소중한 후기가 이곳에 쌓일 예정이에요.',           badge: '후기 기능 준비 중' },
+  duration: { icon: 'flame-outline',             title: 'KERRI와 함께한 시간', desc: '코치님이 KERRI와 함께 코칭을 기록해온 시간이에요.',         badge: 'KERRI 프로필 생성일 기준' },
 };
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
@@ -657,28 +657,28 @@ export default function ProfileScreen() {
             </View>
             <View style={stat.grid}>
               <Pressable
-                onPress={() => { Vibration.vibrate(10); setJourneyPopup('members'); }}
+                onPress={() => setJourneyPopup('members')}
                 style={({ pressed }) => [stat.cell, stat.cellRight, pressed && styles.journeyCellPressed]}
               >
                 <Text style={stat.value}>{`${membersCount}명`}</Text>
                 <Text style={stat.label}>함께한 회원</Text>
               </Pressable>
               <Pressable
-                onPress={() => { Vibration.vibrate(10); setJourneyPopup('lessons'); }}
+                onPress={() => setJourneyPopup('lessons')}
                 style={({ pressed }) => [stat.cell, pressed && styles.journeyCellPressed]}
               >
                 <Text style={stat.value}>{`${perf.totalLessons.toLocaleString()}회`}</Text>
                 <Text style={stat.label}>진행한 레슨</Text>
               </Pressable>
               <Pressable
-                onPress={() => { Vibration.vibrate(10); setJourneyPopup('reports'); }}
+                onPress={() => setJourneyPopup('reports')}
                 style={({ pressed }) => [stat.cell, stat.cellRight, stat.cellBottom, pressed && styles.journeyCellPressed]}
               >
                 <Text style={stat.value}>{`${perf.totalReports}개`}</Text>
                 <Text style={stat.label}>남긴 레슨 기록</Text>
               </Pressable>
               <Pressable
-                onPress={() => { Vibration.vibrate(10); setJourneyPopup('reviews'); }}
+                onPress={() => setJourneyPopup('reviews')}
                 style={({ pressed }) => [stat.cell, stat.cellBottom, pressed && styles.journeyCellPressed]}
               >
                 <Text style={stat.value}>—</Text>
@@ -689,7 +689,7 @@ export default function ProfileScreen() {
               <>
                 <View style={styles.journeyDivider} />
                 <Pressable
-                  onPress={() => { Vibration.vibrate(10); setJourneyPopup('duration'); }}
+                  onPress={() => setJourneyPopup('duration')}
                   style={({ pressed }) => [styles.journeyFooter, pressed && styles.journeyFooterPressed]}
                 >
                   <Ionicons name="ribbon-outline" size={14} color={TERRA} />
