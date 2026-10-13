@@ -3,7 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, Modal, TextInput, ActivityIndicator,
-  Image, Switch,
+  Image, Switch, Pressable, Vibration,
 } from 'react-native';
 import SkeletonBox from '../../components/SkeletonBox';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +22,18 @@ import CoachQRModal from '../../components/CoachQRModal';
 import { FEATURE_SHARED_QR } from '../../lib/featureFlags';
 import TerracottaRefreshControl from '../../components/TerracottaRefreshControl';
 import { FLOATING_TAB_BAR_SPACE } from '../../components/GlassTabBar';
+
+type JourneyPopupKey = 'members' | 'lessons' | 'reports' | 'reviews' | 'duration';
+
+const JOURNEY_INFO: Record<JourneyPopupKey, {
+  icon: string; title: string; desc: string; badge: string;
+}> = {
+  members:  { icon: 'people-outline',            title: '함께한 회원',       desc: 'KERRI에서 코치님이 지금까지 등록한 누적 회원 수예요.',       badge: '현재 등록 회원 기준' },
+  lessons:  { icon: 'calendar-outline',          title: '진행한 레슨',       desc: '출석 처리가 완료된 레슨이 차곡차곡 쌓여요.',                 badge: '출석 완료 기준' },
+  reports:  { icon: 'document-text-outline',     title: '남긴 레슨 기록',    desc: '코치님이 회원의 성장을 위해 남긴 레슨 기록이에요.',           badge: '기록 작성 기준' },
+  reviews:  { icon: 'chatbubble-ellipses-outline', title: '받은 회원 후기', desc: '회원이 남긴 소중한 후기가 이곳에 쌓일 예정이에요.',           badge: '후기 기능 준비 중' },
+  duration: { icon: 'medal-outline',             title: 'KERRI와 함께한 시간', desc: '코치님이 KERRI와 함께 코칭을 기록해온 시간이에요.',         badge: 'KERRI 프로필 생성일 기준' },
+};
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SPORTS = ['테니스', '배드민턴', '스쿼시', '탁구', '골프', '기타'];
@@ -149,6 +161,7 @@ export default function ProfileScreen() {
   });
   const [membersCount, setMembersCount] = useState(0);
   const [joinedMonths, setJoinedMonths] = useState<number | null>(null);
+  const [journeyPopup, setJourneyPopup] = useState<JourneyPopupKey | null>(null);
   const [journeyPublic, setJourneyPublic] = useState(false);
   const [journeyVisibilityModal, setJourneyVisibilityModal] = useState(false);
   const [journeyVisibilityDraft, setJourneyVisibilityDraft] = useState(false);
@@ -643,22 +656,49 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
             <View style={stat.grid}>
-              <StatCell value={`${membersCount}명`} label="함께한 회원" right />
-              <StatCell value={`${perf.totalLessons.toLocaleString()}회`} label="진행한 레슨" />
-              <StatCell value={`${perf.totalReports}개`} label="남긴 레슨 기록" right bottom />
-              <StatCell value="—" label="받은 회원 후기" bottom />
+              <Pressable
+                onPress={() => { Vibration.vibrate(10); setJourneyPopup('members'); }}
+                style={({ pressed }) => [stat.cell, stat.cellRight, pressed && styles.journeyCellPressed]}
+              >
+                <Text style={stat.value}>{`${membersCount}명`}</Text>
+                <Text style={stat.label}>함께한 회원</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => { Vibration.vibrate(10); setJourneyPopup('lessons'); }}
+                style={({ pressed }) => [stat.cell, pressed && styles.journeyCellPressed]}
+              >
+                <Text style={stat.value}>{`${perf.totalLessons.toLocaleString()}회`}</Text>
+                <Text style={stat.label}>진행한 레슨</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => { Vibration.vibrate(10); setJourneyPopup('reports'); }}
+                style={({ pressed }) => [stat.cell, stat.cellRight, stat.cellBottom, pressed && styles.journeyCellPressed]}
+              >
+                <Text style={stat.value}>{`${perf.totalReports}개`}</Text>
+                <Text style={stat.label}>남긴 레슨 기록</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => { Vibration.vibrate(10); setJourneyPopup('reviews'); }}
+                style={({ pressed }) => [stat.cell, stat.cellBottom, pressed && styles.journeyCellPressed]}
+              >
+                <Text style={stat.value}>—</Text>
+                <Text style={stat.label}>받은 회원 후기</Text>
+              </Pressable>
             </View>
             {joinedMonths !== null && (
               <>
                 <View style={styles.journeyDivider} />
-                <View style={styles.journeyFooter}>
+                <Pressable
+                  onPress={() => { Vibration.vibrate(10); setJourneyPopup('duration'); }}
+                  style={({ pressed }) => [styles.journeyFooter, pressed && styles.journeyFooterPressed]}
+                >
                   <Ionicons name="ribbon-outline" size={14} color={TERRA} />
                   <Text style={styles.journeyFooterText}>
                     {joinedMonths > 0
                       ? `KERRI와 함께한 지 ${joinedMonths}개월`
                       : 'KERRI 코칭 여정이 시작됐어요!'}
                   </Text>
-                </View>
+                </Pressable>
               </>
             )}
           </View>
@@ -1052,6 +1092,52 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
+      {/* ── 코칭 여정 항목 설명 팝업 ── */}
+      <Modal
+        visible={journeyPopup !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setJourneyPopup(null)}
+      >
+        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setJourneyPopup(null)}>
+          <TouchableOpacity
+            style={[styles.journeyPopupSheet, { paddingBottom: insets.bottom + 12 }]}
+            activeOpacity={1}
+            onPress={() => {}}
+          >
+            <View style={styles.handle} />
+            {journeyPopup !== null && (() => {
+              const info = JOURNEY_INFO[journeyPopup];
+              const value =
+                journeyPopup === 'members'  ? `${membersCount}명` :
+                journeyPopup === 'lessons'  ? `${perf.totalLessons.toLocaleString()}회` :
+                journeyPopup === 'reports'  ? `${perf.totalReports}개` :
+                journeyPopup === 'reviews'  ? '—' :
+                joinedMonths !== null && joinedMonths > 0 ? `${joinedMonths}개월` : '이제 시작이에요!';
+              return (
+                <>
+                  <View style={styles.journeyPopupIconWrap}>
+                    <Ionicons name={info.icon as any} size={26} color={TERRA} />
+                  </View>
+                  <Text style={styles.journeyPopupTitle}>{info.title}</Text>
+                  <Text style={styles.journeyPopupValue}>{value}</Text>
+                  <Text style={styles.journeyPopupDesc}>{info.desc}</Text>
+                  <View style={styles.journeyPopupBadgeWrap}>
+                    <Text style={styles.journeyPopupBadgeText}>{info.badge}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.saveBtn, { marginTop: 16 }]}
+                    onPress={() => setJourneyPopup(null)}
+                  >
+                    <Text style={styles.saveBtnTxt}>확인했어요</Text>
+                  </TouchableOpacity>
+                </>
+              );
+            })()}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       {/* ── 코칭 여정 공개 설정 바텀시트 ── */}
       <Modal
         visible={journeyVisibilityModal}
@@ -1356,6 +1442,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 6,
   },
   journeyFooterText: { fontSize: 13, color: TERRA, fontWeight: '600' },
+  journeyFooterPressed: { backgroundColor: CREAM, borderRadius: 8 },
+  journeyCellPressed: { backgroundColor: CREAM },
+
+  // 항목 설명 팝업
+  journeyPopupSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: 20, paddingTop: 8,
+    marginTop: 'auto' as any,
+  },
+  journeyPopupIconWrap: {
+    width: 52, height: 52, borderRadius: 26,
+    backgroundColor: TERRA_LIGHT,
+    justifyContent: 'center', alignItems: 'center',
+    marginTop: 12, marginBottom: 10,
+  },
+  journeyPopupTitle: { fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 2 },
+  journeyPopupValue: { fontSize: 28, fontWeight: '800', color: DARK, marginBottom: 10 },
+  journeyPopupDesc: { fontSize: 14, color: DARK, lineHeight: 21 },
+  journeyPopupBadgeWrap: {
+    alignSelf: 'flex-start',
+    backgroundColor: TERRA_LIGHT, borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 4, marginTop: 10,
+  },
+  journeyPopupBadgeText: { fontSize: 11, fontWeight: '700', color: TERRA },
   statAssetBox: {
     backgroundColor: TERRA_LIGHT, borderRadius: 14,
     padding: 14, marginBottom: 16,
