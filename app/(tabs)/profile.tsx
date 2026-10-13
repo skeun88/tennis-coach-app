@@ -624,7 +624,7 @@ export default function ProfileScreen() {
           <View style={styles.sectionCard}>
             <View style={styles.statsHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="trail-sign-outline" size={15} color={TERRA} />
+                <Ionicons name="flame-outline" size={22} color={TERRA} />
                 <Text style={styles.sectionTitle}>나의 코칭 여정</Text>
               </View>
               <TouchableOpacity
