@@ -28,7 +28,7 @@ type JourneyPopupKey = 'members' | 'lessons' | 'reports' | 'reviews' | 'duration
 const JOURNEY_INFO: Record<JourneyPopupKey, {
   icon: string; title: string; desc: string; badge: string;
 }> = {
-  members:  { icon: 'people-outline',            title: '함께한 회원',       desc: 'KERRI에서 코치님이 지금까지 등록한 누적 회원 수예요.',       badge: '현재 등록 회원 기준' },
+  members:  { icon: 'people-outline',            title: '함께한 회원',       desc: 'KERRI에서 코치님이 지금까지 등록한 누적 회원 수예요.',       badge: '전체 회원 등록 기준' },
   lessons:  { icon: 'calendar-outline',          title: '진행한 레슨',       desc: '출석 처리가 완료된 레슨이 차곡차곡 쌓여요.',                 badge: '출석 완료 기준' },
   reports:  { icon: 'document-text-outline',     title: '남긴 레슨 기록',    desc: '코치님이 회원의 성장을 위해 남긴 레슨 기록이에요.',           badge: '기록 작성 기준' },
   reviews:  { icon: 'heart-outline',              title: '받은 회원 후기',   desc: '회원이 남긴 소중한 후기가 이곳에 쌓일 예정이에요.',           badge: '후기 기능 준비 중' },
