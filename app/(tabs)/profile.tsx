@@ -141,13 +141,14 @@ export default function ProfileScreen() {
   const [qrModalVisible, setQrModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [statDetail, setStatDetail] = useState<null | 'lessons' | 'retention' | 'satisfaction' | 'reports'>(null);
   const [initialLoaded, setInitialLoaded] = useState(false);
 
   const [perf, setPerf] = useState<Performance>({
     totalLessons: 0, avgRetentionMonths: null,
     satisfactionAvg: null, satisfactionCount: 0, totalReports: 0,
   });
+  const [membersCount, setMembersCount] = useState(0);
+  const [joinedMonths, setJoinedMonths] = useState<number | null>(null);
 
   const [profile, setProfile] = useState<ProfileInfo>({
     name: '', avatar_url: '', sport: '테니스',
@@ -177,11 +178,13 @@ export default function ProfileScreen() {
     if (!user) return;
     setCoachId(user.id);
 
-    const [allLessonsRes, plansRes, profileRes] = await Promise.all([
+    const [allLessonsRes, plansRes, profileRes, membersRes] = await Promise.all([
       supabase.from('lessons').select('id, date').eq('coach_id', user.id),
       supabase.from('lesson_plans').select('*', { count: 'exact', head: true }).eq('coach_id', user.id),
       supabase.from('coach_profiles').select('*').eq('coach_id', user.id).maybeSingle(),
+      supabase.from('members').select('id', { count: 'exact', head: true }).eq('coach_id', user.id),
     ]);
+    setMembersCount(membersRes.count ?? 0);
     const reviewsRes = { data: [] as any[] };
 
     const totalReports = plansRes.count ?? 0;
@@ -241,6 +244,12 @@ export default function ProfileScreen() {
     setPerf({ totalLessons, avgRetentionMonths, satisfactionAvg, satisfactionCount, totalReports });
 
     const p = profileRes.data;
+    if (p?.created_at) {
+      const created = new Date(p.created_at);
+      const now = new Date();
+      const months = Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24 * 30.44));
+      setJoinedMonths(Math.max(0, months));
+    }
     setProfile({
       name: p?.display_name ?? user.email?.split('@')[0] ?? '코치',
       avatar_url: p?.avatar_url ?? '',
@@ -465,7 +474,7 @@ export default function ProfileScreen() {
                   <SkeletonBox width="100%" height={56} borderRadius={14} />
                 </View>
               </View>
-              {/* 코칭 실적 카드 스켈레톤 */}
+              {/* 나의 코칭 여정 카드 스켈레톤 */}
               <View style={styles.sectionCard}>
                 <SkeletonBox width={100} height={16} borderRadius={6} style={{ marginBottom: 16 }} />
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
@@ -584,71 +593,36 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          {/* ── 코칭 실적 ── */}
+          {/* ── 나의 코칭 여정 ── */}
           <View style={styles.sectionCard}>
             <View style={styles.statsHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="bar-chart-outline" size={15} color={TERRA} />
-                <Text style={styles.sectionTitle}>코칭 실적</Text>
+                <Ionicons name="trail-sign-outline" size={15} color={TERRA} />
+                <Text style={styles.sectionTitle}>나의 코칭 여정</Text>
               </View>
-              {canUse('coaching_stats_public')
-                ? <Text style={styles.verifiedBadge}>KERRI 검증 데이터 · 조작 불가</Text>
-                : <View style={styles.blindBadge}><Text style={styles.blindBadgeText}>Pro 공개</Text></View>
-              }
+              <View style={styles.journeyPrivateBadge}>
+                <Ionicons name="lock-closed" size={10} color={TERRA} />
+                <Text style={styles.journeyPrivateBadgeText}>나만 보기</Text>
+              </View>
             </View>
-
-            {!canUse('coaching_stats_public') && (
-              <View style={styles.blindWrap}>
-                <View style={[stat.grid, { opacity: 0.12 }]}>
-                  <StatCell value="●●●회" label="누적 레슨" right />
-                  <StatCell value="●●개월" label="평균 유지" />
-                  <StatCell value="●.●" label="만족도" right bottom />
-                  <StatCell value="●●개" label="레슨 리포트" bottom />
+            <View style={stat.grid}>
+              <StatCell value={`${membersCount}명`} label="함께한 회원" right />
+              <StatCell value={`${perf.totalLessons.toLocaleString()}회`} label="진행한 레슨" />
+              <StatCell value={`${perf.totalReports}개`} label="남긴 레슨 기록" right bottom />
+              <StatCell value="—" label="받은 회원 후기" bottom />
+            </View>
+            {joinedMonths !== null && (
+              <>
+                <View style={styles.journeyDivider} />
+                <View style={styles.journeyFooter}>
+                  <Ionicons name="ribbon-outline" size={14} color={TERRA} />
+                  <Text style={styles.journeyFooterText}>
+                    {joinedMonths > 0
+                      ? `KERRI와 함께한 지 ${joinedMonths}개월`
+                      : 'KERRI 코칭 여정이 시작됐어요!'}
+                  </Text>
                 </View>
-                <View style={styles.blindOverlay}>
-                  <View style={styles.blindIcon}>
-                    <Ionicons name="lock-closed" size={20} color={TERRA} />
-                  </View>
-                  <Text style={styles.blindTitle}>Pro 공개 기능</Text>
-                  <Text style={styles.blindDesc}>{"데이터는 지금도 쌓이고 있어요.\nPro로 업그레이드하면 내 코칭 실적이 공개됩니다."}</Text>
-                  <TouchableOpacity style={styles.blindBtn} onPress={() => setUpsellVisible(true)}>
-                    <Ionicons name="star" size={13} color="#fff" />
-                    <Text style={styles.blindBtnText}>Pro로 공개하기</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-
-            {canUse('coaching_stats_public') && (
-              <View style={stat.grid}>
-                <StatCell
-                  value={`${perf.totalLessons.toLocaleString()}회`}
-                  label="누적 레슨"
-                  sub="출석 체크 기준"
-                  right
-                  onPress={() => setStatDetail('lessons')}
-                />
-                <StatCell
-                  value={perf.avgRetentionMonths !== null ? `${perf.avgRetentionMonths}개월` : '-'}
-                  label="평균 유지"
-                  sub={perf.avgRetentionMonths !== null ? '이탈 회원 기준' : '데이터 쌓는 중'}
-                  onPress={() => setStatDetail('retention')}
-                />
-                <StatCell
-                  value={perf.satisfactionAvg !== null ? `${perf.satisfactionAvg}` : '-'}
-                  label="만족도"
-                  sub={perf.satisfactionCount > 0 ? `${perf.satisfactionCount}명 평가` : '아직 받은 리뷰가 없어요'}
-                  right bottom
-                  onPress={() => setStatDetail('satisfaction')}
-                />
-                <StatCell
-                  value={`${perf.totalReports}개`}
-                  label="레슨 기록"
-                  sub="발송 완료 기준"
-                  bottom
-                  onPress={() => setStatDetail('reports')}
-                />
-              </View>
+              </>
             )}
           </View>
 
@@ -1041,64 +1015,6 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* ── 코칭 실적 설명 바텀시트 ── */}
-      <Modal visible={statDetail !== null} transparent animationType="slide" onRequestClose={() => setStatDetail(null)}>
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setStatDetail(null)}>
-          <TouchableOpacity style={[styles.sheet, { paddingBottom: insets.bottom + 8 }]} activeOpacity={1} onPress={() => {}}>
-            <View style={styles.handle} />
-            {statDetail === 'lessons' && (
-              <StatDetailContent
-                icon="calendar-outline"
-                title="나의 실제 레슨 경험"
-                value={`${perf.totalLessons.toLocaleString()}회`}
-                what="KERRI에서 출석 완료로 기록된 실제 레슨 횟수예요."
-                how="코치가 레슨을 진행하고 출석 처리를 완료할 때마다 누적돼요."
-                meaning="숫자가 쌓일수록 코치가 현장에서 얼마나 꾸준히 레슨해 왔는지 보여줄 수 있어요."
-              />
-            )}
-            {statDetail === 'retention' && (
-              <StatDetailContent
-                icon="people-outline"
-                title="회원과 함께한 평균 기간"
-                value={perf.avgRetentionMonths !== null ? `${perf.avgRetentionMonths}개월` : '데이터 부족'}
-                what="회원들이 코치와 평균적으로 얼마나 오랫동안 레슨을 이어가는지 보여주는 지표예요."
-                how={perf.avgRetentionMonths !== null ? "회원별 실제 레슨 시작일과 마지막 레슨 기록을 기준으로 계산돼요." : "아직 분석할 데이터가 부족해요."}
-                meaning="평균 유지 기간은 회원을 얼마나 꾸준히 관리하고 관계를 이어가는지 보여주는 코칭 케어 지표가 될 수 있어요."
-              />
-            )}
-            {statDetail === 'satisfaction' && (
-              <StatDetailContent
-                icon="star-outline"
-                title="회원이 남긴 실제 만족도"
-                value={perf.satisfactionAvg !== null ? `${perf.satisfactionAvg}` : '리뷰 없음'}
-                what="레슨을 받은 회원이 직접 남긴 평가를 바탕으로 계산된 만족도예요."
-                how={perf.satisfactionCount > 0 ? `회원의 실제 리뷰와 평가가 등록될 때 반영돼요. 현재 ${perf.satisfactionCount}명이 평가했어요.` : "아직 받은 리뷰가 없어요. 회원의 리뷰가 등록되면 만족도가 표시돼요."}
-                meaning="코치의 설명, 레슨 경험과 회원 만족도를 보여주는 신뢰 자료가 될 수 있어요."
-              />
-            )}
-            {statDetail === 'reports' && (
-              <StatDetailContent
-                icon="document-text-outline"
-                title="체계적으로 관리한 레슨"
-                value={`${perf.totalReports}개`}
-                what="코치가 KERRI에 남긴 실제 레슨 기록의 수예요."
-                how="레슨 내용을 작성하고 회원에게 발송 완료할 때마다 누적돼요."
-                meaning="회원별 수업 내용을 얼마나 꾸준하고 체계적으로 관리하는지 보여주는 기록이에요."
-              />
-            )}
-            <View style={styles.statAssetBox}>
-              <Text style={styles.statAssetTitle}>코치의 경험이 데이터 자산이 됩니다</Text>
-              <Text style={styles.statAssetDesc}>{"KERRI에 쌓인 레슨 경험, 회원 유지, 만족도와 레슨 기록은 코치의 전문성과 관리 역량을 보여주는 데이터가 됩니다."}</Text>
-              <Text style={styles.statAssetSub}>{"꾸준히 쌓인 코칭 실적은 회원이 코치를 신뢰하고 선택하는 근거가 되며, 장기적으로 코치의 브랜드 가치와 경쟁력을 높일 수 있어요."}</Text>
-              <Text style={styles.statAssetTrust}>{"KERRI에서 실제 활동을 기준으로 자동 집계되며 코치가 임의로 수정할 수 없습니다."}</Text>
-            </View>
-            <TouchableOpacity style={styles.saveBtn} onPress={() => setStatDetail(null)}>
-              <Text style={styles.saveBtnTxt}>확인</Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
       <PlanUpsellModal
         visible={upsellVisible}
         onClose={() => setUpsellVisible(false)}
@@ -1286,7 +1202,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between', marginBottom: 4,
   },
   sectionTitle: { fontSize: 15, fontWeight: '800', color: DARK },
-  verifiedBadge: { fontSize: 10, color: Colors.mutedFg, fontWeight: '600' },
+  journeyPrivateBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: TERRA_LIGHT, borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 3,
+  },
+  journeyPrivateBadgeText: { fontSize: 10, fontWeight: '700', color: TERRA },
+  journeyDivider: {
+    height: 1, backgroundColor: Colors.borderLight, marginTop: 4, marginBottom: 10,
+  },
+  journeyFooter: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+  },
+  journeyFooterText: { fontSize: 13, color: TERRA, fontWeight: '600' },
   statAssetBox: {
     backgroundColor: TERRA_LIGHT, borderRadius: 14,
     padding: 14, marginBottom: 16,
