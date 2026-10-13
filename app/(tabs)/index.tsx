@@ -18,6 +18,7 @@ import { notifyMemberAbsent, notifyReregister, notifyLessonCountUpdate } from '.
 import PlanUpsellModal from "../../components/PlanUpsellModal";
 import CoachQRModal from '../../components/CoachQRModal';
 import OnboardingModal from '../../components/OnboardingModal';
+import BottomSheetModal from '../../components/BottomSheetModal';
 import {
   fetchHomeData,
   fetchTodayCards,
@@ -917,98 +918,90 @@ export default function HomeScreen() {
       </TouchableOpacity>
 
       {/* 미납 회원 모달 */}
-      <Modal visible={unpaidModal} transparent animationType="slide" onRequestClose={() => setUnpaidModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>미납 회원</Text>
-                <Text style={{ fontSize: 14, color: '#8B7355', marginTop: 2 }}>잔여 0회 회원</Text>
-              </View>
-              <TouchableOpacity onPress={() => setUnpaidModal(false)}>
-                <Ionicons name="close" size={22} color="#8B7355" />
-              </TouchableOpacity>
-            </View>
-            {unpaidMemberList.length === 0 ? (
-              <View style={{ padding: 40, alignItems: 'center' }}>
-                <Ionicons name="checkmark-circle-outline" size={40} color="#C0755A" />
-                <Text style={{ fontSize: 14, color: '#C4B49E', marginTop: 12 }}>미납 회원이 없어요 🎉</Text>
-              </View>
-            ) : (
-              <ScrollView style={{ maxHeight: 400 }}>
-                {unpaidMemberList.map(m => (
-                  <TouchableOpacity
-                    key={m.id}
-                    style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#EDE0D4', gap: 12 }}
-                    onPress={() => { setUnpaidModal(false); router.push(`/members/${m.id}`); }}
-                  >
-                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#EDE0D4', justifyContent: 'center', alignItems: 'center' }}>
-                      <Text style={{ fontSize: 16, fontWeight: '800', color: '#3E2B22' }}>{m.name.slice(0,1)}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#3E2B22' }}>{m.name}</Text>
-                      <Text style={{ fontSize: 14, color: '#8B7355', marginTop: 2 }}>{m.level} · 잔여 {m.remaining_credits}회</Text>
-                    </View>
-                    <View style={{ backgroundColor: '#EDE0D4', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#3E2B22' }}>0회</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
-            <TouchableOpacity style={{ margin: 16, backgroundColor: '#C0755A', borderRadius: 10, paddingVertical: 12, alignItems: 'center' }} onPress={() => setUnpaidModal(false)}>
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>닫기</Text>
-            </TouchableOpacity>
+      <BottomSheetModal visible={unpaidModal} onClose={() => setUnpaidModal(false)}>
+        <View style={styles.modalHeader}>
+          <View>
+            <Text style={styles.modalTitle}>미납 회원</Text>
+            <Text style={{ fontSize: 14, color: '#8B7355', marginTop: 2 }}>잔여 0회 회원</Text>
           </View>
+          <TouchableOpacity onPress={() => setUnpaidModal(false)}>
+            <Ionicons name="close" size={22} color="#8B7355" />
+          </TouchableOpacity>
         </View>
-      </Modal>
+        {unpaidMemberList.length === 0 ? (
+          <View style={{ padding: 40, alignItems: 'center' }}>
+            <Ionicons name="checkmark-circle-outline" size={40} color="#C0755A" />
+            <Text style={{ fontSize: 14, color: '#C4B49E', marginTop: 12 }}>미납 회원이 없어요 🎉</Text>
+          </View>
+        ) : (
+          <ScrollView style={{ maxHeight: 400 }}>
+            {unpaidMemberList.map(m => (
+              <TouchableOpacity
+                key={m.id}
+                style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#EDE0D4', gap: 12 }}
+                onPress={() => { setUnpaidModal(false); router.push(`/members/${m.id}`); }}
+              >
+                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#EDE0D4', justifyContent: 'center', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#3E2B22' }}>{m.name.slice(0,1)}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#3E2B22' }}>{m.name}</Text>
+                  <Text style={{ fontSize: 14, color: '#8B7355', marginTop: 2 }}>{m.level} · 잔여 {m.remaining_credits}회</Text>
+                </View>
+                <View style={{ backgroundColor: '#EDE0D4', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#3E2B22' }}>0회</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+        <TouchableOpacity style={{ margin: 16, backgroundColor: '#C0755A', borderRadius: 10, paddingVertical: 12, alignItems: 'center' }} onPress={() => setUnpaidModal(false)}>
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>닫기</Text>
+        </TouchableOpacity>
+      </BottomSheetModal>
 
       {/* 만료 예정 회원 모달 */}
-      <Modal visible={expiringModal} transparent animationType="slide" onRequestClose={() => setExpiringModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>만료 예정 회원</Text>
-                <Text style={{ fontSize: 14, color: '#8B7355', marginTop: 2 }}>잔여 1~2회 회원</Text>
-              </View>
-              <TouchableOpacity onPress={() => setExpiringModal(false)}>
-                <Ionicons name="close" size={22} color="#8B7355" />
-              </TouchableOpacity>
-            </View>
-            {expiringMemberList.length === 0 ? (
-              <View style={{ padding: 40, alignItems: 'center' }}>
-                <Ionicons name="checkmark-circle-outline" size={40} color="#C0755A" />
-                <Text style={{ fontSize: 14, color: '#C4B49E', marginTop: 12 }}>만료 예정 회원이 없어요 🎉</Text>
-              </View>
-            ) : (
-              <ScrollView style={{ maxHeight: 400 }}>
-                {expiringMemberList.map(m => (
-                  <TouchableOpacity
-                    key={m.id}
-                    style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#EDE0D4', gap: 12 }}
-                    onPress={() => { setExpiringModal(false); router.push(`/members/${m.id}`); }}
-                  >
-                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#EDE0D4', justifyContent: 'center', alignItems: 'center' }}>
-                      <Text style={{ fontSize: 16, fontWeight: '800', color: '#3E2B22' }}>{m.name.slice(0,1)}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#3E2B22' }}>{m.name}</Text>
-                      <Text style={{ fontSize: 14, color: '#8B7355', marginTop: 2 }}>{m.level}</Text>
-                    </View>
-                    <View style={{ backgroundColor: '#EDE0D4', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#3E2B22' }}>잔여 {m.remaining_credits}회</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
-            <TouchableOpacity style={{ margin: 16, backgroundColor: '#C0755A', borderRadius: 10, paddingVertical: 12, alignItems: 'center' }} onPress={() => setExpiringModal(false)}>
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>닫기</Text>
-            </TouchableOpacity>
+      <BottomSheetModal visible={expiringModal} onClose={() => setExpiringModal(false)}>
+        <View style={styles.modalHeader}>
+          <View>
+            <Text style={styles.modalTitle}>만료 예정 회원</Text>
+            <Text style={{ fontSize: 14, color: '#8B7355', marginTop: 2 }}>잔여 1~2회 회원</Text>
           </View>
+          <TouchableOpacity onPress={() => setExpiringModal(false)}>
+            <Ionicons name="close" size={22} color="#8B7355" />
+          </TouchableOpacity>
         </View>
-      </Modal>
+        {expiringMemberList.length === 0 ? (
+          <View style={{ padding: 40, alignItems: 'center' }}>
+            <Ionicons name="checkmark-circle-outline" size={40} color="#C0755A" />
+            <Text style={{ fontSize: 14, color: '#C4B49E', marginTop: 12 }}>만료 예정 회원이 없어요 🎉</Text>
+          </View>
+        ) : (
+          <ScrollView style={{ maxHeight: 400 }}>
+            {expiringMemberList.map(m => (
+              <TouchableOpacity
+                key={m.id}
+                style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#EDE0D4', gap: 12 }}
+                onPress={() => { setExpiringModal(false); router.push(`/members/${m.id}`); }}
+              >
+                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#EDE0D4', justifyContent: 'center', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#3E2B22' }}>{m.name.slice(0,1)}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#3E2B22' }}>{m.name}</Text>
+                  <Text style={{ fontSize: 14, color: '#8B7355', marginTop: 2 }}>{m.level}</Text>
+                </View>
+                <View style={{ backgroundColor: '#EDE0D4', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#3E2B22' }}>잔여 {m.remaining_credits}회</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+        <TouchableOpacity style={{ margin: 16, backgroundColor: '#C0755A', borderRadius: 10, paddingVertical: 12, alignItems: 'center' }} onPress={() => setExpiringModal(false)}>
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>닫기</Text>
+        </TouchableOpacity>
+      </BottomSheetModal>
 
       {/* 결석 바텀시트 */}
       <Modal visible={absenceModal} transparent animationType="slide" onRequestClose={() => setAbsenceModal(false)}>
