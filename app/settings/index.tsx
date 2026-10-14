@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  ScrollView, Alert, ActivityIndicator,
+  ScrollView, Alert, ActivityIndicator, Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import { useSubscription } from '../../hooks/useSubscription';
 import { PLANS } from '../../lib/subscription';
 import { supabase } from '../../lib/supabase';
@@ -13,7 +14,8 @@ import SettingsHeader from '../../components/SettingsHeader';
 
 const TERRA = '#C0755A';
 const DARK = '#3E2B22';
-const TERRA_LIGHT = '#FBF2EF';
+
+const KAKAO_CHANNEL_URL = 'https://pf.kakao.com/_KERRI';
 
 interface SettingRowProps {
   icon: string;
@@ -61,6 +63,8 @@ export default function SettingsScreen() {
   const planLabel = subscription
     ? PLANS[subscription.plan_id]?.name ?? subscription.plan_id
     : null;
+
+  const appVersion = Constants.expoConfig?.version ?? '—';
 
   function handleSignOut() {
     Alert.alert('로그아웃', '로그아웃 하시겠습니까?', [
@@ -123,68 +127,71 @@ export default function SettingsScreen() {
       <SettingsHeader title="설정" />
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
 
-      {/* ── 계정 및 프로필 ── */}
-      <SectionHeader title="계정 및 프로필" />
-      <Group>
-        <SettingRow icon="person-circle-outline" label="계정 정보" onPress={notReady} value={email || undefined} />
-        <SettingRow icon="create-outline" label="코치 프로필 수정" onPress={() => { router.back(); }} />
-        <SettingRow icon="eye-outline" label="공개 프로필 미리보기" onPress={notReady} />
-        <SettingRow icon="time-outline" label="시간블럭 설정" onPress={() => router.push('/settings/availability')} />
-      </Group>
+        {/* ── 계정 ── */}
+        <SectionHeader title="계정" />
+        <Group>
+          <SettingRow icon="person-circle-outline" label="계정 정보" onPress={notReady} value={email || undefined} />
+          <SettingRow icon="notifications-outline" label="알림 설정" onPress={() => router.push('/settings/notifications')} />
+          <SettingRow icon="time-outline" label="시간블럭 설정" onPress={() => router.push('/settings/availability')} />
+        </Group>
 
-      {/* ── 구독 ── */}
-      <SectionHeader title="구독" />
-      <Group>
-        <SettingRow
-          icon="card-outline"
-          label="구독 관리"
-          value={planLabel ? `${planLabel} 플랜` : undefined}
-          onPress={() => router.push('/subscription/manage')}
-        />
-      </Group>
+        {/* ── 구독 ── */}
+        <SectionHeader title="구독" />
+        <Group>
+          <SettingRow
+            icon="card-outline"
+            label="구독 관리"
+            value={planLabel ? `${planLabel} 플랜` : undefined}
+            onPress={() => router.push('/subscription/manage')}
+          />
+        </Group>
 
-      {/* ── 개인정보 및 보안 ── */}
-      <SectionHeader title="개인정보 및 보안" />
-      <Group>
-        <SettingRow icon="document-text-outline" label="개인정보 처리방침" onPress={() => router.push('/(auth)/privacy-policy')} />
-        <SettingRow icon="reader-outline" label="이용약관" onPress={notReady} />
-        <SettingRow icon="mic-outline" label="AI 및 음성 분석 동의 관리" onPress={notReady} />
-        <SettingRow icon="shield-outline" label="데이터 및 계정 관리" onPress={notReady} />
-      </Group>
+        {/* ── 개인정보 및 약관 ── */}
+        <SectionHeader title="개인정보 및 약관" />
+        <Group>
+          <SettingRow icon="mic-outline" label="AI·음성 분석 동의 관리" onPress={notReady} />
+          <SettingRow icon="document-text-outline" label="개인정보처리방침" onPress={() => router.push('/(auth)/privacy-policy')} />
+          <SettingRow icon="reader-outline" label="이용약관" onPress={notReady} />
+        </Group>
 
-      {/* ── 고객 지원 ── */}
-      <SectionHeader title="고객 지원" />
-      <Group>
-        <SettingRow icon="help-circle-outline" label="자주 묻는 질문" onPress={notReady} />
-        <SettingRow icon="mail-outline" label="문의하기" onPress={notReady} />
-        <SettingRow icon="bug-outline" label="오류 신고" onPress={notReady} />
-        <SettingRow icon="information-circle-outline" label="앱 버전 정보" onPress={() => Alert.alert('앱 버전', '1.1.8 (Build 10)')} value="1.1.8" />
-      </Group>
+        {/* ── 고객지원 ── */}
+        <SectionHeader title="고객지원" />
+        <Group>
+          <SettingRow icon="help-circle-outline" label="자주 묻는 질문" onPress={notReady} />
+          <SettingRow
+            icon="chatbubble-ellipses-outline"
+            label="카카오톡 문의"
+            onPress={() => Linking.openURL(KAKAO_CHANNEL_URL).catch(() => Alert.alert('오류', '카카오톡 채널을 열 수 없습니다.'))}
+          />
+        </Group>
 
-      {/* ── 로그아웃 ── */}
-      <View style={styles.logoutCard}>
-        <TouchableOpacity style={styles.logoutRow} onPress={handleSignOut} activeOpacity={0.7}>
-          <Ionicons name="log-out-outline" size={20} color={Colors.destructive} />
-          <Text style={styles.logoutText}>로그아웃</Text>
+        {/* ── 로그아웃 ── */}
+        <View style={styles.logoutCard}>
+          <TouchableOpacity style={styles.logoutRow} onPress={handleSignOut} activeOpacity={0.7}>
+            <Ionicons name="log-out-outline" size={20} color={Colors.destructive} />
+            <Text style={styles.logoutText}>로그아웃</Text>
+          </TouchableOpacity>
+          {!!email && <Text style={styles.emailHint}>{email}</Text>}
+        </View>
+
+        {/* ── 앱 버전 ── */}
+        <Text style={styles.versionText}>버전 {appVersion}</Text>
+
+        {/* ── 계정 삭제 ── */}
+        <TouchableOpacity
+          style={styles.deleteRow}
+          onPress={handleDeleteAccount}
+          disabled={deleting}
+          activeOpacity={0.7}
+        >
+          {deleting
+            ? <ActivityIndicator size="small" color={Colors.mutedFg} />
+            : <Ionicons name="trash-outline" size={14} color={Colors.mutedFg} />
+          }
+          <Text style={styles.deleteText}>계정 삭제</Text>
         </TouchableOpacity>
-        {!!email && <Text style={styles.emailHint}>{email}</Text>}
-      </View>
 
-      {/* ── 계정 삭제 ── */}
-      <TouchableOpacity
-        style={styles.deleteRow}
-        onPress={handleDeleteAccount}
-        disabled={deleting}
-        activeOpacity={0.7}
-      >
-        {deleting
-          ? <ActivityIndicator size="small" color={Colors.mutedFg} />
-          : <Ionicons name="trash-outline" size={14} color={Colors.mutedFg} />
-        }
-        <Text style={styles.deleteText}>계정 삭제</Text>
-      </TouchableOpacity>
-
-      <View style={{ height: 40 }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
     </View>
   );
@@ -236,10 +243,16 @@ const styles = StyleSheet.create({
     textAlign: 'center', paddingBottom: 12,
   },
 
+  // Version
+  versionText: {
+    fontSize: 12, color: Colors.mutedFg,
+    textAlign: 'center', marginTop: 12,
+  },
+
   // Delete account
   deleteRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 5, marginTop: 16, paddingVertical: 8,
+    gap: 5, marginTop: 8, paddingVertical: 8,
   },
   deleteText: { fontSize: 12, color: Colors.mutedFg, textDecorationLine: 'underline' },
 });
