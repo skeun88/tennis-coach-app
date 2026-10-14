@@ -270,7 +270,7 @@ export default function ManageSubscriptionScreen() {
             <Text style={s.footerLink}>구매 복원</Text>
           </TouchableOpacity>
           <Text style={s.footerSep}>·</Text>
-          <TouchableOpacity onPress={() => Linking.openURL('https://kerri.ai/policy/refund')}>
+          <TouchableOpacity onPress={() => Linking.openURL('https://kerri.co.kr/refund-policy')}>
             <Text style={s.footerLink}>구독·환불 정책</Text>
           </TouchableOpacity>
         </View>
