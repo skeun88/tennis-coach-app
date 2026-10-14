@@ -151,7 +151,7 @@ export default function SettingsScreen() {
         <Group>
           <SettingRow icon="mic-outline" label="AI·음성 분석 동의 관리" onPress={notReady} />
           <SettingRow icon="document-text-outline" label="개인정보처리방침" onPress={() => router.push('/(auth)/privacy-policy')} />
-          <SettingRow icon="reader-outline" label="이용약관" onPress={notReady} />
+          <SettingRow icon="reader-outline" label="이용약관" onPress={() => Linking.openURL('https://kerri.co.kr/terms').catch(() => Alert.alert('오류', '페이지를 열 수 없습니다.'))} />
         </Group>
 
         {/* ── 고객지원 ── */}
