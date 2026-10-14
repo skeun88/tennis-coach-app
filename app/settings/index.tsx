@@ -15,7 +15,7 @@ import SettingsHeader from '../../components/SettingsHeader';
 const TERRA = '#C0755A';
 const DARK = '#3E2B22';
 
-const KAKAO_CHANNEL_URL = 'https://pf.kakao.com/_KERRI';
+const KAKAO_CHANNEL_URL = 'http://pf.kakao.com/_CrxgwX/chat';
 
 interface SettingRowProps {
   icon: string;
