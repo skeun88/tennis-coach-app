@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, ActivityIndicator, Platform, Animated, Modal, TextInput, KeyboardAvoidingView,
-  AppState, AppStateStatus,
+  AppState, AppStateStatus, SafeAreaView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
@@ -19,6 +19,8 @@ import { checkAiAnalysisLimit, incrementAiAnalysisUsage } from '../../lib/subscr
 import PlanUpsellModal, { UpsellContext } from '../../components/PlanUpsellModal';
 import ReportQuotaBar from '../../components/ReportQuotaBar';
 import ReportTopupModal from '../../components/ReportTopupModal';
+import CoachConsentModal, { AI_CONSENT_VERSION } from '../../components/CoachConsentModal';
+import MemberConsentRequestModal from '../../components/MemberConsentRequestModal';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -48,6 +50,10 @@ export default function AIAnalysisScreen() {
   const [upsellContext, setUpsellContext] = useState<UpsellContext | null>(null);
   const [usageInfo, setUsageInfo] = useState<{ used: number; limit: number } | undefined>(undefined);
   const [topupModalVisible, setTopupModalVisible] = useState(false);
+  const [coachConsentVisible, setCoachConsentVisible] = useState(false);
+  const [memberConsentVisible, setMemberConsentVisible] = useState(false);
+  const [consentCheckDone, setConsentCheckDone] = useState(false);
+  const [memberConsentOk, setMemberConsentOk] = useState(false);
   const [pendingAnalysis, setPendingAnalysis] = useState<{
     uri: string; userId: string; duration: number;
     storagePath?: string; planId?: string;
@@ -78,15 +84,14 @@ export default function AIAnalysisScreen() {
   // 타이핑 레슨 기록 모달
   const [manualModalVisible, setManualModalVisible] = useState(false);
   const [manualContent, setManualContent] = useState('');
-  const [polishing, setPolishing] = useState(false);
-  const [sendingDirect, setSendingDirect] = useState(false);
-  const [polishedReport, setPolishedReport] = useState<null | {
-    summary: string;
-    achievements: string[];
-    improvement_points: string[];
-    practice_plan: Array<{ title: string; description: string; duration?: string; frequency?: string }>;
-  }>(null);
-  const [savingReport, setSavingReport] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitMode, setSubmitMode] = useState<'direct' | 'ai' | null>(null);
+  const [addedChips, setAddedChips] = useState<string[]>([]);
+  const [inputFocused, setInputFocused] = useState(false);
+  const [cursorPos, setCursorPos] = useState({ start: 0, end: 0 });
+  const inputRef = useRef<TextInput>(null);
+
+  const MEMO_CHIPS = ['오늘 연습', '잘한 점', '주의할 점', '다음 목표'] as const;
 
   const [usageSheetVisible, setUsageSheetVisible] = useState(false);
   const [hasSeenUsage, setHasSeenUsage] = useState(true); // true = no pulse (default until loaded)
@@ -131,6 +136,59 @@ export default function AIAnalysisScreen() {
 
   // plan-detail에서 돌아올 때 목록 새로고침 (제목 변경 반영)
   useFocusEffect(useCallback(() => { loadPlans(); }, []));
+
+  // 화면 진입 시 동의 체크 (1회)
+  useEffect(() => {
+    checkConsents();
+  }, []);
+
+  async function checkConsents() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // 1. 코치 동의 확인
+    const { data: coachConsent } = await supabase
+      .from('ai_consents')
+      .select('id')
+      .eq('coach_id', user.id)
+      .eq('consent_type', 'coach')
+      .eq('consent_status', 'agreed')
+      .eq('consent_version', AI_CONSENT_VERSION)
+      .maybeSingle();
+
+    if (!coachConsent) {
+      setCoachConsentVisible(true);
+      return;
+    }
+
+    // 2. 회원 동의 확인
+    await checkMemberConsent();
+    setConsentCheckDone(true);
+  }
+
+  async function checkMemberConsent() {
+    const { data: memberConsent } = await supabase
+      .from('ai_consents')
+      .select('id')
+      .eq('member_id', memberId)
+      .eq('consent_type', 'member')
+      .eq('consent_status', 'agreed')
+      .maybeSingle();
+
+    if (memberConsent) {
+      setMemberConsentOk(true);
+    } else {
+      // guardian 동의도 확인
+      const { data: guardianConsent } = await supabase
+        .from('ai_consents')
+        .select('id')
+        .eq('member_id', memberId)
+        .eq('consent_type', 'guardian')
+        .eq('consent_status', 'agreed')
+        .maybeSingle();
+      setMemberConsentOk(!!guardianConsent);
+    }
+  }
 
   useEffect(() => {
     loadPlans();
@@ -332,51 +390,79 @@ export default function AIAnalysisScreen() {
     return '';
   }
 
-  async function polishManualReport() {
-    if (!manualContent.trim()) {
-      Alert.alert('내용을 입력해주세요', '레슨 내용을 작성한 후 AI 생성을 눌러주세요.');
-      return;
-    }
-    setPolishing(true);
-    try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/polish-manual-report`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({
-          memberName,
-          memberLevel,
-          lessonDate: new Date().toISOString().split('T')[0],
-          raw: {
-            summary: manualContent,
-            achievements: '',
-            improvementPoints: '',
-            practicePlan: '',
+  const memoKey = `memo_draft_${memberId as string}_${(lessonId as string) || 'no-lesson'}`;
+
+  // 자동 임시저장
+  useEffect(() => {
+    if (!manualModalVisible) return;
+    AsyncStorage.setItem(memoKey, manualContent);
+  }, [manualContent, manualModalVisible]);
+
+  // 모달 열릴 때 임시저장 복원
+  useEffect(() => {
+    if (!manualModalVisible) return;
+    AsyncStorage.getItem(memoKey).then(saved => {
+      if (saved) setManualContent(saved);
+    });
+    setAddedChips([]);
+    setInputFocused(false);
+    setTimeout(() => inputRef.current?.focus(), 350);
+  }, [manualModalVisible]);
+
+  function handleCloseManualModal() {
+    if (manualContent.trim()) {
+      Alert.alert(
+        '작성 중인 메모가 있어요',
+        '내용을 저장하고 나갈까요?',
+        [
+          {
+            text: '삭제하고 닫기',
+            style: 'destructive',
+            onPress: () => {
+              AsyncStorage.removeItem(memoKey);
+              setManualContent('');
+              setAddedChips([]);
+              setManualModalVisible(false);
+            },
           },
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setPolishedReport(data.report);
-      } else {
-        Alert.alert('오류', data.error ?? 'AI 생성 실패');
-      }
-    } catch (e) {
-      Alert.alert('오류', '네트워크 오류가 발생했습니다.');
-    } finally {
-      setPolishing(false);
+          {
+            text: '저장하고 닫기',
+            onPress: () => setManualModalVisible(false),
+          },
+        ]
+      );
+    } else {
+      setManualModalVisible(false);
     }
   }
 
-  async function sendDirectReport() {
-    if (!manualContent.trim()) {
-      Alert.alert('내용을 입력해주세요', '전송할 레슨 내용을 작성해주세요.');
-      return;
-    }
-    setSendingDirect(true);
+  function insertChip(chip: string) {
+    if (addedChips.includes(chip)) return;
+    const pos = cursorPos.start;
+    const before = manualContent.slice(0, pos);
+    const after = manualContent.slice(pos);
+    const prefix = before.length > 0 && !before.endsWith('\n\n')
+      ? (before.endsWith('\n') ? '\n' : '\n\n')
+      : '';
+    const chipBlock = `${chip}\n-`;
+    const newContent = (before + prefix + chipBlock + '\n\n' + after).slice(0, 2000);
+    setManualContent(newContent);
+    setAddedChips(prev => [...prev, chip]);
+    const newPos = (before + prefix + chipBlock).length;
+    setTimeout(() => {
+      inputRef.current?.setNativeProps({ selection: { start: newPos, end: newPos } });
+      inputRef.current?.focus();
+    }, 50);
+  }
+
+  async function handleDirect() {
+    if (!manualContent.trim() || isSubmitting) return;
+    setIsSubmitting(true);
+    setSubmitMode('direct');
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('not authenticated');
-      const { error } = await supabase.from('member_lesson_reports').insert({
+      const { data: saved, error } = await supabase.from('member_lesson_reports').insert({
         coach_id: user.id,
         member_id: memberId,
         lesson_date: new Date().toISOString().split('T')[0],
@@ -386,46 +472,87 @@ export default function AIAnalysisScreen() {
         practice_plan: [],
         source: 'manual',
         sent_to_member: false,
-      });
+      }).select().single();
       if (error) throw error;
-      Alert.alert('저장 완료', '레슨 기록이 저장됐어요. 상세 화면에서 전송할 수 있어요.');
-      setManualModalVisible(false);
+      await AsyncStorage.removeItem(memoKey);
       setManualContent('');
+      setAddedChips([]);
+      setManualModalVisible(false);
       loadPlans();
-    } catch (e) {
-      Alert.alert('오류', '전송에 실패했습니다.');
+      router.push({
+        pathname: '/members/plan-detail',
+        params: { reportId: saved.id, memberId, memberName, memberLevel },
+      } as any);
+    } catch {
+      Alert.alert('저장 실패', '잠시 후 다시 시도해주세요.');
     } finally {
-      setSendingDirect(false);
+      setIsSubmitting(false);
+      setSubmitMode(null);
     }
   }
 
-  async function saveManualReport() {
-    if (!polishedReport) return;
-    setSavingReport(true);
+  async function handleAI() {
+    if (!manualContent.trim() || isSubmitting) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const limitResult = await checkAiAnalysisLimit(user.id, subscription);
+    if (!limitResult.allowed) {
+      if (subscription && subscription.plan_id !== 'free') {
+        const token = (await supabase.auth.getSession()).data.session?.access_token ?? '';
+        setAuthToken(token);
+        setTopupModalVisible(true);
+      } else {
+        setUpsellContext('ai_analysis_free');
+      }
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitMode('ai');
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('not authenticated');
-      const { error } = await supabase.from('member_lesson_reports').insert({
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/polish-manual-report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({
+          memberName,
+          memberLevel,
+          lessonDate: new Date().toISOString().split('T')[0],
+          raw: { summary: manualContent },
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error ?? 'AI 생성 실패');
+
+      const report = data.report;
+      const { data: saved, error } = await supabase.from('member_lesson_reports').insert({
         coach_id: user.id,
         member_id: memberId,
         lesson_date: new Date().toISOString().split('T')[0],
-        summary: polishedReport.summary,
-        achievements: polishedReport.achievements,
-        improvement_points: polishedReport.improvement_points,
-        practice_plan: polishedReport.practice_plan,
+        summary: report.summary,
+        achievements: report.achievements ?? [],
+        improvement_points: report.improvement_points ?? [],
+        practice_plan: report.practice_plan ?? [],
         source: 'manual',
         sent_to_member: false,
-      });
+      }).select().single();
       if (error) throw error;
-      Alert.alert('저장 완료', 'AI 레슨 기록이 저장됐어요. 상세 화면에서 전송할 수 있어요.');
-      setManualModalVisible(false);
-      setPolishedReport(null);
+
+      await incrementAiAnalysisUsage(user.id);
+      await AsyncStorage.removeItem(memoKey);
       setManualContent('');
+      setAddedChips([]);
+      setManualModalVisible(false);
       loadPlans();
-    } catch (e) {
-      Alert.alert('오류', '저장에 실패했습니다.');
+      router.push({
+        pathname: '/members/plan-detail',
+        params: { reportId: saved.id, memberId, memberName, memberLevel },
+      } as any);
+    } catch {
+      Alert.alert('AI 정리 실패', '잠시 후 다시 시도해주세요.\n작성한 내용은 그대로 유지됩니다.');
     } finally {
-      setSavingReport(false);
+      setIsSubmitting(false);
+      setSubmitMode(null);
     }
   }
 
@@ -489,6 +616,11 @@ export default function AIAnalysisScreen() {
   }
 
   async function startRecording() {
+    // 회원 동의 미완료 시 차단
+    if (consentCheckDone && !memberConsentOk) {
+      setMemberConsentVisible(true);
+      return;
+    }
     const consentOk = await checkGuardianConsent();
     if (!consentOk) return;
     try {
@@ -970,6 +1102,19 @@ export default function AIAnalysisScreen() {
 
         {/* 녹음 시작 카드 */}
         <View style={styles.recordCard}>
+          {/* 회원 동의 상태 배지 */}
+          {consentCheckDone && (
+            <View style={[styles.consentBadge, memberConsentOk ? styles.consentBadgeOk : styles.consentBadgeWarn]}>
+              <Ionicons
+                name={memberConsentOk ? 'checkmark-circle' : 'alert-circle-outline'}
+                size={14}
+                color={memberConsentOk ? '#22C55E' : Colors.primary}
+              />
+              <Text style={[styles.consentBadgeText, memberConsentOk ? styles.consentBadgeTextOk : styles.consentBadgeTextWarn]}>
+                {memberConsentOk ? '✓ 회원 동의 확인됨' : '회원 동의 필요'}
+              </Text>
+            </View>
+          )}
           {/* 1. 제목 */}
           <Text style={styles.recordPrompt}>오늘 레슨을 기록해 볼까요?</Text>
           {/* 2. 설명 */}
@@ -1085,7 +1230,7 @@ export default function AIAnalysisScreen() {
         {/* 직접 작성 - 얇은 액션 카드 */}
         <TouchableOpacity
           style={styles.manualReportBtn}
-          onPress={() => { setPolishedReport(null); setManualContent(''); setManualModalVisible(true); }}
+          onPress={() => { setManualModalVisible(true); }}
           activeOpacity={0.85}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -1100,102 +1245,103 @@ export default function AIAnalysisScreen() {
           <Ionicons name="chevron-forward" size={16} color={Colors.mutedFg} />
         </TouchableOpacity>
 
-        {/* 타이핑 레슨 기록 모달 */}
-        <Modal visible={manualModalVisible} animationType="slide" transparent onRequestClose={() => setManualModalVisible(false)}>
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-            <View style={styles.manualOverlay}>
-              <View style={styles.manualSheet}>
+        {/* 레슨 메모 입력 모달 */}
+        <Modal visible={manualModalVisible} animationType="slide" transparent={false} onRequestClose={handleCloseManualModal} statusBarTranslucent>
+          <SafeAreaView style={styles.manualContainer}>
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+              <View style={styles.manualInner}>
+                {/* 헤더 */}
                 <View style={styles.manualHeader}>
-                  <Text style={styles.manualHeaderTitle}>타이핑으로 레슨 기록</Text>
-                  <TouchableOpacity onPress={() => setManualModalVisible(false)}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.manualHeaderTitle}>레슨 메모 입력</Text>
+                    <Text style={styles.manualHeaderSub}>기억나는 내용만 편하게 적어주세요.{'\n'}짧은 메모도 AI가 레슨 기록으로 정리해드려요.</Text>
+                  </View>
+                  <TouchableOpacity onPress={handleCloseManualModal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                     <Ionicons name="close" size={22} color={Colors.mutedFg} />
                   </TouchableOpacity>
                 </View>
 
-                {!polishedReport ? (
-                  <>
-                    <Text style={styles.manualFormHint}>오늘 레슨에서 기억나는 내용을 편하게 작성해주세요.</Text>
-                    <TextInput
-                      style={styles.manualFreeInput}
-                      value={manualContent}
-                      onChangeText={setManualContent}
-                      placeholder="예) 포핸드 타점을 앞으로 잡는 연습을 했고, 백핸드는 몸이 먼저 열리는 부분을 교정했습니다."
-                      placeholderTextColor={Colors.placeholder}
-                      multiline
-                      textAlignVertical="top"
-                    />
-                    <View style={styles.manualBtnRow}>
+                {/* 빠른 입력 칩 */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.chipsScroll}
+                  contentContainerStyle={styles.chipsContent}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {MEMO_CHIPS.map(chip => {
+                    const added = addedChips.includes(chip);
+                    return (
                       <TouchableOpacity
-                        style={[styles.directSendBtn, (sendingDirect || polishing) && { opacity: 0.6 }]}
-                        onPress={sendDirectReport}
-                        disabled={sendingDirect || polishing}
+                        key={chip}
+                        style={[styles.chip, added && styles.chipAdded]}
+                        onPress={() => insertChip(chip)}
+                        disabled={added}
+                        activeOpacity={0.7}
                       >
-                        {sendingDirect
-                          ? <ActivityIndicator color={Colors.primary} size="small" />
-                          : <Text style={styles.directSendBtnText}>전송하기</Text>
-                        }
+                        {added && <Ionicons name="checkmark" size={12} color={Colors.primary} style={{ marginRight: 4 }} />}
+                        <Text style={[styles.chipText, added && styles.chipTextAdded]}>{chip}</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.polishBtn, (polishing || sendingDirect) && { opacity: 0.6 }]}
-                        onPress={polishManualReport}
-                        disabled={polishing || sendingDirect}
-                      >
-                        {polishing
-                          ? <ActivityIndicator color="#fff" size="small" />
-                          : <><Ionicons name="sparkles" size={16} color="#fff" /><Text style={styles.polishBtnText}> AI 레슨 기록 생성</Text></>
-                        }
-                      </TouchableOpacity>
-                    </View>
-                  </>
-                ) : (
-                  <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
-                    <View style={styles.manualForm}>
-                      <Text style={styles.polishedTitle}>AI가 정리한 레슨 기록</Text>
+                    );
+                  })}
+                </ScrollView>
 
-                      <View style={styles.polishedSection}>
-                        <Text style={styles.polishedLabel}>레슨 요약</Text>
-                        <Text style={styles.polishedText}>{polishedReport.summary}</Text>
-                      </View>
-                      <View style={styles.polishedSection}>
-                        <Text style={styles.polishedLabel}>오늘의 성과</Text>
-                        {polishedReport.achievements.map((a, i) => <Text key={i} style={styles.polishedText}>• {a}</Text>)}
-                      </View>
-                      <View style={styles.polishedSection}>
-                        <Text style={styles.polishedLabel}>개선 포인트</Text>
-                        {polishedReport.improvement_points.map((p, i) => <Text key={i} style={styles.polishedText}>• {p}</Text>)}
-                      </View>
-                      <View style={styles.polishedSection}>
-                        <Text style={styles.polishedLabel}>연습 플랜</Text>
-                        {polishedReport.practice_plan.map((p, i) => (
-                          <View key={i} style={styles.practicePlanItem}>
-                            <Text style={styles.practicePlanTitle}>{p.title}</Text>
-                            <Text style={styles.polishedText}>{p.description}</Text>
-                            {p.duration ? <Text style={styles.practicePlanMeta}>{p.duration}{p.frequency ? `  ${p.frequency}` : ''}</Text> : null}
-                          </View>
-                        ))}
-                      </View>
+                {/* 입력창 */}
+                <View style={[styles.inputWrapper, inputFocused && styles.inputWrapperFocused]}>
+                  <TextInput
+                    ref={inputRef}
+                    style={styles.memoInput}
+                    value={manualContent}
+                    onChangeText={v => setManualContent(v.slice(0, 2000))}
+                    placeholder={"예) 포핸드는 타점을 앞으로 잡는 연습을 했고, 백핸드는 몸이 먼저 열리는 부분을 교정했습니다. 다음 시간에는 랠리에서 자세를 유지하기."}
+                    placeholderTextColor={Colors.placeholder}
+                    multiline
+                    textAlignVertical="top"
+                    onFocus={() => setInputFocused(true)}
+                    onBlur={() => setInputFocused(false)}
+                    onSelectionChange={e => setCursorPos(e.nativeEvent.selection)}
+                    scrollEnabled
+                  />
+                  <Text style={styles.charCounter}>{manualContent.length.toLocaleString()} / 2,000</Text>
+                </View>
 
-                      <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
-                        <TouchableOpacity style={styles.retryBtn} onPress={() => setPolishedReport(null)}>
-                          <Text style={styles.retryBtnText}>다시 작성</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.saveBtn, savingReport && { opacity: 0.6 }]}
-                          onPress={saveManualReport}
-                          disabled={savingReport}
-                        >
-                          {savingReport
-                            ? <ActivityIndicator color="#fff" size="small" />
-                            : <Text style={styles.saveBtnText}>저장하기</Text>
-                          }
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  </ScrollView>
+                {/* AI 처리 중 오버레이 */}
+                {isSubmitting && submitMode === 'ai' && (
+                  <View style={styles.manualLoadingOverlay}>
+                    <ActivityIndicator size="large" color={Colors.primary} />
+                    <Text style={styles.manualLoadingText}>AI가 레슨을 정리하고 있어요...</Text>
+                    <Text style={styles.manualLoadingSubText}>잠시만 기다려주세요</Text>
+                  </View>
                 )}
+
+                {/* 하단 버튼 */}
+                <View style={styles.manualBtnRow}>
+                  <TouchableOpacity
+                    style={[styles.directBtn, (!manualContent.trim() || isSubmitting) && styles.btnDisabled]}
+                    onPress={handleDirect}
+                    disabled={!manualContent.trim() || isSubmitting}
+                    activeOpacity={0.8}
+                  >
+                    {isSubmitting && submitMode === 'direct'
+                      ? <ActivityIndicator color={Colors.primary} size="small" />
+                      : <Text style={[styles.directBtnText, (!manualContent.trim() || isSubmitting) && { opacity: 0.4 }]}>그대로 기록하기</Text>
+                    }
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.aiBtn, (!manualContent.trim() || isSubmitting) && styles.btnDisabled]}
+                    onPress={handleAI}
+                    disabled={!manualContent.trim() || isSubmitting}
+                    activeOpacity={0.85}
+                  >
+                    {isSubmitting && submitMode === 'ai'
+                      ? <ActivityIndicator color="#fff" size="small" />
+                      : <><Ionicons name="sparkles" size={16} color="#fff" /><Text style={styles.aiBtnText}> AI로 정리하기</Text></>
+                    }
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
-          </KeyboardAvoidingView>
+            </KeyboardAvoidingView>
+          </SafeAreaView>
         </Modal>
 
         {/* 최근 레슨 기록 */}
@@ -1415,6 +1561,35 @@ export default function AIAnalysisScreen() {
         </View>
       </Modal>
 
+      {/* 코치 동의 모달 */}
+      <CoachConsentModal
+        visible={coachConsentVisible}
+        onAgree={() => {
+          setCoachConsentVisible(false);
+          checkMemberConsent().then(() => setConsentCheckDone(true));
+        }}
+        onDecline={() => {
+          setCoachConsentVisible(false);
+          router.back();
+        }}
+      />
+
+      {/* 회원 동의 요청 모달 */}
+      <MemberConsentRequestModal
+        visible={memberConsentVisible}
+        memberName={memberName as string}
+        onSendRequest={() => {
+          setMemberConsentVisible(false);
+          Alert.alert('동의 요청', `${memberName || '회원'}에게 AI 레슨 기록 동의 요청을 보냈습니다.\n회원이 동의하면 바로 녹음을 시작할 수 있어요.`);
+        }}
+        onQRConsent={() => {
+          setMemberConsentVisible(false);
+          // QR 공유 기능 재사용 (기존 invite 플로우)
+          Alert.alert('QR 동의', 'QR 코드를 회원에게 보여주세요.\n회원이 QR을 스캔하면 동의 화면으로 연결됩니다.');
+        }}
+        onLater={() => setMemberConsentVisible(false)}
+      />
+
       {/* AI 리포트 추가 충전 모달 (월 할당량 소진 시) */}
       {topupModalVisible && authToken && (
         <ReportTopupModal
@@ -1453,6 +1628,18 @@ const styles = StyleSheet.create({
   headerSub: { fontSize: 13, color: Colors.mutedFg, marginTop: 2 },
   scroll: { flex: 1, backgroundColor: Colors.background },
   scrollContent: { backgroundColor: Colors.background, paddingBottom: 48 },
+
+  // 동의 배지
+  consentBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    alignSelf: 'flex-start', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5,
+    marginBottom: 10,
+  },
+  consentBadgeOk: { backgroundColor: '#ECFDF5' },
+  consentBadgeWarn: { backgroundColor: Colors.primaryLight },
+  consentBadgeText: { fontSize: 12, fontWeight: '600' },
+  consentBadgeTextOk: { color: '#22C55E' },
+  consentBadgeTextWarn: { color: Colors.primary },
 
   usageHelpBtn: {
     width: 26, height: 26, borderRadius: 13,
@@ -1642,58 +1829,83 @@ const styles = StyleSheet.create({
   },
   manualReportBtnTitle: { fontSize: 14, fontWeight: '700', color: Colors.foreground },
   manualReportBtnSub: { fontSize: 12, color: Colors.mutedFg, marginTop: 2 },
-  manualOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  manualSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '88%', maxHeight: '92%', display: 'flex', flexDirection: 'column' },
+  // 레슨 메모 입력 모달
+  manualContainer: { flex: 1, backgroundColor: Colors.background },
+  manualInner: { flex: 1, flexDirection: 'column' },
   manualHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 16,
+    flexDirection: 'row', alignItems: 'flex-start',
+    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12,
     borderBottomWidth: 1, borderBottomColor: Colors.border,
+    gap: 12,
   },
-  manualHeaderTitle: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
-  manualForm: { padding: 20, paddingBottom: 40 },
-  manualFormHint: { fontSize: 13, color: Colors.mutedFg, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, lineHeight: 20 },
-  manualFreeInput: {
+  manualHeaderTitle: { fontSize: 17, fontWeight: '800', color: Colors.foreground, marginBottom: 4 },
+  manualHeaderSub: { fontSize: 13, color: Colors.mutedFg, lineHeight: 19 },
+  chipsScroll: { flexGrow: 0, flexShrink: 0 },
+  chipsContent: { paddingHorizontal: 20, paddingVertical: 10, gap: 8, flexDirection: 'row', alignItems: 'center' },
+  chip: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 14, paddingVertical: 7,
+    borderRadius: 20, borderWidth: 1.5, borderColor: Colors.border,
+    backgroundColor: '#fff',
+  },
+  chipAdded: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight },
+  chipText: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg },
+  chipTextAdded: { color: Colors.primary },
+  inputWrapper: {
     flex: 1,
-    marginHorizontal: 20,
-    marginVertical: 8,
-    borderWidth: 1, borderColor: Colors.border, borderRadius: 12,
-    padding: 16, fontSize: 15, color: Colors.foreground,
-    lineHeight: 24, textAlignVertical: 'top',
-    minHeight: 200,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: Colors.borderLight,
+    backgroundColor: '#F4EEE8',
+    overflow: 'hidden',
+    minHeight: 240,
+    maxHeight: 320,
   },
+  inputWrapperFocused: {
+    borderColor: Colors.primary,
+  },
+  memoInput: {
+    flex: 1,
+    padding: 16,
+    fontSize: 15,
+    color: Colors.foreground,
+    lineHeight: 24,
+    textAlignVertical: 'top',
+  },
+  charCounter: {
+    alignSelf: 'flex-end',
+    fontSize: 11,
+    color: Colors.mutedFg,
+    paddingHorizontal: 14,
+    paddingBottom: 10,
+  },
+  manualLoadingOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(247,240,233,0.94)',
+    justifyContent: 'center', alignItems: 'center', gap: 14,
+    zIndex: 10,
+  },
+  manualLoadingText: { fontSize: 15, fontWeight: '700', color: Colors.foreground },
+  manualLoadingSubText: { fontSize: 13, color: Colors.mutedFg },
   manualBtnRow: {
     flexDirection: 'row', gap: 10,
-    paddingHorizontal: 20, paddingVertical: 16,
+    paddingHorizontal: 16, paddingVertical: 14,
     borderTopWidth: 1, borderTopColor: Colors.border,
   },
-  directSendBtn: {
+  directBtn: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
     borderWidth: 1.5, borderColor: Colors.primary, borderRadius: 12,
     paddingVertical: 14,
   },
-  directSendBtnText: { fontSize: 15, fontWeight: '600', color: Colors.primary },
-  polishBtn: {
+  directBtnText: { fontSize: 15, fontWeight: '600', color: Colors.primary },
+  aiBtn: {
     flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14,
   },
-  polishBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  polishedTitle: { fontSize: 15, fontWeight: '800', color: Colors.foreground, marginBottom: 16 },
-  polishedSection: { marginBottom: 16 },
-  polishedLabel: { fontSize: 13, fontWeight: '700', color: Colors.primary, marginBottom: 6 },
-  polishedText: { fontSize: 13, color: Colors.foreground, lineHeight: 20 },
-  practicePlanItem: { backgroundColor: Colors.mutedBg, borderRadius: 8, padding: 10, marginBottom: 8 },
-  practicePlanTitle: { fontSize: 13, fontWeight: '700', color: Colors.foreground, marginBottom: 4 },
-  practicePlanMeta: { fontSize: 11, color: Colors.mutedFg, marginTop: 4 },
-  retryBtn: {
-    flex: 1, borderWidth: 1, borderColor: Colors.border, borderRadius: 10,
-    paddingVertical: 12, alignItems: 'center',
-  },
-  retryBtnText: { fontSize: 14, color: Colors.foreground, fontWeight: '600' },
-  saveBtn: {
-    flex: 2, backgroundColor: Colors.primary, borderRadius: 10,
-    paddingVertical: 12, alignItems: 'center',
-  },
-  saveBtnText: { fontSize: 14, color: '#fff', fontWeight: '700' },
+  aiBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  btnDisabled: { opacity: 0.5 },
   emptyBox: { alignItems: 'center', paddingVertical: 32, gap: 8 },
   emptyText: { fontSize: 15, color: Colors.placeholder, fontWeight: '600' },
   emptySubText: { fontSize: 13, color: Colors.placeholder, textAlign: 'center' },
