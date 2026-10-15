@@ -21,6 +21,7 @@ import ReportQuotaBar from '../../components/ReportQuotaBar';
 import ReportTopupModal from '../../components/ReportTopupModal';
 import CoachConsentModal, { AI_CONSENT_VERSION } from '../../components/CoachConsentModal';
 import MemberConsentRequestModal from '../../components/MemberConsentRequestModal';
+import MemberVerbalConsentSheet from '../../components/MemberVerbalConsentSheet';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -52,8 +53,11 @@ export default function AIAnalysisScreen() {
   const [topupModalVisible, setTopupModalVisible] = useState(false);
   const [coachConsentVisible, setCoachConsentVisible] = useState(false);
   const [memberConsentVisible, setMemberConsentVisible] = useState(false);
+  const [verbalConsentVisible, setVerbalConsentVisible] = useState(false);
   const [consentCheckDone, setConsentCheckDone] = useState(false);
   const [memberConsentOk, setMemberConsentOk] = useState(false);
+  const [isMinorMember, setIsMinorMember] = useState(false);
+  const [currentCoachId, setCurrentCoachId] = useState<string>('');
   const [pendingAnalysis, setPendingAnalysis] = useState<{
     uri: string; userId: string; duration: number;
     storagePath?: string; planId?: string;
@@ -145,15 +149,15 @@ export default function AIAnalysisScreen() {
   async function checkConsents() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+    setCurrentCoachId(user.id);
 
-    // 1. 코치 동의 확인
+    // 1. 코치 동의 확인 (coach_voice_ai 또는 레거시 'coach' 타입)
     const { data: coachConsent } = await supabase
       .from('ai_consents')
       .select('id')
       .eq('coach_id', user.id)
-      .eq('consent_type', 'coach')
+      .in('consent_type', ['coach_voice_ai', 'coach'])
       .eq('consent_status', 'agreed')
-      .eq('consent_version', AI_CONSENT_VERSION)
       .maybeSingle();
 
     if (!coachConsent) {
@@ -161,33 +165,36 @@ export default function AIAnalysisScreen() {
       return;
     }
 
-    // 2. 회원 동의 확인
+    // 2. 회원 미성년 여부 확인
+    await checkMinorStatus();
+
+    // 3. 회원 구두 동의 여부 확인 (배지 표시용)
     await checkMemberConsent();
     setConsentCheckDone(true);
   }
 
+  async function checkMinorStatus() {
+    if (!memberId) return;
+    const { data } = await supabase
+      .from('members')
+      .select('birth_date')
+      .eq('id', memberId)
+      .maybeSingle();
+    if (!data?.birth_date) return;
+    const age = new Date().getFullYear() - new Date(data.birth_date).getFullYear();
+    setIsMinorMember(age < 14);
+  }
+
   async function checkMemberConsent() {
-    const { data: memberConsent } = await supabase
+    // 구두 동의(member_voice_ai) 또는 레거시(member, guardian) 확인
+    const { data: voiceConsent } = await supabase
       .from('ai_consents')
       .select('id')
       .eq('member_id', memberId)
-      .eq('consent_type', 'member')
+      .in('consent_type', ['member_voice_ai', 'member', 'guardian'])
       .eq('consent_status', 'agreed')
       .maybeSingle();
-
-    if (memberConsent) {
-      setMemberConsentOk(true);
-    } else {
-      // guardian 동의도 확인
-      const { data: guardianConsent } = await supabase
-        .from('ai_consents')
-        .select('id')
-        .eq('member_id', memberId)
-        .eq('consent_type', 'guardian')
-        .eq('consent_status', 'agreed')
-        .maybeSingle();
-      setMemberConsentOk(!!guardianConsent);
-    }
+    setMemberConsentOk(!!voiceConsent);
   }
 
   useEffect(() => {
@@ -585,44 +592,24 @@ export default function AIAnalysisScreen() {
 
   async function checkGuardianConsent(): Promise<boolean> {
     if (!memberId) return true;
-    const { data } = await supabase
-      .from('members')
-      .select('birth_date, guardian_consent_at')
-      .eq('id', memberId)
-      .maybeSingle();
-    if (!data?.birth_date) return true;
-    const birthYear = new Date(data.birth_date).getFullYear();
-    const todayYear = new Date().getFullYear();
-    const age = todayYear - birthYear;
-    if (age >= 14) return true;
-    if (data.guardian_consent_at) return true;
-    return new Promise(resolve => {
-      Alert.alert(
-        '보호자 동의 확인',
-        `${memberName || '이 회원'}은 만 14세 미만입니다.\n\n개인정보보호법에 따라 보호자(법정대리인)로부터 개인정보 처리 동의를 받아야 합니다.\n\n동의를 받으셨나요?`,
-        [
-          { text: '아직 못 받았어요', style: 'cancel', onPress: () => resolve(false) },
-          {
-            text: '네, 동의받았습니다',
-            onPress: async () => {
-              await supabase.from('members').update({ guardian_consent_at: new Date().toISOString() }).eq('id', memberId);
-              resolve(true);
-            },
-          },
-        ],
-        { cancelable: false }
-      );
-    });
+    if (isMinorMember) {
+      setVerbalConsentVisible(true);
+      return false;
+    }
+    return true;
   }
 
   async function startRecording() {
-    // 회원 동의 미완료 시 차단
-    if (consentCheckDone && !memberConsentOk) {
-      setMemberConsentVisible(true);
+    // 미성년 회원 차단 (보호자 동의 기능 미구현)
+    if (isMinorMember) {
+      setVerbalConsentVisible(true);
       return;
     }
-    const consentOk = await checkGuardianConsent();
-    if (!consentOk) return;
+    // 회원 구두 동의 최초 확인 (첫 녹음 시에만)
+    if (consentCheckDone && !memberConsentOk) {
+      setVerbalConsentVisible(true);
+      return;
+    }
     try {
       const status = await AudioModule.requestRecordingPermissionsAsync();
       if (!status.granted) {
@@ -1578,9 +1565,42 @@ export default function AIAnalysisScreen() {
       <MemberConsentRequestModal
         visible={memberConsentVisible}
         memberName={memberName as string}
-        onSendRequest={() => {
+        onSendRequest={async () => {
           setMemberConsentVisible(false);
-          Alert.alert('동의 요청', `${memberName || '회원'}에게 AI 레슨 기록 동의 요청을 보냈습니다.\n회원이 동의하면 바로 녹음을 시작할 수 있어요.`);
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('not authenticated');
+
+            // 기존 pending 요청 중복 방지
+            const { data: existing } = await supabase
+              .from('ai_consents')
+              .select('id')
+              .eq('coach_id', user.id)
+              .eq('member_id', memberId)
+              .eq('consent_type', 'member')
+              .eq('consent_status', 'pending')
+              .maybeSingle();
+
+            if (!existing) {
+              const { error } = await supabase.from('ai_consents').insert({
+                coach_id: user.id,
+                member_id: memberId,
+                consent_type: 'member',
+                consent_status: 'pending',
+                consent_version: AI_CONSENT_VERSION,
+                source: 'coach_app',
+              });
+              if (error) throw error;
+            }
+
+            Alert.alert(
+              '동의 요청 전송 완료',
+              `${memberName || '회원'}님이 다음에 앱을 열면 동의 요청이 표시됩니다.\n동의 후 바로 녹음을 시작할 수 있어요.`,
+            );
+          } catch (e: any) {
+            Alert.alert('오류', '동의 요청 전송에 실패했습니다.');
+            console.error('[CONSENT] send request error:', e?.message);
+          }
         }}
         onQRConsent={() => {
           setMemberConsentVisible(false);
@@ -1588,6 +1608,20 @@ export default function AIAnalysisScreen() {
           Alert.alert('QR 동의', 'QR 코드를 회원에게 보여주세요.\n회원이 QR을 스캔하면 동의 화면으로 연결됩니다.');
         }}
         onLater={() => setMemberConsentVisible(false)}
+      />
+
+      {/* 회원 구두 동의 확인 바텀시트 */}
+      <MemberVerbalConsentSheet
+        visible={verbalConsentVisible}
+        memberName={memberName as string}
+        memberId={memberId as string}
+        coachId={currentCoachId}
+        isMinor={isMinorMember}
+        onConfirm={() => {
+          setVerbalConsentVisible(false);
+          setMemberConsentOk(true);
+        }}
+        onCancel={() => setVerbalConsentVisible(false)}
       />
 
       {/* AI 리포트 추가 충전 모달 (월 할당량 소진 시) */}
