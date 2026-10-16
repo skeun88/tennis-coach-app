@@ -131,17 +131,25 @@ export async function syncRevenueCatToDb(userId: string): Promise<void> {
       return;
     }
 
+    // Toss 직접결제 구독은 process-billing이 status를 관리하므로 RevenueCat이 덮어쓰지 않음
+    const { data: curSub } = await supabase
+      .from('subscriptions')
+      .select('toss_billing_key')
+      .eq('coach_id', userId)
+      .single();
+
+    const upsertPayload: Record<string, unknown> = {
+      coach_id: userId,
+      plan_id: planId,
+      current_period_end: currentPeriodEnd,
+    };
+    if (!curSub?.toss_billing_key) {
+      upsertPayload.status = status;
+    }
+
     await supabase
       .from('subscriptions')
-      .upsert(
-        {
-          coach_id: userId,
-          plan_id: planId,
-          status,
-          current_period_end: currentPeriodEnd,
-        },
-        { onConflict: 'coach_id' }
-      );
+      .upsert(upsertPayload, { onConflict: 'coach_id' });
   } catch (e) {
     console.warn('[syncRevenueCat] error:', e);
   }

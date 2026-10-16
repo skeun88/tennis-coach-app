@@ -171,7 +171,7 @@ export default function ManageSubscriptionScreen() {
             </View>
           </View>
 
-          {isTrial && (
+          {isTrial && trialDaysLeft > 0 && (
             <View style={s.trialRow}>
               <Ionicons name="time-outline" size={14} color={TERRACOTTA} />
               <Text style={s.trialText}>무료 체험 {trialDaysLeft}일 남음</Text>
