@@ -6,6 +6,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSubscription } from '../../hooks/useSubscription';
+import { format } from 'date-fns-tz';
 import {
   PLANS, getAiAnalysisUsageThisMonth,
   TOPUP_PRODUCTS, TRIAL_DAYS, ANNUAL_PRICES,
@@ -138,7 +139,7 @@ export default function ManageSubscriptionScreen() {
   const aiProgress = aiLimit > 0 ? Math.min(1, aiUsed / aiLimit) : 0;
 
   const nextBillingDate = subscription.next_billing_at
-    ? new Date(subscription.next_billing_at).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })
+    ? format(new Date(subscription.next_billing_at), 'yyyy년 M월 d일', { timeZone: 'UTC' })
     : null;
 
   const nextResetDate = (() => {
