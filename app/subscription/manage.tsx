@@ -1,17 +1,56 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  SafeAreaView, Alert, ActivityIndicator, Linking, Platform,
+  SafeAreaView, Alert, ActivityIndicator, Linking, Platform, AppState,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSubscription } from '../../hooks/useSubscription';
 import { format } from 'date-fns-tz';
+import Purchases from 'react-native-purchases';
 import {
   PLANS, getAiAnalysisUsageThisMonth,
   TOPUP_PRODUCTS, TRIAL_DAYS, ANNUAL_PRICES,
 } from '../../lib/subscription';
-import { restorePurchases } from '../../lib/purchases';
+import { restorePurchases, ENTITLEMENT_IDS } from '../../lib/purchases';
+
+/** RevenueCat entitlement 기반 trial 정보 */
+interface RcTrialInfo {
+  isTrial: boolean;
+  expirationDate: string | null; // ISO UTC
+  willRenew: boolean;
+  daysLeft: number;
+  appUserId: string;
+  periodType: string;
+}
+
+async function fetchRcTrialInfo(): Promise<RcTrialInfo> {
+  const customerInfo = await Purchases.getCustomerInfo();
+  const appUserId = await Purchases.getAppUserID();
+  const active = customerInfo.entitlements.active;
+  const ent = active[ENTITLEMENT_IDS.PRO] ?? active[ENTITLEMENT_IDS.BASIC] ?? null;
+
+  const periodType: string = (ent as any)?.periodType ?? '';
+  const isTrial = periodType === 'TRIAL';
+  const expirationDate: string | null = ent?.expirationDate ?? null;
+  const willRenew: boolean = (ent as any)?.willRenew ?? false;
+
+  let daysLeft = 0;
+  if (isTrial && expirationDate) {
+    const diff = new Date(expirationDate).getTime() - Date.now();
+    daysLeft = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  }
+
+  return { isTrial, expirationDate, willRenew, daysLeft, appUserId, periodType };
+}
+
+function formatKoreanDate(isoStr: string | null): string | null {
+  if (!isoStr) return null;
+  try {
+    return format(new Date(isoStr), 'yyyy년 M월 d일', { timeZone: 'UTC' });
+  } catch { return null; }
+}
 
 const CREAM = '#F7F0E9';
 const TERRACOTTA = '#C0755A';
@@ -63,8 +102,11 @@ function MenuRow({ icon, label, value, onPress, destructive }: { icon: string; l
 
 export default function ManageSubscriptionScreen() {
   const router = useRouter();
-  const { subscription, loading, isTrial, trialDaysLeft, refresh } = useSubscription();
+  const { subscription, loading, refresh } = useSubscription();
   const [aiUsed, setAiUsed] = useState(0);
+  const [rcInfo, setRcInfo] = useState<RcTrialInfo | null>(null);
+  const [rcLoading, setRcLoading] = useState(true);
+  const appStateRef = useRef(AppState.currentState);
 
   const loadUsage = useCallback(async () => {
     if (!subscription) return;
@@ -73,6 +115,33 @@ export default function ManageSubscriptionScreen() {
   }, [subscription]);
 
   useEffect(() => { loadUsage(); }, [loadUsage]);
+
+  // RevenueCat 직접 조회 — DB 날짜 사용 안 함
+  const loadRcInfo = useCallback(async () => {
+    try {
+      setRcLoading(true);
+      const info = await fetchRcTrialInfo();
+      setRcInfo(info);
+    } catch (e) {
+      console.warn('[RC] fetchRcTrialInfo error:', e);
+    } finally {
+      setRcLoading(false);
+    }
+  }, []);
+
+  // 화면 진입 시 갱신
+  useFocusEffect(useCallback(() => { loadRcInfo(); }, [loadRcInfo]));
+
+  // foreground 복귀 시 갱신
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (appStateRef.current.match(/inactive|background/) && next === 'active') {
+        loadRcInfo();
+      }
+      appStateRef.current = next;
+    });
+    return () => sub.remove();
+  }, [loadRcInfo]);
 
   async function openStoreManagement() {
     const url = Platform.OS === 'android'
@@ -90,6 +159,7 @@ export default function ManageSubscriptionScreen() {
     try {
       await restorePurchases();
       await refresh();
+      await loadRcInfo(); // 복원 완료 후 RC 정보 즉시 갱신
       Alert.alert('구매 복원 완료', '이전 구매 내역이 복원됐습니다.');
     } catch (e: any) {
       if (!e.userCancelled) {
@@ -99,7 +169,7 @@ export default function ManageSubscriptionScreen() {
     }
   }
 
-  if (loading) {
+  if (loading || rcLoading) {
     return (
       <SafeAreaView style={s.container}>
         <ActivityIndicator size="large" color={TERRACOTTA} style={{ marginTop: 60 }} />
@@ -138,9 +208,12 @@ export default function ManageSubscriptionScreen() {
   const aiRemain = Math.max(0, aiLimit - aiUsed);
   const aiProgress = aiLimit > 0 ? Math.min(1, aiUsed / aiLimit) : 0;
 
-  const nextBillingDate = subscription.next_billing_at
-    ? format(new Date(subscription.next_billing_at), 'yyyy년 M월 d일', { timeZone: 'UTC' })
-    : null;
+  // ── RevenueCat 기반 trial 정보 (DB 날짜 사용 안 함) ──
+  const isTrial = rcInfo?.isTrial ?? false;
+  const trialDaysLeft = rcInfo?.daysLeft ?? 0;
+  const willRenew = rcInfo?.willRenew ?? false;
+  // RC expirationDate 기준 다음 갱신일/만료일
+  const nextBillingDate = formatKoreanDate(rcInfo?.expirationDate ?? null);
 
   const nextResetDate = (() => {
     const now = new Date();
@@ -172,14 +245,25 @@ export default function ManageSubscriptionScreen() {
             </View>
           </View>
 
-          {isTrial && trialDaysLeft > 0 && (
+          {isTrial && (
             <View style={s.trialRow}>
               <Ionicons name="time-outline" size={14} color={TERRACOTTA} />
               <Text style={s.trialText}>무료 체험 {trialDaysLeft}일 남음</Text>
-              {nextBillingDate && (
+              {nextBillingDate && willRenew && (
                 <Text style={s.trialSubText}>· {nextBillingDate}부터 자동 결제</Text>
               )}
             </View>
+          )}
+
+          {/* willRenew=false: 가격 동의 미완료 안내 */}
+          {isTrial && !willRenew && nextBillingDate && (
+            <TouchableOpacity style={s.noRenewBanner} onPress={openStoreManagement}>
+              <Ionicons name="alert-circle-outline" size={15} color="#DC4444" />
+              <Text style={s.noRenewText}>
+                {nextBillingDate}까지 무료 체험 · 계속 이용하려면 App Store에서 결제에 동의해 주세요
+              </Text>
+              <Ionicons name="chevron-forward" size={13} color="#DC4444" />
+            </TouchableOpacity>
           )}
 
           {isPaid && plan.price > 0 && (
@@ -191,7 +275,10 @@ export default function ManageSubscriptionScreen() {
                 <InfoRow label="현재 결제" value={`${plan.price.toLocaleString()}원/월`} />
               )}
               {nextBillingDate && (
-                <InfoRow label="다음 갱신일" value={nextBillingDate} />
+                <InfoRow
+                  label={isTrial ? '다음 결제 예정일' : '다음 갱신일'}
+                  value={nextBillingDate}
+                />
               )}
             </>
           )}
@@ -319,6 +406,12 @@ const s = StyleSheet.create({
   trialRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 },
   trialText: { fontSize: 13, color: TERRACOTTA, fontWeight: '700' },
   trialSubText: { fontSize: 12, color: WARM_GRAY },
+  noRenewBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#FFF0F0', borderRadius: 10,
+    padding: 10, marginTop: 8,
+  },
+  noRenewText: { flex: 1, fontSize: 12, color: '#DC4444', lineHeight: 17 },
 
   divider: { height: 1, backgroundColor: '#F5EDE5', marginVertical: 12 },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 5 },
