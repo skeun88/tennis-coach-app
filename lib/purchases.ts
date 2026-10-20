@@ -145,6 +145,12 @@ export async function syncRevenueCatToDb(userId: string): Promise<void> {
     };
     if (!curSub?.toss_billing_key) {
       upsertPayload.status = status;
+      // trial 상태이면 trial_ends_at도 RevenueCat expirationDate로 동기화
+      // (초기 startTrial() 세팅값이 실제 App Store trial 기간과 다를 수 있음)
+      if (status === 'trial' && currentPeriodEnd) {
+        upsertPayload.trial_ends_at = currentPeriodEnd;
+        upsertPayload.next_billing_at = currentPeriodEnd;
+      }
     }
 
     await supabase
