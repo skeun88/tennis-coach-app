@@ -7,6 +7,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Colors } from '../../lib/theme';
+import SettingsHeader from '../../components/SettingsHeader';
 
 const PRESET_COLORS = [Colors.primary, Colors.info, Colors.navy, Colors.destructive, '#ea580c', '#0891b2', '#65a30d'];
 
@@ -86,7 +87,9 @@ export default function NewLessonPackageScreen() {
   const priceNum = parseInt(price) || 0;
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <View style={{ flex: 1 }}>
+      <SettingsHeader title={isEdit ? '레슨권 수정' : '레슨권 등록'} />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
 
         {/* 미리보기 카드 */}
@@ -177,7 +180,8 @@ export default function NewLessonPackageScreen() {
           {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>{isEdit ? '수정 완료' : '레슨권 등록'}</Text>}
         </TouchableOpacity>
       </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 

@@ -4,10 +4,10 @@ import {
   TouchableOpacity, KeyboardAvoidingView, Platform,
   ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useHeaderHeight } from '@react-navigation/elements';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../lib/theme';
+import SettingsHeader from '../../components/SettingsHeader';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -28,7 +28,7 @@ const QUICK_QUESTIONS = [
 ];
 
 export default function ChatScreen() {
-  const headerHeight = useHeaderHeight();
+  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '0',
@@ -122,11 +122,12 @@ export default function ChatScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <View style={styles.container}>
+      <SettingsHeader title="KERRI 도우미" onBack={() => router.back()} />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={headerHeight}
+        keyboardVerticalOffset={0}
       >
         <FlatList
           ref={flatListRef}
@@ -192,7 +193,7 @@ export default function ChatScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 

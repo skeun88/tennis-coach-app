@@ -1,6 +1,6 @@
 import { ScrollView, View, Text, StyleSheet } from 'react-native';
-import { Stack } from 'expo-router';
 import { Colors } from '../../lib/theme';
+import SettingsHeader from '../../components/SettingsHeader';
 
 const TERRA = '#C0755A';
 const DARK = '#3E2B22';
@@ -142,8 +142,8 @@ const sections: { title: string; body: string }[] = [
 
 export default function PrivacyPolicyScreen() {
   return (
-    <>
-      <Stack.Screen options={{ title: '개인정보 처리방침', headerShown: true, headerBackTitle: '뒤로' }} />
+    <View style={{ flex: 1 }}>
+      <SettingsHeader title="개인정보처리방침" />
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <Text style={styles.effectiveDate}>시행일: {EFFECTIVE_DATE}</Text>
         {sections.map((s) => (
@@ -154,7 +154,7 @@ export default function PrivacyPolicyScreen() {
         ))}
         <Text style={styles.footer}>KERRI 개인정보 처리방침 v1.0</Text>
       </ScrollView>
-    </>
+    </View>
   );
 }
 
