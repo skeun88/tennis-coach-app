@@ -377,7 +377,7 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 14, color: '#3E2B22' },
 
-  filterScroll: { marginBottom: 12 },
+  filterScroll: { height: 48, flexShrink: 0, marginBottom: 12 },
   filterChips: { paddingHorizontal: 16, paddingVertical: 4, gap: 8, flexDirection: 'row', alignItems: 'center' },
   chip: {
     paddingHorizontal: 15, paddingVertical: 0,
