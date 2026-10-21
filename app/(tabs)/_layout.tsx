@@ -196,6 +196,11 @@ export default function TabsLayout() {
             headerShown: true,
             headerStyle: { backgroundColor: Colors.primary },
             headerTintColor: Colors.white,
+            headerLeft: () => (
+              <TouchableOpacity onPress={() => router.back()} style={{ paddingLeft: 8 }}>
+                <Ionicons name="chevron-back" size={26} color={Colors.white} />
+              </TouchableOpacity>
+            ),
           }}
         />
       </Tabs>
