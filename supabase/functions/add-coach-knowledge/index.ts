@@ -26,7 +26,7 @@ function chunkText(text: string, chunkSize = 650, overlap = 130): string[] {
     if (end === text.length) break
     start += chunkSize - overlap
   }
-  return chunks.filter(c => c.length > 50)
+  return chunks.filter(c => c.length > 5)
 }
 
 // OpenAI 임베딩 생성
@@ -184,7 +184,7 @@ serve(async (req) => {
       source = '코치 직접 입력'
     }
 
-    if (!textContent || textContent.trim().length < 20) {
+    if (!textContent || !textContent.trim()) {
       return new Response(JSON.stringify({ error: '등록할 내용이 없습니다.' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })

@@ -17,6 +17,7 @@ import { useSubscription } from '../../hooks/useSubscription';
 import { notifyMemberAbsent, notifyReregister, notifyLessonCountUpdate } from '../../lib/notifications';
 import PlanUpsellModal from "../../components/PlanUpsellModal";
 import CoachQRModal from '../../components/CoachQRModal';
+import CoachingStyleModal from '../../components/CoachingStyleModal';
 import OnboardingModal from '../../components/OnboardingModal';
 import BottomSheetModal from '../../components/BottomSheetModal';
 import {
@@ -64,6 +65,7 @@ export default function HomeScreen() {
   const [selectedDeduction, setSelectedDeduction] = useState('');
   const [savingAbsence, setSavingAbsence] = useState(false);
   const [knowledgeCount, setKnowledgeCount] = useState(0);
+  const [knowledgeModal, setKnowledgeModal] = useState(false);
   const [homeUpsellVisible, setHomeUpsellVisible] = useState(false);
   const [showChatHint, setShowChatHint] = useState(false);
   const { canUse, subscription } = useSubscription();
@@ -681,7 +683,7 @@ export default function HomeScreen() {
             if (!canUse('ai_analysis')) {
               setHomeUpsellVisible(true);
             } else {
-              router.push('/(tabs)/profile');
+              setKnowledgeModal(true);
             }
           }}
         >
@@ -820,6 +822,12 @@ export default function HomeScreen() {
           onClose={() => setHomeUpsellVisible(false)}
           context="ai_coaching_model"
           currentPlanId={subscription?.plan_id ?? 'free'}
+        />
+        <CoachingStyleModal
+          visible={knowledgeModal}
+          onClose={() => setKnowledgeModal(false)}
+          onSaved={(count) => setKnowledgeCount(prev => prev + count)}
+          onDeleted={() => setKnowledgeCount(prev => prev - 1)}
         />
         <OnboardingModal
           visible={noPackageModal}

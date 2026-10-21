@@ -1,9 +1,9 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, Modal, TextInput, ActivityIndicator,
-  Image, Switch, Pressable, KeyboardAvoidingView, Platform,
+  Image, Switch, Pressable, Platform,
 } from 'react-native';
 import SkeletonBox from '../../components/SkeletonBox';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,13 +12,12 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import PlanUpsellModal from '../../components/PlanUpsellModal';
-import * as DocumentPicker from 'expo-document-picker';
-import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from 'expo-audio';
 import { supabase } from '../../lib/supabase';
 import { useSubscription } from '../../hooks/useSubscription';
 import { PLANS } from '../../lib/subscription';
 import { Colors, Radius, Shadow } from '../../lib/theme';
 import CoachQRModal from '../../components/CoachQRModal';
+import CoachingStyleModal from '../../components/CoachingStyleModal';
 import { FEATURE_SHARED_QR } from '../../lib/featureFlags';
 import TerracottaRefreshControl from '../../components/TerracottaRefreshControl';
 import { FLOATING_TAB_BAR_SPACE } from '../../components/GlassTabBar';
@@ -129,15 +128,7 @@ export default function ProfileScreen() {
   const [knowledgeList, setKnowledgeList] = useState<any[]>([]);
   const [knowledgeCount, setKnowledgeCount] = useState(0);
   const [knowledgeModal, setKnowledgeModal] = useState(false);
-  const [knowledgeUploading, setKnowledgeUploading] = useState(false);
-  const [knowledgeCategory, setKnowledgeCategory] = useState('기타');
-  const [knowledgeText, setKnowledgeText] = useState('');
-  const [knowledgeFileUploading, setKnowledgeFileUploading] = useState(false);
   const [upsellVisible, setUpsellVisible] = useState(false);
-  const audioRecorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: false });
-  const voiceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [voiceRecordingDuration, setVoiceRecordingDuration] = useState(0);
   const [voiceUsedSeconds, setVoiceUsedSeconds] = useState(0);
   const VOICE_MONTHLY_LIMIT = 1800;
 
@@ -901,219 +892,14 @@ export default function ProfileScreen() {
       </Modal>
 
       {/* ── AI 코칭 모델 관리 모달 ── */}
-      <Modal visible={knowledgeModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setKnowledgeModal(false)}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <View style={styles.knowledgeModalCont}>
-          <View style={styles.knowledgeModalHead}>
-            <Text style={styles.modalTitle}>코칭 스타일 관리</Text>
-            <TouchableOpacity onPress={() => setKnowledgeModal(false)}>
-              <Ionicons name="close" size={24} color={Colors.foreground} />
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, gap: 16 }}>
-            {/* AI 코칭모델 사용 가이드 */}
-            <View style={styles.guideCard}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                <Ionicons name="bulb-outline" size={16} color={Colors.primary} />
-                <Text style={styles.guideTitle}>코칭 스타일을 AI에게 알려주세요</Text>
-              </View>
-              <Text style={styles.guideBody}>
-                음성 또는 텍스트로 입력하면 AI가 학습해 리포트를 코치님 스타일로 작성해요.{'\n\n'}
-                <Text style={styles.guideBold}>예시</Text>{'\n'}
-                • "초보자는 임팩트 타점부터 교정한다"{'\n'}
-                • "서브 토스 불안정 시 매 레슨 5분 반복"{'\n\n'}
-                <Text style={styles.guideBold}>팁</Text>  스타일·드릴·피드백 방식을 추가할수록 정확해져요
-              </Text>
-            </View>
-
-            <Text style={styles.modalLabel}>카테고리</Text>
-            <View style={styles.categoryRow}>
-              {['포핸드','백핸드','서브','전술','멘탈','기타'].map(cat => (
-                <TouchableOpacity
-                  key={cat}
-                  style={[styles.categoryBtn, knowledgeCategory === cat && styles.categoryBtnActive]}
-                  onPress={() => setKnowledgeCategory(cat)}
-                >
-                  <Text style={[styles.categoryBtnText, knowledgeCategory === cat && styles.categoryBtnTextActive]}>{cat}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <TouchableOpacity
-              style={[styles.uploadBtn, isRecording && styles.uploadBtnRecording]}
-              onPress={async () => {
-                if (!isRecording) {
-                  try {
-                    const status = await AudioModule.requestRecordingPermissionsAsync();
-                    if (!status.granted) { Alert.alert('오류', '녹음을 시작할 수 없어요.'); return; }
-                    await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-                    await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
-                    audioRecorder.record();
-                    setVoiceRecordingDuration(0);
-                    voiceTimerRef.current = setInterval(() => setVoiceRecordingDuration(d => d + 1), 1000);
-                    setIsRecording(true);
-                  } catch { Alert.alert('오류', '녹음을 시작할 수 없어요.'); }
-                } else {
-                  setKnowledgeUploading(true);
-                  if (voiceTimerRef.current) clearInterval(voiceTimerRef.current);
-                  const durationSeconds = voiceRecordingDuration;
-                  setIsRecording(false);
-                  await audioRecorder.stop();
-                  const uri = audioRecorder.uri;
-                  if (uri) {
-                    try {
-                      const { data: { user } } = await supabase.auth.getUser();
-                      const { data: { session } } = await supabase.auth.getSession();
-                      const form = new FormData();
-                      form.append('coach_id', user!.id);
-                      form.append('category', knowledgeCategory);
-                      form.append('duration_seconds', String(durationSeconds));
-                      form.append('audio', { uri, type: 'audio/m4a', name: 'recording.m4a' } as any);
-                      const res = await fetch(`${SUPABASE_URL}/functions/v1/add-coach-knowledge`, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${session?.access_token}` },
-                        body: form,
-                      });
-                      const result = await res.json();
-                      if (result.success) {
-                        Alert.alert('완료', `${result.saved}개 항목이 등록됐어요!`);
-                        setKnowledgeModal(false);
-                        setKnowledgeCount(prev => prev + result.saved);
-                        setVoiceUsedSeconds(prev => prev + durationSeconds);
-                      } else {
-                        Alert.alert('오류', result.error || '등록 실패');
-                      }
-                    } catch { Alert.alert('오류', '업로드 실패'); }
-                  }
-                  setKnowledgeUploading(false);
-                }
-              }}
-              disabled={knowledgeUploading}
-            >
-              {knowledgeUploading ? <ActivityIndicator color="#fff" /> : (
-                <>
-                  <Ionicons name={isRecording ? "stop-circle" : "mic"} size={22} color="#fff" />
-                  <Text style={styles.uploadBtnText}>{isRecording ? '녹음 중... 탭하면 완료' : '음성으로 코칭 스타일 녹음'}</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <View>
-              <Text style={styles.modalLabel}>텍스트로 직접 입력</Text>
-              <TextInput
-                style={styles.knowledgeTextInput}
-                placeholder="코칭 철학, 훈련 방법, 기술 포인트 등 자유롭게 입력하세요"
-                placeholderTextColor={Colors.mutedFg}
-                multiline
-                numberOfLines={5}
-                value={knowledgeText}
-                onChangeText={setKnowledgeText}
-                textAlignVertical="top"
-              />
-              <TouchableOpacity
-                style={[styles.uploadBtn, { backgroundColor: '#059669', marginTop: 8 }, (!knowledgeText.trim() || knowledgeUploading) && { opacity: 0.5 }]}
-                disabled={!knowledgeText.trim() || knowledgeUploading}
-                onPress={async () => {
-                  setKnowledgeUploading(true);
-                  try {
-                    const { data: { user } } = await supabase.auth.getUser();
-                    const { data: { session } } = await supabase.auth.getSession();
-                    const res = await fetch(`${SUPABASE_URL}/functions/v1/add-coach-knowledge`, {
-                      method: 'POST',
-                      headers: { 'Authorization': `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ coach_id: user!.id, category: knowledgeCategory, text: knowledgeText }),
-                    });
-                    const result = await res.json();
-                    if (result.success) {
-                      Alert.alert('완료', `${result.saved}개 항목이 등록됐어요!`);
-                      setKnowledgeText('');
-                      setKnowledgeModal(false);
-                      setKnowledgeCount(prev => prev + result.saved);
-                    } else {
-                      Alert.alert('오류', result.error || '등록 실패');
-                    }
-                  } catch { Alert.alert('오류', '텍스트 등록 실패'); }
-                  setKnowledgeUploading(false);
-                }}
-              >
-                {knowledgeUploading ? <ActivityIndicator color="#fff" /> : (
-                  <>
-                    <Ionicons name="checkmark-circle" size={22} color="#fff" />
-                    <Text style={styles.uploadBtnText}>텍스트로 등록</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.uploadBtn, { backgroundColor: '#6366F1' }, knowledgeFileUploading && { opacity: 0.6 }]}
-              disabled={knowledgeFileUploading}
-              onPress={async () => {
-                try {
-                  const result = await DocumentPicker.getDocumentAsync({ type: 'text/plain', copyToCacheDirectory: true });
-                  if (result.canceled || !result.assets?.[0]) return;
-                  const file = result.assets[0];
-                  setKnowledgeFileUploading(true);
-                  const { data: { user } } = await supabase.auth.getUser();
-                  const { data: { session } } = await supabase.auth.getSession();
-                  const form = new FormData();
-                  form.append('coach_id', user!.id);
-                  form.append('category', knowledgeCategory);
-                  form.append('file', { uri: file.uri, type: 'text/plain', name: file.name } as any);
-                  const res = await fetch(`${SUPABASE_URL}/functions/v1/add-coach-knowledge`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${session?.access_token}` },
-                    body: form,
-                  });
-                  const json = await res.json();
-                  if (json.success) {
-                    Alert.alert('완료', `${json.saved}개 항목이 등록됐어요!`);
-                    setKnowledgeModal(false);
-                    setKnowledgeCount(prev => prev + json.saved);
-                  } else {
-                    Alert.alert('오류', json.error || '파일 등록 실패');
-                  }
-                } catch { Alert.alert('오류', '파일 업로드 실패'); }
-                setKnowledgeFileUploading(false);
-              }}
-            >
-              {knowledgeFileUploading ? <ActivityIndicator color="#fff" /> : (
-                <>
-                  <Ionicons name="document-text" size={22} color="#fff" />
-                  <Text style={styles.uploadBtnText}>텍스트 파일(.txt) 업로드</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            {knowledgeList.length > 0 && (
-              <View>
-                <Text style={styles.modalLabel}>등록된 코칭 스타일</Text>
-                {knowledgeList.map(k => (
-                  <View key={k.id} style={styles.knowledgeItem}>
-                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={styles.knowledgeItemCategory}>{k.category}</Text>
-                      <Text style={styles.knowledgeItemTitle} numberOfLines={1}>{k.title}</Text>
-                    </View>
-                    <TouchableOpacity onPress={async () => {
-                      Alert.alert('삭제', `"${k.title}" 삭제할까요?`, [
-                        { text: '취소', style: 'cancel' },
-                        { text: '삭제', style: 'destructive', onPress: async () => {
-                          await supabase.from('tennis_knowledge').delete().eq('id', k.id);
-                          setKnowledgeList(prev => prev.filter(x => x.id !== k.id));
-                          setKnowledgeCount(prev => prev - 1);
-                        }},
-                      ]);
-                    }}>
-                      <Ionicons name="trash-outline" size={16} color={Colors.mutedFg} />
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-            )}
-          </ScrollView>
-        </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      <CoachingStyleModal
+        visible={knowledgeModal}
+        onClose={() => setKnowledgeModal(false)}
+        onSaved={(count) => setKnowledgeCount(prev => prev + count)}
+        onDeleted={() => setKnowledgeCount(prev => prev - 1)}
+        knowledgeList={knowledgeList}
+        onKnowledgeListChange={setKnowledgeList}
+      />
 
       {/* ── 코칭 여정 항목 설명 팝업 ── */}
       <Modal
@@ -1656,27 +1442,4 @@ const styles = StyleSheet.create({
   },
   avatarEditOverlayTxt: { fontSize: 10, color: '#fff', fontWeight: '600' },
 
-  guideCard: { backgroundColor: '#FAF4F0', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#EDE0D4' },
-  guideTitle: { fontSize: 13, fontWeight: '700', color: '#5C4033' },
-  guideBody: { fontSize: 12, color: '#9E8878', lineHeight: 19 },
-  guideBold: { fontWeight: '700', color: '#7A5C4E' },
-
-  // Knowledge modal
-  knowledgeModalCont: { flex: 1, backgroundColor: Colors.background },
-  knowledgeModalHead: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    padding: 20, borderBottomWidth: 1, borderBottomColor: Colors.border,
-  },
-  categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  categoryBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: Colors.border, backgroundColor: '#fff' },
-  categoryBtnActive: { backgroundColor: TERRA, borderColor: TERRA },
-  categoryBtnText: { fontSize: 13, color: Colors.mutedFg },
-  categoryBtnTextActive: { color: '#fff', fontWeight: '700' },
-  uploadBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: TERRA, borderRadius: 12, padding: 16 },
-  uploadBtnRecording: { backgroundColor: Colors.destructive },
-  uploadBtnText: { color: '#fff', fontSize: 14, fontWeight: '600', flex: 1 },
-  knowledgeTextInput: { borderWidth: 1, borderColor: Colors.border, borderRadius: 10, padding: 12, fontSize: 14, color: Colors.foreground, minHeight: 120, backgroundColor: '#FAFAFA' },
-  knowledgeItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: 1, borderTopColor: Colors.border },
-  knowledgeItemCategory: { fontSize: 11, color: TERRA, backgroundColor: TERRA_LIGHT, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, fontWeight: '600' },
-  knowledgeItemTitle: { fontSize: 13, color: Colors.foreground, flex: 1 },
 });
