@@ -8,7 +8,7 @@ export type MemberFormValues = {
   email: string;
   birthDate: string;
   joinDate: string;
-  level: MemberLevel;
+  level?: MemberLevel | null;
   notes: string;
 };
 
@@ -30,6 +30,7 @@ export const buildMemberUpsertPayload = (values: MemberFormValues) => ({
   email: values.email.trim() || null,
   birth_date: values.birthDate.trim() || null,
   join_date: values.joinDate.trim() || null,
-  level: values.level,
+  // 레벨은 명시적으로 선택한 경우에만 저장 (미선택 시 키 자체를 보내지 않음)
+  ...(values.level ? { level: values.level } : {}),
   notes: values.notes.trim() || null,
 });
