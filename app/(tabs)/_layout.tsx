@@ -201,6 +201,7 @@ export default function TabsLayout() {
                 <Ionicons name="chevron-back" size={26} color={Colors.white} />
               </TouchableOpacity>
             ),
+            tabBarStyle: { display: 'none' },
           }}
         />
       </Tabs>
