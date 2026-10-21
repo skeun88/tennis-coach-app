@@ -3,7 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, Modal, TextInput, ActivityIndicator,
-  Image, Switch, Pressable,
+  Image, Switch, Pressable, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import SkeletonBox from '../../components/SkeletonBox';
 import { Ionicons } from '@expo/vector-icons';
@@ -902,6 +902,7 @@ export default function ProfileScreen() {
 
       {/* ── AI 코칭 모델 관리 모달 ── */}
       <Modal visible={knowledgeModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setKnowledgeModal(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.knowledgeModalCont}>
           <View style={styles.knowledgeModalHead}>
             <Text style={styles.modalTitle}>코칭 스타일 관리</Text>
@@ -1114,6 +1115,7 @@ export default function ProfileScreen() {
             )}
           </ScrollView>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ── 코칭 여정 항목 설명 팝업 ── */}
