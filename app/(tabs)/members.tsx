@@ -263,6 +263,7 @@ export default function MembersScreen() {
       <FlatList
         data={filtered}
         keyExtractor={item => item.id}
+        style={{ flex: 1 }}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + FLOATING_TAB_BAR_SPACE + 24 }]}
         refreshControl={
           <TerracottaRefreshControl
@@ -376,7 +377,7 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 14, color: '#3E2B22' },
 
-  filterScroll: { minHeight: 48, marginBottom: 12 },
+  filterScroll: { marginBottom: 12 },
   filterChips: { paddingHorizontal: 16, paddingVertical: 4, gap: 8, flexDirection: 'row', alignItems: 'center' },
   chip: {
     paddingHorizontal: 15, paddingVertical: 0,
