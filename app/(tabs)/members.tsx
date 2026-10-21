@@ -241,23 +241,24 @@ export default function MembersScreen() {
       </View>
 
       {/* 필터 칩 */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        removeClippedSubviews={false}
-        style={styles.filterScroll}
-        contentContainerStyle={styles.filterChips}
-      >
-        {FILTERS.map(f => (
-          <TouchableOpacity
-            key={f}
-            style={[styles.chip, filter === f && styles.chipActive]}
-            onPress={() => setFilter(f)}
-          >
-            <Text numberOfLines={1} style={[styles.chipText, filter === f && styles.chipTextActive]}>{f}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <View style={styles.filterScrollWrap}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          removeClippedSubviews={false}
+          contentContainerStyle={styles.filterChips}
+        >
+          {FILTERS.map(f => (
+            <TouchableOpacity
+              key={f}
+              style={[styles.chip, filter === f && styles.chipActive]}
+              onPress={() => setFilter(f)}
+            >
+              <Text numberOfLines={1} style={[styles.chipText, filter === f && styles.chipTextActive]}>{f}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
 
       {/* 회원 목록 */}
       <FlatList
@@ -377,7 +378,7 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 14, color: '#3E2B22' },
 
-  filterScroll: { height: 48, flexShrink: 0, marginBottom: 12 },
+  filterScrollWrap: { height: 48, marginBottom: 12 },
   filterChips: { paddingHorizontal: 16, paddingVertical: 4, gap: 8, flexDirection: 'row', alignItems: 'center' },
   chip: {
     paddingHorizontal: 15, paddingVertical: 0,
