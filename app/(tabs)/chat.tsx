@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useHeaderHeight } from '@react-navigation/elements';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../lib/theme';
 
@@ -27,6 +28,7 @@ const QUICK_QUESTIONS = [
 ];
 
 export default function ChatScreen() {
+  const headerHeight = useHeaderHeight();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '0',
@@ -123,8 +125,8 @@ export default function ChatScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={headerHeight}
       >
         <FlatList
           ref={flatListRef}
@@ -132,6 +134,7 @@ export default function ChatScreen() {
           keyExtractor={item => item.id}
           renderItem={renderMessage}
           contentContainerStyle={styles.messageList}
+          keyboardShouldPersistTaps="handled"
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
           ListFooterComponent={
             loading ? (
