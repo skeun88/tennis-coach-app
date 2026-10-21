@@ -336,6 +336,14 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   const [changeScopeLoading, setChangeScopeLoading] = useState(false);
   const [scheduleListSheet, setScheduleListSheet] = useState(false);
 
+  // 레슨 재등록 시트
+  const [reregSheet, setReregSheet] = useState(false);
+  const [reregPkgId, setReregPkgId] = useState<string | null>(null);
+  const [reregStartDate, setReregStartDate] = useState('');
+  const [reregPayStatus, setReregPayStatus] = useState<'납부완료' | '미납'>('납부완료');
+  const [reregPayAmount, setReregPayAmount] = useState('');
+  const [reregLoading, setReregLoading] = useState(false);
+
   // 출석 수정 상태
   const [editingAttId, setEditingAttId] = useState<string | null>(null);
   const [editStatus, setEditStatus] = useState<'출석' | '결석'>('출석');
@@ -575,6 +583,75 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     setByDateAddEntries([]);
     byDateAddTempDateRef.current = '';
     setByDateAddCalMonth({ year: new Date().getFullYear(), month: new Date().getMonth() });
+  }
+
+  function getNextRegularDateAfter(fromDateStr: string): string | null {
+    if (scheduleDays.length === 0) return null;
+    const from = new Date(fromDateStr + 'T00:00:00+09:00');
+    from.setDate(from.getDate() + 1);
+    for (let i = 0; i < 60; i++) {
+      if (scheduleDays.includes(from.getDay())) return toKSTDateStr(from);
+      from.setDate(from.getDate() + 1);
+    }
+    return null;
+  }
+
+  function openReregSheet() {
+    const pkg = lessonPackage ? lessonPackages.find(p => p.id === selectedPackageId) ?? null : null;
+    setReregPkgId(selectedPackageId);
+    setReregPayAmount(pkg ? String(pkg.price ?? '') : lessonPackage ? String(lessonPackage.price ?? '') : '');
+    setReregPayStatus('납부완료');
+    const todayStr = toKSTDateStr(new Date());
+    if (futureLessons.length > 0) {
+      const lastDate = futureLessons[futureLessons.length - 1].date;
+      setReregStartDate(getNextRegularDateAfter(lastDate) ?? todayStr);
+    } else {
+      setReregStartDate(getNextRegularDateAfter(todayStr) ?? todayStr);
+    }
+    setReregSheet(true);
+  }
+
+  async function handleReregister(withSchedule: boolean) {
+    if (!member || !reregPkgId) { Alert.alert('오류', '레슨권을 선택해주세요.'); return; }
+    setReregLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setReregLoading(false); return; }
+      const pkg = lessonPackages.find(p => p.id === reregPkgId);
+      if (!pkg) { Alert.alert('오류', '레슨권을 찾을 수 없어요.'); setReregLoading(false); return; }
+      const credits = pkg.total_credits || 0;
+      const duration = pkg.duration_minutes || 60;
+      const amount = parseInt(reregPayAmount) || 0;
+      const newRemaining = ((member as any).remaining_credits ?? 0) + credits;
+      const { error: memberErr } = await supabase.from('members').update({
+        lesson_package_id: reregPkgId,
+        total_credits: ((member as any).total_credits ?? 0) + credits,
+        remaining_credits: newRemaining,
+      }).eq('id', id!);
+      if (memberErr) { Alert.alert('오류', '회원 정보 업데이트 실패'); setReregLoading(false); return; }
+      const payDueDate = toKSTDateStr(new Date());
+      const paidDate = reregPayStatus === '납부완료' ? payDueDate : null;
+      const paidAmount = reregPayStatus === '납부완료' ? amount : 0;
+      await supabase.from('payments').insert({
+        member_id: id, coach_id: user.id, description: pkg.title,
+        amount, paid_amount: paidAmount,
+        due_date: payDueDate, paid_date: paidDate, status: reregPayStatus,
+      });
+      let scheduledCount = 0;
+      if (withSchedule && scheduleDays.length > 0 && reregStartDate) {
+        scheduledCount = await generateScheduleLessons(
+          supabase, user.id, id!, member.name, scheduleDays, dayTimes, duration, credits, reregStartDate,
+        );
+      }
+      setReregSheet(false);
+      setReregLoading(false);
+      await loadMember();
+      await loadFutureLessons();
+      Alert.alert('완료 ✅', scheduledCount > 0 ? `재등록 완료! ${scheduledCount}개 일정이 추가됐어요.` : '재등록 완료!');
+    } catch (e) {
+      Alert.alert('오류', '재등록에 실패했어요.');
+      setReregLoading(false);
+    }
   }
 
   async function loadUnreadCount() {
@@ -1488,124 +1565,111 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         {tab === 'info' && !editing && (
           <View style={styles.card}>
             <Text style={styles.cardSectionLabel}>레슨 관리</Text>
-            {!isMemberTrial && (() => {
-              let mainText = '';
-              let subText = '';
-              let actionLabel = '';
-              if (detectedScheduleType === 'regular') {
-                const days: number[] = (member as any).fixed_schedule_days ?? [];
-                const fst = (member as any).fixed_schedule_times;
-                const lt = (member as any).fixed_schedule_time?.slice(0, 5);
-                const schedSummary = days.map(d => {
-                  const raw = fst?.[String(d)];
-                  const timesArr: string[] = Array.isArray(raw) ? raw : (raw ? [raw] : (lt ? [lt] : []));
-                  return `매주 ${DAYS_KR[d]}요일 ${timesArr.join('/')}`;
-                }).join(' · ');
-                mainText = `정기 일정 · ${schedSummary}`;
-                if (nextLesson) {
-                  const dl = new Date(nextLesson.date + 'T00:00:00');
-                  subText = `다음 레슨 ${dl.getMonth() + 1}월 ${dl.getDate()}일 ${DAYS_KR[dl.getDay()]}요일 ${nextLesson.start_time.slice(0, 5)}`;
-                }
-                actionLabel = '변경 〉';
-              } else if (detectedScheduleType === 'by_date') {
-                mainText = `날짜별 일정 · 예정 ${futureCount}개`;
-                if (nextLesson) {
-                  const dl = new Date(nextLesson.date + 'T00:00:00');
-                  subText = `다음 레슨 ${dl.getMonth() + 1}월 ${dl.getDate()}일 ${DAYS_KR[dl.getDay()]}요일 ${nextLesson.start_time.slice(0, 5)}`;
-                }
-                if (unregisteredCount > 0) subText += (subText ? ' · ' : '') + `미등록 ${unregisteredCount}회`;
-                actionLabel = '관리 〉';
-              } else {
-                mainText = '등록된 일정이 없어요';
-                subText = `잔여 ${memberRemaining}회의 일정을 등록해 주세요`;
-                actionLabel = '일정 추가 〉';
-              }
-              return (
-                <TouchableOpacity style={styles.scheduleSectionRow} onPress={() => setScheduleSheet(true)} activeOpacity={0.8}>
-                  <View style={styles.scheduleSectionIconWrap}>
-                    <Ionicons name="calendar-outline" size={18} color={Colors.primary} />
+
+            {!isMemberTrial && (
+              <>
+                {/* ① 정기 레슨 시간 */}
+                {(() => {
+                  const days: number[] = (member as any).fixed_schedule_days ?? [];
+                  const fst = (member as any).fixed_schedule_times;
+                  const lt = (member as any).fixed_schedule_time?.slice(0, 5);
+                  const dur = parseInt(lessonDuration) || 60;
+                  if (days.length > 0) {
+                    const schedSummary = days.map(d => {
+                      const raw = fst?.[String(d)];
+                      const timesArr: string[] = Array.isArray(raw) ? raw : (raw ? [String(raw)] : (lt ? [lt] : []));
+                      return `${DAYS_KR[d]} ${timesArr.join('/')}`;
+                    }).join(' · ');
+                    return (
+                      <TouchableOpacity style={styles.lessonMgmtRow} onPress={() => setScheduleSheet(true)} activeOpacity={0.7}>
+                        <View style={styles.lessonMgmtIconWrap}><Ionicons name="repeat-outline" size={16} color={Colors.primary} /></View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.lessonMgmtLabel}>정기 레슨 시간</Text>
+                          <Text style={styles.lessonMgmtMain} numberOfLines={2}>매주 {schedSummary} · {dur}분</Text>
+                        </View>
+                        <Text style={styles.lessonMgmtAction}>변경 〉</Text>
+                      </TouchableOpacity>
+                    );
+                  }
+                  return (
+                    <TouchableOpacity style={[styles.lessonMgmtRow, { opacity: 0.7 }]} onPress={openEditModal} activeOpacity={0.7}>
+                      <View style={styles.lessonMgmtIconWrap}><Ionicons name="repeat-outline" size={16} color={Colors.iconMuted} /></View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.lessonMgmtLabel}>정기 레슨 시간</Text>
+                        <Text style={[styles.lessonMgmtMain, { color: Colors.placeholder }]}>설정되지 않음</Text>
+                      </View>
+                      <Text style={styles.lessonMgmtAction}>설정 〉</Text>
+                    </TouchableOpacity>
+                  );
+                })()}
+
+                {/* ② 이용 중인 레슨권 */}
+                <TouchableOpacity style={styles.lessonMgmtRow} onPress={openEditModal} activeOpacity={0.7}>
+                  <View style={styles.lessonMgmtIconWrap}>
+                    {lessonPackage
+                      ? <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: lessonPackage.color }} />
+                      : <Ionicons name="card-outline" size={16} color={Colors.iconMuted} />
+                    }
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.scheduleSectionLabel}>일정 설정</Text>
-                    <Text style={styles.scheduleSectionMain} numberOfLines={2}>{mainText}</Text>
-                    {!!subText && <Text style={styles.scheduleSectionSub} numberOfLines={1}>{subText}</Text>}
+                    <Text style={styles.lessonMgmtLabel}>이용 중인 레슨권</Text>
+                    {lessonPackage
+                      ? <Text style={styles.lessonMgmtMain} numberOfLines={1}>{lessonPackage.title} · 잔여 {memberRemaining}회</Text>
+                      : <Text style={[styles.lessonMgmtMain, { color: Colors.placeholder }]}>레슨권 없음 · 잔여 {memberRemaining}회</Text>
+                    }
                   </View>
-                  <Text style={styles.scheduleSectionAction}>{actionLabel}</Text>
+                  <Text style={styles.lessonMgmtAction}>변경 〉</Text>
                 </TouchableOpacity>
+
+                {/* ③ 앞으로 예정된 일정 */}
+                <TouchableOpacity style={[styles.lessonMgmtRow, { borderBottomWidth: 0 }]} onPress={() => setScheduleListSheet(true)} activeOpacity={0.7}>
+                  <View style={styles.lessonMgmtIconWrap}><Ionicons name="calendar-outline" size={16} color={Colors.primary} /></View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.lessonMgmtLabel}>앞으로 예정된 일정</Text>
+                    {futureCount > 0 ? (
+                      <>
+                        <Text style={styles.lessonMgmtMain}>예정 {futureCount}개</Text>
+                        {(() => {
+                          const last = futureLessons[futureLessons.length - 1];
+                          const d = new Date(last.date + 'T00:00:00');
+                          return <Text style={styles.lessonMgmtSub}>마지막 레슨 {d.getMonth() + 1}월 {d.getDate()}일</Text>;
+                        })()}
+                      </>
+                    ) : (
+                      <Text style={[styles.lessonMgmtMain, { color: Colors.placeholder }]}>예정 일정 없음</Text>
+                    )}
+                  </View>
+                  <Text style={styles.lessonMgmtAction}>일정 보기 〉</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* 상태별 안내 */}
+            {!isMemberTrial && (() => {
+              let statusMsg = '';
+              let statusColor = Colors.accentWarm;
+              if (memberRemaining > 0 && futureCount === 0) {
+                statusMsg = '남은 레슨의 일정을 잡아주세요';
+                statusColor = Colors.primary;
+              } else if (memberRemaining === 0) {
+                if (scheduleDays.length > 0 && futureCount > 0) {
+                  statusMsg = '정기 시간 유지 중 · 재등록 필요';
+                  statusColor = Colors.accentWarm;
+                } else if (futureCount === 0) {
+                  statusMsg = '레슨권을 모두 사용했어요';
+                  statusColor = Colors.mutedFg;
+                }
+              } else if (memberRemaining <= 2 && memberRemaining > 0) {
+                statusMsg = '재등록 시기가 다가왔어요';
+                statusColor = '#D97706';
+              }
+              if (!statusMsg) return null;
+              return (
+                <View style={[styles.lessonStatusBanner, { borderColor: statusColor + '40', backgroundColor: statusColor + '15' }]}>
+                  <Text style={[styles.lessonStatusText, { color: statusColor }]}>{statusMsg}</Text>
+                </View>
               );
             })()}
-            <InfoRow icon="layers-outline" label="레슨권 잔여" value={`${(member as any).remaining_credits ?? 0}회`} />
-            {!editingPackage ? (
-              <View style={styles.packageBanner}>
-                {lessonPackage ? (
-                  <>
-                    <View style={[styles.packageDot, { backgroundColor: lessonPackage.color }]} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.packageTitle}>{lessonPackage.title}</Text>
-                      <Text style={styles.packageMeta}>{lessonPackage.total_credits ?? 0}회 · {(lessonPackage.price ?? 0).toLocaleString()}원</Text>
-                    </View>
-                    <TouchableOpacity onPress={openEditModal}>
-                      <Text style={{ fontSize: 13, color: Colors.primary, fontWeight: '600' }}>변경 →</Text>
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <>
-                    <Ionicons name="card-outline" size={18} color={Colors.iconMuted} />
-                    <Text style={[styles.packageMeta, { color: Colors.placeholder, marginLeft: 8 }]}>연결된 레슨권 없음</Text>
-                    <TouchableOpacity onPress={openEditModal} style={{ marginLeft: 'auto' }}>
-                      <Text style={{ fontSize: 14, color: Colors.primary, fontWeight: '600' }}>설정 →</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
-              </View>
-            ) : (
-              <View style={{ marginTop: 8 }}>
-                <Text style={styles.editLabel}>레슨권 변경</Text>
-                {lessonPackages.length === 0 ? (
-                  <Text style={{ fontSize: 13, color: Colors.placeholder, marginBottom: 12 }}>등록된 레슨권이 없어요</Text>
-                ) : (
-                  <View style={styles.editPkgGrid}>
-                    <TouchableOpacity
-                      style={[styles.editPkgCard, styles.editPkgCardNone, !selectedPackageId && styles.editPkgCardNoneSelected]}
-                      onPress={() => setSelectedPackageId(null)}
-                    >
-                      {!selectedPackageId && <View style={styles.editPkgCheck}><Ionicons name="checkmark" size={10} color="#fff" /></View>}
-                      <Ionicons name="close-circle-outline" size={20} color={!selectedPackageId ? '#fff' : Colors.placeholder} />
-                      <Text style={[styles.editPkgNoneText, !selectedPackageId && { color: '#fff' }]}>없음</Text>
-                    </TouchableOpacity>
-                    {lessonPackages.map(pkg => {
-                      const isSelected = selectedPackageId === pkg.id;
-                      return (
-                        <TouchableOpacity
-                          key={pkg.id}
-                          style={[styles.editPkgCard, { borderColor: pkg.color }, isSelected && { backgroundColor: pkg.color + '18' }]}
-                          onPress={() => handleSelectPackage(pkg)}
-                          activeOpacity={0.8}
-                        >
-                          {isSelected && (
-                            <View style={[styles.editPkgCheck, { backgroundColor: pkg.color }]}>
-                              <Ionicons name="checkmark" size={10} color="#fff" />
-                            </View>
-                          )}
-                          <View style={[styles.editPkgColorBar, { backgroundColor: pkg.color }]} />
-                          <Text style={styles.editPkgTitle} numberOfLines={2}>{pkg.title}</Text>
-                          <Text style={styles.editPkgMeta}>{pkg.duration_minutes}분 · {pkg.total_credits}회</Text>
-                          <Text style={[styles.editPkgPrice, { color: pkg.color ?? Colors.primary }]}>{(pkg.price ?? 0).toLocaleString()}원</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                )}
-                <View style={styles.btnRow}>
-                  <TouchableOpacity style={styles.saveBtn} onPress={handleSavePackage}>
-                    <Text style={styles.saveBtnText}>저장</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.cancelBtn} onPress={() => setEditingPackage(false)}>
-                    <Text style={styles.cancelBtnText}>취소</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
 
             {/* 체험 회원 배너 */}
             {(member as any).is_trial && (
@@ -1621,37 +1685,34 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                     </Text>
                   </View>
                 </View>
-                <TouchableOpacity
-                  style={styles.convertBtn}
-                  onPress={handleConvertTrial}
-                  disabled={convertingTrial}
-                >
-                  {convertingTrial
-                    ? <ActivityIndicator size="small" color="#fff" />
-                    : <Text style={styles.convertBtnText}>정규 전환</Text>}
+                <TouchableOpacity style={styles.convertBtn} onPress={handleConvertTrial} disabled={convertingTrial}>
+                  {convertingTrial ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.convertBtnText}>정규 전환</Text>}
                 </TouchableOpacity>
               </View>
             )}
 
-            {/* 앱 초대 문자 버튼 */}
-            <TouchableOpacity style={styles.inviteBtn} onPress={handleSendInvite}>
-              <Ionicons name="paper-plane-outline" size={16} color={Colors.primary} />
-              <Text style={styles.inviteBtnText}>회원앱 초대 문자 발송</Text>
-            </TouchableOpacity>
+            {/* 버튼 행: 레슨 재등록 + 회원앱 초대 */}
+            <View style={styles.lessonMgmtBtns}>
+              {!isMemberTrial && (
+                <TouchableOpacity style={styles.reregMainBtn} onPress={openReregSheet}>
+                  <Ionicons name="refresh-outline" size={16} color="#fff" />
+                  <Text style={styles.reregMainBtnText}>레슨 재등록</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={[styles.inviteBtn, { flex: 1 }]} onPress={handleSendInvite}>
+                <Ionicons name="paper-plane-outline" size={16} color={Colors.primary} />
+                <Text style={styles.inviteBtnText}>회원앱 초대</Text>
+              </TouchableOpacity>
+            </View>
 
-            {/* 재등록 안내 알림 발송 버튼 (잔여 2회 이하 시 표시) */}
-            {((member as any).remaining_credits ?? 0) <= 2 && (
-              <TouchableOpacity
-                style={styles.reregisterBtn}
-                onPress={handleSendReregisterNotif}
-                disabled={sendingReregister}
-              >
-                {sendingReregister ? (
-                  <ActivityIndicator size="small" color="#D97706" />
-                ) : (
-                  <Ionicons name="notifications-outline" size={16} color="#D97706" />
-                )}
-                <Text style={styles.reregisterBtnText}>재등록 안내 보내기</Text>
+            {/* 잔여 있지만 일정 없을 때 — 일정 추가 */}
+            {!isMemberTrial && memberRemaining > 0 && futureCount === 0 && (
+              <TouchableOpacity style={styles.scheduleAddBtn} onPress={() => {
+                setByDateAddCalMonth({ year: new Date().getFullYear(), month: new Date().getMonth() });
+                setByDateAddSheet(true);
+              }}>
+                <Ionicons name="add-circle-outline" size={16} color={Colors.primary} />
+                <Text style={styles.scheduleAddBtnText}>일정 추가</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -3064,6 +3125,161 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* 레슨 재등록 시트 */}
+      <Modal visible={reregSheet} transparent animationType="slide" onRequestClose={() => setReregSheet(false)}>
+        <TouchableOpacity style={styles.modalOverlayTP} activeOpacity={1} onPress={() => setReregSheet(false)}>
+          <TouchableOpacity activeOpacity={1} onPress={e => e.stopPropagation()}>
+            <View style={[styles.modalSheetTP, { paddingBottom: 40 }]}>
+              <View style={styles.modalHeaderTP}>
+                <Text style={styles.modalTitleTP}>레슨 재등록</Text>
+                <TouchableOpacity onPress={() => setReregSheet(false)}>
+                  <Ionicons name="close" size={22} color={Colors.mutedFg} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={{ maxHeight: 480 }} bounces={false} keyboardShouldPersistTaps="handled">
+                <View style={{ padding: 16, gap: 14 }}>
+                  {/* 레슨권 선택 */}
+                  <View>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 }}>레슨권 선택</Text>
+                    {lessonPackages.length === 0 ? (
+                      <Text style={{ color: Colors.placeholder, fontSize: 14 }}>등록된 레슨권이 없어요. 먼저 레슨권을 만들어주세요.</Text>
+                    ) : (
+                      <View style={{ gap: 8 }}>
+                        {lessonPackages.map(pkg => {
+                          const isSel = reregPkgId === pkg.id;
+                          return (
+                            <TouchableOpacity
+                              key={pkg.id}
+                              style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 10, borderWidth: 1.5,
+                                borderColor: isSel ? pkg.color : Colors.border, backgroundColor: isSel ? pkg.color + '12' : '#fff', gap: 10 }}
+                              onPress={() => { setReregPkgId(pkg.id); setReregPayAmount(String(pkg.price ?? '')); }}
+                            >
+                              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: pkg.color }} />
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.foreground }}>{pkg.title}</Text>
+                                <Text style={{ fontSize: 13, color: Colors.mutedFg }}>{pkg.duration_minutes}분 · {pkg.total_credits}회 · {(pkg.price ?? 0).toLocaleString()}원</Text>
+                              </View>
+                              {isSel && <Ionicons name="checkmark-circle" size={20} color={pkg.color} />}
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    )}
+                  </View>
+
+                  {/* 정기 레슨 시간 요약 */}
+                  {scheduleDays.length > 0 && (
+                    <View style={{ backgroundColor: Colors.background, borderRadius: 10, padding: 12 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 }}>정기 레슨 시간</Text>
+                      {(() => {
+                        const fst = (member as any).fixed_schedule_times;
+                        const lt = (member as any).fixed_schedule_time?.slice(0, 5);
+                        const dur = parseInt(lessonDuration) || 60;
+                        const summary = scheduleDays.map(d => {
+                          const raw = fst?.[String(d)];
+                          const timesArr: string[] = Array.isArray(raw) ? raw : (raw ? [String(raw)] : (lt ? [lt] : []));
+                          return `${DAYS_KR[d]} ${timesArr.join('/')}`;
+                        }).join(' · ');
+                        return <Text style={{ fontSize: 14, color: Colors.foreground, fontWeight: '600' }}>매주 {summary} · {dur}분</Text>;
+                      })()}
+                    </View>
+                  )}
+
+                  {/* 레슨 시작일 */}
+                  <View>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>레슨 시작일</Text>
+                    <TextInput
+                      style={styles.editInput}
+                      value={reregStartDate}
+                      onChangeText={v => setReregStartDate(formatDate(v))}
+                      placeholder="YYYY-MM-DD"
+                      keyboardType="number-pad"
+                    />
+                  </View>
+
+                  {/* 결제 금액 */}
+                  <View>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>결제 금액</Text>
+                    <TextInput
+                      style={styles.editInput}
+                      value={reregPayAmount}
+                      onChangeText={setReregPayAmount}
+                      placeholder="금액 입력"
+                      keyboardType="number-pad"
+                    />
+                  </View>
+
+                  {/* 결제 상태 */}
+                  <View>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>결제 상태</Text>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {(['납부완료', '미납'] as const).map(s => (
+                        <TouchableOpacity
+                          key={s}
+                          style={{ flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center',
+                            backgroundColor: reregPayStatus === s ? Colors.primary : Colors.mutedBg,
+                            borderWidth: 1.5, borderColor: reregPayStatus === s ? Colors.primary : Colors.border }}
+                          onPress={() => setReregPayStatus(s)}
+                        >
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: reregPayStatus === s ? '#fff' : Colors.mutedFg }}>{s}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* 등록 요약 */}
+                  {reregPkgId && (() => {
+                    const pkg = lessonPackages.find(p => p.id === reregPkgId);
+                    if (!pkg || !member) return null;
+                    const startD = reregStartDate ? new Date(reregStartDate + 'T00:00:00') : null;
+                    return (
+                      <View style={{ backgroundColor: '#FFF8F0', borderRadius: 10, padding: 14, borderWidth: 1, borderColor: '#F4D4A0' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#92400E', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 }}>등록 요약</Text>
+                        <Text style={{ fontSize: 14, color: Colors.foreground, marginBottom: 2 }}>{member.name} · 새 레슨권 {pkg.total_credits}회</Text>
+                        {scheduleDays.length > 0 && (() => {
+                          const fst = (member as any).fixed_schedule_times;
+                          const lt = (member as any).fixed_schedule_time?.slice(0, 5);
+                          const summary = scheduleDays.map(d => {
+                            const raw = fst?.[String(d)];
+                            const timesArr: string[] = Array.isArray(raw) ? raw : (raw ? [String(raw)] : (lt ? [lt] : []));
+                            return `${DAYS_KR[d]} ${timesArr.join('/')}`;
+                          }).join(' · ');
+                          return <Text style={{ fontSize: 14, color: Colors.foreground, marginBottom: 2 }}>매주 {summary}</Text>;
+                        })()}
+                        {startD && !isNaN(startD.getTime()) && <Text style={{ fontSize: 14, color: Colors.foreground, marginBottom: 2 }}>{startD.getMonth() + 1}월 {startD.getDate()}일부터 일정 {pkg.total_credits}개 추가</Text>}
+                        <Text style={{ fontSize: 14, color: Colors.foreground }}>결제 상태: {reregPayStatus}</Text>
+                      </View>
+                    );
+                  })()}
+                </View>
+              </ScrollView>
+
+              {/* 버튼 */}
+              <View style={{ padding: 16, paddingTop: 8, gap: 8 }}>
+                {reregPkgId && scheduleDays.length > 0 && reregStartDate && (
+                  <TouchableOpacity
+                    style={{ backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', opacity: reregLoading ? 0.5 : 1 }}
+                    onPress={() => handleReregister(true)}
+                    disabled={reregLoading}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>{reregLoading ? '처리 중...' : '재등록하고 일정 만들기'}</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={{ backgroundColor: (reregPkgId && scheduleDays.length > 0 && reregStartDate) ? Colors.mutedBg : Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', opacity: (reregLoading || !reregPkgId) ? 0.4 : 1 }}
+                  onPress={() => handleReregister(false)}
+                  disabled={reregLoading || !reregPkgId}
+                >
+                  <Text style={{ fontWeight: '700', fontSize: 15, color: (reregPkgId && scheduleDays.length > 0 && reregStartDate) ? Colors.mutedFg : '#fff' }}>
+                    {reregLoading ? '처리 중...' : '재등록하기'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       {/* 결제 완료 모달 */}
       <Modal
         visible={payDoneModal}
@@ -3324,4 +3540,30 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: Colors.mutedBg, gap: 12,
   },
   scheduleSheetItemText: { flex: 1, fontSize: 16, fontWeight: '600', color: Colors.foreground },
+  // 레슨 관리 카드 행
+  lessonMgmtRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.mutedBg, minHeight: 52,
+  },
+  lessonMgmtIconWrap: {
+    width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.primaryLight,
+    justifyContent: 'center', alignItems: 'center', marginRight: 10,
+  },
+  lessonMgmtLabel: { fontSize: 11, fontWeight: '700', color: Colors.mutedFg, textTransform: 'uppercase' as const, letterSpacing: 0.3, marginBottom: 2 },
+  lessonMgmtMain: { fontSize: 14, fontWeight: '600', color: Colors.foreground },
+  lessonMgmtSub: { fontSize: 12, color: Colors.mutedFg, marginTop: 1 },
+  lessonMgmtAction: { fontSize: 12, fontWeight: '700', color: Colors.primary, marginLeft: 8 },
+  lessonMgmtBtns: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  reregMainBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, backgroundColor: Colors.primary, borderRadius: 10, paddingVertical: 11,
+  },
+  reregMainBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  lessonStatusBanner: { borderRadius: 8, borderWidth: 1, paddingVertical: 8, paddingHorizontal: 12, marginTop: 10 },
+  lessonStatusText: { fontSize: 13, fontWeight: '600', textAlign: 'center' as const },
+  scheduleAddBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    borderWidth: 1.5, borderColor: Colors.primary, borderRadius: 10, paddingVertical: 10, marginTop: 8,
+  },
+  scheduleAddBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 14 },
 });
