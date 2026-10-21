@@ -910,6 +910,24 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, gap: 16 }}>
+            {/* AI 코칭모델 사용 가이드 */}
+            <View style={styles.guideCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <Ionicons name="bulb-outline" size={18} color={Colors.primary} />
+                <Text style={styles.guideTitle}>AI 코칭 모델이란?</Text>
+              </View>
+              <Text style={styles.guideBody}>
+                코치님의 코칭 스타일을 AI가 학습해, 레슨 리포트를 코치님답게 자동 작성해드려요.{'\n\n'}
+                <Text style={styles.guideBold}>입력 예시</Text>{'\n'}
+                • "포핸드 교정 시 나는 항상 팔꿈치가 몸에서 떨어지지 않도록 강조한다"{'\n'}
+                • "초보자한테는 랠리 유지보다 임팩트 타점 교정을 먼저 시킨다"{'\n'}
+                • "서브 토스가 흔들리는 학생에게는 매 레슨 5분씩 토스 반복 드릴"{'\n\n'}
+                <Text style={styles.guideBold}>사용 팁</Text>{'\n'}
+                • 리포트 내용을 수정하면 자동으로 AI가 반영해요{'\n'}
+                • 레슨 스타일·선호 드릴·피드백 방식을 등록할수록 정확해져요
+              </Text>
+            </View>
+
             <Text style={styles.modalLabel}>카테고리</Text>
             <View style={styles.categoryRow}>
               {['포핸드','백핸드','서브','전술','멘탈','기타'].map(cat => (
@@ -1638,6 +1656,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 3,
   },
   avatarEditOverlayTxt: { fontSize: 10, color: '#fff', fontWeight: '600' },
+
+  guideCard: { backgroundColor: '#FBF2EF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#EDE0D4' },
+  guideTitle: { fontSize: 14, fontWeight: '700', color: Colors.foreground },
+  guideBody: { fontSize: 13, color: Colors.mutedFg, lineHeight: 20 },
+  guideBold: { fontWeight: '700', color: Colors.foreground },
 
   // Knowledge modal
   knowledgeModalCont: { flex: 1, backgroundColor: Colors.background },

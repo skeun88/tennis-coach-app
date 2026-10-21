@@ -350,7 +350,7 @@ serve(async (req) => {
 
     // ── Step 1: Whisper STT + 회원/코치 정보 병렬 ──
     console.log(`[AUDIO] size=${audioFile?.size ?? '?'}bytes, duration=${durationSeconds ?? '?'}s`)
-    const tennisTechPrompt = '한국어 테니스 코치 레슨 녹음입니다.'
+    const tennisTechPrompt = '한국어 테니스 코치 레슨 녹음입니다. 포핸드, 백핸드, 랠리, 서브, 발리, 스매시, 로브, 크로스, 다운더라인, 드롭샷, 스플릿스텝, 풋워크, 토스, 임팩트, 팔로스루, 회전, 탑스핀, 슬라이스, 플랫, 오픈스탠스, 클로즈드스탠스, 그립, 웨스턴, 이스턴, 컨티넨탈, 리턴, 아웃, 페어라인, 베이스라인, 코트, 네트, 서비스박스, 듀스, 어드밴티지, 타이브레이크.'
 
     const whisperForm = new FormData()
     whisperForm.append('file', audioFile, 'audio.m4a')

@@ -11,6 +11,30 @@ import { notifyMemberReport } from '../../lib/notifications';
 import { LessonPlan, DrillSuggestion } from '../../types';
 import { Colors } from '../../lib/theme';
 
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+
+const SECTION_LABEL: Record<string, string> = {
+  summary: '레슨 요약',
+  improvement_points: '개선 포인트',
+  coach_next_goals: '다음 목표',
+  achievements: '이번 레슨 성과',
+  ai_title: '레슨 제목',
+};
+
+async function submitEditFeedback(coachId: string, token: string, section: string, before: string, after: string) {
+  if (!before.trim() || !after.trim() || before.trim() === after.trim()) return;
+  const label = SECTION_LABEL[section] ?? section;
+  const text = `[리포트 수정 피드백] ${label}\n수정 전: ${before.trim()}\n수정 후: ${after.trim()}`;
+  try {
+    await fetch(`${SUPABASE_URL}/functions/v1/add-coach-knowledge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': SUPABASE_ANON_KEY },
+      body: JSON.stringify({ coach_id: coachId, category: '리포트 피드백', level: '전체', title: `${label} 수정`, text }),
+    });
+  } catch { /* 피드백 저장 실패는 조용히 */ }
+}
+
 const CREAM = '#F7F0E9';
 const TERRACOTTA = '#C0755A';
 const DARK_BROWN = '#3E2B22';
@@ -37,6 +61,8 @@ export default function PlanDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [expandedTranscript, setExpandedTranscript] = useState(false);
   const [sending, setSending] = useState(false);
+  const [coachId, setCoachId] = useState('');
+  const [authToken, setAuthToken] = useState('');
 
   const [editingSection, setEditingSection] = useState<EditSection>(null);
   const [editingValue, setEditingValue] = useState('');
@@ -63,6 +89,9 @@ export default function PlanDetailScreen() {
 
   async function loadData() {
     setLoading(true);
+    const [sessionRes] = await Promise.all([supabase.auth.getSession()]);
+    const session = sessionRes.data.session;
+    if (session) { setCoachId(session.user.id); setAuthToken(session.access_token); }
     if (isManual) {
       const { data: rep } = await supabase
         .from('member_lesson_reports').select('*').eq('id', reportId).maybeSingle();
@@ -259,6 +288,10 @@ export default function PlanDetailScreen() {
           await supabase.from('lesson_plans').update({ improvement_points: editingValue }).eq('id', plan.id);
           setPlan(prev => prev ? { ...prev, improvement_points: editingValue } : prev);
         }
+      }
+      // 리포트 수정 내용을 AI 모델 피드백으로 저장 (텍스트 섹션만, 드릴 제외)
+      if (editingSection !== 'drill_suggestions' && coachId && authToken) {
+        submitEditFeedback(coachId, authToken, editingSection!, originalValue, editingValue);
       }
       setInputFocused(false);
       setEditingSection(null);
