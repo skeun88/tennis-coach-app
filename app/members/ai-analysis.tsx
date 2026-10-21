@@ -616,14 +616,14 @@ export default function AIAnalysisScreen() {
     return true;
   }
 
-  async function startRecording() {
+  async function startRecording(consentOverride = false) {
     // 미성년 회원 차단 (보호자 동의 기능 미구현)
     if (isMinorMember) {
       setVerbalConsentVisible(true);
       return;
     }
     // 회원 구두 동의 최초 확인 (첫 녹음 시에만)
-    if (consentCheckDone && !memberConsentOk) {
+    if (consentCheckDone && !memberConsentOk && !consentOverride) {
       setVerbalConsentVisible(true);
       return;
     }
@@ -1152,7 +1152,7 @@ export default function AIAnalysisScreen() {
                     (isRecording && !isPaused) && styles.recordBtnActive,
                     isPaused && styles.recordBtnPaused,
                   ]}
-                  onPress={isRecording && !isPaused ? () => stopAndAnalyze('main') : (!isRecording && !isPaused ? startRecording : undefined)}
+                  onPress={isRecording && !isPaused ? () => stopAndAnalyze('main') : (!isRecording && !isPaused ? () => startRecording() : undefined)}
                   disabled={isPaused}
                 >
                   <Ionicons
@@ -1638,6 +1638,7 @@ export default function AIAnalysisScreen() {
           setVerbalConsentVisible(false);
           setMemberConsentOk(true);
           AsyncStorage.setItem(MEMBER_VERBAL_CONSENT_KEY, '1');
+          startRecording(true);
         }}
         onCancel={() => setVerbalConsentVisible(false)}
       />
