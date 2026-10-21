@@ -5,15 +5,18 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../lib/supabase';
 import { Colors } from '../../lib/theme';
 import SettingsHeader from '../../components/SettingsHeader';
+
+export const PENDING_NEW_PACKAGE_KEY = 'pending_new_package_id';
 
 const PRESET_COLORS = [Colors.primary, Colors.info, Colors.navy, Colors.destructive, '#ea580c', '#0891b2', '#65a30d'];
 
 export default function NewLessonPackageScreen() {
   const router = useRouter();
-  const { editId } = useLocalSearchParams<{ editId?: string }>();
+  const { editId, fromMemberNew } = useLocalSearchParams<{ editId?: string; fromMemberNew?: string }>();
   const isEdit = !!editId;
 
   const [title, setTitle] = useState('');
@@ -62,16 +65,22 @@ export default function NewLessonPackageScreen() {
     };
 
     let error;
+    let createdId: string | undefined;
     if (isEdit) {
       ({ error } = await supabase.from('lesson_packages').update(payload).eq('id', editId));
     } else {
-      ({ error } = await supabase.from('lesson_packages').insert(payload));
+      const { data: created, error: insertError } = await supabase.from('lesson_packages').insert(payload).select('id').single();
+      error = insertError;
+      createdId = created?.id;
     }
 
     setLoading(false);
     if (error) {
       console.error('lesson_packages error:', JSON.stringify(error));
       Alert.alert('오류', error.message || '저장에 실패했습니다.');
+    } else if (fromMemberNew && createdId) {
+      await AsyncStorage.setItem(PENDING_NEW_PACKAGE_KEY, createdId);
+      router.back();
     } else {
       Alert.alert('완료', isEdit ? '레슨권이 수정됐습니다.' : '레슨권이 등록됐습니다.', [
         { text: '확인', onPress: () => router.back() }

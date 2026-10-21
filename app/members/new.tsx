@@ -1,10 +1,10 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
-  Modal, FlatList,
+  Modal, FlatList, Keyboard,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -284,12 +284,33 @@ export default function NewMemberScreen() {
   const timePickerModeRef = useRef<'regular' | 'by_date'>('regular');
   const byDateTempDateRef = useRef('');
 
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => setIsKeyboardVisible(true));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setIsKeyboardVisible(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+
   useFocusEffect(useCallback(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return;
-      supabase.from('lesson_packages').select('*')
-        .eq('coach_id', user.id).order('created_at', { ascending: false })
-        .then(({ data }) => setLessonPackages(data ?? []));
+      const { data } = await supabase.from('lesson_packages').select('*')
+        .eq('coach_id', user.id).order('created_at', { ascending: false });
+      const pkgs = data ?? [];
+      setLessonPackages(pkgs);
+
+      const pendingId = await AsyncStorage.getItem('pending_new_package_id');
+      if (pendingId) {
+        await AsyncStorage.removeItem('pending_new_package_id');
+        const pkg = pkgs.find(p => p.id === pendingId);
+        if (pkg) {
+          setSelectedPackageId(pkg.id);
+          setTotalCredits(String(pkg.total_credits ?? 10));
+          setRemainingCredits(String(pkg.total_credits ?? 10));
+          setLessonDuration(String(pkg.duration_minutes ?? 60));
+        }
+      }
     });
   }, []));
 
@@ -357,13 +378,7 @@ export default function NewMemberScreen() {
   const newPkgTitleValue = newPkgTitleEdited ? newPkgTitle : suggestedPkgTitle;
 
   function openCreatePackageModal() {
-    setNewPkgCredits('10');
-    setNewPkgDuration('60');
-    setNewPkgPrice('');
-    setNewPkgTitle('');
-    setNewPkgTitleEdited(false);
-    setNewPkgColor(Colors.primary);
-    setCreatePackageModalVisible(true);
+    router.push('/lesson-packages/new?fromMemberNew=true');
   }
 
   async function handleCreatePackage() {
@@ -1074,30 +1089,6 @@ export default function NewMemberScreen() {
             </View>
           )}
 
-          {/* 반복 주기 */}
-          <View style={styles.repeatSummaryRow}>
-            <Text style={styles.label}>반복 주기</Text>
-            <Text style={styles.repeatSummaryValue}>
-              {repeatType === 'none' ? '안 함'
-                : repeatType === 'weekly' ? '매주'
-                : `${repeatInterval}주마다`}
-            </Text>
-          </View>
-          <TouchableOpacity style={styles.accordionHeader} onPress={() => setRepeatAdvancedOpen(v => !v)} activeOpacity={0.7}>
-            <Text style={styles.accordionHeaderText}>추가 설정</Text>
-            <Text style={styles.accordionHint}>격주 등 반복 간격</Text>
-            <Ionicons name={repeatAdvancedOpen ? 'chevron-up' : 'chevron-down'} size={18} color={Colors.mutedFg} />
-          </TouchableOpacity>
-          {repeatAdvancedOpen && (
-            <TouchableOpacity style={[styles.repeatRow, { marginTop: 10 }]} onPress={() => setRepeatModalVisible(true)}>
-              <Text style={styles.repeatRowValue}>
-                {repeatType === 'none' ? '안 함'
-                  : repeatType === 'weekly' ? '매주'
-                  : `${repeatInterval}주마다 (사용자 지정)`}
-              </Text>
-              <Ionicons name="chevron-forward" size={16} color={Colors.mutedFg} />
-            </TouchableOpacity>
-          )}
           </>
           )}
 
@@ -1162,12 +1153,14 @@ export default function NewMemberScreen() {
         </View>
       </ScrollView>
 
-      {/* 하단 고정 저장 버튼 */}
-      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-        <TouchableOpacity style={[styles.saveBtn, loading && { opacity: 0.7 }]} onPress={handleSave} disabled={loading}>
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>{saveLabel}</Text>}
-        </TouchableOpacity>
-      </View>
+      {/* 하단 고정 저장 버튼 — 키보드 열리면 숨김 */}
+      {!isKeyboardVisible && (
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          <TouchableOpacity style={[styles.saveBtn, loading && { opacity: 0.7 }]} onPress={handleSave} disabled={loading}>
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>{saveLabel}</Text>}
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* 레슨권 인라인 생성 모달 */}
       <Modal visible={createPackageModalVisible} transparent animationType="slide" onRequestClose={() => setCreatePackageModalVisible(false)}>
