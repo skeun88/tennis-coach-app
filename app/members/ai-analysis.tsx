@@ -19,7 +19,7 @@ import { checkAiAnalysisLimit, incrementAiAnalysisUsage } from '../../lib/subscr
 import PlanUpsellModal, { UpsellContext } from '../../components/PlanUpsellModal';
 import ReportQuotaBar from '../../components/ReportQuotaBar';
 import ReportTopupModal from '../../components/ReportTopupModal';
-import CoachConsentModal, { AI_CONSENT_VERSION } from '../../components/CoachConsentModal';
+import CoachConsentModal, { AI_CONSENT_VERSION, COACH_CONSENT_STORAGE_KEY_PREFIX } from '../../components/CoachConsentModal';
 import MemberConsentRequestModal from '../../components/MemberConsentRequestModal';
 import MemberVerbalConsentSheet from '../../components/MemberVerbalConsentSheet';
 
@@ -151,18 +151,24 @@ export default function AIAnalysisScreen() {
     if (!user) return;
     setCurrentCoachId(user.id);
 
-    // 1. 코치 동의 확인 (coach_voice_ai 또는 레거시 'coach' 타입)
-    const { data: coachConsent } = await supabase
-      .from('ai_consents')
-      .select('id')
-      .eq('coach_id', user.id)
-      .in('consent_type', ['coach_voice_ai', 'coach'])
-      .eq('consent_status', 'agreed')
-      .maybeSingle();
+    // 1. 로컬 캐시 우선 확인 — 동의 후 DB 조회 실패해도 모달 재표시 방지
+    const localConsent = await AsyncStorage.getItem(`${COACH_CONSENT_STORAGE_KEY_PREFIX}${user.id}`);
+    if (localConsent !== '1') {
+      // 로컬에 없으면 DB 확인 (coach_voice_ai 또는 레거시 'coach' 타입)
+      const { data: coachConsent } = await supabase
+        .from('ai_consents')
+        .select('id')
+        .eq('coach_id', user.id)
+        .in('consent_type', ['coach_voice_ai', 'coach'])
+        .eq('consent_status', 'agreed')
+        .maybeSingle();
 
-    if (!coachConsent) {
-      setCoachConsentVisible(true);
-      return;
+      if (!coachConsent) {
+        setCoachConsentVisible(true);
+        return;
+      }
+      // DB에는 있지만 로컬에 없는 경우 — 동기화
+      await AsyncStorage.setItem(`${COACH_CONSENT_STORAGE_KEY_PREFIX}${user.id}`, '1');
     }
 
     // 2. 회원 미성년 여부 확인

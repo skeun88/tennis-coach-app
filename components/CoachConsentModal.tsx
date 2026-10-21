@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, Modal, TouchableOpacity,
-  ScrollView, SafeAreaView, Platform,
+  ScrollView, SafeAreaView,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../lib/theme';
 import { supabase } from '../lib/supabase';
 
 export const AI_CONSENT_VERSION = '1.0';
+export const COACH_CONSENT_STORAGE_KEY_PREFIX = 'kerri_coach_ai_consent_v1_';
 
 interface Props {
   visible: boolean;
@@ -16,26 +18,25 @@ interface Props {
 }
 
 const INFO_ITEMS = [
-  {
-    icon: 'mic-outline' as const,
-    text: '레슨 음성을 텍스트로 변환해요',
-  },
-  {
-    icon: 'sparkles-outline' as const,
-    text: '레슨과 관계없는 사적인 대화는 기록에서 제외해요',
-  },
-  {
-    icon: 'trash-outline' as const,
-    text: '원본 음성은 처리 후 최대 7일 이내 삭제해요',
-  },
+  { icon: 'mic-outline' as const, text: '레슨 음성을 텍스트로 변환해요' },
+  { icon: 'sparkles-outline' as const, text: '레슨과 관계없는 사적인 대화는 기록에서 제외해요' },
+  { icon: 'trash-outline' as const, text: '원본 음성은 처리 후 최대 7일 이내 삭제해요' },
 ];
 
 export default function CoachConsentModal({ visible, onAgree, onDecline }: Props) {
   const [check1, setCheck1] = useState(false);
   const [check2, setCheck2] = useState(false);
-  const [detailVisible, setDetailVisible] = useState(false);
+  const [showDetail, setShowDetail] = useState(false);
 
   const canAgree = check1 && check2;
+
+  useEffect(() => {
+    if (!visible) {
+      setCheck1(false);
+      setCheck2(false);
+      setShowDetail(false);
+    }
+  }, [visible]);
 
   function toggleAll() {
     const next = !(check1 && check2);
@@ -67,112 +68,101 @@ export default function CoachConsentModal({ visible, onAgree, onDecline }: Props
         agreed_at: now,
       },
     ]);
+    // DB 결과와 무관하게 로컬에 저장 (RLS 문제 등으로 SELECT 실패 시에도 모달 재표시 방지)
+    await AsyncStorage.setItem(`${COACH_CONSENT_STORAGE_KEY_PREFIX}${user.id}`, '1');
     onAgree();
   }
 
   return (
-    <>
-      <Modal visible={visible} animationType="slide" transparent onRequestClose={onDecline}>
-        <View style={styles.overlay}>
-          <SafeAreaView style={styles.sheet}>
-            <View style={styles.handle} />
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onDecline}>
+      <View style={styles.overlay}>
+        <SafeAreaView style={styles.sheet}>
+          <View style={styles.handle} />
 
-            <ScrollView
-              contentContainerStyle={styles.content}
-              showsVerticalScrollIndicator={false}
-            >
-              {/* 헤더 */}
-              <Text style={styles.title}>AI 레슨 기록을{'\n'}시작해볼까요?</Text>
-              <Text style={styles.desc}>
-                레슨 중 코칭 내용을 녹음하면 KERRI가 핵심 내용과 다음 연습 방향을 정리해드려요.
-              </Text>
-
-              {/* 핵심 안내 3개 */}
-              <View style={styles.infoBox}>
-                {INFO_ITEMS.map((item, i) => (
-                  <View key={i} style={[styles.infoRow, i < INFO_ITEMS.length - 1 && styles.infoRowBorder]}>
-                    <View style={styles.infoIconWrap}>
-                      <Ionicons name={item.icon} size={18} color={Colors.primary} />
-                    </View>
-                    <Text style={styles.infoText}>{item.text}</Text>
-                  </View>
-                ))}
-              </View>
-
-              {/* 추가 안내 */}
-              <View style={styles.noteBox}>
-                <Ionicons name="information-circle-outline" size={16} color={Colors.mutedFg} />
-                <Text style={styles.noteText}>
-                  AI가 만든 기록은 자동으로 전송되지 않아요. 코치님이 내용을 확인하고 수정한 후 회원에게 보낼 수 있어요.
-                </Text>
-              </View>
-
-              {/* 체크박스 */}
-              <View style={styles.checkboxSection}>
-                {/* 전체 동의 */}
-                <TouchableOpacity style={[styles.checkRow, styles.allCheckRow]} onPress={toggleAll} activeOpacity={0.7}>
-                  <View style={[styles.checkbox, canAgree && styles.checkboxChecked]}>
-                    {canAgree && <Ionicons name="checkmark" size={14} color="#fff" />}
-                  </View>
-                  <Text style={styles.allCheckLabel}>전체 동의</Text>
+          {showDetail ? (
+            <>
+              <View style={styles.detailHeader}>
+                <TouchableOpacity onPress={() => setShowDetail(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="chevron-back" size={22} color={Colors.mutedFg} />
                 </TouchableOpacity>
-                <View style={styles.divider} />
-                <CheckRow
-                  checked={check1}
-                  onToggle={() => setCheck1(v => !v)}
-                  label="[AI 레슨 기록 이용 시 필수] 본인의 음성 녹음 및 AI 처리"
-                />
-                <CheckRow
-                  checked={check2}
-                  onToggle={() => setCheck2(v => !v)}
-                  label="[AI 레슨 기록 이용 시 필수] 개인정보 국외 이전 및 외부 AI 서비스 처리"
-                />
+                <Text style={styles.detailTitle}>AI 레슨 기록 동의서</Text>
+                <View style={{ width: 22 }} />
               </View>
-
-              {/* 자세히 보기 */}
-              <TouchableOpacity onPress={() => setDetailVisible(true)} style={styles.detailLink}>
-                <Text style={styles.detailLinkText}>자세히 보기</Text>
-                <Ionicons name="chevron-forward" size={13} color={Colors.primary} />
-              </TouchableOpacity>
-            </ScrollView>
-
-            {/* 버튼 */}
-            <View style={styles.btnArea}>
-              <TouchableOpacity
-                style={[styles.agreeBtn, !canAgree && styles.agreeBtnDisabled]}
-                onPress={canAgree ? handleAgree : undefined}
-                activeOpacity={canAgree ? 0.85 : 1}
-              >
-                <Text style={[styles.agreeBtnText, !canAgree && styles.agreeBtnTextDisabled]}>
-                  동의하고 시작하기
+              <ScrollView contentContainerStyle={styles.detailContent} showsVerticalScrollIndicator={false}>
+                <Text style={styles.detailBody}>{CONSENT_FULL_TEXT}</Text>
+              </ScrollView>
+            </>
+          ) : (
+            <>
+              <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+                <Text style={styles.title}>AI 레슨 기록을{'\n'}시작해볼까요?</Text>
+                <Text style={styles.desc}>
+                  레슨 중 코칭 내용을 녹음하면 KERRI가 핵심 내용과 다음 연습 방향을 정리해드려요.
                 </Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.declineBtn} onPress={onDecline} activeOpacity={0.7}>
-                <Text style={styles.declineBtnText}>지금은 안 할게요</Text>
-              </TouchableOpacity>
-            </View>
-          </SafeAreaView>
-        </View>
-      </Modal>
 
-      {/* 동의서 전문 모달 */}
-      <Modal visible={detailVisible} animationType="slide" transparent onRequestClose={() => setDetailVisible(false)}>
-        <View style={styles.overlay}>
-          <SafeAreaView style={styles.sheet}>
-            <View style={styles.handle} />
-            <View style={styles.detailHeader}>
-              <Text style={styles.detailTitle}>AI 레슨 기록 동의서</Text>
-              <TouchableOpacity onPress={() => setDetailVisible(false)}>
-                <Ionicons name="close" size={22} color={Colors.mutedFg} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView contentContainerStyle={styles.detailContent} showsVerticalScrollIndicator={false}>
-              <Text style={styles.detailBody}>{CONSENT_FULL_TEXT}</Text>
-            </ScrollView>
-          </SafeAreaView>
-        </View>
-      </Modal>
-    </>
+                <View style={styles.infoBox}>
+                  {INFO_ITEMS.map((item, i) => (
+                    <View key={i} style={[styles.infoRow, i < INFO_ITEMS.length - 1 && styles.infoRowBorder]}>
+                      <View style={styles.infoIconWrap}>
+                        <Ionicons name={item.icon} size={18} color={Colors.primary} />
+                      </View>
+                      <Text style={styles.infoText}>{item.text}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                <View style={styles.noteBox}>
+                  <Ionicons name="information-circle-outline" size={16} color={Colors.mutedFg} />
+                  <Text style={styles.noteText}>
+                    AI가 만든 기록은 자동으로 전송되지 않아요. 코치님이 내용을 확인하고 수정한 후 회원에게 보낼 수 있어요.
+                  </Text>
+                </View>
+
+                <View style={styles.checkboxSection}>
+                  <TouchableOpacity style={[styles.checkRow, styles.allCheckRow]} onPress={toggleAll} activeOpacity={0.7}>
+                    <View style={[styles.checkbox, canAgree && styles.checkboxChecked]}>
+                      {canAgree && <Ionicons name="checkmark" size={14} color="#fff" />}
+                    </View>
+                    <Text style={styles.allCheckLabel}>전체 동의</Text>
+                  </TouchableOpacity>
+                  <View style={styles.divider} />
+                  <CheckRow
+                    checked={check1}
+                    onToggle={() => setCheck1(v => !v)}
+                    label="[AI 레슨 기록 이용 시 필수] 본인의 음성 녹음 및 AI 처리"
+                  />
+                  <CheckRow
+                    checked={check2}
+                    onToggle={() => setCheck2(v => !v)}
+                    label="[AI 레슨 기록 이용 시 필수] 개인정보 국외 이전 및 외부 AI 서비스 처리"
+                  />
+                </View>
+
+                <TouchableOpacity onPress={() => setShowDetail(true)} style={styles.detailLink}>
+                  <Text style={styles.detailLinkText}>자세히 보기</Text>
+                  <Ionicons name="chevron-forward" size={13} color={Colors.primary} />
+                </TouchableOpacity>
+              </ScrollView>
+
+              <View style={styles.btnArea}>
+                <TouchableOpacity
+                  style={[styles.agreeBtn, !canAgree && styles.agreeBtnDisabled]}
+                  onPress={canAgree ? handleAgree : undefined}
+                  activeOpacity={canAgree ? 0.85 : 1}
+                >
+                  <Text style={[styles.agreeBtnText, !canAgree && styles.agreeBtnTextDisabled]}>
+                    동의하고 시작하기
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.declineBtn} onPress={onDecline} activeOpacity={0.7}>
+                  <Text style={styles.declineBtnText}>지금은 안 할게요</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </SafeAreaView>
+      </View>
+    </Modal>
   );
 }
 
@@ -319,21 +309,16 @@ const styles = StyleSheet.create({
     fontSize: 22, fontWeight: '800', color: Colors.foreground,
     lineHeight: 30, marginBottom: 12,
   },
-  desc: {
-    fontSize: 14, color: Colors.mutedFg, lineHeight: 22, marginBottom: 20,
-  },
+  desc: { fontSize: 14, color: Colors.mutedFg, lineHeight: 22, marginBottom: 20 },
   infoBox: {
     backgroundColor: Colors.background,
-    borderRadius: 16, overflow: 'hidden',
-    marginBottom: 16,
+    borderRadius: 16, overflow: 'hidden', marginBottom: 16,
   },
   infoRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingHorizontal: 16, paddingVertical: 14,
   },
-  infoRowBorder: {
-    borderBottomWidth: 1, borderBottomColor: Colors.border,
-  },
+  infoRowBorder: { borderBottomWidth: 1, borderBottomColor: Colors.border },
   infoIconWrap: {
     width: 32, height: 32, borderRadius: 10,
     backgroundColor: Colors.primaryLight,
@@ -374,13 +359,13 @@ const styles = StyleSheet.create({
   agreeBtnTextDisabled: { color: Colors.mutedFg },
   declineBtn: { alignItems: 'center', paddingVertical: 10 },
   declineBtnText: { fontSize: 15, color: Colors.mutedFg },
-  // 전문 모달
+  // 동의서 전문
   detailHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 14,
+    paddingHorizontal: 16, paddingVertical: 14,
     borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
   detailTitle: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
-  detailContent: { padding: 20 },
+  detailContent: { padding: 20, paddingBottom: 40 },
   detailBody: { fontSize: 13, color: Colors.foreground, lineHeight: 22 },
 });
