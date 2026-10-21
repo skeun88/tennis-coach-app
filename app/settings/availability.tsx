@@ -334,7 +334,7 @@ export default function AvailabilityScreen() {
             </ScrollView>
           )}
 
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 14, alignItems: 'stretch' }}>
             <TouchableOpacity
               style={[styles.addBtn, { flex: 1 }, selectedDays.length === 0 && styles.addBtnDisabled]}
               onPress={handleAdd}
@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
   pickerTextActive: { color: '#fff' },
   addBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    marginTop: 14, paddingVertical: 10, borderRadius: 10,
+    paddingVertical: 10, borderRadius: 10,
     borderWidth: 1.5, borderColor: Colors.primary, borderStyle: 'dashed',
   },
   addBtnDisabled: { borderColor: Colors.placeholder },
