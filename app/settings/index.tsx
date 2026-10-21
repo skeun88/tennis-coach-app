@@ -157,7 +157,7 @@ export default function SettingsScreen() {
         {/* ── 고객지원 ── */}
         <SectionHeader title="고객지원" />
         <Group>
-          <SettingRow icon="help-circle-outline" label="자주 묻는 질문" onPress={notReady} />
+          <SettingRow icon="help-circle-outline" label="자주 묻는 질문" onPress={() => router.push('/settings/faq')} />
           <SettingRow
             icon="chatbubble-ellipses-outline"
             label="카카오톡 문의"
