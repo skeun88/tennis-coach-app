@@ -12,7 +12,7 @@ const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const HOURS = Array.from({ length: 18 }, (_, i) => String(i + 6).padStart(2, '0'));
 const HALF_HOURS = ['00', '30'];
 
-type DaySchedule = { start: string; end: string };
+type DaySchedule = { start: string; end: string; blocked?: boolean };
 
 export default function AvailabilityScreen() {
   const [loading, setLoading] = useState(true);
@@ -44,7 +44,8 @@ export default function AvailabilityScreen() {
       if (Object.keys(times).length > 0) {
         const schedules: Record<number, DaySchedule> = {};
         for (const [k, v] of Object.entries(times)) {
-          schedules[Number(k)] = v as DaySchedule;
+          const s = v as DaySchedule;
+          schedules[Number(k)] = (s as any).blocked ? { start: '00:00', end: '00:00', blocked: true } : s;
         }
         setDaySchedules(schedules);
       } else if ((data.available_days ?? []).length > 0) {
@@ -65,8 +66,8 @@ export default function AvailabilityScreen() {
     setSelectedDays(prev => {
       if (prev.includes(idx)) return prev.filter(d => d !== idx);
       const next = [...prev, idx].sort();
-      // 이미 저장된 요일이면 그 시간으로 피커 채우기 (단일 선택 시)
-      if (prev.length === 0 && daySchedules[idx]) {
+      // 이미 저장된 요일이면 그 시간으로 피커 채우기 (단일 선택, 블락 아닌 경우만)
+      if (prev.length === 0 && daySchedules[idx] && !daySchedules[idx].blocked) {
         const [sh, sm] = daySchedules[idx].start.split(':');
         const [eh, em] = daySchedules[idx].end.split(':');
         setStartHour(sh); setStartMin(sm);
@@ -91,6 +92,17 @@ export default function AvailabilityScreen() {
     setDaySchedules(prev => {
       const next = { ...prev };
       for (const d of selectedDays) next[d] = schedule;
+      return next;
+    });
+    setSelectedDays([]);
+    closeAllPickers();
+  }
+
+  function handleBlock() {
+    if (selectedDays.length === 0) return;
+    setDaySchedules(prev => {
+      const next = { ...prev };
+      for (const d of selectedDays) next[d] = { start: '00:00', end: '00:00', blocked: true };
       return next;
     });
     setSelectedDays([]);
@@ -146,6 +158,7 @@ export default function AvailabilityScreen() {
       const dow = new Date(l.date + 'T00:00:00').getDay();
       const sched = daySchedules[dow];
       if (!sched) return !sortedDays.includes(dow);
+      if (sched.blocked) return true;
       const [lh, lm] = l.start_time.slice(0, 5).split(':').map(Number);
       const lStartMin = lh * 60 + lm;
       const [sh, sm] = sched.start.split(':').map(Number);
@@ -321,18 +334,26 @@ export default function AvailabilityScreen() {
             </ScrollView>
           )}
 
-          <TouchableOpacity
-            style={[styles.addBtn, selectedDays.length === 0 && styles.addBtnDisabled]}
-            onPress={handleAdd}
-            disabled={selectedDays.length === 0}
-          >
-            <Ionicons name="add-circle-outline" size={18} color={selectedDays.length > 0 ? Colors.primary : Colors.placeholder} />
-            <Text style={[styles.addBtnText, selectedDays.length === 0 && { color: Colors.placeholder }]}>
-              {selectedDays.length > 0
-                ? `${selectedDays.map(d => DAYS[d]).join('·')}요일 추가`
-                : '요일을 먼저 선택하세요'}
-            </Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
+            <TouchableOpacity
+              style={[styles.addBtn, { flex: 1 }, selectedDays.length === 0 && styles.addBtnDisabled]}
+              onPress={handleAdd}
+              disabled={selectedDays.length === 0}
+            >
+              <Ionicons name="add-circle-outline" size={18} color={selectedDays.length > 0 ? Colors.primary : Colors.placeholder} />
+              <Text style={[styles.addBtnText, selectedDays.length === 0 && { color: Colors.placeholder }]}>
+                {selectedDays.length > 0
+                  ? `${selectedDays.map(d => DAYS[d]).join('·')}요일 추가`
+                  : '요일을 먼저 선택하세요'}
+              </Text>
+            </TouchableOpacity>
+            {selectedDays.length > 0 && (
+              <TouchableOpacity style={styles.blockBtn} onPress={handleBlock}>
+                <Ionicons name="ban-outline" size={16} color="#D9534F" />
+                <Text style={styles.blockBtnText}>불가능</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {/* 추가된 일정 목록 */}
@@ -351,12 +372,19 @@ export default function AvailabilityScreen() {
                   }}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <View style={styles.dayChip}>
+                    <View style={[styles.dayChip, daySchedules[dayIdx].blocked && styles.dayChipBlocked]}>
                       <Text style={styles.dayChipText}>{DAYS[dayIdx]}</Text>
                     </View>
-                    <Text style={{ fontSize: 14, color: Colors.foreground }}>
-                      {daySchedules[dayIdx].start} ~ {daySchedules[dayIdx].end}
-                    </Text>
+                    {daySchedules[dayIdx].blocked ? (
+                      <View style={styles.blockedBadge}>
+                        <Ionicons name="ban-outline" size={12} color="#D9534F" />
+                        <Text style={styles.blockedBadgeText}>레슨 불가</Text>
+                      </View>
+                    ) : (
+                      <Text style={{ fontSize: 14, color: Colors.foreground }}>
+                        {daySchedules[dayIdx].start} ~ {daySchedules[dayIdx].end}
+                      </Text>
+                    )}
                   </View>
                   <TouchableOpacity
                     onPress={() => removeDay(dayIdx)}
@@ -456,4 +484,16 @@ const styles = StyleSheet.create({
     paddingVertical: 14, alignItems: 'center',
   },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  blockBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10,
+    borderWidth: 1.5, borderColor: '#D9534F',
+  },
+  blockBtnText: { fontSize: 13, fontWeight: '700', color: '#D9534F' },
+  dayChipBlocked: { backgroundColor: '#D9534F' },
+  blockedBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: '#FEE2E2', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3,
+  },
+  blockedBadgeText: { fontSize: 13, color: '#D9534F', fontWeight: '600' },
 });
