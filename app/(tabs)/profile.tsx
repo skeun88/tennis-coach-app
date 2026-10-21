@@ -913,19 +913,16 @@ export default function ProfileScreen() {
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, gap: 16 }}>
             {/* AI 코칭모델 사용 가이드 */}
             <View style={styles.guideCard}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <Ionicons name="bulb-outline" size={18} color={Colors.primary} />
-                <Text style={styles.guideTitle}>AI 코칭 모델이란?</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <Ionicons name="bulb-outline" size={16} color={Colors.primary} />
+                <Text style={styles.guideTitle}>코칭 스타일을 AI에게 알려주세요</Text>
               </View>
               <Text style={styles.guideBody}>
-                코치님의 코칭 스타일을 AI가 학습해, 레슨 리포트를 코치님답게 자동 작성해드려요.{'\n\n'}
-                <Text style={styles.guideBold}>입력 예시</Text>{'\n'}
-                • "포핸드 교정 시 나는 항상 팔꿈치가 몸에서 떨어지지 않도록 강조한다"{'\n'}
-                • "초보자한테는 랠리 유지보다 임팩트 타점 교정을 먼저 시킨다"{'\n'}
-                • "서브 토스가 흔들리는 학생에게는 매 레슨 5분씩 토스 반복 드릴"{'\n\n'}
-                <Text style={styles.guideBold}>사용 팁</Text>{'\n'}
-                • 리포트 내용을 수정하면 자동으로 AI가 반영해요{'\n'}
-                • 레슨 스타일·선호 드릴·피드백 방식을 등록할수록 정확해져요
+                음성 또는 텍스트로 입력하면 AI가 학습해 리포트를 코치님 스타일로 작성해요.{'\n\n'}
+                <Text style={styles.guideBold}>예시</Text>{'\n'}
+                • "초보자는 임팩트 타점부터 교정한다"{'\n'}
+                • "서브 토스 불안정 시 매 레슨 5분 반복"{'\n\n'}
+                <Text style={styles.guideBold}>팁</Text>  스타일·드릴·피드백 방식을 추가할수록 정확해져요
               </Text>
             </View>
 
@@ -1659,10 +1656,10 @@ const styles = StyleSheet.create({
   },
   avatarEditOverlayTxt: { fontSize: 10, color: '#fff', fontWeight: '600' },
 
-  guideCard: { backgroundColor: '#FBF2EF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#EDE0D4' },
-  guideTitle: { fontSize: 14, fontWeight: '700', color: Colors.foreground },
-  guideBody: { fontSize: 13, color: Colors.mutedFg, lineHeight: 20 },
-  guideBold: { fontWeight: '700', color: Colors.foreground },
+  guideCard: { backgroundColor: '#FAF4F0', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#EDE0D4' },
+  guideTitle: { fontSize: 13, fontWeight: '700', color: '#5C4033' },
+  guideBody: { fontSize: 12, color: '#9E8878', lineHeight: 19 },
+  guideBold: { fontWeight: '700', color: '#7A5C4E' },
 
   // Knowledge modal
   knowledgeModalCont: { flex: 1, backgroundColor: Colors.background },
