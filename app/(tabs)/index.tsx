@@ -838,31 +838,6 @@ export default function HomeScreen() {
           />
         ) : null}
 
-        {/* 레슨가능시간 힌트 모달 */}
-        <Modal visible={availabilityHintModal} transparent animationType="fade" onRequestClose={() => setAvailabilityHintModal(false)}>
-          <View style={styles.hintOverlay}>
-            <View style={styles.hintCard}>
-              <View style={styles.hintIconWrap}>
-                <Ionicons name="time" size={36} color="#C0755A" />
-              </View>
-              <Text style={styles.hintTitle}>레슨 가능 시간을 설정해보세요</Text>
-              <Text style={styles.hintBody}>
-                오른쪽 상단의 <Text style={{ fontWeight: '700' }}>시계 버튼</Text>으로 요일별 레슨 가능한 시간대를 설정할 수 있어요.{'\n\n'}설정해두면 회원 앱에서 코치님의 가능한 시간대를 확인하고 레슨을 신청할 수 있어요.
-              </Text>
-              <TouchableOpacity
-                style={styles.hintPrimaryBtn}
-                onPress={() => { setAvailabilityHintModal(false); router.push('/settings/availability'); }}
-              >
-                <Ionicons name="time-outline" size={16} color="#fff" />
-                <Text style={styles.hintPrimaryBtnText}>지금 설정하기</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.hintSecondaryBtn} onPress={() => setAvailabilityHintModal(false)}>
-                <Text style={styles.hintSecondaryBtnText}>나중에</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-
         {/* 이탈 위험 모달 */}
         <Modal visible={churnModal} transparent animationType="slide" onRequestClose={() => setChurnModal(false)}>
           <View style={styles.modalOverlay}>
@@ -1118,6 +1093,32 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* 레슨가능시간 툴팁 — 시계 아이콘 위치 안내 */}
+      {availabilityHintModal && (
+        <View style={[StyleSheet.absoluteFillObject, { zIndex: 100 }]}>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setAvailabilityHintModal(false)} />
+          <View style={[styles.hintTooltip, { top: insets.top + 62 }]}>
+            <View style={styles.hintArrowUp} />
+            <Text style={styles.hintTooltipTitle}>레슨 가능 시간 설정</Text>
+            <Text style={styles.hintTooltipBody}>
+              위 시계 버튼에서 요일별 레슨 가능 시간을 설정할 수 있어요. 회원 앱에서 코치님의 시간대를 보고 신청해요.
+            </Text>
+            <View style={styles.hintTooltipBtns}>
+              <TouchableOpacity
+                style={styles.hintTooltipPrimaryBtn}
+                onPress={() => { setAvailabilityHintModal(false); router.push('/settings/availability'); }}
+              >
+                <Text style={styles.hintTooltipPrimaryBtnText}>설정하기</Text>
+                <Ionicons name="arrow-forward" size={13} color="#C0755A" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setAvailabilityHintModal(false)}>
+                <Text style={styles.hintTooltipDismissText}>나중에</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -1316,13 +1317,22 @@ const styles = StyleSheet.create({
   interestDismissBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: '#F7F0E9', borderWidth: 1, borderColor: '#EDE0D4' },
   interestDismissBtnText: { fontSize: 13, fontWeight: '600', color: '#8B7355' },
 
-  hintOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
-  hintCard: { backgroundColor: '#fff', borderRadius: 24, padding: 28, alignItems: 'center', width: '100%' },
-  hintIconWrap: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#FBF2EF', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  hintTitle: { fontSize: 18, fontWeight: '800', color: '#3E2B22', marginBottom: 12, textAlign: 'center' },
-  hintBody: { fontSize: 14, color: '#8B7355', lineHeight: 22, textAlign: 'center', marginBottom: 24 },
-  hintPrimaryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#C0755A', borderRadius: 12, paddingVertical: 13, paddingHorizontal: 28, marginBottom: 10, width: '100%', justifyContent: 'center' },
-  hintPrimaryBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  hintSecondaryBtn: { paddingVertical: 10 },
-  hintSecondaryBtnText: { fontSize: 14, color: '#8B7355', fontWeight: '500' },
+  hintTooltip: {
+    position: 'absolute', right: 8, width: 230,
+    backgroundColor: '#fff', borderRadius: 16, padding: 14,
+    borderWidth: 1, borderColor: '#EDE0D4',
+    shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 8,
+  },
+  hintArrowUp: {
+    position: 'absolute', top: -8, right: 50,
+    width: 14, height: 14, backgroundColor: '#fff',
+    borderTopWidth: 1, borderLeftWidth: 1, borderColor: '#EDE0D4',
+    transform: [{ rotate: '45deg' }],
+  },
+  hintTooltipTitle: { fontSize: 14, fontWeight: '800', color: '#3E2B22', marginBottom: 6 },
+  hintTooltipBody: { fontSize: 13, color: '#8B7355', lineHeight: 19, marginBottom: 12 },
+  hintTooltipBtns: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  hintTooltipPrimaryBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FBF2EF', borderRadius: 8, paddingVertical: 7, paddingHorizontal: 12 },
+  hintTooltipPrimaryBtnText: { fontSize: 13, fontWeight: '700', color: '#C0755A' },
+  hintTooltipDismissText: { fontSize: 13, color: '#C4B49E', fontWeight: '500' },
 });
