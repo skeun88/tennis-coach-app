@@ -6,10 +6,9 @@ import {
   PlanFeatures,
   canUseFeature,
   isSubscriptionActive,
-  getTrialDaysLeft,
   getCurrentSubscription,
 } from '../lib/subscription';
-import { syncRevenueCatToDb } from '../lib/purchases';
+import { syncRevenueCatToDb, ENTITLEMENT_IDS } from '../lib/purchases';
 
 interface UseSubscriptionResult {
   subscription: Subscription | null;
@@ -18,6 +17,7 @@ interface UseSubscriptionResult {
   isBlocked: boolean;
   isTrial: boolean;
   trialDaysLeft: number;
+  trialEndsAt: string | null;
   canUse: (feature: keyof PlanFeatures) => boolean;
   refresh: () => Promise<void>;
 }
@@ -25,6 +25,7 @@ interface UseSubscriptionResult {
 export function useSubscription(): UseSubscriptionResult {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
+  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
   const channelIdRef = useRef(`${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
   const refresh = useCallback(async () => {
@@ -32,6 +33,22 @@ export function useSubscription(): UseSubscriptionResult {
     if (user) await syncRevenueCatToDb(user.id);
     const sub = await getCurrentSubscription();
     setSubscription(sub);
+
+    // RC에서 직접 trial 만료일 조회 (DB trial_ends_at은 stale할 수 있음)
+    try {
+      const customerInfo = await Purchases.getCustomerInfo();
+      const active = customerInfo.entitlements.active;
+      const ent = active[ENTITLEMENT_IDS.PRO] ?? active[ENTITLEMENT_IDS.BASIC] ?? null;
+      const periodType: string = (ent as any)?.periodType ?? '';
+      if (periodType === 'TRIAL') {
+        setTrialEndsAt((ent?.expirationDate as string | null | undefined) ?? null);
+      } else {
+        setTrialEndsAt(null);
+      }
+    } catch {
+      setTrialEndsAt(null);
+    }
+
     setLoading(false);
   }, []);
 
@@ -78,7 +95,13 @@ export function useSubscription(): UseSubscriptionResult {
   const isBlocked =
     subscription?.status === 'blocked' || subscription?.status === 'cancelled';
   const isTrial = subscription?.status === 'trial';
-  const trialDaysLeft = subscription && isTrial ? getTrialDaysLeft(subscription) : 0;
+
+  // RC 기반 남은 일수 (trialEndsAt이 있으면 사용, 없으면 0)
+  const trialDaysLeft = (() => {
+    if (!isTrial || !trialEndsAt) return 0;
+    const ms = new Date(trialEndsAt).getTime() - Date.now();
+    return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
+  })();
 
   return {
     subscription,
@@ -87,6 +110,7 @@ export function useSubscription(): UseSubscriptionResult {
     isBlocked,
     isTrial,
     trialDaysLeft,
+    trialEndsAt,
     canUse,
     refresh,
   };

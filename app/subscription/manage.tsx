@@ -48,7 +48,7 @@ async function fetchRcTrialInfo(): Promise<RcTrialInfo> {
 function formatKoreanDate(isoStr: string | null): string | null {
   if (!isoStr) return null;
   try {
-    return format(new Date(isoStr), 'yyyy년 M월 d일', { timeZone: 'UTC' });
+    return format(new Date(isoStr), 'yyyy년 M월 d일', { timeZone: 'Asia/Seoul' });
   } catch { return null; }
 }
 
@@ -248,7 +248,19 @@ export default function ManageSubscriptionScreen() {
           {isTrial && (
             <View style={s.trialRow}>
               <Ionicons name="time-outline" size={14} color={TERRACOTTA} />
-              <Text style={s.trialText}>무료 체험 {trialDaysLeft}일 남음</Text>
+              <Text style={s.trialText}>
+                {rcLoading
+                  ? '확인 중...'
+                  : (() => {
+                      const exp = rcInfo?.expirationDate ?? null;
+                      if (!exp) return '무료 체험 중';
+                      const ms = new Date(exp).getTime() - Date.now();
+                      if (ms <= 0) return '무료 체험 종료';
+                      if (ms < 24 * 60 * 60 * 1000) return '무료 체험 1일 미만 남음';
+                      return `무료 체험 ${Math.ceil(ms / (24 * 60 * 60 * 1000))}일 남음`;
+                    })()
+                }
+              </Text>
               {nextBillingDate && willRenew && (
                 <Text style={s.trialSubText}>· {nextBillingDate}부터 자동 결제</Text>
               )}

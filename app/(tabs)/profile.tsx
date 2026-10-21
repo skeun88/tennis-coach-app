@@ -122,7 +122,7 @@ function StatCell({ value, label, sub, right, bottom, onPress }: {
 }
 
 export default function ProfileScreen() {
-  const { subscription, isActive, isTrial, trialDaysLeft, canUse } = useSubscription();
+  const { subscription, isActive, isTrial, trialEndsAt, canUse } = useSubscription();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -143,7 +143,13 @@ export default function ProfileScreen() {
 
   const planLabel = subscription ? PLANS[subscription.plan_id]?.name ?? subscription.plan_id : null;
   const statusLabel = isTrial
-    ? `무료 체험 중 (${trialDaysLeft}일 남음)`
+    ? (() => {
+        if (!trialEndsAt) return '무료 체험 중';
+        const ms = new Date(trialEndsAt).getTime() - Date.now();
+        if (ms <= 0) return '무료 체험 종료';
+        if (ms < 24 * 60 * 60 * 1000) return '무료 체험 1일 미만 남음';
+        return `무료 체험 ${Math.ceil(ms / (24 * 60 * 60 * 1000))}일 남음`;
+      })()
     : subscription?.status === 'active' ? '구독 중'
     : subscription?.status === 'cancelled' ? '해지됨'
     : subscription?.status === 'past_due' ? '결제 실패'

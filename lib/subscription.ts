@@ -183,13 +183,42 @@ export function isSubscriptionActive(subscription: Subscription | null): boolean
   );
 }
 
-/** Trial 남은 일수 */
+/** Trial 남은 일수 (DB 기준 — hook에서 RC 기준으로 override됨) */
 export function getTrialDaysLeft(subscription: Subscription): number {
   if (subscription.status !== 'trial') return 0;
   const now = new Date();
   const trialEnd = new Date(subscription.trial_ends_at);
   const diff = trialEnd.getTime() - now.getTime();
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+}
+
+/**
+ * spec 기준 체험 남은 기간 문구
+ * - 24h 이상: '무료 체험 N일 남음'
+ * - 0~24h: '무료 체험 1일 미만 남음'
+ * - 만료: '무료 체험 종료'
+ * - 로딩/실패: '확인 중...'
+ */
+export function formatTrialRemaining(trialEndsAt: string | null, loading = false): string {
+  if (loading) return '확인 중...';
+  if (!trialEndsAt) return '무료 체험 중';
+  const ms = new Date(trialEndsAt).getTime() - Date.now();
+  if (ms <= 0) return '무료 체험 종료';
+  if (ms < 24 * 60 * 60 * 1000) return '무료 체험 1일 미만 남음';
+  return `무료 체험 ${Math.ceil(ms / (24 * 60 * 60 * 1000))}일 남음`;
+}
+
+/** Asia/Seoul 기준 한국어 날짜 문자열 */
+export function formatKoreanDateKST(isoStr: string | null): string | null {
+  if (!isoStr) return null;
+  try {
+    return new Date(isoStr).toLocaleDateString('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  } catch { return null; }
 }
 
 /** 업그레이드 차액 계산 (basic → pro) */
