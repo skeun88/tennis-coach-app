@@ -85,6 +85,9 @@ export default function HomeScreen() {
   // 레슨권 등록 유도 모달
   const [noPackageModal, setNoPackageModal] = useState(false);
 
+  // 레슨가능시간 힌트 모달
+  const [availabilityHintModal, setAvailabilityHintModal] = useState(false);
+
   // ④ 이탈 위험
   const [churnRiskList, setChurnRiskList] = useState<ChurnRiskMember[]>([]);
   const [churnModal, setChurnModal] = useState(false);
@@ -131,6 +134,9 @@ export default function HomeScreen() {
 
     setCoachEmail(user.email ?? '');
     setUserId(user.id);
+
+    // 레슨가능시간 힌트 모달 (최초 3회 + 주 1회)
+    checkAvailabilityHint(user.id);
 
     // 레슨권 없으면 모달 (최초 1회)
     const dismissed = await AsyncStorage.getItem(`no_package_modal_dismissed_${user.id}`);
@@ -272,6 +278,27 @@ export default function HomeScreen() {
       if (!val) setShowChatHint(true);
     });
   }, []);
+
+  async function checkAvailabilityHint(uid: string) {
+    const countKey = `availability_hint_count_${uid}`;
+    const lastKey = `availability_hint_last_shown_${uid}`;
+    const [countRaw, lastRaw] = await Promise.all([
+      AsyncStorage.getItem(countKey),
+      AsyncStorage.getItem(lastKey),
+    ]);
+    const count = parseInt(countRaw ?? '0', 10);
+    const last = parseInt(lastRaw ?? '0', 10);
+    const now = Date.now();
+    const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+    const shouldShow = count < 3 || (now - last) > WEEK_MS;
+    if (shouldShow) {
+      setAvailabilityHintModal(true);
+      await Promise.all([
+        AsyncStorage.setItem(countKey, String(count + 1)),
+        AsyncStorage.setItem(lastKey, String(now)),
+      ]);
+    }
+  }
 
   function dismissChatHint() {
     setShowChatHint(false);
@@ -811,6 +838,31 @@ export default function HomeScreen() {
           />
         ) : null}
 
+        {/* 레슨가능시간 힌트 모달 */}
+        <Modal visible={availabilityHintModal} transparent animationType="fade" onRequestClose={() => setAvailabilityHintModal(false)}>
+          <View style={styles.hintOverlay}>
+            <View style={styles.hintCard}>
+              <View style={styles.hintIconWrap}>
+                <Ionicons name="time" size={36} color="#C0755A" />
+              </View>
+              <Text style={styles.hintTitle}>레슨 가능 시간을 설정해보세요</Text>
+              <Text style={styles.hintBody}>
+                오른쪽 상단의 <Text style={{ fontWeight: '700' }}>시계 버튼</Text>으로 요일별 레슨 가능한 시간대를 설정할 수 있어요.{'\n\n'}설정해두면 회원 앱에서 코치님의 가능한 시간대를 확인하고 레슨을 신청할 수 있어요.
+              </Text>
+              <TouchableOpacity
+                style={styles.hintPrimaryBtn}
+                onPress={() => { setAvailabilityHintModal(false); router.push('/settings/availability'); }}
+              >
+                <Ionicons name="time-outline" size={16} color="#fff" />
+                <Text style={styles.hintPrimaryBtnText}>지금 설정하기</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.hintSecondaryBtn} onPress={() => setAvailabilityHintModal(false)}>
+                <Text style={styles.hintSecondaryBtnText}>나중에</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
         {/* 이탈 위험 모달 */}
         <Modal visible={churnModal} transparent animationType="slide" onRequestClose={() => setChurnModal(false)}>
           <View style={styles.modalOverlay}>
@@ -1263,4 +1315,14 @@ const styles = StyleSheet.create({
   interestRegBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
   interestDismissBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: '#F7F0E9', borderWidth: 1, borderColor: '#EDE0D4' },
   interestDismissBtnText: { fontSize: 13, fontWeight: '600', color: '#8B7355' },
+
+  hintOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
+  hintCard: { backgroundColor: '#fff', borderRadius: 24, padding: 28, alignItems: 'center', width: '100%' },
+  hintIconWrap: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#FBF2EF', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  hintTitle: { fontSize: 18, fontWeight: '800', color: '#3E2B22', marginBottom: 12, textAlign: 'center' },
+  hintBody: { fontSize: 14, color: '#8B7355', lineHeight: 22, textAlign: 'center', marginBottom: 24 },
+  hintPrimaryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#C0755A', borderRadius: 12, paddingVertical: 13, paddingHorizontal: 28, marginBottom: 10, width: '100%', justifyContent: 'center' },
+  hintPrimaryBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  hintSecondaryBtn: { paddingVertical: 10 },
+  hintSecondaryBtnText: { fontSize: 14, color: '#8B7355', fontWeight: '500' },
 });
