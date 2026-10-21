@@ -48,27 +48,31 @@ export default function CoachConsentModal({ visible, onAgree, onDecline }: Props
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const now = new Date().toISOString();
-    await supabase.from('ai_consents').insert([
-      {
-        coach_id: user.id,
-        consent_type: 'coach_voice_ai',
-        consent_status: 'agreed',
-        consent_version: AI_CONSENT_VERSION,
-        consent_method: 'app',
-        source: 'coach_app',
-        agreed_at: now,
-      },
-      {
-        coach_id: user.id,
-        consent_type: 'international_transfer',
-        consent_status: 'agreed',
-        consent_version: AI_CONSENT_VERSION,
-        consent_method: 'app',
-        source: 'coach_app',
-        agreed_at: now,
-      },
-    ]);
-    // DB 결과와 무관하게 로컬에 저장 (RLS 문제 등으로 SELECT 실패 시에도 모달 재표시 방지)
+    // DB 저장은 best-effort — 실패해도 로컬 동의는 반드시 저장
+    try {
+      await supabase.from('ai_consents').insert([
+        {
+          coach_id: user.id,
+          consent_type: 'coach_voice_ai',
+          consent_status: 'agreed',
+          consent_version: AI_CONSENT_VERSION,
+          consent_method: 'app',
+          source: 'coach_app',
+          agreed_at: now,
+        },
+        {
+          coach_id: user.id,
+          consent_type: 'international_transfer',
+          consent_status: 'agreed',
+          consent_version: AI_CONSENT_VERSION,
+          consent_method: 'app',
+          source: 'coach_app',
+          agreed_at: now,
+        },
+      ]);
+    } catch {
+      // 무시
+    }
     await AsyncStorage.setItem(`${COACH_CONSENT_STORAGE_KEY_PREFIX}${user.id}`, '1');
     onAgree();
   }
@@ -138,7 +142,11 @@ export default function CoachConsentModal({ visible, onAgree, onDecline }: Props
                   />
                 </View>
 
-                <TouchableOpacity onPress={() => setShowDetail(true)} style={styles.detailLink}>
+                <TouchableOpacity
+                  onPress={() => setShowDetail(true)}
+                  style={styles.detailLink}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
                   <Text style={styles.detailLinkText}>자세히 보기</Text>
                   <Ionicons name="chevron-forward" size={13} color={Colors.primary} />
                 </TouchableOpacity>
@@ -304,7 +312,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
     alignSelf: 'center', marginTop: 10, marginBottom: 4,
   },
-  content: { padding: 24, paddingBottom: 8 },
+  content: { padding: 24, paddingBottom: 24 },
   title: {
     fontSize: 22, fontWeight: '800', color: Colors.foreground,
     lineHeight: 30, marginBottom: 12,

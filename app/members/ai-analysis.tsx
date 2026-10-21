@@ -191,8 +191,16 @@ export default function AIAnalysisScreen() {
     setIsMinorMember(age < 14);
   }
 
+  const MEMBER_VERBAL_CONSENT_KEY = `kerri_member_verbal_consent_v1_${memberId}`;
+
   async function checkMemberConsent() {
-    // 구두 동의(member_voice_ai) 또는 레거시(member, guardian) 확인
+    // 로컬 캐시 우선 확인
+    const local = await AsyncStorage.getItem(MEMBER_VERBAL_CONSENT_KEY);
+    if (local === '1') {
+      setMemberConsentOk(true);
+      return;
+    }
+    // DB 확인 (구두 동의: member_voice_ai 또는 레거시 member, guardian)
     const { data: voiceConsent } = await supabase
       .from('ai_consents')
       .select('id')
@@ -200,6 +208,9 @@ export default function AIAnalysisScreen() {
       .in('consent_type', ['member_voice_ai', 'member', 'guardian'])
       .eq('consent_status', 'agreed')
       .maybeSingle();
+    if (voiceConsent) {
+      await AsyncStorage.setItem(MEMBER_VERBAL_CONSENT_KEY, '1');
+    }
     setMemberConsentOk(!!voiceConsent);
   }
 
@@ -1626,6 +1637,7 @@ export default function AIAnalysisScreen() {
         onConfirm={() => {
           setVerbalConsentVisible(false);
           setMemberConsentOk(true);
+          AsyncStorage.setItem(MEMBER_VERBAL_CONSENT_KEY, '1');
         }}
         onCancel={() => setVerbalConsentVisible(false)}
       />

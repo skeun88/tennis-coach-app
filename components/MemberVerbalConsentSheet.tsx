@@ -43,13 +43,12 @@ export default function MemberVerbalConsentSheet({
     setSaving(true);
     try {
       await insertVerbalConsents(coachId, memberId);
-      onConfirm();
     } catch {
-      // 저장 실패 시 취소 처리
-      onCancel();
+      // DB 실패해도 구두 동의는 확인된 것으로 처리
     } finally {
       setSaving(false);
     }
+    onConfirm();
   }
 
   return (
