@@ -249,14 +249,14 @@ serve(async (req) => {
       supabase.from('ai_consents')
         .select('id')
         .eq('coach_id', coachId)
-        .eq('consent_type', 'coach')
+        .in('consent_type', ['coach_voice_ai', 'coach'])
         .eq('consent_status', 'agreed')
         .eq('consent_version', AI_CONSENT_VERSION)
         .maybeSingle(),
       supabase.from('ai_consents')
         .select('id, consent_type')
         .eq('member_id', memberId)
-        .in('consent_type', ['member', 'guardian'])
+        .in('consent_type', ['member_voice_ai', 'member', 'guardian'])
         .eq('consent_status', 'agreed')
         .maybeSingle(),
     ])
