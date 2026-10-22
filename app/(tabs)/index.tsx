@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity,
@@ -55,6 +55,8 @@ export default function HomeScreen() {
   const [todayCards, setTodayCards] = useState<TodayMemberCard[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingAttendance, setLoadingAttendance] = useState<string | null>(null);
+  // realtime이 출석 처리 중 stale 캐시로 상태를 덮어쓰는 것을 방지
+  const attendanceOpInProgress = useRef(false);
   const [coachEmail, setCoachEmail] = useState('');
   const [userId, setUserId] = useState<string | null>(null);
   const [autoGenSuggestion, setAutoGenSuggestion] = useState<{memberId: string; name: string; time: string}[]>([]);
@@ -348,6 +350,8 @@ export default function HomeScreen() {
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'members' }, (payload) => {
           const row = payload.new as any;
           if (row.coach_id !== coachId) return;
+          // 출석 처리 중에는 realtime이 stale 캐시로 덮어쓰지 않도록 스킵
+          if (attendanceOpInProgress.current) return;
           loadAll();
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'payments' }, (payload) => {
@@ -380,7 +384,15 @@ export default function HomeScreen() {
   async function handleAttend(card: TodayMemberCard) {
     if (!userId) return;
     const key = `${card.lessonId}:${card.memberId}`;
+    attendanceOpInProgress.current = true;
     setLoadingAttendance(key);
+    // 낙관적 업데이트: DB 완료 전에 즉시 UI 반영
+    const newAttended = !card.attended;
+    setTodayCards(prev => prev.map(c =>
+      c.lessonId === card.lessonId && c.memberId === card.memberId
+        ? { ...c, attended: newAttended, isAbsent: newAttended ? false : c.isAbsent }
+        : c
+    ));
     try {
       if (card.attended) {
         // 출석 되돌리기
@@ -430,8 +442,11 @@ export default function HomeScreen() {
       }
       await loadTodayCards(userId);
     } catch {
+      // 실패 시 낙관적 업데이트 롤백
+      await loadTodayCards(userId);
       Alert.alert('오류', '출석 처리 중 오류가 발생했습니다.');
     } finally {
+      attendanceOpInProgress.current = false;
       setLoadingAttendance(null);
     }
   }
@@ -442,6 +457,7 @@ export default function HomeScreen() {
       // 결석 되돌리기
       if (!userId || !card.attendanceId) return;
       const key = `${card.lessonId}:${card.memberId}`;
+      attendanceOpInProgress.current = true;
       setLoadingAttendance(key);
       try {
         await supabase.from('attendance').delete().eq('id', card.attendanceId);
@@ -450,6 +466,7 @@ export default function HomeScreen() {
         }
         await loadTodayCards(userId);
       } finally {
+        attendanceOpInProgress.current = false;
         setLoadingAttendance(null);
       }
     } else {
@@ -465,6 +482,7 @@ export default function HomeScreen() {
     if (!userId || !absenceCard || !selectedReason || !selectedDeduction) return;
     const card = absenceCard;
     setSavingAbsence(true);
+    attendanceOpInProgress.current = true;
     const key = `${card.lessonId}:${card.memberId}`;
     setLoadingAttendance(key);
     try {
@@ -497,6 +515,7 @@ export default function HomeScreen() {
     } catch {
       Alert.alert('오류', '처리 중 오류가 발생했습니다.');
     } finally {
+      attendanceOpInProgress.current = false;
       setSavingAbsence(false);
       setLoadingAttendance(null);
     }
