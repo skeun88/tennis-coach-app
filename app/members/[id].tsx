@@ -3448,8 +3448,8 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       <Modal visible={reregSheet} transparent animationType="slide" onRequestClose={() => setReregSheet(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <TouchableOpacity style={styles.modalOverlayTP} activeOpacity={1} onPress={() => setReregSheet(false)}>
-          <TouchableOpacity activeOpacity={1} style={{ width: '100%' }} onPress={e => e.stopPropagation()}>
-            <View style={[styles.modalSheetTP, { paddingBottom: 0, maxHeight: '92%' }]}>
+          <TouchableOpacity activeOpacity={1} style={{ width: '100%', maxHeight: '92%' }} onPress={e => e.stopPropagation()}>
+            <View style={[styles.modalSheetTP, { paddingBottom: 0, flex: 1 }]}>
               <View style={styles.modalHeaderTP}>
                 <Text style={styles.modalTitleTP}>레슨 재등록</Text>
                 <TouchableOpacity onPress={() => setReregSheet(false)}>
