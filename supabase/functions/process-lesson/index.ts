@@ -252,23 +252,23 @@ serve(async (req) => {
         .in('consent_type', ['coach_voice_ai', 'coach'])
         .eq('consent_status', 'agreed')
         .eq('consent_version', AI_CONSENT_VERSION)
-        .maybeSingle(),
+        .limit(1),
       supabase.from('ai_consents')
         .select('id, consent_type')
         .eq('member_id', memberId)
         .in('consent_type', ['member_voice_ai', 'member', 'guardian'])
         .eq('consent_status', 'agreed')
-        .maybeSingle(),
+        .limit(1),
     ])
 
-    if (!coachConsentRes.data) {
+    if (!coachConsentRes.data?.[0]) {
       if (lessonPlanId) await supabase.from('lesson_plans').update({ status: 'failed', error_message: 'COACH_CONSENT_REQUIRED' }).eq('id', lessonPlanId)
       return new Response(JSON.stringify({ error: 'COACH_CONSENT_REQUIRED', message: '코치 동의가 필요합니다.' }), {
         status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
 
-    if (!memberConsentRes.data) {
+    if (!memberConsentRes.data?.[0]) {
       if (lessonPlanId) await supabase.from('lesson_plans').update({ status: 'failed', error_message: 'MEMBER_CONSENT_REQUIRED' }).eq('id', lessonPlanId)
       return new Response(JSON.stringify({ error: 'MEMBER_CONSENT_REQUIRED', message: '회원 동의가 필요합니다.' }), {
         status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
