@@ -404,10 +404,13 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       if (changePkgSelectedId) {
         const { data: pkg } = await supabase
           .from('lesson_packages')
-          .select('title, color, total_credits, price')
+          .select('title, color, total_credits, price, duration_minutes')
           .eq('id', changePkgSelectedId)
           .maybeSingle();
-        if (pkg) setLessonPackage({ ...pkg, color: pkg.color ?? '#888888', price: pkg.price ?? 0, total_credits: pkg.total_credits ?? 0 });
+        if (pkg) {
+          setLessonPackage({ ...pkg, color: pkg.color ?? '#888888', price: pkg.price ?? 0, total_credits: pkg.total_credits ?? 0 });
+          setLessonDuration(String(pkg.duration_minutes ?? 60));
+        }
       } else {
         setLessonPackage(null);
       }
@@ -3439,8 +3442,9 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       {/* 레슨 재등록 시트 */}
       <Modal visible={reregSheet} transparent animationType="slide" onRequestClose={() => setReregSheet(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <TouchableOpacity style={styles.modalOverlayTP} activeOpacity={1} onPress={() => setReregSheet(false)}>
-          <TouchableOpacity activeOpacity={1} style={{ width: '100%', height: '92%' }} onPress={e => e.stopPropagation()}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' }}>
+            <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setReregSheet(false)} />
+            <View style={{ height: '92%' }}>
             <View style={[styles.modalSheetTP, { paddingBottom: 0, flex: 1 }]}>
               <View style={styles.modalHeaderTP}>
                 <Text style={styles.modalTitleTP}>레슨 재등록</Text>
@@ -3621,8 +3625,8 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                 </View>
               )}
             </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
+            </View>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
 
