@@ -20,8 +20,7 @@ import PlanUpsellModal from '../../components/PlanUpsellModal';
 import { notifyMemberMessage, notifyMemberReregister, notifyMemberAbsent } from '../../lib/notifications';
 import { detectScheduleType, ScheduleType } from '../../lib/scheduleTypeUtils';
 import { buildMemberUpsertPayload, MEMBER_LEVELS } from './member-form';
-
-type DayTimes = Record<number, string[]>;
+import { ScheduleSection, DayTimes } from '../../components/ScheduleSection';
 type DateEntry = { date: string; startTime: string; duration: number };
 
 const LEVELS: MemberLevel[] = MEMBER_LEVELS;
@@ -342,13 +341,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   const [seDayTimes, setSeDayTimes] = useState<DayTimes>({});
   const [seDuration, setSeDuration] = useState(60);
   const [seApplyFrom, setSeApplyFrom] = useState('');
-  const [seApplyFromCalVisible, setSeApplyFromCalVisible] = useState(false);
-  const [seApplyFromCalMonth, setSeApplyFromCalMonth] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() });
   const [seSaving, setSeSaving] = useState(false);
-  const [seTimePickerVisible, setSeTimePickerVisible] = useState(false);
-  const [seEditingDay, setSeEditingDay] = useState<number | null>(null);
-  const [seTempHour, setSeTempHour] = useState('');
-  const [seTempMinute, setSeTempMinute] = useState('00');
   // by_date 모드: 수정 가능한 예정 일정
   const [seByDateLessons, setSeByDateLessons] = useState<{id:string; date:string; startTime:string; duration:number}[]>([]);
   const [seByDateChanges, setSeByDateChanges] = useState<Record<string, {date:string; startTime:string}>>({});
@@ -421,8 +414,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     setSeDuration(parseInt(lessonDuration) || 60);
     const todayStr = toKSTDateStr(new Date());
     setSeApplyFrom(todayStr);
-    setSeApplyFromCalMonth({ year: new Date().getFullYear(), month: new Date().getMonth() });
-    setSeApplyFromCalVisible(false);
+
     setSeByDateChanges({});
     if (initialType === 'by_date') {
       const nowH = new Date().getHours();
@@ -2602,337 +2594,162 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
           <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
             <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 120 }}>
 
-              {/* 일정 방식 */}
               <View style={{ padding: 16 }}>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.4 }}>일정 방식</Text>
-                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 4 }}>
-                  {([
-                    { key: 'regular', label: '매주 같은 요일', icon: 'repeat' },
-                    { key: 'by_date', label: '날짜 직접 선택', icon: 'calendar' },
-                  ] as const).map(opt => (
-                    <TouchableOpacity
-                      key={opt.key}
-                      style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 10, paddingHorizontal: 4, borderRadius: 10, borderWidth: 1.5, borderColor: seType === opt.key ? Colors.primary : Colors.border, backgroundColor: seType === opt.key ? Colors.primary : Colors.mutedBg }}
-                      onPress={() => {
-                        setSeType(opt.key);
-                        if (opt.key === 'by_date') {
-                          const todayStr2 = toKSTDateStr(new Date());
-                          const nowH2 = new Date().getHours();
-                          const nowM2 = new Date().getMinutes();
-                          const nowMin2 = nowH2 * 60 + nowM2;
-                          const pending2 = futureLessons.filter(l => {
-                            if (l.date > todayStr2) return true;
-                            if (l.date === todayStr2) {
-                              const [lh2, lm2] = (l.start_time?.slice(0,5) ?? '00:00').split(':').map(Number);
-                              return lh2 * 60 + lm2 >= nowMin2;
-                            }
-                            return false;
-                          }).map(l => ({ id: l.id, date: l.date, startTime: l.start_time?.slice(0, 5) ?? '09:00', duration: seDuration }));
-                          setSeByDateLessons(pending2);
-                          setSeByDateChanges({});
+                <ScheduleSection
+                  scheduleType={seType}
+                  onScheduleTypeChange={(t) => {
+                    if (t === 'later') return;
+                    setSeType(t as 'regular' | 'by_date');
+                    if (t === 'by_date') {
+                      const todayStr2 = toKSTDateStr(new Date());
+                      const nowH2 = new Date().getHours();
+                      const nowM2 = new Date().getMinutes();
+                      const nowMin2 = nowH2 * 60 + nowM2;
+                      const pending2 = futureLessons.filter(l => {
+                        if (l.date > todayStr2) return true;
+                        if (l.date === todayStr2) {
+                          const [lh2, lm2] = (l.start_time?.slice(0,5) ?? '00:00').split(':').map(Number);
+                          return lh2 * 60 + lm2 >= nowMin2;
                         }
-                      }}
-                    >
-                      <Ionicons name={opt.icon as any} size={16} color={seType === opt.key ? '#fff' : Colors.mutedFg} />
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: seType === opt.key ? '#fff' : Colors.mutedFg, textAlign: 'center' }}>{opt.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
+                        return false;
+                      }).map(l => ({ id: l.id, date: l.date, startTime: l.start_time?.slice(0, 5) ?? '09:00', duration: seDuration }));
+                      setSeByDateLessons(pending2);
+                      setSeByDateChanges({});
+                    }
+                  }}
+                  scheduleDays={seDays}
+                  onDaysChange={setSeDays}
+                  dayTimes={seDayTimes}
+                  onDayTimesChange={setSeDayTimes}
+                  startDate={seApplyFrom}
+                  onStartDateChange={setSeApplyFrom}
+                  startDateLabel="적용 시작일"
+                  hideNeverOption={true}
+                  byDateContent={
+                    <View>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 }}>예정 일정 수정</Text>
+                      {seByDateLessons.length === 0 ? (
+                        <Text style={{ fontSize: 14, color: Colors.placeholder, marginBottom: 12 }}>수정할 예정 일정이 없어요</Text>
+                      ) : (
+                        seByDateLessons.map(lesson => {
+                          const changed = seByDateChanges[lesson.id];
+                          const displayDate = changed?.date ?? lesson.date;
+                          const displayTime = changed?.startTime ?? lesson.startTime;
+                          const d = new Date(displayDate + 'T00:00:00');
+                          const dateLabel = `${d.getMonth() + 1}/${d.getDate()}(${DAYS_KR[d.getDay()]})`;
+                          const isModified = !!changed;
+                          return (
+                            <View key={lesson.id} style={[styles.dayTimeRow2, { marginBottom: 8, flexDirection: 'column', alignItems: 'stretch', gap: 0 }]}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                {isModified && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.primary }} />}
+                                <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: Colors.foreground }}>{dateLabel} {displayTime}</Text>
+                                <TouchableOpacity
+                                  onPress={() => {
+                                    setSeByDateEditingId(lesson.id);
+                                    const dInit = new Date(displayDate + 'T00:00:00');
+                                    setSeByDateCalMonth({ year: dInit.getFullYear(), month: dInit.getMonth() });
+                                    setSeByDateCalVisible(true);
+                                  }}
+                                  style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: Colors.primaryLight, marginRight: 4 }}
+                                >
+                                  <Text style={{ fontSize: 12, color: Colors.primary, fontWeight: '600' }}>날짜</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  onPress={() => {
+                                    setSeByDateEditingIdForTime(lesson.id);
+                                    const [h2, m2] = displayTime.split(':');
+                                    setSeByDateTempHour(h2);
+                                    setSeByDateTempMinute(m2 ?? '00');
+                                    setSeByDateTimePickerVisible(true);
+                                  }}
+                                  style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: Colors.primaryLight }}
+                                >
+                                  <Text style={{ fontSize: 12, color: Colors.primary, fontWeight: '600' }}>시간</Text>
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          );
+                        })
+                      )}
 
-              {/* ── 매주 같은 요일 ── */}
-              {seType === 'regular' && (
-                <View style={{ paddingHorizontal: 16 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 }}>요일 · 시간</Text>
-                  <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
-                    {DAYS_KR.map((dayName, dayIdx) => {
-                      const isDaySel = seDays.includes(dayIdx);
-                      return (
-                        <TouchableOpacity
-                          key={dayIdx}
-                          style={{ flex: 1, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', backgroundColor: isDaySel ? Colors.primary : Colors.mutedBg }}
-                          onPress={() => {
-                            if (isDaySel) {
-                              setSeDays(prev => prev.filter(d => d !== dayIdx));
-                              setSeDayTimes(prev => { const n = { ...prev }; delete n[dayIdx]; return n; });
-                            } else {
-                              setSeDays(prev => [...prev, dayIdx].sort());
-                            }
-                          }}
-                        >
-                          <Text style={{ fontSize: 13, fontWeight: '700', color: isDaySel ? '#fff' : Colors.mutedFg }}>{dayName}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                  {seDays.length === 0 && (
-                    <Text style={{ fontSize: 13, color: Colors.placeholder, marginBottom: 8 }}>요일을 선택하세요</Text>
-                  )}
-                  {seDays.map(dayIdx => {
-                    const times = seDayTimes[dayIdx] ?? [];
-                    return (
-                      <View key={dayIdx} style={{ marginBottom: 12 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, justifyContent: 'space-between' }}>
-                          <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.foreground }}>{DAYS_KR[dayIdx]}요일</Text>
-                          <TouchableOpacity
-                            onPress={() => { setSeEditingDay(dayIdx); setSeTempHour(''); setSeTempMinute('00'); setSeTimePickerVisible(true); }}
-                            style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: Colors.primaryLight }}
-                          >
-                            <Ionicons name="add" size={14} color={Colors.primary} />
-                            <Text style={{ fontSize: 13, color: Colors.primary, fontWeight: '600' }}>시간 추가</Text>
-                          </TouchableOpacity>
-                        </View>
-                        {times.length === 0 ? (
-                          <Text style={{ fontSize: 13, color: Colors.placeholder }}>시간을 추가해주세요</Text>
-                        ) : (
-                          times.map(t => (
-                            <View key={t} style={[styles.dayTimeRow2, { marginBottom: 4 }]}>
-                              <Ionicons name="time-outline" size={16} color={Colors.primary} />
-                              <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: Colors.foreground }}>{t}</Text>
-                              <TouchableOpacity onPress={() => setSeDayTimes(prev => {
-                                const next = { ...prev, [dayIdx]: (prev[dayIdx] ?? []).filter(x => x !== t) };
-                                if (next[dayIdx].length === 0) delete next[dayIdx];
-                                return next;
-                              })}>
-                                <Ionicons name="close-circle" size={18} color={Colors.destructive} />
+                      {seByDateCalVisible && seByDateEditingId && (() => {
+                        const { year, month } = seByDateCalMonth;
+                        const todayStr4 = toKSTDateStr(new Date());
+                        const firstDow4 = new Date(year, month, 1).getDay();
+                        const daysInMonth4 = new Date(year, month + 1, 0).getDate();
+                        const cells4: (number | null)[] = [];
+                        for (let i = 0; i < firstDow4; i++) cells4.push(null);
+                        for (let d = 1; d <= daysInMonth4; d++) cells4.push(d);
+                        while (cells4.length % 7 !== 0) cells4.push(null);
+                        const MONTHS_KR4 = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+                        const DAYS_LBL4 = ['일','월','화','수','목','금','토'];
+                        const lesson4 = seByDateLessons.find(l => l.id === seByDateEditingId);
+                        const curDate4 = seByDateChanges[seByDateEditingId]?.date ?? lesson4?.date ?? '';
+                        return (
+                          <View style={{ marginBottom: 12, backgroundColor: Colors.background, borderRadius: 12, padding: 10, borderWidth: 1, borderColor: Colors.border }}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                              <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.foreground }}>날짜 선택</Text>
+                              <TouchableOpacity onPress={() => { setSeByDateCalVisible(false); setSeByDateEditingId(null); }}>
+                                <Ionicons name="close" size={18} color={Colors.mutedFg} />
                               </TouchableOpacity>
                             </View>
-                          ))
-                        )}
-                      </View>
-                    );
-                  })}
-
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginTop: 4, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 }}>1회 레슨 시간</Text>
-                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-                    {[30, 60, 90, 120].map(d => (
-                      <TouchableOpacity
-                        key={d}
-                        style={{ flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1.5, borderColor: seDuration === d ? Colors.primary : Colors.border, backgroundColor: seDuration === d ? Colors.primary : Colors.mutedBg, alignItems: 'center' }}
-                        onPress={() => setSeDuration(d)}
-                      >
-                        <Text style={{ fontSize: 13, fontWeight: '700', color: seDuration === d ? '#fff' : Colors.mutedFg }}>{d}분</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  {/* 언제부터 변경하나요? */}
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 }}>언제부터 변경하나요?</Text>
-                  <TouchableOpacity
-                    style={[styles.editInput, { justifyContent: 'space-between', flexDirection: 'row', alignItems: 'center', marginBottom: 4 }]}
-                    onPress={() => setSeApplyFromCalVisible(v => !v)}
-                  >
-                    <Text style={{ fontSize: 15, color: seApplyFrom ? Colors.foreground : Colors.placeholder }}>
-                      {seApplyFrom ? (() => {
-                        const d = new Date(seApplyFrom + 'T00:00:00');
-                        return d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
-                      })() : '날짜 선택'}
-                    </Text>
-                    <Ionicons name={seApplyFromCalVisible ? 'chevron-up' : 'calendar-outline'} size={18} color={Colors.primary} />
-                  </TouchableOpacity>
-                  {seApplyFromCalVisible && (() => {
-                    const { year, month } = seApplyFromCalMonth;
-                    const todayStr3 = toKSTDateStr(new Date());
-                    const firstDow3 = new Date(year, month, 1).getDay();
-                    const daysInMonth3 = new Date(year, month + 1, 0).getDate();
-                    const cells3: (number | null)[] = [];
-                    for (let i = 0; i < firstDow3; i++) cells3.push(null);
-                    for (let d = 1; d <= daysInMonth3; d++) cells3.push(d);
-                    while (cells3.length % 7 !== 0) cells3.push(null);
-                    const MONTHS_KR3 = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
-                    const DAYS_LBL3 = ['일','월','화','수','목','금','토'];
-                    return (
-                      <View style={{ marginBottom: 12, backgroundColor: Colors.background, borderRadius: 12, padding: 10, borderWidth: 1, borderColor: Colors.border }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                          <TouchableOpacity style={{ padding: 6 }} onPress={() => setSeApplyFromCalMonth(p => { const m = p.month - 1; return m < 0 ? { year: p.year - 1, month: 11 } : { year: p.year, month: m }; })}>
-                            <Ionicons name="chevron-back" size={20} color={Colors.primary} />
-                          </TouchableOpacity>
-                          <Text style={{ fontSize: 15, fontWeight: '800', color: Colors.primary }}>{year}년 {MONTHS_KR3[month]}</Text>
-                          <TouchableOpacity style={{ padding: 6 }} onPress={() => setSeApplyFromCalMonth(p => { const m = p.month + 1; return m > 11 ? { year: p.year + 1, month: 0 } : { year: p.year, month: m }; })}>
-                            <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
-                          </TouchableOpacity>
-                        </View>
-                        <View style={{ flexDirection: 'row', marginBottom: 4 }}>
-                          {DAYS_LBL3.map((dl, di) => (
-                            <Text key={di} style={{ flex: 1, textAlign: 'center', fontSize: 13, fontWeight: '700', color: di === 0 ? Colors.destructive : di === 6 ? Colors.accentWarm : Colors.mutedFg, paddingVertical: 2 }}>{dl}</Text>
-                          ))}
-                        </View>
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                          {cells3.map((day3, ci3) => {
-                            if (!day3) return <View key={ci3} style={{ width: '14.28%', paddingVertical: 2 }} />;
-                            const dateStr3 = `${year}-${String(month + 1).padStart(2, '0')}-${String(day3).padStart(2, '0')}`;
-                            const isPast3 = dateStr3 < todayStr3;
-                            const isSelected3 = dateStr3 === seApplyFrom;
-                            const isToday3 = dateStr3 === todayStr3;
-                            const dow3 = ci3 % 7;
-                            return (
-                              <TouchableOpacity
-                                key={ci3}
-                                disabled={isPast3}
-                                style={{ width: '14.28%', alignItems: 'center', paddingVertical: 2 }}
-                                onPress={() => { setSeApplyFrom(dateStr3); setSeApplyFromCalVisible(false); }}
-                              >
-                                <View style={{ width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', backgroundColor: isSelected3 ? Colors.primary : isToday3 ? Colors.primary + '18' : 'transparent' }}>
-                                  <Text style={{ fontSize: 13, fontWeight: isSelected3 || isToday3 ? '800' : '400', color: isSelected3 ? '#fff' : isPast3 ? Colors.border : dow3 === 0 ? Colors.destructive : dow3 === 6 ? Colors.accentWarm : Colors.foreground }}>{day3}</Text>
-                                </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                              <TouchableOpacity style={{ padding: 6 }} onPress={() => setSeByDateCalMonth(p => { const m = p.month - 1; return m < 0 ? { year: p.year - 1, month: 11 } : { year: p.year, month: m }; })}>
+                                <Ionicons name="chevron-back" size={20} color={Colors.primary} />
                               </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-                      </View>
-                    );
-                  })()}
+                              <Text style={{ fontSize: 15, fontWeight: '800', color: Colors.primary }}>{year}년 {MONTHS_KR4[month]}</Text>
+                              <TouchableOpacity style={{ padding: 6 }} onPress={() => setSeByDateCalMonth(p => { const m = p.month + 1; return m > 11 ? { year: p.year + 1, month: 0 } : { year: p.year, month: m }; })}>
+                                <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
+                              </TouchableOpacity>
+                            </View>
+                            <View style={{ flexDirection: 'row', marginBottom: 4 }}>
+                              {DAYS_LBL4.map((dl, di) => (
+                                <Text key={di} style={{ flex: 1, textAlign: 'center', fontSize: 13, fontWeight: '700', color: di === 0 ? Colors.destructive : di === 6 ? Colors.accentWarm : Colors.mutedFg, paddingVertical: 2 }}>{dl}</Text>
+                              ))}
+                            </View>
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                              {cells4.map((day4, ci4) => {
+                                if (!day4) return <View key={ci4} style={{ width: '14.28%', paddingVertical: 2 }} />;
+                                const dateStr4 = `${year}-${String(month + 1).padStart(2, '0')}-${String(day4).padStart(2, '0')}`;
+                                const isPast4 = dateStr4 < todayStr4;
+                                const isSelected4 = dateStr4 === curDate4;
+                                const dow4 = ci4 % 7;
+                                return (
+                                  <TouchableOpacity
+                                    key={ci4}
+                                    disabled={isPast4}
+                                    style={{ width: '14.28%', alignItems: 'center', paddingVertical: 2 }}
+                                    onPress={() => {
+                                      const lessonForChange = seByDateLessons.find(l => l.id === seByDateEditingId);
+                                      if (!lessonForChange) return;
+                                      const prev5 = seByDateChanges[seByDateEditingId] ?? { date: lessonForChange.date, startTime: lessonForChange.startTime };
+                                      setSeByDateChanges(c => ({ ...c, [seByDateEditingId]: { ...prev5, date: dateStr4 } }));
+                                      setSeByDateCalVisible(false);
+                                      setSeByDateEditingId(null);
+                                    }}
+                                  >
+                                    <View style={{ width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', backgroundColor: isSelected4 ? Colors.primary : 'transparent' }}>
+                                      <Text style={{ fontSize: 13, fontWeight: isSelected4 ? '800' : '400', color: isSelected4 ? '#fff' : isPast4 ? Colors.border : dow4 === 0 ? Colors.destructive : dow4 === 6 ? Colors.accentWarm : Colors.foreground }}>{day4}</Text>
+                                    </View>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </View>
+                          </View>
+                        );
+                      })()}
 
-                  {/* 변경 미리보기 */}
-                  {(() => {
-                    const affected = futureLessons.filter(l => l.date >= seApplyFrom);
-                    if (affected.length > 0) {
-                      const applyD = new Date(seApplyFrom + 'T00:00:00');
-                      const applyLabel = `${applyD.getMonth() + 1}월 ${applyD.getDate()}일`;
-                      return (
+                      {Object.keys(seByDateChanges).length > 0 && (
                         <View style={{ backgroundColor: Colors.primary + '12', borderRadius: 10, padding: 12, marginBottom: 8 }}>
                           <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.primary }}>
-                            {applyLabel}부터 예정 일정 {affected.length}개가 변경돼요.
+                            {Object.keys(seByDateChanges).length}개 일정이 수정됩니다.
                           </Text>
                         </View>
-                      );
-                    }
-                    return (
-                      <View style={{ backgroundColor: Colors.mutedBg, borderRadius: 10, padding: 12, marginBottom: 8 }}>
-                        <Text style={{ fontSize: 14, color: Colors.mutedFg }}>
-                          예정 일정이 없어 정기 시간만 변경돼요
-                        </Text>
-                      </View>
-                    );
-                  })()}
-                </View>
-              )}
-
-              {/* ── 날짜 직접 선택 ── */}
-              {seType === 'by_date' && (
-                <View style={{ paddingHorizontal: 16 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 }}>예정 일정 수정</Text>
-                  {seByDateLessons.length === 0 ? (
-                    <Text style={{ fontSize: 14, color: Colors.placeholder, marginBottom: 12 }}>수정할 예정 일정이 없어요</Text>
-                  ) : (
-                    seByDateLessons.map(lesson => {
-                      const changed = seByDateChanges[lesson.id];
-                      const displayDate = changed?.date ?? lesson.date;
-                      const displayTime = changed?.startTime ?? lesson.startTime;
-                      const d = new Date(displayDate + 'T00:00:00');
-                      const dateLabel = `${d.getMonth() + 1}/${d.getDate()}(${DAYS_KR[d.getDay()]})`;
-                      const isModified = !!changed;
-                      return (
-                        <View key={lesson.id} style={[styles.dayTimeRow2, { marginBottom: 8, flexDirection: 'column', alignItems: 'stretch', gap: 0 }]}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            {isModified && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.primary }} />}
-                            <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: Colors.foreground }}>{dateLabel} {displayTime}</Text>
-                            <TouchableOpacity
-                              onPress={() => {
-                                setSeByDateEditingId(lesson.id);
-                                const dInit = new Date(displayDate + 'T00:00:00');
-                                setSeByDateCalMonth({ year: dInit.getFullYear(), month: dInit.getMonth() });
-                                setSeByDateCalVisible(true);
-                              }}
-                              style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: Colors.primaryLight, marginRight: 4 }}
-                            >
-                              <Text style={{ fontSize: 12, color: Colors.primary, fontWeight: '600' }}>날짜</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              onPress={() => {
-                                setSeByDateEditingIdForTime(lesson.id);
-                                const [h2, m2] = displayTime.split(':');
-                                setSeByDateTempHour(h2);
-                                setSeByDateTempMinute(m2 ?? '00');
-                                setSeByDateTimePickerVisible(true);
-                              }}
-                              style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: Colors.primaryLight }}
-                            >
-                              <Text style={{ fontSize: 12, color: Colors.primary, fontWeight: '600' }}>시간</Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                      );
-                    })
-                  )}
-
-                  {seByDateCalVisible && seByDateEditingId && (() => {
-                    const { year, month } = seByDateCalMonth;
-                    const todayStr4 = toKSTDateStr(new Date());
-                    const firstDow4 = new Date(year, month, 1).getDay();
-                    const daysInMonth4 = new Date(year, month + 1, 0).getDate();
-                    const cells4: (number | null)[] = [];
-                    for (let i = 0; i < firstDow4; i++) cells4.push(null);
-                    for (let d = 1; d <= daysInMonth4; d++) cells4.push(d);
-                    while (cells4.length % 7 !== 0) cells4.push(null);
-                    const MONTHS_KR4 = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
-                    const DAYS_LBL4 = ['일','월','화','수','목','금','토'];
-                    const lesson4 = seByDateLessons.find(l => l.id === seByDateEditingId);
-                    const curDate4 = seByDateChanges[seByDateEditingId]?.date ?? lesson4?.date ?? '';
-                    return (
-                      <View style={{ marginBottom: 12, backgroundColor: Colors.background, borderRadius: 12, padding: 10, borderWidth: 1, borderColor: Colors.border }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                          <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.foreground }}>날짜 선택</Text>
-                          <TouchableOpacity onPress={() => { setSeByDateCalVisible(false); setSeByDateEditingId(null); }}>
-                            <Ionicons name="close" size={18} color={Colors.mutedFg} />
-                          </TouchableOpacity>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                          <TouchableOpacity style={{ padding: 6 }} onPress={() => setSeByDateCalMonth(p => { const m = p.month - 1; return m < 0 ? { year: p.year - 1, month: 11 } : { year: p.year, month: m }; })}>
-                            <Ionicons name="chevron-back" size={20} color={Colors.primary} />
-                          </TouchableOpacity>
-                          <Text style={{ fontSize: 15, fontWeight: '800', color: Colors.primary }}>{year}년 {MONTHS_KR4[month]}</Text>
-                          <TouchableOpacity style={{ padding: 6 }} onPress={() => setSeByDateCalMonth(p => { const m = p.month + 1; return m > 11 ? { year: p.year + 1, month: 0 } : { year: p.year, month: m }; })}>
-                            <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
-                          </TouchableOpacity>
-                        </View>
-                        <View style={{ flexDirection: 'row', marginBottom: 4 }}>
-                          {DAYS_LBL4.map((dl, di) => (
-                            <Text key={di} style={{ flex: 1, textAlign: 'center', fontSize: 13, fontWeight: '700', color: di === 0 ? Colors.destructive : di === 6 ? Colors.accentWarm : Colors.mutedFg, paddingVertical: 2 }}>{dl}</Text>
-                          ))}
-                        </View>
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                          {cells4.map((day4, ci4) => {
-                            if (!day4) return <View key={ci4} style={{ width: '14.28%', paddingVertical: 2 }} />;
-                            const dateStr4 = `${year}-${String(month + 1).padStart(2, '0')}-${String(day4).padStart(2, '0')}`;
-                            const isPast4 = dateStr4 < todayStr4;
-                            const isSelected4 = dateStr4 === curDate4;
-                            const dow4 = ci4 % 7;
-                            return (
-                              <TouchableOpacity
-                                key={ci4}
-                                disabled={isPast4}
-                                style={{ width: '14.28%', alignItems: 'center', paddingVertical: 2 }}
-                                onPress={() => {
-                                  const lessonForChange = seByDateLessons.find(l => l.id === seByDateEditingId);
-                                  if (!lessonForChange) return;
-                                  const prev5 = seByDateChanges[seByDateEditingId] ?? { date: lessonForChange.date, startTime: lessonForChange.startTime };
-                                  setSeByDateChanges(c => ({ ...c, [seByDateEditingId]: { ...prev5, date: dateStr4 } }));
-                                  setSeByDateCalVisible(false);
-                                  setSeByDateEditingId(null);
-                                }}
-                              >
-                                <View style={{ width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', backgroundColor: isSelected4 ? Colors.primary : 'transparent' }}>
-                                  <Text style={{ fontSize: 13, fontWeight: isSelected4 ? '800' : '400', color: isSelected4 ? '#fff' : isPast4 ? Colors.border : dow4 === 0 ? Colors.destructive : dow4 === 6 ? Colors.accentWarm : Colors.foreground }}>{day4}</Text>
-                                </View>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-                      </View>
-                    );
-                  })()}
-
-                  {Object.keys(seByDateChanges).length > 0 && (
-                    <View style={{ backgroundColor: Colors.primary + '12', borderRadius: 10, padding: 12, marginBottom: 8 }}>
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.primary }}>
-                        {Object.keys(seByDateChanges).length}개 일정이 수정됩니다.
-                      </Text>
+                      )}
                     </View>
-                  )}
-                </View>
-              )}
-
+                  }
+                />
+              </View>
             </ScrollView>
           </KeyboardAvoidingView>
 
@@ -2952,72 +2769,6 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         </View>
       </Modal>
 
-      {/* 레슨 일정 변경 모달 — 요일별 시간 피커 */}
-      <Modal visible={seTimePickerVisible} transparent animationType="slide" onRequestClose={() => setSeTimePickerVisible(false)}>
-        <View style={styles.modalOverlayTP}>
-          <View style={styles.modalSheetTP}>
-            <View style={styles.modalHeaderTP}>
-              <Text style={styles.modalTitleTP}>
-                {seEditingDay !== null ? `${DAYS_KR[seEditingDay]}요일 시작 시간` : '시작 시간'}
-              </Text>
-              <TouchableOpacity onPress={() => setSeTimePickerVisible(false)}>
-                <Ionicons name="close" size={22} color={Colors.mutedFg} />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.spinnerRowTP}>
-              <View style={styles.spinnerColTP}>
-                <Text style={styles.spinnerLabelTP}>시</Text>
-                <FlatList
-                  data={HOURS} keyExtractor={item => item}
-                  showsVerticalScrollIndicator={false} style={styles.spinnerListTP}
-                  renderItem={({ item }) => {
-                    const isSel = item === seTempHour;
-                    return (
-                      <TouchableOpacity style={[styles.spinnerItemTP, isSel && styles.spinnerItemTPSel]} onPress={() => setSeTempHour(item)}>
-                        <Text style={[styles.spinnerItemTPText, isSel && styles.spinnerItemTPTextSel]}>{item}</Text>
-                      </TouchableOpacity>
-                    );
-                  }}
-                />
-              </View>
-              <Text style={styles.spinnerColonTP}>:</Text>
-              <View style={styles.spinnerColTP}>
-                <Text style={styles.spinnerLabelTP}>분</Text>
-                <FlatList
-                  data={MINUTES} keyExtractor={item => item}
-                  showsVerticalScrollIndicator={false} style={styles.spinnerListTP}
-                  renderItem={({ item }) => {
-                    const isSel = item === seTempMinute;
-                    return (
-                      <TouchableOpacity style={[styles.spinnerItemTP, isSel && styles.spinnerItemTPSel]} onPress={() => setSeTempMinute(item)}>
-                        <Text style={[styles.spinnerItemTPText, isSel && styles.spinnerItemTPTextSel]}>{item}</Text>
-                      </TouchableOpacity>
-                    );
-                  }}
-                />
-              </View>
-            </View>
-            <TouchableOpacity
-              style={[styles.confirmBtnTP, !seTempHour && styles.confirmBtnTPDis]}
-              onPress={() => {
-                if (!seTempHour || seEditingDay === null) return;
-                const newTime = `${seTempHour}:${seTempMinute}`;
-                setSeDayTimes(prev => {
-                  const existing = prev[seEditingDay] ?? [];
-                  if (existing.includes(newTime)) return prev;
-                  return { ...prev, [seEditingDay]: [...existing, newTime].sort() };
-                });
-                setSeTimePickerVisible(false);
-                setSeEditingDay(null);
-              }}
-            >
-              <Text style={styles.confirmBtnTPText}>
-                {seTempHour ? `${seTempHour}:${seTempMinute} 선택` : '시간을 선택하세요'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
 
       {/* 레슨 일정 변경 모달 — 날짜별 시간 피커 */}
       <Modal visible={seByDateTimePickerVisible} transparent animationType="slide" onRequestClose={() => setSeByDateTimePickerVisible(false)}>
