@@ -183,7 +183,7 @@ export default function NextLessonBriefingCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#FBF2EF',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     marginHorizontal: 16,
     marginTop: 6,
@@ -235,37 +235,36 @@ const styles = StyleSheet.create({
   },
   lastLessonDate: {
     fontSize: 12,
-    color: '#8B7355',
+    color: '#9CA3AF',
     fontWeight: '500',
   },
   divider: {
     height: 1,
-    backgroundColor: '#EDE0D4',
+    backgroundColor: '#F0EDEA',
     marginHorizontal: 0,
   },
   contentWrap: {
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 8,
+    paddingVertical: 12,
+    gap: 10,
   },
   section: {
-    gap: 3,
+    gap: 4,
   },
   sectionLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#C0755A',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    color: '#3E2B22',
+    letterSpacing: 0.3,
   },
   sectionText: {
     fontSize: 13,
-    color: '#3E2B22',
-    lineHeight: 19,
+    color: '#555555',
+    lineHeight: 20,
   },
   emptyText: {
     fontSize: 13,
-    color: '#8B7355',
+    color: '#9CA3AF',
     fontWeight: '500',
     paddingHorizontal: 14,
     paddingBottom: 14,
@@ -274,12 +273,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
+    marginHorizontal: 14,
+    marginBottom: 12,
+    paddingVertical: 9,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
     gap: 4,
   },
   viewRecordText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#C0755A',
+    color: '#555555',
   },
 });
