@@ -2291,16 +2291,15 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       {/* ─── 통합 수정 모달 ─── */}
       <Modal visible={showEditModal} animationType="slide" onRequestClose={() => setShowEditModal(false)}>
         <View style={{ flex: 1, backgroundColor: Colors.background }}>
-          {/* 헤더 */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: insets.top + 8, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: Colors.border, backgroundColor: '#fff' }}>
-            <TouchableOpacity onPress={() => setShowEditModal(false)} style={{ padding: 4, minWidth: 40 }}>
-              <Ionicons name="close" size={24} color={Colors.mutedFg} />
-            </TouchableOpacity>
-            <Text style={{ flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700', color: Colors.foreground }}>회원 정보 수정</Text>
-            <TouchableOpacity onPress={handleSaveAll} style={{ padding: 4, minWidth: 40, alignItems: 'flex-end' }}>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.primary }}>저장</Text>
-            </TouchableOpacity>
-          </View>
+          <SettingsHeader
+            title="회원 정보 수정"
+            onBack={() => setShowEditModal(false)}
+            right={
+              <TouchableOpacity onPress={handleSaveAll} style={{ padding: 4 }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.primary }}>저장</Text>
+              </TouchableOpacity>
+            }
+          />
 
           <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
             <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
@@ -2339,13 +2338,10 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       {/* ─── 레슨권 변경 모달 ─── */}
       <Modal visible={showChangePkgModal} animationType="slide" onRequestClose={() => { if (!changePkgSaving) setShowChangePkgModal(false); }}>
         <View style={{ flex: 1, backgroundColor: Colors.background }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: insets.top + 8, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: Colors.border, backgroundColor: '#fff' }}>
-            <TouchableOpacity onPress={() => { if (!changePkgSaving) setShowChangePkgModal(false); }} style={{ padding: 4, minWidth: 40 }}>
-              <Ionicons name="close" size={24} color={Colors.mutedFg} />
-            </TouchableOpacity>
-            <Text style={{ flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700', color: Colors.foreground }}>레슨권 변경</Text>
-            <View style={{ minWidth: 40 }} />
-          </View>
+          <SettingsHeader
+            title="레슨권 변경"
+            onBack={() => { if (!changePkgSaving) setShowChangePkgModal(false); }}
+          />
 
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
             {lessonPackages.length === 0 ? (
@@ -2692,14 +2688,10 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       {/* ─── 레슨 일정 변경 모달 ─── */}
       <Modal visible={scheduleEditModal} animationType="slide" onRequestClose={() => { if (!seSaving) setScheduleEditModal(false); }}>
         <View style={{ flex: 1, backgroundColor: Colors.background }}>
-          {/* 헤더 */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: insets.top + 8, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: Colors.border, backgroundColor: '#fff' }}>
-            <TouchableOpacity onPress={() => { if (!seSaving) setScheduleEditModal(false); }} style={{ padding: 4, minWidth: 40 }}>
-              <Ionicons name="close" size={24} color={Colors.mutedFg} />
-            </TouchableOpacity>
-            <Text style={{ flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700', color: Colors.foreground }}>레슨 일정 변경</Text>
-            <View style={{ minWidth: 40 }} />
-          </View>
+          <SettingsHeader
+            title="레슨 일정 변경"
+            onBack={() => { if (!seSaving) setScheduleEditModal(false); }}
+          />
 
           <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
             <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 120 }}>
