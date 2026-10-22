@@ -380,6 +380,44 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   const [editDeductCredit, setEditDeductCredit] = useState(false);
   const [savingAtt, setSavingAtt] = useState(false);
 
+  // 레슨권 변경 모달
+  const [showChangePkgModal, setShowChangePkgModal] = useState(false);
+  const [changePkgSelectedId, setChangePkgSelectedId] = useState<string | null>(null);
+  const [changePkgSaving, setChangePkgSaving] = useState(false);
+
+  function openChangePkgModal() {
+    setChangePkgSelectedId(selectedPackageId);
+    setShowChangePkgModal(true);
+  }
+
+  async function handleSaveLessonPackage() {
+    if (!id) return;
+    setChangePkgSaving(true);
+    try {
+      const { error } = await supabase
+        .from('members')
+        .update({ lesson_package_id: changePkgSelectedId })
+        .eq('id', id);
+      if (error) throw error;
+      setSelectedPackageId(changePkgSelectedId);
+      if (changePkgSelectedId) {
+        const { data: pkg } = await supabase
+          .from('lesson_packages')
+          .select('title, color, total_credits, price')
+          .eq('id', changePkgSelectedId)
+          .maybeSingle();
+        if (pkg) setLessonPackage({ ...pkg, color: pkg.color ?? '#888888', price: pkg.price ?? 0, total_credits: pkg.total_credits ?? 0 });
+      } else {
+        setLessonPackage(null);
+      }
+      setShowChangePkgModal(false);
+    } catch (e: any) {
+      Alert.alert('오류', e?.message || '저장에 실패했습니다.');
+    } finally {
+      setChangePkgSaving(false);
+    }
+  }
+
   // 통합 수정 모달
   const [showEditModal, setShowEditModal] = useState(false);
   const [editSchedType, setEditSchedType] = useState<'regular' | 'by_date' | 'later'>('later');
@@ -1773,7 +1811,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                 })()}
 
                 {/* ② 이용 중인 레슨권 */}
-                <TouchableOpacity style={styles.lessonMgmtRow} onPress={openEditModal} activeOpacity={0.7}>
+                <TouchableOpacity style={styles.lessonMgmtRow} onPress={openChangePkgModal} activeOpacity={0.7}>
                   <View style={styles.lessonMgmtIconWrap}>
                     {lessonPackage
                       ? <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: lessonPackage.color }} />
@@ -2280,6 +2318,77 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
               <View style={{ height: 60 }} />
             </ScrollView>
           </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* ─── 레슨권 변경 모달 ─── */}
+      <Modal visible={showChangePkgModal} animationType="slide" onRequestClose={() => { if (!changePkgSaving) setShowChangePkgModal(false); }}>
+        <View style={{ flex: 1, backgroundColor: Colors.background }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: insets.top + 8, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: Colors.border, backgroundColor: '#fff' }}>
+            <TouchableOpacity onPress={() => { if (!changePkgSaving) setShowChangePkgModal(false); }} style={{ padding: 4, minWidth: 40 }}>
+              <Ionicons name="close" size={24} color={Colors.mutedFg} />
+            </TouchableOpacity>
+            <Text style={{ flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700', color: Colors.foreground }}>레슨권 변경</Text>
+            <View style={{ minWidth: 40 }} />
+          </View>
+
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
+            {lessonPackages.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <Ionicons name="receipt-outline" size={32} color={Colors.iconMuted} />
+                <Text style={{ marginTop: 8, color: Colors.mutedFg, fontSize: 15 }}>등록된 레슨권이 없어요</Text>
+              </View>
+            ) : (
+              <View style={{ gap: 10 }}>
+                {lessonPackages.map(pkg => {
+                  const isSelected = changePkgSelectedId === pkg.id;
+                  const pkgColor = pkg.color || Colors.primary;
+                  return (
+                    <TouchableOpacity
+                      key={pkg.id}
+                      style={{
+                        borderRadius: 12,
+                        borderWidth: isSelected ? 2.5 : 1.5,
+                        borderColor: isSelected ? pkgColor : Colors.border,
+                        backgroundColor: isSelected ? pkgColor + '18' : '#fff',
+                        padding: 14,
+                      }}
+                      onPress={() => setChangePkgSelectedId(pkg.id)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: pkgColor, marginRight: 8 }} />
+                        <Text style={{ flex: 1, fontSize: 15, fontWeight: '700', color: Colors.foreground }} numberOfLines={1}>{pkg.title}</Text>
+                        {isSelected && (
+                          <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: pkgColor, alignItems: 'center', justifyContent: 'center' }}>
+                            <Ionicons name="checkmark" size={13} color="#fff" />
+                          </View>
+                        )}
+                      </View>
+                      <Text style={{ fontSize: 13, color: Colors.mutedFg }}>
+                        {pkg.total_credits ? `총 ${pkg.total_credits}회` : (pkg.duration_days ? `${pkg.duration_days}일 이용` : '-')} · 1회 {pkg.duration_minutes ?? 60}분
+                      </Text>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: pkgColor, marginTop: 2 }}>{(pkg.price ?? 0).toLocaleString()}원</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </ScrollView>
+
+          <View style={{ padding: 16, paddingBottom: insets.bottom + 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: Colors.border }}>
+            <TouchableOpacity
+              style={{ backgroundColor: changePkgSelectedId ? Colors.primary : Colors.border, borderRadius: 12, paddingVertical: 16, alignItems: 'center' }}
+              onPress={handleSaveLessonPackage}
+              disabled={changePkgSaving || !changePkgSelectedId}
+              activeOpacity={0.8}
+            >
+              {changePkgSaving
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={{ fontSize: 16, fontWeight: '700', color: changePkgSelectedId ? '#fff' : Colors.mutedFg }}>변경사항 저장</Text>
+              }
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
 
