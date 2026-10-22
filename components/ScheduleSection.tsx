@@ -36,6 +36,13 @@ interface Props {
   hideNeverOption?: boolean;
   byDateContent?: React.ReactNode;
   onDayAdded?: (day: number) => void;
+  lessonDuration?: number;
+}
+
+function calcEndTime(startTime: string, durationMinutes: number): string {
+  const [h, m] = startTime.split(':').map(Number);
+  const endMin = h * 60 + m + durationMinutes;
+  return `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`;
 }
 
 export function ScheduleSection({
@@ -53,6 +60,7 @@ export function ScheduleSection({
   hideNeverOption = false,
   byDateContent,
   onDayAdded,
+  lessonDuration,
 }: Props) {
   const [timePickerVisible, setTimePickerVisible] = useState(false);
   const [editingDay, setEditingDay] = useState<number | null>(null);
@@ -266,7 +274,12 @@ export function ScheduleSection({
                     {times.map((time, idx) => (
                       <View key={idx} style={ss.dayTimeRow}>
                         <Ionicons name="time" size={15} color={Colors.primary} />
-                        <Text style={ss.dayTimeValue}>{time}</Text>
+                        <Text style={ss.dayTimeValue}>
+                          {time}
+                          {lessonDuration ? (
+                            <Text style={ss.endTimeLabel}> → {calcEndTime(time, lessonDuration)}</Text>
+                          ) : null}
+                        </Text>
                         <TouchableOpacity onPress={() => openTimePicker(day, idx)} style={ss.timeAction}>
                           <Ionicons name="pencil-outline" size={15} color={Colors.mutedFg} />
                         </TouchableOpacity>
@@ -527,6 +540,7 @@ const ss = StyleSheet.create({
   dayTimeEmpty: { fontSize: 13, color: Colors.placeholder, paddingHorizontal: 4, paddingBottom: 2 },
   dayTimeRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: Colors.border, gap: 8 },
   dayTimeValue: { flex: 1, fontSize: 15, fontWeight: '600', color: Colors.foreground },
+  endTimeLabel: { fontSize: 14, fontWeight: '400', color: Colors.mutedFg },
   timeAction: { padding: 2 },
   dayTimeHint: { fontSize: 14, color: Colors.warning, marginTop: 4 },
   datePickerBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.mutedBg, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 12, borderWidth: 1, borderColor: Colors.border },

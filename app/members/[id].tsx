@@ -2690,7 +2690,16 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
             <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 120 }}>
 
               <View style={{ padding: 16 }}>
+                {/* 이용권 기준 1회 레슨 시간 */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.primary + '12', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 14 }}>
+                  <Ionicons name="time-outline" size={16} color={Colors.primary} />
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.primary }}>
+                    {seDuration > 0 ? `1회 ${seDuration}분 · 이용 중인 레슨권 기준` : '레슨권 시간 정보를 확인해주세요'}
+                  </Text>
+                </View>
+
                 <ScheduleSection
+                  lessonDuration={seDuration}
                   scheduleType={seType}
                   onScheduleTypeChange={(t) => {
                     if (t === 'later') return;
@@ -2737,7 +2746,12 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                             <View key={lesson.id} style={[styles.dayTimeRow2, { marginBottom: 8, flexDirection: 'column', alignItems: 'stretch', gap: 0 }]}>
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                 {isModified && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.primary }} />}
-                                <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: Colors.foreground }}>{dateLabel} {displayTime}</Text>
+                                <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: Colors.foreground }}>
+                                  {dateLabel} {displayTime}
+                                  {seDuration > 0 ? (
+                                    <Text style={{ fontSize: 13, fontWeight: '400', color: Colors.mutedFg }}>{' → '}{(() => { const [hh2, mm2] = displayTime.split(':').map(Number); const em = hh2 * 60 + mm2 + seDuration; return `${String(Math.floor(em / 60)).padStart(2, '0')}:${String(em % 60).padStart(2, '0')}`; })()}</Text>
+                                  ) : null}
+                                </Text>
                                 <TouchableOpacity
                                   onPress={() => {
                                     setSeByDateEditingId(lesson.id);
