@@ -363,13 +363,14 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   // 재등록 모달 전용 요일/시간 (member 공용 scheduleDays/dayTimes 와 분리)
   const [reregDays, setReregDays] = useState<number[]>([]);
   const [reregDayTimes, setReregDayTimes] = useState<DayTimes>({});
-  const [reregTimePicker, setReregTimePicker] = useState(false);
-  const [reregEditingDay, setReregEditingDay] = useState<number | null>(null);
-  const [reregTempHour, setReregTempHour] = useState('');
-  const [reregTempMinute, setReregTempMinute] = useState('00');
   // 재등록 시작일 캘린더
-  const [reregCalendarVisible, setReregCalendarVisible] = useState(false);
   const [reregCalMonth, setReregCalMonth] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() });
+  // 재등록 모달 확장 상태
+  const [reregSchedType, setReregSchedType] = useState<ScheduleType>('later');
+  const [reregByDateEntries, setReregByDateEntries] = useState<{ date: string; time: string }[]>([]);
+  const [reregPkgExpanded, setReregPkgExpanded] = useState(false);
+  const [reregPayStatusSelected, setReregPayStatusSelected] = useState(false);
+  const [reregAmountFocused, setReregAmountFocused] = useState(false);
 
   // 출석 수정 상태
   const [editingAttId, setEditingAttId] = useState<string | null>(null);
@@ -787,26 +788,27 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     setReregPkgId(selectedPackageId);
     setReregPayAmount(pkg ? String(pkg.price ?? '') : lessonPackage ? String(lessonPackage.price ?? '') : '');
     setReregPayStatus('납부완료');
+    setReregPayStatusSelected(false);
+    setReregPkgExpanded(false);
+    setReregByDateEntries([]);
+    setReregAmountFocused(false);
     const todayStr = toKSTDateStr(new Date());
-    if (futureLessons.length > 0) {
-      const lastDate = futureLessons[futureLessons.length - 1].date;
-      setReregStartDate(getNextRegularDateAfter(lastDate) ?? todayStr);
-    } else {
-      setReregStartDate(getNextRegularDateAfter(todayStr) ?? todayStr);
-    }
-    // 기존 정기 요일·시간을 재등록 모달의 초기값으로 복사
-    setReregDays([...scheduleDays]);
-    setReregDayTimes({ ...dayTimes });
     const startD = futureLessons.length > 0
       ? (getNextRegularDateAfter(futureLessons[futureLessons.length - 1].date) ?? todayStr)
       : (getNextRegularDateAfter(todayStr) ?? todayStr);
+    setReregStartDate(startD);
+    // 기존 정기 요일·시간을 재등록 모달의 초기값으로 복사
+    setReregDays([...scheduleDays]);
+    setReregDayTimes({ ...dayTimes });
+    setReregSchedType(scheduleDays.length > 0 ? 'regular' : 'later');
     const startDObj = new Date(startD + 'T00:00:00');
     setReregCalMonth({ year: startDObj.getFullYear(), month: startDObj.getMonth() });
     setReregSheet(true);
   }
 
-  async function handleReregister(withSchedule: boolean) {
+  async function handleReregister() {
     if (!member || !reregPkgId) { Alert.alert('오류', '레슨권을 선택해주세요.'); return; }
+    if (!reregPayStatusSelected) { Alert.alert('오류', '납부 여부를 선택해주세요.'); return; }
     setReregLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -815,11 +817,10 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       if (!pkg) { Alert.alert('오류', '레슨권을 찾을 수 없어요.'); setReregLoading(false); return; }
       const credits = pkg.total_credits || 0;
       const duration = pkg.duration_minutes || 60;
-      const amount = parseInt(reregPayAmount) || 0;
+      const amount = parseInt(reregPayAmount.replace(/,/g, '')) || 0;
       const newRemaining = ((member as any).remaining_credits ?? 0) + credits;
 
-      // 재등록 모달에서 변경한 요일/시간이 있으면 member 정기 시간으로도 저장
-      const hasReregSchedule = reregDays.length > 0 && reregDays.every(d => reregDayTimes[d]?.length > 0);
+      const hasReregSchedule = reregSchedType === 'regular' && reregDays.length > 0 && reregDays.every(d => reregDayTimes[d]?.length > 0);
       const memberUpdatePayload: Record<string, any> = {
         lesson_package_id: reregPkgId,
         total_credits: ((member as any).total_credits ?? 0) + credits,
@@ -846,10 +847,24 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         due_date: payDueDate, paid_date: paidDate, status: reregPayStatus,
       });
       let scheduledCount = 0;
-      if (withSchedule && hasReregSchedule && reregStartDate) {
+      if (hasReregSchedule && reregStartDate) {
         scheduledCount = await generateScheduleLessons(
           supabase, user.id, id!, member.name, reregDays, reregDayTimes, duration, credits, reregStartDate,
         );
+      } else if (reregSchedType === 'by_date' && reregByDateEntries.length > 0) {
+        for (const entry of reregByDateEntries) {
+          const [hh, mm] = entry.time.split(':').map(Number);
+          const endMin = hh * 60 + mm + duration;
+          const startSt = entry.time + ':00';
+          const endSt = String(Math.floor(endMin / 60)).padStart(2, '0') + ':' + String(endMin % 60).padStart(2, '0') + ':00';
+          const { data: lesson, error: lErr } = await supabase.from('lessons').insert({
+            coach_id: user.id, title: member.name, date: entry.date, start_time: startSt, end_time: endSt, source: 'auto',
+          }).select('id').single();
+          if (!lErr && lesson) {
+            await supabase.from('lesson_members').insert({ lesson_id: lesson.id, member_id: id! });
+            scheduledCount++;
+          }
+        }
       }
       setReregSheet(false);
       setReregLoading(false);
@@ -3431,32 +3446,58 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
 
       {/* 레슨 재등록 시트 */}
       <Modal visible={reregSheet} transparent animationType="slide" onRequestClose={() => setReregSheet(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <TouchableOpacity style={styles.modalOverlayTP} activeOpacity={1} onPress={() => setReregSheet(false)}>
-          <TouchableOpacity activeOpacity={1} onPress={e => e.stopPropagation()}>
-            <View style={[styles.modalSheetTP, { paddingBottom: 40 }]}>
+          <TouchableOpacity activeOpacity={1} style={{ width: '100%' }} onPress={e => e.stopPropagation()}>
+            <View style={[styles.modalSheetTP, { paddingBottom: 0, maxHeight: '92%' }]}>
               <View style={styles.modalHeaderTP}>
                 <Text style={styles.modalTitleTP}>레슨 재등록</Text>
                 <TouchableOpacity onPress={() => setReregSheet(false)}>
                   <Ionicons name="close" size={22} color={Colors.mutedFg} />
                 </TouchableOpacity>
               </View>
-              <ScrollView style={{ maxHeight: 480 }} bounces={false} keyboardShouldPersistTaps="handled">
-                <View style={{ padding: 16, gap: 14 }}>
-                  {/* 레슨권 선택 */}
+              <ScrollView bounces={false} keyboardShouldPersistTaps="handled" style={{ flex: 1 }}>
+                <View style={{ padding: 16, gap: 20 }}>
+
+                  {/* 1. 레슨권 섹션 */}
                   <View>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 }}>레슨권 선택</Text>
-                    {lessonPackages.length === 0 ? (
-                      <Text style={{ color: Colors.placeholder, fontSize: 14 }}>등록된 레슨권이 없어요. 먼저 레슨권을 만들어주세요.</Text>
-                    ) : (
-                      <View style={{ gap: 8 }}>
-                        {lessonPackages.map(pkg => {
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, textTransform: 'uppercase', letterSpacing: 0.4 }}>레슨권</Text>
+                      <TouchableOpacity onPress={() => setReregPkgExpanded(v => !v)}>
+                        <Text style={{ fontSize: 13, color: Colors.primary, fontWeight: '700' }}>
+                          {reregPkgExpanded ? '닫기' : '변경'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    {(() => {
+                      const selPkg = lessonPackages.find(p => p.id === reregPkgId);
+                      if (!selPkg) return (
+                        <Text style={{ color: Colors.placeholder, fontSize: 14 }}>레슨권을 선택해주세요</Text>
+                      );
+                      return (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 10,
+                          backgroundColor: selPkg.color + '12', borderWidth: 1.5, borderColor: selPkg.color, gap: 10 }}>
+                          <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: selPkg.color }} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.foreground }}>{selPkg.title}</Text>
+                            <Text style={{ fontSize: 13, color: Colors.mutedFg }}>{selPkg.duration_minutes}분 · {selPkg.total_credits}회 · {(selPkg.price ?? 0).toLocaleString()}원</Text>
+                          </View>
+                          <Ionicons name="checkmark-circle" size={20} color={selPkg.color} />
+                        </View>
+                      );
+                    })()}
+                    {reregPkgExpanded && (
+                      <View style={{ gap: 8, marginTop: 10 }}>
+                        {lessonPackages.length === 0 ? (
+                          <Text style={{ color: Colors.placeholder, fontSize: 14 }}>등록된 레슨권이 없어요.</Text>
+                        ) : lessonPackages.map(pkg => {
                           const isSel = reregPkgId === pkg.id;
                           return (
                             <TouchableOpacity
                               key={pkg.id}
                               style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 10, borderWidth: 1.5,
                                 borderColor: isSel ? pkg.color : Colors.border, backgroundColor: isSel ? pkg.color + '12' : '#fff', gap: 10 }}
-                              onPress={() => { setReregPkgId(pkg.id); setReregPayAmount(String(pkg.price ?? '')); }}
+                              onPress={() => { setReregPkgId(pkg.id); setReregPayAmount(String(pkg.price ?? '')); setReregPkgExpanded(false); }}
                             >
                               <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: pkg.color }} />
                               <View style={{ flex: 1 }}>
@@ -3471,336 +3512,126 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                     )}
                   </View>
 
-                  {/* 요일·시간 선택 */}
+                  {/* 2. 일정 섹션 */}
                   <View>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 }}>요일 · 시간</Text>
-                    <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
-                      {DAYS_KR.map((dayName, dayIdx) => {
-                        const isDaySel = reregDays.includes(dayIdx);
-                        return (
-                          <TouchableOpacity
-                            key={dayIdx}
-                            style={{ flex: 1, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center',
-                              backgroundColor: isDaySel ? Colors.primary : Colors.mutedBg }}
-                            onPress={() => {
-                              if (isDaySel) {
-                                setReregDays(prev => prev.filter(d => d !== dayIdx));
-                                setReregDayTimes(prev => { const n = { ...prev }; delete n[dayIdx]; return n; });
-                              } else {
-                                setReregDays(prev => [...prev, dayIdx].sort());
-                              }
-                            }}
-                          >
-                            <Text style={{ fontSize: 13, fontWeight: '700', color: isDaySel ? '#fff' : Colors.mutedFg }}>{dayName}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                    {reregDays.length === 0 && (
-                      <Text style={{ fontSize: 13, color: Colors.placeholder, marginBottom: 4 }}>요일을 선택하세요</Text>
-                    )}
-                    {reregDays.map(dayIdx => {
-                      const times = reregDayTimes[dayIdx] ?? [];
-                      return (
-                        <View key={dayIdx} style={{ marginBottom: 10 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, justifyContent: 'space-between' }}>
-                            <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.foreground }}>{DAYS_KR[dayIdx]}요일</Text>
-                            <TouchableOpacity
-                              onPress={() => {
-                                setReregEditingDay(dayIdx);
-                                setReregTempHour('');
-                                setReregTempMinute('00');
-                                setReregTimePicker(true);
-                              }}
-                              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: Colors.primaryLight }}
-                            >
-                              <Ionicons name="add" size={14} color={Colors.primary} />
-                              <Text style={{ fontSize: 13, color: Colors.primary, fontWeight: '600' }}>시간 추가</Text>
-                            </TouchableOpacity>
-                          </View>
-                          {times.length === 0 ? (
-                            <Text style={{ fontSize: 13, color: Colors.placeholder }}>시간을 추가해주세요</Text>
-                          ) : (
-                            times.map(t => (
-                              <View key={t} style={[styles.dayTimeRow2, { marginBottom: 4 }]}>
-                                <Ionicons name="time-outline" size={16} color={Colors.primary} />
-                                <Text style={{ flex: 1, fontSize: 14, fontWeight: '600', color: Colors.foreground }}>{t}</Text>
-                                <TouchableOpacity
-                                  onPress={() => setReregDayTimes(prev => {
-                                    const next = { ...prev, [dayIdx]: (prev[dayIdx] ?? []).filter(x => x !== t) };
-                                    if (next[dayIdx].length === 0) delete next[dayIdx];
-                                    return next;
-                                  })}
-                                >
-                                  <Ionicons name="close-circle" size={18} color={Colors.destructive} />
-                                </TouchableOpacity>
-                              </View>
-                            ))
-                          )}
-                        </View>
-                      );
-                    })}
-                  </View>
-
-                  {/* 레슨 시작일 */}
-                  <View>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>레슨 시작일</Text>
-                    <TouchableOpacity
-                      style={[styles.editInput, { justifyContent: 'space-between', flexDirection: 'row', alignItems: 'center' }]}
-                      onPress={() => setReregCalendarVisible(v => !v)}
-                    >
-                      <Text style={{ fontSize: 15, color: reregStartDate ? Colors.foreground : Colors.placeholder }}>
-                        {reregStartDate ? (() => {
-                          const d = new Date(reregStartDate + 'T00:00:00');
-                          return d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
-                        })() : '날짜 선택'}
-                      </Text>
-                      <Ionicons name={reregCalendarVisible ? 'chevron-up' : 'calendar-outline'} size={18} color={Colors.primary} />
-                    </TouchableOpacity>
-                    {reregCalendarVisible && (() => {
-                      const { year, month } = reregCalMonth;
-                      const todayStr = toKSTDateStr(new Date());
-                      const firstDow = new Date(year, month, 1).getDay();
-                      const daysInMonth = new Date(year, month + 1, 0).getDate();
-                      const cells: (number | null)[] = [];
-                      for (let i = 0; i < firstDow; i++) cells.push(null);
-                      for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-                      while (cells.length % 7 !== 0) cells.push(null);
-                      const MONTHS_KR = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
-                      const DAYS_LABEL = ['일','월','화','수','목','금','토'];
-                      return (
-                        <View style={{ marginTop: 8, backgroundColor: Colors.background, borderRadius: 12, padding: 10, borderWidth: 1, borderColor: Colors.border }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <TouchableOpacity style={{ padding: 6 }} onPress={() => setReregCalMonth(p => { const m = p.month - 1; return m < 0 ? { year: p.year - 1, month: 11 } : { year: p.year, month: m }; })}>
-                              <Ionicons name="chevron-back" size={20} color={Colors.primary} />
-                            </TouchableOpacity>
-                            <Text style={{ fontSize: 15, fontWeight: '800', color: Colors.primary }}>{year}년 {MONTHS_KR[month]}</Text>
-                            <TouchableOpacity style={{ padding: 6 }} onPress={() => setReregCalMonth(p => { const m = p.month + 1; return m > 11 ? { year: p.year + 1, month: 0 } : { year: p.year, month: m }; })}>
-                              <Ionicons name="chevron-forward" size={20} color={Colors.primary} />
-                            </TouchableOpacity>
-                          </View>
-                          <View style={{ flexDirection: 'row', marginBottom: 4 }}>
-                            {DAYS_LABEL.map((dl, di) => (
-                              <Text key={di} style={{ flex: 1, textAlign: 'center', fontSize: 13, fontWeight: '700',
-                                color: di === 0 ? Colors.destructive : di === 6 ? Colors.accentWarm : Colors.mutedFg,
-                                paddingVertical: 2 }}>{dl}</Text>
-                            ))}
-                          </View>
-                          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                            {cells.map((day, ci) => {
-                              if (!day) return <View key={ci} style={{ width: '14.28%', paddingVertical: 2 }} />;
-                              const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                              const isPast = dateStr < todayStr;
-                              const isSelected = dateStr === reregStartDate;
-                              const isToday = dateStr === todayStr;
-                              const dow = ci % 7;
-                              return (
-                                <TouchableOpacity
-                                  key={ci}
-                                  disabled={isPast}
-                                  style={{ width: '14.28%', alignItems: 'center', paddingVertical: 2 }}
-                                  onPress={() => { setReregStartDate(dateStr); setReregCalendarVisible(false); }}
-                                >
-                                  <View style={{ width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center',
-                                    backgroundColor: isSelected ? Colors.primary : isToday ? Colors.primary + '20' : 'transparent' }}>
-                                    <Text style={{ fontSize: 14, fontWeight: isSelected || isToday ? '700' : '400',
-                                      color: isPast ? Colors.mutedFg + '55' : isSelected ? '#fff' : dow === 0 ? Colors.destructive : dow === 6 ? Colors.accentWarm : Colors.foreground }}>
-                                      {day}
-                                    </Text>
-                                  </View>
-                                </TouchableOpacity>
-                              );
-                            })}
-                          </View>
-                          <TouchableOpacity onPress={() => setReregCalendarVisible(false)} style={{ alignItems: 'center', paddingTop: 8 }}>
-                            <Text style={{ fontSize: 13, color: Colors.mutedFg }}>취소</Text>
-                          </TouchableOpacity>
-                        </View>
-                      );
-                    })()}
-                  </View>
-
-                  {/* 결제 금액 */}
-                  <View>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>결제 금액</Text>
-                    <TextInput
-                      style={styles.editInput}
-                      value={reregPayAmount}
-                      onChangeText={setReregPayAmount}
-                      placeholder="금액 입력"
-                      keyboardType="number-pad"
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.4 }}>언제 레슨하나요?</Text>
+                    <ScheduleSection
+                      scheduleType={reregSchedType}
+                      onScheduleTypeChange={setReregSchedType}
+                      scheduleDays={reregDays}
+                      onDaysChange={setReregDays}
+                      dayTimes={reregDayTimes}
+                      onDayTimesChange={setReregDayTimes}
+                      byDateEntries={reregByDateEntries}
+                      onByDateEntriesChange={setReregByDateEntries}
+                      startDate={reregStartDate}
+                      onStartDateChange={setReregStartDate}
+                      startDateLabel="레슨 시작일"
+                      lessonDuration={(() => {
+                        const selPkg = lessonPackages.find(p => p.id === reregPkgId);
+                        return selPkg?.duration_minutes ?? parseInt(lessonDuration) ?? 60;
+                      })()}
                     />
                   </View>
 
-                  {/* 결제 상태 */}
+                  {/* 3. 결제 정보 섹션 */}
                   <View>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 }}>결제 상태</Text>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      {(['납부완료', '미납'] as const).map(s => (
-                        <TouchableOpacity
-                          key={s}
-                          style={{ flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center',
-                            backgroundColor: reregPayStatus === s ? Colors.primary : Colors.mutedBg,
-                            borderWidth: 1.5, borderColor: reregPayStatus === s ? Colors.primary : Colors.border }}
-                          onPress={() => setReregPayStatus(s)}
-                        >
-                          <Text style={{ fontSize: 13, fontWeight: '700', color: reregPayStatus === s ? '#fff' : Colors.mutedFg }}>{s}</Text>
-                        </TouchableOpacity>
-                      ))}
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.4 }}>결제 정보</Text>
+                    <View style={{ gap: 10 }}>
+                      <View>
+                        <Text style={{ fontSize: 13, color: Colors.mutedFg, marginBottom: 6 }}>등록 금액</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1,
+                          borderColor: reregAmountFocused ? Colors.primary : Colors.border,
+                          borderRadius: 10, paddingHorizontal: 12, backgroundColor: '#fff' }}>
+                          <TextInput
+                            style={{ flex: 1, fontSize: 15, paddingVertical: 12, color: Colors.foreground }}
+                            value={reregPayAmount ? Number(reregPayAmount.replace(/,/g, '')).toLocaleString() : ''}
+                            onChangeText={v => setReregPayAmount(v.replace(/,/g, ''))}
+                            placeholder="금액 입력"
+                            keyboardType="number-pad"
+                            onFocus={() => setReregAmountFocused(true)}
+                            onBlur={() => setReregAmountFocused(false)}
+                          />
+                          <Text style={{ fontSize: 14, color: Colors.mutedFg }}>원</Text>
+                        </View>
+                      </View>
+                      <View>
+                        <Text style={{ fontSize: 13, color: Colors.mutedFg, marginBottom: 6 }}>납부 여부</Text>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <TouchableOpacity
+                            style={{ flex: 1, paddingVertical: 11, borderRadius: 10, alignItems: 'center',
+                              backgroundColor: reregPayStatusSelected && reregPayStatus === '납부완료' ? Colors.primary : Colors.mutedBg,
+                              borderWidth: 1.5, borderColor: reregPayStatusSelected && reregPayStatus === '납부완료' ? Colors.primary : Colors.border }}
+                            onPress={() => { setReregPayStatus('납부완료'); setReregPayStatusSelected(true); }}
+                          >
+                            <Text style={{ fontSize: 14, fontWeight: '700',
+                              color: reregPayStatusSelected && reregPayStatus === '납부완료' ? '#fff' : Colors.mutedFg }}>받았어요</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={{ flex: 1, paddingVertical: 11, borderRadius: 10, alignItems: 'center',
+                              backgroundColor: reregPayStatusSelected && reregPayStatus === '미납' ? Colors.destructive : Colors.mutedBg,
+                              borderWidth: 1.5, borderColor: reregPayStatusSelected && reregPayStatus === '미납' ? Colors.destructive : Colors.border }}
+                            onPress={() => { setReregPayStatus('미납'); setReregPayStatusSelected(true); }}
+                          >
+                            <Text style={{ fontSize: 14, fontWeight: '700',
+                              color: reregPayStatusSelected && reregPayStatus === '미납' ? '#fff' : Colors.mutedFg }}>아직 안 받았어요</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
                     </View>
                   </View>
 
-                  {/* 등록 요약 */}
-                  {reregPkgId && (() => {
-                    const pkg = lessonPackages.find(p => p.id === reregPkgId);
-                    if (!pkg || !member) return null;
-                    const hasSchedule = reregDays.length > 0 && reregDays.every(d => (reregDayTimes[d]?.length ?? 0) > 0);
-                    // 첫 레슨 날짜 계산
-                    let firstLessonDateStr: string | null = null;
-                    if (hasSchedule && reregStartDate) {
-                      const cursor = new Date(reregStartDate + 'T00:00:00');
-                      for (let i = 0; i < 60; i++) {
-                        if (reregDays.includes(cursor.getDay())) { firstLessonDateStr = toKSTDateStr(cursor); break; }
-                        cursor.setDate(cursor.getDate() + 1);
-                      }
-                    }
-                    // 마지막 레슨 날짜 계산
-                    let lastLessonDateStr: string | null = null;
-                    if (hasSchedule && firstLessonDateStr) {
-                      const cursor2 = new Date(firstLessonDateStr + 'T00:00:00');
-                      let count = 0;
-                      const limit = pkg.total_credits;
-                      for (let i = 0; i < limit * 14 && count < limit; i++) {
-                        if (reregDays.includes(cursor2.getDay()) && (reregDayTimes[cursor2.getDay()]?.length ?? 0) > 0) {
-                          lastLessonDateStr = toKSTDateStr(cursor2);
-                          count++;
-                        }
-                        if (count < limit) cursor2.setDate(cursor2.getDate() + 1);
-                      }
-                    }
-                    const schedSummary = hasSchedule
-                      ? reregDays.map(d => `${DAYS_KR[d]} ${(reregDayTimes[d] ?? []).join('/')}`).join(' · ')
-                      : null;
-                    const dur = parseInt(lessonDuration) || 60;
-                    return (
-                      <View style={{ backgroundColor: '#FFF8F0', borderRadius: 10, padding: 14, borderWidth: 1, borderColor: '#F4D4A0' }}>
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#92400E', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 }}>등록 요약</Text>
-                        <Text style={{ fontSize: 14, color: Colors.foreground, marginBottom: 2 }}>{member.name} · 새 레슨권 {pkg.total_credits}회</Text>
-                        {schedSummary && <Text style={{ fontSize: 14, color: Colors.foreground, marginBottom: 2 }}>매주 {schedSummary} · {dur}분</Text>}
-                        {firstLessonDateStr && (() => {
-                          const fd = new Date(firstLessonDateStr + 'T00:00:00');
-                          return <Text style={{ fontSize: 14, color: Colors.foreground, marginBottom: 2 }}>첫 레슨: {fd.getMonth() + 1}월 {fd.getDate()}일 ({DAYS_KR[fd.getDay()]})</Text>;
-                        })()}
-                        {lastLessonDateStr && firstLessonDateStr && (() => {
-                          const ld = new Date(lastLessonDateStr + 'T00:00:00');
-                          return <Text style={{ fontSize: 14, color: Colors.foreground, marginBottom: 2 }}>일정 {pkg.total_credits}개 · 마지막 {ld.getMonth() + 1}월 {ld.getDate()}일</Text>;
-                        })()}
-                        {!hasSchedule && reregStartDate && (
-                          <Text style={{ fontSize: 14, color: Colors.mutedFg, marginBottom: 2 }}>요일·시간을 설정하면 일정이 자동 생성됩니다</Text>
-                        )}
-                        <Text style={{ fontSize: 14, color: Colors.foreground }}>결제 상태: {reregPayStatus}</Text>
-                      </View>
-                    );
-                  })()}
+                  <View style={{ height: 8 }} />
                 </View>
               </ScrollView>
 
-              {/* 버튼 */}
-              {(() => {
-                const hasReregSched = reregDays.length > 0 && reregDays.every(d => (reregDayTimes[d]?.length ?? 0) > 0) && !!reregStartDate;
-                return (
-                  <View style={{ padding: 16, paddingTop: 8, gap: 8 }}>
-                    {reregPkgId && hasReregSched && (
-                      <TouchableOpacity
-                        style={{ backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', opacity: reregLoading ? 0.5 : 1 }}
-                        onPress={() => handleReregister(true)}
-                        disabled={reregLoading}
-                      >
-                        <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>{reregLoading ? '처리 중...' : '재등록하고 일정 만들기'}</Text>
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity
-                      style={{ backgroundColor: (reregPkgId && hasReregSched) ? Colors.mutedBg : Colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', opacity: (reregLoading || !reregPkgId) ? 0.4 : 1 }}
-                      onPress={() => handleReregister(false)}
-                      disabled={reregLoading || !reregPkgId}
-                    >
-                      <Text style={{ fontWeight: '700', fontSize: 15, color: (reregPkgId && hasReregSched) ? Colors.mutedFg : '#fff' }}>
-                        {reregLoading ? '처리 중...' : '재등록하기'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                );
-              })()}
+              {/* 고정 하단 CTA */}
+              {!reregAmountFocused && (
+                <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: insets.bottom > 0 ? insets.bottom : 24, borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: '#fff' }}>
+                  {reregPkgId && (() => {
+                    const pkg = lessonPackages.find(p => p.id === reregPkgId);
+                    if (!pkg) return null;
+                    if (reregSchedType === 'later') {
+                      return <Text style={{ fontSize: 13, color: Colors.mutedFg, marginBottom: 10, textAlign: 'center' }}>레슨권만 등록하고 일정은 나중에 잡아요</Text>;
+                    }
+                    if (reregSchedType === 'regular') {
+                      const hasSchedule = reregDays.length > 0 && reregDays.every(d => (reregDayTimes[d]?.length ?? 0) > 0);
+                      if (!hasSchedule || !reregStartDate) {
+                        return <Text style={{ fontSize: 13, color: Colors.mutedFg, marginBottom: 10, textAlign: 'center' }}>요일과 시간을 설정하면 일정이 만들어져요</Text>;
+                      }
+                      const cursor = new Date(reregStartDate + 'T00:00:00');
+                      for (let i = 0; i < 14; i++) {
+                        if (reregDays.includes(cursor.getDay())) break;
+                        cursor.setDate(cursor.getDate() + 1);
+                      }
+                      const firstM = cursor.getMonth() + 1;
+                      const firstD = cursor.getDate();
+                      return <Text style={{ fontSize: 13, color: Colors.mutedFg, marginBottom: 10, textAlign: 'center' }}>{firstM}월 {firstD}일부터 일정 {pkg.total_credits}개가 추가돼요</Text>;
+                    }
+                    if (reregSchedType === 'by_date') {
+                      if (reregByDateEntries.length === 0) {
+                        return <Text style={{ fontSize: 13, color: Colors.mutedFg, marginBottom: 10, textAlign: 'center' }}>날짜를 직접 추가해주세요</Text>;
+                      }
+                      return <Text style={{ fontSize: 13, color: Colors.mutedFg, marginBottom: 10, textAlign: 'center' }}>일정 {reregByDateEntries.length}개가 추가돼요</Text>;
+                    }
+                    return null;
+                  })()}
+                  <TouchableOpacity
+                    style={{ backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 15, alignItems: 'center',
+                      opacity: (reregLoading || !reregPkgId || !reregPayStatusSelected) ? 0.4 : 1 }}
+                    onPress={handleReregister}
+                    disabled={reregLoading || !reregPkgId || !reregPayStatusSelected}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>
+                      {reregLoading ? '처리 중...' : '재등록 완료'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
-      </Modal>
-
-      {/* 재등록 시간 선택 모달 */}
-      <Modal visible={reregTimePicker} transparent animationType="slide" onRequestClose={() => setReregTimePicker(false)}>
-        <View style={styles.modalOverlayTP}>
-          <View style={styles.modalSheetTP}>
-            <View style={styles.modalHeaderTP}>
-              <Text style={styles.modalTitleTP}>
-                {reregEditingDay !== null ? `${DAYS_KR[reregEditingDay]}요일 시작 시간` : '시작 시간'}
-              </Text>
-              <TouchableOpacity onPress={() => setReregTimePicker(false)}>
-                <Ionicons name="close" size={22} color={Colors.mutedFg} />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.spinnerRowTP}>
-              <View style={styles.spinnerColTP}>
-                <Text style={styles.spinnerLabelTP}>시</Text>
-                <FlatList
-                  data={HOURS} keyExtractor={item => item}
-                  showsVerticalScrollIndicator={false} style={styles.spinnerListTP}
-                  renderItem={({ item }) => {
-                    const isSel = item === reregTempHour;
-                    return (
-                      <TouchableOpacity style={[styles.spinnerItemTP, isSel && styles.spinnerItemTPSel]} onPress={() => setReregTempHour(item)}>
-                        <Text style={[styles.spinnerItemTPText, isSel && styles.spinnerItemTPTextSel]}>{item}</Text>
-                      </TouchableOpacity>
-                    );
-                  }}
-                />
-              </View>
-              <Text style={styles.spinnerColonTP}>:</Text>
-              <View style={styles.spinnerColTP}>
-                <Text style={styles.spinnerLabelTP}>분</Text>
-                <FlatList
-                  data={MINUTES} keyExtractor={item => item}
-                  showsVerticalScrollIndicator={false} style={styles.spinnerListTP}
-                  renderItem={({ item }) => {
-                    const isSel = item === reregTempMinute;
-                    return (
-                      <TouchableOpacity style={[styles.spinnerItemTP, isSel && styles.spinnerItemTPSel]} onPress={() => setReregTempMinute(item)}>
-                        <Text style={[styles.spinnerItemTPText, isSel && styles.spinnerItemTPTextSel]}>{item}</Text>
-                      </TouchableOpacity>
-                    );
-                  }}
-                />
-              </View>
-            </View>
-            <TouchableOpacity
-              style={[styles.confirmBtnTP, !reregTempHour && styles.confirmBtnTPDis]}
-              onPress={() => {
-                if (!reregTempHour || reregEditingDay === null) return;
-                const newTime = `${reregTempHour}:${reregTempMinute}`;
-                setReregDayTimes(prev => {
-                  const existing = prev[reregEditingDay] ?? [];
-                  if (existing.includes(newTime)) return prev;
-                  return { ...prev, [reregEditingDay]: [...existing, newTime].sort() };
-                });
-                setReregTimePicker(false);
-                setReregEditingDay(null);
-              }}
-            >
-              <Text style={styles.confirmBtnTPText}>
-                {reregTempHour ? `${reregTempHour}:${reregTempMinute} 선택` : '시간을 선택하세요'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* 결제 완료 모달 */}
