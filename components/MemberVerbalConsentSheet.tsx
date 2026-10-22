@@ -25,11 +25,9 @@ async function insertVerbalConsents(coachId: string, memberId: string): Promise<
     agreed_at: now,
   };
 
+  // consent_type CHECK 제약: 'coach', 'member', 'guardian' 만 허용
   const { error } = await supabase.from('ai_consents').insert([
-    { ...base, consent_type: 'coach_voice_ai', coach_id: coachId },
-    { ...base, consent_type: 'member_voice_ai', member_id: memberId, coach_id: coachId },
-    { ...base, consent_type: 'member_health_info', member_id: memberId, coach_id: coachId },
-    { ...base, consent_type: 'international_transfer', coach_id: coachId, member_id: memberId },
+    { ...base, consent_type: 'member', member_id: memberId, coach_id: coachId },
   ]);
   if (error) throw error;
 }

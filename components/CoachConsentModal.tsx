@@ -50,19 +50,11 @@ export default function CoachConsentModal({ visible, onAgree, onDecline }: Props
     const now = new Date().toISOString();
     // DB 저장은 best-effort — 실패해도 로컬 동의는 반드시 저장
     try {
+      // consent_type CHECK 제약: 'coach', 'member', 'guardian' 만 허용
       await supabase.from('ai_consents').insert([
         {
           coach_id: user.id,
-          consent_type: 'coach_voice_ai',
-          consent_status: 'agreed',
-          consent_version: AI_CONSENT_VERSION,
-          consent_method: 'app',
-          source: 'coach_app',
-          agreed_at: now,
-        },
-        {
-          coach_id: user.id,
-          consent_type: 'international_transfer',
+          consent_type: 'coach',
           consent_status: 'agreed',
           consent_version: AI_CONSENT_VERSION,
           consent_method: 'app',

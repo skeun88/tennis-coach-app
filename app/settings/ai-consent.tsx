@@ -42,7 +42,7 @@ export default function AiConsentScreen() {
       .select('consent_type, consent_status, agreed_at, consent_version')
       .eq('coach_id', user.id)
       .eq('consent_version', AI_CONSENT_VERSION)
-      .in('consent_type', ['coach_voice_ai', 'international_transfer'])
+      .in('consent_type', ['coach'])
       .order('agreed_at', { ascending: false });
     setRecords(data ?? []);
     setLoading(false);
