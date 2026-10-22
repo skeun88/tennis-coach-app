@@ -18,6 +18,7 @@ import { notifyMemberAbsent, notifyReregister, notifyLessonCountUpdate } from '.
 import PlanUpsellModal from "../../components/PlanUpsellModal";
 import CoachQRModal from '../../components/CoachQRModal';
 import CoachingStyleModal from '../../components/CoachingStyleModal';
+import NextLessonBriefingCard from '../../components/NextLessonBriefingCard';
 import OnboardingModal from '../../components/OnboardingModal';
 import BottomSheetModal from '../../components/BottomSheetModal';
 import {
@@ -675,34 +676,18 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* ── 섹션4: AI 코칭 모델 ── */}
-        <TouchableOpacity
-          style={styles.aiCard}
-          activeOpacity={0.85}
-          onPress={() => {
-            if (!canUse('ai_analysis')) {
-              setHomeUpsellVisible(true);
-            } else {
-              setKnowledgeModal(true);
-            }
-          }}
-        >
-          <View style={styles.aiCardLeft}>
-            <View style={styles.aiIconWrap}>
-              <Ionicons name="bulb" size={20} color="#C0755A" />
-            </View>
-            <View>
-              <Text style={styles.aiCardTitle}>내 AI 코칭 모델</Text>
-              <Text style={styles.aiCardDesc}>코칭 스타일 {knowledgeCount}개 등록됨</Text>
-            </View>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            {!canUse('ai_analysis') && (
-              <View style={styles.proBadge}><Text style={styles.proBadgeText}>PRO</Text></View>
-            )}
-            <Ionicons name="chevron-forward" size={18} color="#8B7355" />
-          </View>
-        </TouchableOpacity>
+        {/* ── 섹션4: 다음 레슨 브리핑 ── */}
+        <NextLessonBriefingCard
+          nextCard={unprocessedToday[0] ?? null}
+          hasToday={todayCards.length > 0}
+          allDone={todayCards.length > 0 && unprocessedToday.length === 0}
+          onPressCard={(memberId, memberName, memberLevel) =>
+            router.push({ pathname: '/members/ai-analysis', params: { memberId, memberName, memberLevel } } as any)
+          }
+          onPressViewRecord={(planId, memberId, memberName, memberLevel) =>
+            router.push({ pathname: '/members/plan-detail', params: { planId, memberId, memberName, memberLevel } } as any)
+          }
+        />
 
         {/* ── 섹션5: 오늘 레슨 상세 ── */}
         <View style={styles.sectionHeader}>
