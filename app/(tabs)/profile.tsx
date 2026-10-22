@@ -1,9 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, Modal, TextInput, ActivityIndicator,
-  Image, Switch, Pressable, Platform,
+  Image, Switch, Pressable, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import SkeletonBox from '../../components/SkeletonBox';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +21,7 @@ import CoachingStyleModal from '../../components/CoachingStyleModal';
 import { FEATURE_SHARED_QR } from '../../lib/featureFlags';
 import TerracottaRefreshControl from '../../components/TerracottaRefreshControl';
 import { FLOATING_TAB_BAR_SPACE } from '../../components/GlassTabBar';
+import SettingsHeader from '../../components/SettingsHeader';
 
 type JourneyPopupKey = 'members' | 'lessons' | 'reports' | 'reviews' | 'duration';
 
@@ -42,10 +43,7 @@ const CREAM = '#F7F0E9';
 const TERRA_LIGHT = '#FBF2EF';
 const DARK = '#3E2B22';
 
-const PHOTO_SIZE = 92;
-const COVER_H = 99;
-const CARD_PAD_H = 18;
-const PHOTO_GAP = 16;
+const PC_PHOTO_SIZE = 72;
 
 interface Performance {
   totalLessons: number;
@@ -66,41 +64,7 @@ interface CareerInfo {
   career_details: string; certifications: string; awards: string;
 }
 
-function SaveBtn({ onPress, loading }: { onPress: () => void; loading: boolean }) {
-  return (
-    <TouchableOpacity style={styles.saveBtn} onPress={onPress} disabled={loading}>
-      {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnTxt}>저장하기</Text>}
-    </TouchableOpacity>
-  );
-}
-
-function CancelBtn({ onPress }: { onPress: () => void }) {
-  return (
-    <TouchableOpacity style={styles.cancelBtn} onPress={onPress}>
-      <Text style={styles.cancelBtnTxt}>취소</Text>
-    </TouchableOpacity>
-  );
-}
-
-function StatDetailContent({ icon, title, value, what, how, meaning }: {
-  icon: string; title: string; value: string; what: string; how: string; meaning: string;
-}) {
-  return (
-    <View style={{ marginBottom: 16 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-        <Ionicons name={icon as any} size={22} color={TERRA} />
-        <Text style={{ fontSize: 18, fontWeight: '800', color: DARK }}>{title}</Text>
-      </View>
-      <Text style={{ fontSize: 28, fontWeight: '900', color: TERRA, marginBottom: 14 }}>{value}</Text>
-      <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 }}>이 수치는 무엇인가요?</Text>
-      <Text style={{ fontSize: 14, color: DARK, lineHeight: 20, marginBottom: 12 }}>{what}</Text>
-      <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 }}>어떻게 쌓이나요?</Text>
-      <Text style={{ fontSize: 14, color: DARK, lineHeight: 20, marginBottom: 12 }}>{how}</Text>
-      <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 }}>코치에게 주는 의미</Text>
-      <Text style={{ fontSize: 14, color: DARK, lineHeight: 20 }}>{meaning}</Text>
-    </View>
-  );
-}
+type EditData = ProfileInfo & CareerInfo;
 
 function StatCell({ value, label, sub, right, bottom, onPress }: {
   value: string; label: string; sub?: string; right?: boolean; bottom?: boolean; onPress?: () => void;
@@ -119,6 +83,15 @@ function StatCell({ value, label, sub, right, bottom, onPress }: {
     </TouchableOpacity>
   );
 }
+
+const EMPTY_PROFILE: ProfileInfo = {
+  name: '', avatar_url: '', sport: '테니스',
+  region_city: '', region_district: '', center_name: '', bio: '',
+};
+const EMPTY_CAREER: CareerInfo = {
+  coaching_years: '', has_player_career: false,
+  career_details: '', certifications: '', awards: '',
+};
 
 export default function ProfileScreen() {
   const { subscription, isActive, isTrial, trialEndsAt, canUse } = useSubscription();
@@ -164,28 +137,41 @@ export default function ProfileScreen() {
   const [journeyVisibilityDraft, setJourneyVisibilityDraft] = useState(false);
   const [savingJourneyVisibility, setSavingJourneyVisibility] = useState(false);
 
-  const [profile, setProfile] = useState<ProfileInfo>({
-    name: '', avatar_url: '', sport: '테니스',
-    region_city: '', region_district: '', center_name: '', bio: '',
-  });
-  const [profileModal, setProfileModal] = useState(false);
-  const [editProfile, setEditProfile] = useState<ProfileInfo>({
-    name: '', avatar_url: '', sport: '테니스',
-    region_city: '', region_district: '', center_name: '', bio: '',
-  });
-  const [sportPickerOpen, setSportPickerOpen] = useState(false);
-  const [savingProfile, setSavingProfile] = useState(false);
+  const [profile, setProfile] = useState<ProfileInfo>(EMPTY_PROFILE);
+  const [career, setCareer] = useState<CareerInfo>(EMPTY_CAREER);
 
-  const [career, setCareer] = useState<CareerInfo>({
-    coaching_years: '', has_player_career: false,
-    career_details: '', certifications: '', awards: '',
-  });
-  const [careerModal, setCareerModal] = useState(false);
-  const [editCareer, setEditCareer] = useState<CareerInfo>({
-    coaching_years: '', has_player_career: false,
-    career_details: '', certifications: '', awards: '',
-  });
-  const [savingCareer, setSavingCareer] = useState(false);
+  // 통합 편집 모달 state
+  const [editModal, setEditModal] = useState(false);
+  const [editScrollTarget, setEditScrollTarget] = useState<'profile' | 'career'>('profile');
+  const [editData, setEditData] = useState<EditData>({ ...EMPTY_PROFILE, ...EMPTY_CAREER });
+  const [isSaving, setIsSaving] = useState(false);
+  const [sportPickerOpen, setSportPickerOpen] = useState(false);
+  const editScrollRef = useRef<ScrollView>(null);
+  const careerSectionY = useRef(0);
+
+  const isDirty = editModal && (
+    editData.name !== profile.name ||
+    editData.avatar_url !== profile.avatar_url ||
+    editData.sport !== profile.sport ||
+    editData.region_city !== profile.region_city ||
+    editData.region_district !== profile.region_district ||
+    editData.center_name !== profile.center_name ||
+    editData.bio !== profile.bio ||
+    editData.coaching_years !== career.coaching_years ||
+    editData.has_player_career !== career.has_player_career ||
+    editData.career_details !== career.career_details ||
+    editData.certifications !== career.certifications ||
+    editData.awards !== career.awards
+  );
+
+  useEffect(() => {
+    if (editModal && editScrollTarget === 'career') {
+      const timer = setTimeout(() => {
+        editScrollRef.current?.scrollTo({ y: careerSectionY.current, animated: true });
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [editModal, editScrollTarget]);
 
   async function loadProfile() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -307,7 +293,6 @@ export default function ProfileScreen() {
 
   const initial = (profile.name || '코').slice(0, 1).toUpperCase();
   const regionLabel = [profile.region_city, profile.region_district].filter(Boolean).join(' ');
-  const sportCenter = [profile.sport, profile.center_name].filter(Boolean).join(' · ');
 
   const voiceRemainMin = Math.floor((VOICE_MONTHLY_LIMIT - voiceUsedSeconds) / 60);
   const voiceExceeded = voiceUsedSeconds >= VOICE_MONTHLY_LIMIT;
@@ -328,6 +313,15 @@ export default function ProfileScreen() {
     ? '프로필이 완성됐어요!'
     : `${missingLabels.slice(0, 2).join(', ')}을 추가해 보세요`;
 
+  // 경력·자격 카드용 rows (종목·지역·센터 제외, 실제 데이터만)
+  const careerRows = [
+    { label: '코칭 경력', value: career.coaching_years ? `${career.coaching_years}년` : '' },
+    { label: '선수 경력', value: career.has_player_career ? '있음' : '' },
+    { label: '주요 경력', value: career.career_details },
+    { label: '자격증', value: career.certifications },
+    { label: '수상·대회', value: career.awards },
+  ].filter(r => !!r.value);
+
   async function handlePickAvatar() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') { Alert.alert('권한 필요', '사진 라이브러리 접근 권한이 필요합니다.'); return; }
@@ -337,15 +331,12 @@ export default function ProfileScreen() {
     const uri = asset.uri;
     setUploadingAvatar(true);
     try {
-      console.log('[Avatar] Step 1: 사진 선택 완료, uri 생성');
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { console.log('[Avatar] Step 2 FAIL: 로그인 필요'); return; }
-      console.log('[Avatar] Step 2: 사용자 인증 확인');
+      if (!user) return;
 
       const mimeType = asset.mimeType ?? 'image/jpeg';
       const ext = (mimeType.split('/')[1]?.toLowerCase() ?? 'jpg').replace(/[^a-z0-9]/g, '') || 'jpg';
       const filePath = `${user.id}/avatar.${ext}`;
-      console.log(`[Avatar] Step 3: 파일 경로 결정 — avatars/${filePath}`);
 
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
@@ -354,12 +345,10 @@ export default function ProfileScreen() {
       const { data: existingFiles } = await supabase.storage.from('avatars').list(user.id);
       const oldAvatars = (existingFiles ?? []).filter(f => f.name.startsWith('avatar.'));
       if (oldAvatars.length > 0) {
-        console.log(`[Avatar] Step 4: 기존 아바타 ${oldAvatars.length}개 삭제`);
         await supabase.storage.from('avatars').remove(oldAvatars.map(f => `${user.id}/${f.name}`));
       }
 
       const uploadUrl = `${SUPABASE_URL}/storage/v1/object/avatars/${filePath}`;
-      console.log('[Avatar] Step 5: Storage 업로드 시작');
       const uploadResult = await FileSystem.uploadAsync(uploadUrl, uri, {
         httpMethod: 'POST',
         uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
@@ -369,62 +358,83 @@ export default function ProfileScreen() {
           'x-upsert': 'true',
         },
       });
-      console.log(`[Avatar] Step 5 결과: status=${uploadResult.status}`);
       if (uploadResult.status >= 400) {
-        console.error(`[Avatar] Step 5 FAIL: HTTP ${uploadResult.status} — ${uploadResult.body}`);
         throw new Error(`Storage 업로드 실패 (HTTP ${uploadResult.status})`);
       }
 
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath);
       const urlWithBust = `${publicUrl}?t=${Date.now()}`;
-      console.log('[Avatar] Step 6: publicUrl 생성 완료');
-      setEditProfile(p => ({ ...p, avatar_url: urlWithBust }));
-      console.log('[Avatar] Step 7: editProfile.avatar_url 업데이트 완료 (저장하기 버튼으로 DB 저장 필요)');
+      setEditData(p => ({ ...p, avatar_url: urlWithBust }));
     } catch (e: any) {
-      console.error('[Avatar] 업로드 오류:', e?.message ?? e);
       Alert.alert('오류', '프로필 사진을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       setUploadingAvatar(false);
     }
   }
 
-  async function saveProfile() {
-    if (!editProfile.name.trim()) { Alert.alert('오류', '이름을 입력해주세요.'); return; }
-    setSavingProfile(true);
+  async function saveAll() {
+    if (!editData.name.trim()) { Alert.alert('오류', '이름을 입력해주세요.'); return; }
+    setIsSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setSavingProfile(false); return; }
-    const { error } = await supabase.from('coach_profiles').upsert({
-      coach_id: user.id, display_name: editProfile.name.trim(), avatar_url: editProfile.avatar_url || null,
-      sport: editProfile.sport, region_city: editProfile.region_city.trim() || null,
-      region_district: editProfile.region_district.trim() || null,
-      center_name: editProfile.center_name.trim() || null,
-      bio: editProfile.bio.trim() || null, updated_at: new Date().toISOString(),
-    }, { onConflict: 'coach_id' });
-    setSavingProfile(false);
-    if (error) { Alert.alert('오류', '저장에 실패했습니다.'); return; }
-    setProfile({ ...editProfile }); setProfileModal(false);
-  }
-
-  async function saveCareer() {
-    setSavingCareer(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setSavingCareer(false); return; }
+    if (!user) { setIsSaving(false); return; }
     const { error } = await supabase.from('coach_profiles').upsert({
       coach_id: user.id,
-      coaching_years: editCareer.coaching_years ? parseInt(editCareer.coaching_years, 10) : null,
-      has_player_career: editCareer.has_player_career,
-      career_details: editCareer.career_details.trim() || null,
-      certifications: editCareer.certifications.trim() || null,
-      awards: editCareer.awards.trim() || null,
+      display_name: editData.name.trim(),
+      avatar_url: editData.avatar_url || null,
+      sport: editData.sport,
+      region_city: editData.region_city.trim() || null,
+      region_district: editData.region_district.trim() || null,
+      center_name: editData.center_name.trim() || null,
+      bio: editData.bio.trim() || null,
+      coaching_years: editData.coaching_years ? parseInt(editData.coaching_years, 10) : null,
+      has_player_career: editData.has_player_career,
+      career_details: editData.career_details.trim() || null,
+      certifications: editData.certifications.trim() || null,
+      awards: editData.awards.trim() || null,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'coach_id' });
-    setSavingCareer(false);
+    setIsSaving(false);
     if (error) { Alert.alert('오류', '저장에 실패했습니다.'); return; }
-    setCareer({ ...editCareer }); setCareerModal(false);
+    setProfile({
+      name: editData.name,
+      avatar_url: editData.avatar_url,
+      sport: editData.sport,
+      region_city: editData.region_city,
+      region_district: editData.region_district,
+      center_name: editData.center_name,
+      bio: editData.bio,
+    });
+    setCareer({
+      coaching_years: editData.coaching_years,
+      has_player_career: editData.has_player_career,
+      career_details: editData.career_details,
+      certifications: editData.certifications,
+      awards: editData.awards,
+    });
+    setEditModal(false);
   }
 
-  const openProfileEdit = () => { setEditProfile({ ...profile }); setProfileModal(true); };
-  const openCareerEdit = () => { setEditCareer({ ...career }); setCareerModal(true); };
+  function openEditModal(target: 'profile' | 'career') {
+    setEditData({ ...profile, ...career });
+    setEditScrollTarget(target);
+    setSportPickerOpen(false);
+    setEditModal(true);
+  }
+
+  function handleEditBack() {
+    if (isDirty) {
+      Alert.alert(
+        '저장하지 않은 변경사항이 있어요',
+        '나가면 변경사항이 사라져요.',
+        [
+          { text: '계속 편집', style: 'cancel' },
+          { text: '나가기', style: 'destructive', onPress: () => setEditModal(false) },
+        ]
+      );
+    } else {
+      setEditModal(false);
+    }
+  }
 
   function openJourneyVisibility() {
     setJourneyVisibilityDraft(journeyPublic);
@@ -447,20 +457,6 @@ export default function ProfileScreen() {
     setJourneyPublic(newValue);
     setJourneyVisibilityModal(false);
   }
-
-  // Coach intro rows
-  const introRows = [
-    { label: '전문 종목', value: profile.sport },
-    { label: '활동 지역', value: regionLabel },
-    { label: '소속 센터', value: profile.center_name },
-    { label: '코칭 경력', value: career.coaching_years ? `${career.coaching_years}년` : '' },
-    { label: '선수 경력', value: career.has_player_career ? '있음' : '' },
-    { label: '주요 경력', value: career.career_details },
-    { label: '자격증', value: career.certifications },
-    { label: '수상 / 대회', value: career.awards },
-  ].filter(r => !!r.value);
-
-  const hasMissingCareer = !career.certifications || !career.awards;
 
   return (
     <View style={styles.screen}>
@@ -490,25 +486,19 @@ export default function ProfileScreen() {
           {/* ── 스켈레톤 (최초 로딩 전) ── */}
           {!initialLoaded && (
             <>
-              {/* 브랜딩 카드 스켈레톤 */}
+              {/* 프로필 카드 스켈레톤 */}
               <View style={styles.profileCard}>
-                <SkeletonBox width="100%" height={COVER_H} borderRadius={0} />
-                <View style={{ position: 'absolute', top: COVER_H - PHOTO_SIZE / 2, left: CARD_PAD_H }}>
-                  <SkeletonBox width={PHOTO_SIZE} height={PHOTO_SIZE} borderRadius={PHOTO_SIZE / 2} />
+                <View style={{ flexDirection: 'row', padding: 18, gap: 14, alignItems: 'center' }}>
+                  <SkeletonBox width={PC_PHOTO_SIZE} height={PC_PHOTO_SIZE} borderRadius={PC_PHOTO_SIZE / 2} />
+                  <View style={{ flex: 1, gap: 8 }}>
+                    <SkeletonBox width={120} height={16} borderRadius={6} />
+                    <SkeletonBox width={90} height={13} borderRadius={5} />
+                    <SkeletonBox width={70} height={12} borderRadius={5} />
+                  </View>
                 </View>
-                <View style={{ backgroundColor: '#fff', paddingHorizontal: CARD_PAD_H, paddingBottom: 16 }}>
-                  <View style={{ flexDirection: 'row', height: PHOTO_SIZE / 2 + 10, alignItems: 'center', marginBottom: 10 }}>
-                    <View style={{ width: PHOTO_SIZE + PHOTO_GAP }} />
-                    <View style={{ flex: 1, gap: 6 }}>
-                      <SkeletonBox width={110} height={15} borderRadius={6} />
-                      <SkeletonBox width={75} height={12} borderRadius={5} />
-                    </View>
-                  </View>
-                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                    <SkeletonBox width={16} height={14} borderRadius={4} />
-                    <SkeletonBox width="75%" height={13} borderRadius={6} />
-                  </View>
-                  <SkeletonBox width="100%" height={56} borderRadius={14} />
+                <View style={{ paddingHorizontal: 18, paddingBottom: 16, gap: 10 }}>
+                  <SkeletonBox width="85%" height={13} borderRadius={6} />
+                  <SkeletonBox width="100%" height={44} borderRadius={12} />
                 </View>
               </View>
               {/* 나의 코칭 여정 카드 스켈레톤 */}
@@ -523,7 +513,7 @@ export default function ProfileScreen() {
                   ))}
                 </View>
               </View>
-              {/* 코치 소개 카드 스켈레톤 */}
+              {/* 경력·자격 카드 스켈레톤 */}
               <View style={styles.sectionCard}>
                 <SkeletonBox width={80} height={16} borderRadius={6} style={{ marginBottom: 16 }} />
                 {[0,1,2].map(i => (
@@ -552,81 +542,62 @@ export default function ProfileScreen() {
           {/* ── 실제 콘텐츠 (최초 로딩 후) ── */}
           {initialLoaded && <>
 
-          {/* ── 코치 프로필 카드 ── */}
+          {/* ── 코치 프로필 카드 (흰색 카드) ── */}
           <View style={styles.profileCard}>
-            {/* 1. 테라코타 커버: KERRI + 수정버튼 (상단) / 코치이름 (하단 중앙) */}
-            <View style={styles.profileCover}>
-              <View style={styles.coverTopRow}>
-                <Text style={styles.profileCoverLabel}>KERRI</Text>
-                <TouchableOpacity style={styles.profileEditBtn} onPress={openProfileEdit} activeOpacity={0.7}>
-                  <Ionicons name="create-outline" size={17} color="#fff" />
-                </TouchableOpacity>
+            {/* 사진 + 기본정보 행 */}
+            <View style={styles.pcRow}>
+              {/* 왼쪽: 원형 프로필 사진 */}
+              <View style={styles.pcAvatarWrap}>
+                {profile.avatar_url ? (
+                  <Image source={{ uri: profile.avatar_url }} style={styles.pcAvatarImg} />
+                ) : (
+                  <Text style={styles.pcAvatarInitial}>{initial}</Text>
+                )}
               </View>
-              <View style={styles.coverMiddle}>
-                <View style={styles.coverNameRow}>
-                  <View style={{ width: PHOTO_SIZE + PHOTO_GAP }} />
-                  <Text style={styles.coverCoachName} numberOfLines={1}>
-                    {profile.name || '코치'} 코치
+              {/* 오른쪽: 이름 / 종목·소속센터 / 지역 */}
+              <View style={styles.pcInfo}>
+                <Text style={styles.pcName} numberOfLines={1}>{profile.name || '코치'} 코치</Text>
+                {!!(profile.sport || profile.center_name) && (
+                  <Text style={styles.pcMeta} numberOfLines={1}>
+                    {[profile.sport, profile.center_name].filter(Boolean).join(' · ')}
                   </Text>
-                </View>
+                )}
+                {!!regionLabel && (
+                  <View style={styles.pcRegionRow}>
+                    <Ionicons name="location-outline" size={11} color={Colors.placeholder} />
+                    <Text style={styles.pcRegion} numberOfLines={1}>{regionLabel}</Text>
+                  </View>
+                )}
               </View>
             </View>
 
-            {/* 2. 흰색 정보 영역 (먼저 렌더링, z-index 낮음) */}
-            <View style={styles.profileInfoArea}>
-              {/* 종목·센터 / 지역 (사진 우측) */}
-              <View style={styles.profileInfoRow}>
-                <View style={{ width: PHOTO_SIZE + PHOTO_GAP }} />
-                <View style={{ flex: 1, gap: 4, justifyContent: 'center' }}>
-                  {!!(profile.sport || profile.center_name) && (
-                    <Text style={styles.profileMeta}>
-                      {[profile.sport, profile.center_name].filter(Boolean).join(' · ')}
-                    </Text>
-                  )}
-                  {!!regionLabel && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                      <Ionicons name="location-outline" size={12} color={Colors.placeholder} />
-                      <Text style={styles.profileRegion}>{regionLabel}</Text>
-                    </View>
-                  )}
-                </View>
+            {/* 한 줄 소개 */}
+            {profile.bio ? (
+              <View style={styles.pcBioBox}>
+                <Text style={styles.pcBioQuote}>"</Text>
+                <Text style={styles.pcBio}>{profile.bio}</Text>
               </View>
+            ) : (
+              <TouchableOpacity onPress={() => openEditModal('profile')} activeOpacity={0.7} style={styles.pcBioBox}>
+                <Text style={[styles.pcBioQuote, { color: Colors.placeholder }]}>"</Text>
+                <Text style={styles.pcBioEmpty}>나만의 코칭 방향을 소개해보세요.</Text>
+              </TouchableOpacity>
+            )}
 
-              {/* 한 줄 소개 (사진 아래, 전체 너비) */}
-              {profile.bio ? (
-                <View style={styles.profileBioBox}>
-                  <Text style={styles.profileBioQuote}>{'"'}</Text>
-                  <Text style={styles.profileBio} numberOfLines={2}>{profile.bio}</Text>
-                </View>
-              ) : (
-                <TouchableOpacity onPress={openProfileEdit} activeOpacity={0.7} style={styles.profileBioBox}>
-                  <Text style={[styles.profileBioQuote, { color: Colors.placeholder }]}>{'"'}</Text>
-                  <Text style={styles.profileBioEmpty}>나만의 코칭 방향을 소개해보세요.</Text>
-                </TouchableOpacity>
-              )}
-
-              {/* 프로필 확인 버튼 (눈 아이콘 제거) */}
+            {/* 하단 버튼 행 */}
+            <View style={styles.pcBtnRow}>
+              <TouchableOpacity style={styles.pcEditBtn} onPress={() => openEditModal('profile')} activeOpacity={0.8}>
+                <Ionicons name="create-outline" size={14} color={TERRA} />
+                <Text style={styles.pcEditBtnText}>프로필 편집</Text>
+              </TouchableOpacity>
               <TouchableOpacity
-                style={styles.profilePrimaryBtn}
+                style={styles.pcViewBtn}
                 onPress={() => Alert.alert('내 프로필 미리보기', '회원에게 공개되는 코치 프로필입니다.\n(준비 중입니다)')}
                 activeOpacity={0.8}
               >
-                <Text style={styles.profilePrimaryBtnText}>회원에게 보이는 프로필 확인</Text>
-                <Ionicons name="chevron-forward" size={18} color={TERRA} />
+                <Text style={styles.pcViewBtnText}>회원에게 보이는 프로필</Text>
+                <Ionicons name="chevron-forward" size={14} color={TERRA} />
               </TouchableOpacity>
-            </View>
-
-            {/* 3. 프로필 사진 — 마지막에 렌더링해야 흰색 영역 위에 표시됨 */}
-            <View style={styles.profileAvatarFloat}>
-              <View style={styles.profileAvatarOuter}>
-                <View style={styles.profileAvatarInner}>
-                  {profile.avatar_url ? (
-                    <Image source={{ uri: profile.avatar_url }} style={styles.profileAvatarImg} />
-                  ) : (
-                    <Text style={styles.profileAvatarInitial}>{initial}</Text>
-                  )}
-                </View>
-              </View>
             </View>
           </View>
 
@@ -709,44 +680,43 @@ export default function ProfileScreen() {
               </View>
               <Text style={styles.completionTip}>{completionTip}</Text>
             </View>
-            <TouchableOpacity onPress={openProfileEdit} style={styles.completionBtn}>
+            <TouchableOpacity onPress={() => openEditModal('profile')} style={styles.completionBtn}>
               <Text style={styles.completionBtnText}>완성하기 →</Text>
             </TouchableOpacity>
           </View>}
 
-          {/* ── 코치 소개 ── */}
+          {/* ── 경력·자격 ── */}
           <View style={styles.sectionCard}>
             <View style={styles.cardHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="person-outline" size={15} color={TERRA} />
-                <Text style={styles.sectionTitle}>코치 소개</Text>
+                <Ionicons name="ribbon-outline" size={15} color={TERRA} />
+                <Text style={styles.sectionTitle}>경력·자격</Text>
               </View>
               <TouchableOpacity
-                onPress={openCareerEdit}
+                onPress={() => openEditModal('career')}
                 style={styles.editChip}
               >
                 <Ionicons name="pencil-outline" size={11} color={TERRA} />
-                <Text style={styles.editChipText}>수정</Text>
+                <Text style={styles.editChipText}>편집</Text>
               </TouchableOpacity>
             </View>
 
-            {introRows.length === 0 ? (
-              <TouchableOpacity onPress={openCareerEdit} style={styles.emptyIntro}>
-                <Text style={styles.emptyIntroText}>프로필 정보를 입력해 보세요 →</Text>
-              </TouchableOpacity>
+            {careerRows.length === 0 ? (
+              <View>
+                <Text style={styles.careerEmptyText}>코치님의 경력과 자격을 소개해보세요</Text>
+                <TouchableOpacity onPress={() => openEditModal('career')} style={styles.careerAddBtn} activeOpacity={0.7}>
+                  <Ionicons name="add-circle-outline" size={15} color={TERRA} />
+                  <Text style={styles.careerAddBtnText}>경력 추가</Text>
+                </TouchableOpacity>
+              </View>
             ) : (
               <View style={{ gap: 0 }}>
-                {introRows.map((row, i) => (
-                  <View key={row.label} style={[styles.introRow, i < introRows.length - 1 && styles.introRowBorder]}>
+                {careerRows.map((row, i) => (
+                  <View key={row.label} style={[styles.introRow, i < careerRows.length - 1 && styles.introRowBorder]}>
                     <Text style={styles.introLabel}>{row.label}</Text>
-                    <Text style={styles.introValue} numberOfLines={2}>{row.value}</Text>
+                    <Text style={styles.introValue}>{row.value}</Text>
                   </View>
                 ))}
-                {hasMissingCareer && (
-                  <TouchableOpacity onPress={openCareerEdit} style={styles.introAddRow}>
-                    <Text style={styles.introAddText}>자격증 및 수상 추가하기 →</Text>
-                  </TouchableOpacity>
-                )}
               </View>
             )}
           </View>
@@ -812,82 +782,214 @@ export default function ProfileScreen() {
         </View>
       </ScrollView>
 
-      {/* ── 모달: 기본 프로필 ── */}
-      <Modal visible={profileModal} transparent animationType="slide" onRequestClose={() => setProfileModal(false)}>
-        <View style={styles.overlay}>
-          <ScrollView style={{ maxHeight: '92%' }} keyboardShouldPersistTaps="handled">
-            <View style={styles.sheet}>
-              <View style={styles.handle} />
-              <Text style={styles.modalTitle}>기본 프로필</Text>
-              <View style={styles.avatarEditWrap}>
-                <TouchableOpacity style={styles.avatarEditBtn} onPress={handlePickAvatar} disabled={uploadingAvatar}>
-                  {uploadingAvatar ? <ActivityIndicator color={TERRA} />
-                    : editProfile.avatar_url ? <Image source={{ uri: editProfile.avatar_url }} style={styles.avatarEditImg} />
-                    : <Ionicons name="camera-outline" size={28} color={TERRA} />}
-                  <View style={styles.avatarEditOverlay}>
-                    <Ionicons name="camera" size={12} color="#fff" />
-                    <Text style={styles.avatarEditOverlayTxt}>사진 변경</Text>
+      {/* ── 통합 프로필 편집 모달 (전체화면) ── */}
+      <Modal
+        visible={editModal}
+        transparent={false}
+        animationType="slide"
+        onRequestClose={handleEditBack}
+      >
+        <View style={styles.editScreen}>
+          <SettingsHeader
+            title="프로필 편집"
+            onBack={handleEditBack}
+            right={
+              <TouchableOpacity
+                style={[styles.editSaveBtn, (!isDirty || isSaving) && styles.editSaveBtnDisabled]}
+                onPress={saveAll}
+                disabled={!isDirty || isSaving}
+              >
+                {isSaving
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={styles.editSaveBtnText}>저장</Text>
+                }
+              </TouchableOpacity>
+            }
+          />
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={0}
+          >
+            <ScrollView
+              ref={editScrollRef}
+              style={{ flex: 1 }}
+              contentContainerStyle={styles.editScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {/* ── 기본 정보 영역 ── */}
+              <Text style={styles.editSectionHeader}>기본 정보</Text>
+
+              {/* 프로필 사진 */}
+              <View style={styles.editAvatarSection}>
+                <View style={styles.editAvatarWrap}>
+                  <View style={styles.editAvatarCircle}>
+                    {uploadingAvatar ? (
+                      <ActivityIndicator color={TERRA} size="small" />
+                    ) : editData.avatar_url ? (
+                      <Image source={{ uri: editData.avatar_url }} style={styles.editAvatarImg} />
+                    ) : (
+                      <Text style={styles.editAvatarInitial}>
+                        {(editData.name || '코').slice(0, 1).toUpperCase()}
+                      </Text>
+                    )}
                   </View>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.editAvatarCameraBtn}
+                    onPress={handlePickAvatar}
+                    disabled={uploadingAvatar}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="camera" size={14} color="#fff" />
+                  </TouchableOpacity>
+                </View>
               </View>
-              <Text style={styles.modalLabel}>코치 이름 *</Text>
-              <TextInput style={styles.input} value={editProfile.name} onChangeText={v => setEditProfile(p => ({ ...p, name: v }))} placeholder="코치 이름" placeholderTextColor={Colors.placeholder} />
-              <Text style={styles.modalLabel}>종목 *</Text>
+
+              {/* 코치 이름 */}
+              <Text style={styles.editLabel}>코치 이름 *</Text>
+              <TextInput
+                style={styles.input}
+                value={editData.name}
+                onChangeText={v => setEditData(p => ({ ...p, name: v }))}
+                placeholder="코치 이름"
+                placeholderTextColor={Colors.placeholder}
+              />
+
+              {/* 종목 */}
+              <Text style={styles.editLabel}>종목 *</Text>
               <TouchableOpacity style={styles.picker} onPress={() => setSportPickerOpen(o => !o)}>
-                <Text style={styles.pickerTxt}>{editProfile.sport || '종목 선택'}</Text>
+                <Text style={styles.pickerTxt}>{editData.sport || '종목 선택'}</Text>
                 <Ionicons name={sportPickerOpen ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.mutedFg} />
               </TouchableOpacity>
               {sportPickerOpen && (
                 <View style={styles.pickerList}>
                   {SPORTS.map(s => (
-                    <TouchableOpacity key={s} style={[styles.pickerOption, editProfile.sport === s && styles.pickerOptionSel]} onPress={() => { setEditProfile(p => ({ ...p, sport: s })); setSportPickerOpen(false); }}>
-                      <Text style={[styles.pickerOptionTxt, editProfile.sport === s && { color: TERRA, fontWeight: '700' }]}>{s}</Text>
-                      {editProfile.sport === s && <Ionicons name="checkmark" size={14} color={TERRA} />}
+                    <TouchableOpacity
+                      key={s}
+                      style={[styles.pickerOption, editData.sport === s && styles.pickerOptionSel]}
+                      onPress={() => { setEditData(p => ({ ...p, sport: s })); setSportPickerOpen(false); }}
+                    >
+                      <Text style={[styles.pickerOptionTxt, editData.sport === s && { color: TERRA, fontWeight: '700' }]}>{s}</Text>
+                      {editData.sport === s && <Ionicons name="checkmark" size={14} color={TERRA} />}
                     </TouchableOpacity>
                   ))}
                 </View>
               )}
-              <Text style={styles.modalLabel}>활동 지역</Text>
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <TextInput style={[styles.input, { flex: 1 }]} value={editProfile.region_city} onChangeText={v => setEditProfile(p => ({ ...p, region_city: v }))} placeholder="시 (예: 서울)" placeholderTextColor={Colors.placeholder} />
-                <TextInput style={[styles.input, { flex: 1 }]} value={editProfile.region_district} onChangeText={v => setEditProfile(p => ({ ...p, region_district: v }))} placeholder="구 (예: 강남구)" placeholderTextColor={Colors.placeholder} />
-              </View>
-              <Text style={styles.modalLabel}>소속 센터</Text>
-              <TextInput style={styles.input} value={editProfile.center_name} onChangeText={v => setEditProfile(p => ({ ...p, center_name: v }))} placeholder="센터 또는 클럽명" placeholderTextColor={Colors.placeholder} />
-              <Text style={styles.modalLabel}>한 줄 소개</Text>
-              <TextInput style={[styles.input, { minHeight: 60, textAlignVertical: 'top', paddingTop: 12 }]} value={editProfile.bio} onChangeText={v => setEditProfile(p => ({ ...p, bio: v }))} placeholder="나를 한 문장으로 소개해보세요" placeholderTextColor={Colors.placeholder} multiline maxLength={80} />
-              <Text style={styles.charCount}>{editProfile.bio.length}/80</Text>
-              <SaveBtn onPress={saveProfile} loading={savingProfile} />
-              <CancelBtn onPress={() => setProfileModal(false)} />
-            </View>
-          </ScrollView>
-        </View>
-      </Modal>
 
-      {/* ── 모달: 경력 정보 ── */}
-      <Modal visible={careerModal} transparent animationType="slide" onRequestClose={() => setCareerModal(false)}>
-        <View style={styles.overlay}>
-          <ScrollView style={{ maxHeight: '92%' }} keyboardShouldPersistTaps="handled">
-            <View style={styles.sheet}>
-              <View style={styles.handle} />
-              <Text style={styles.modalTitle}>경력 정보</Text>
-              <Text style={styles.modalLabel}>코칭 경력 (연수)</Text>
-              <TextInput style={styles.input} value={editCareer.coaching_years} onChangeText={v => setEditCareer(c => ({ ...c, coaching_years: v.replace(/[^0-9]/g, '') }))} placeholder="예: 7" placeholderTextColor={Colors.placeholder} keyboardType="numeric" maxLength={2} />
-              <Text style={styles.modalLabel}>선수 경력</Text>
-              <View style={styles.switchRow}>
-                <Text style={styles.switchLabel}>{editCareer.has_player_career ? '있음' : '없음'}</Text>
-                <Switch value={editCareer.has_player_career} onValueChange={v => setEditCareer(c => ({ ...c, has_player_career: v }))} trackColor={{ false: Colors.border, true: TERRA }} thumbColor="#fff" />
+              {/* 활동 지역 */}
+              <Text style={styles.editLabel}>활동 지역</Text>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TextInput
+                  style={[styles.input, { flex: 1 }]}
+                  value={editData.region_city}
+                  onChangeText={v => setEditData(p => ({ ...p, region_city: v }))}
+                  placeholder="시·도 (예: 서울)"
+                  placeholderTextColor={Colors.placeholder}
+                />
+                <TextInput
+                  style={[styles.input, { flex: 1 }]}
+                  value={editData.region_district}
+                  onChangeText={v => setEditData(p => ({ ...p, region_district: v }))}
+                  placeholder="시·군·구 (예: 강남구)"
+                  placeholderTextColor={Colors.placeholder}
+                />
               </View>
-              <Text style={styles.modalLabel}>주요 경력</Text>
-              <TextInput style={[styles.input, styles.multilineInput]} value={editCareer.career_details} onChangeText={v => setEditCareer(c => ({ ...c, career_details: v }))} placeholder={'예: 전 대학 선수\n○○테니스아카데미 수석코치'} placeholderTextColor={Colors.placeholder} multiline />
-              <Text style={styles.modalLabel}>자격증</Text>
-              <TextInput style={[styles.input, styles.multilineInput]} value={editCareer.certifications} onChangeText={v => setEditCareer(c => ({ ...c, certifications: v }))} placeholder={'예: 생활체육지도자 2급\nKTA 공인 코치'} placeholderTextColor={Colors.placeholder} multiline />
-              <Text style={styles.modalLabel}>수상 / 대회 경력</Text>
-              <TextInput style={[styles.input, styles.multilineInput]} value={editCareer.awards} onChangeText={v => setEditCareer(c => ({ ...c, awards: v }))} placeholder={'예: 2023 전국 동호인 대회 우승'} placeholderTextColor={Colors.placeholder} multiline />
-              <SaveBtn onPress={saveCareer} loading={savingCareer} />
-              <CancelBtn onPress={() => setCareerModal(false)} />
-            </View>
-          </ScrollView>
+
+              {/* 소속 센터 */}
+              <Text style={styles.editLabel}>소속 센터</Text>
+              <TextInput
+                style={styles.input}
+                value={editData.center_name}
+                onChangeText={v => setEditData(p => ({ ...p, center_name: v }))}
+                placeholder="센터 또는 클럽명"
+                placeholderTextColor={Colors.placeholder}
+              />
+
+              {/* 한 줄 소개 */}
+              <Text style={styles.editLabel}>한 줄 소개</Text>
+              <TextInput
+                style={[styles.input, styles.multilineInput]}
+                value={editData.bio}
+                onChangeText={v => setEditData(p => ({ ...p, bio: v }))}
+                placeholder="나를 한 문장으로 소개해보세요"
+                placeholderTextColor={Colors.placeholder}
+                multiline
+                maxLength={80}
+              />
+              <Text style={styles.charCount}>{editData.bio.length}/80</Text>
+
+              {/* ── 경력·자격 영역 ── */}
+              <View
+                onLayout={e => { careerSectionY.current = e.nativeEvent.layout.y; }}
+              >
+                <View style={styles.editSectionDivider} />
+                <Text style={styles.editSectionHeader}>경력·자격</Text>
+
+                {/* 코칭 경력 */}
+                <Text style={styles.editLabel}>코칭 경력</Text>
+                <View style={styles.yearInputRow}>
+                  <TextInput
+                    style={[styles.input, { flex: 1 }]}
+                    value={editData.coaching_years}
+                    onChangeText={v => setEditData(c => ({ ...c, coaching_years: v.replace(/[^0-9]/g, '') }))}
+                    placeholder="예: 7"
+                    placeholderTextColor={Colors.placeholder}
+                    keyboardType="numeric"
+                    maxLength={2}
+                  />
+                  <Text style={styles.yearUnit}>년</Text>
+                </View>
+
+                {/* 선수 경력 */}
+                <Text style={styles.editLabel}>선수 경력</Text>
+                <View style={styles.switchRow}>
+                  <Text style={styles.switchLabel}>{editData.has_player_career ? '있음' : '없음'}</Text>
+                  <Switch
+                    value={editData.has_player_career}
+                    onValueChange={v => setEditData(c => ({ ...c, has_player_career: v }))}
+                    trackColor={{ false: Colors.border, true: TERRA }}
+                    thumbColor="#fff"
+                  />
+                </View>
+
+                {/* 주요 경력 */}
+                <Text style={styles.editLabel}>주요 경력</Text>
+                <TextInput
+                  style={[styles.input, styles.multilineInput]}
+                  value={editData.career_details}
+                  onChangeText={v => setEditData(c => ({ ...c, career_details: v }))}
+                  placeholder={'예: 전 대학 선수\n○○테니스아카데미 수석코치'}
+                  placeholderTextColor={Colors.placeholder}
+                  multiline
+                />
+
+                {/* 자격증 */}
+                <Text style={styles.editLabel}>자격증</Text>
+                <TextInput
+                  style={[styles.input, styles.multilineInput]}
+                  value={editData.certifications}
+                  onChangeText={v => setEditData(c => ({ ...c, certifications: v }))}
+                  placeholder={'예: 생활체육지도자 2급\nKTA 공인 코치'}
+                  placeholderTextColor={Colors.placeholder}
+                  multiline
+                />
+
+                {/* 수상·대회 이력 */}
+                <Text style={styles.editLabel}>수상·대회 이력</Text>
+                <TextInput
+                  style={[styles.input, styles.multilineInput]}
+                  value={editData.awards}
+                  onChangeText={v => setEditData(c => ({ ...c, awards: v }))}
+                  placeholder={'예: 2023 전국 동호인 대회 우승'}
+                  placeholderTextColor={Colors.placeholder}
+                  multiline
+                />
+              </View>
+
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
@@ -1085,122 +1187,67 @@ const styles = StyleSheet.create({
 
   body: { paddingHorizontal: 16, paddingBottom: 20 },
 
-  // Profile card (structural redesign)
+  // ── 새 프로필 카드 (흰색) ──
   profileCard: {
     backgroundColor: '#fff',
     borderRadius: 22,
     marginBottom: 14,
-    overflow: 'hidden',
+    paddingTop: 18,
+    paddingHorizontal: 18,
+    paddingBottom: 14,
     shadowColor: '#C0755A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.07,
     shadowRadius: 10,
     elevation: 2,
   },
-  profileCover: {
-    height: COVER_H,
-    backgroundColor: '#D99278',
-    paddingHorizontal: CARD_PAD_H,
-    paddingTop: 12,
-  },
-  coverTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  coverMiddle: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  coverNameRow: {
+  pcRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 14,
+    marginBottom: 12,
   },
-  coverCoachName: {
-    flex: 1,
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#fff',
-  },
-  profileCoverLabel: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 2,
-  },
-  profileEditBtn: {
-    width: 44, height: 44,
-    justifyContent: 'center', alignItems: 'center',
-    marginRight: -10,
-  },
-  // photo: absolute, rendered LAST so it appears above white area
-  profileAvatarFloat: {
-    position: 'absolute',
-    top: COVER_H - PHOTO_SIZE / 2,
-    left: CARD_PAD_H,
-    zIndex: 10,
-    elevation: 10,
-  },
-  profileAvatarOuter: {
-    width: PHOTO_SIZE, height: PHOTO_SIZE, borderRadius: PHOTO_SIZE / 2,
-    borderWidth: 3, borderColor: '#FFFFFF',
-    justifyContent: 'center', alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  profileAvatarInner: {
-    width: PHOTO_SIZE - 8, height: PHOTO_SIZE - 8, borderRadius: (PHOTO_SIZE - 8) / 2,
-    borderWidth: 1.5, borderColor: '#F1C9BA',
+  pcAvatarWrap: {
+    width: PC_PHOTO_SIZE, height: PC_PHOTO_SIZE,
+    borderRadius: PC_PHOTO_SIZE / 2,
+    backgroundColor: TERRA_LIGHT,
+    borderWidth: 2, borderColor: '#F1C9BA',
     overflow: 'hidden',
     justifyContent: 'center', alignItems: 'center',
+    flexShrink: 0,
+  },
+  pcAvatarImg: { width: PC_PHOTO_SIZE, height: PC_PHOTO_SIZE, borderRadius: PC_PHOTO_SIZE / 2 },
+  pcAvatarInitial: { fontSize: 26, fontWeight: '800', color: TERRA },
+  pcInfo: { flex: 1, gap: 3 },
+  pcName: { fontSize: 18, fontWeight: '800', color: DARK },
+  pcMeta: { fontSize: 14, color: Colors.mutedFg, fontWeight: '500' },
+  pcRegionRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },
+  pcRegion: { fontSize: 13, color: Colors.placeholder },
+  pcBioBox: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 6,
+    marginBottom: 12,
+  },
+  pcBioQuote: { fontSize: 18, fontWeight: '800', color: TERRA, lineHeight: 22, marginTop: -1 },
+  pcBio: { flex: 1, fontSize: 13, color: DARK, lineHeight: 20 },
+  pcBioEmpty: { flex: 1, fontSize: 13, color: Colors.placeholder, lineHeight: 20 },
+  pcBtnRow: {
+    flexDirection: 'row', gap: 8,
+  },
+  pcEditBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
     backgroundColor: TERRA_LIGHT,
+    borderRadius: 10,
+    paddingHorizontal: 13, paddingVertical: 9,
   },
-  profileAvatarImg: { width: PHOTO_SIZE - 8, height: PHOTO_SIZE - 8, borderRadius: (PHOTO_SIZE - 8) / 2 },
-  profileAvatarInitial: { fontSize: 28, fontWeight: '800', color: TERRA },
-  profileInfoArea: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: CARD_PAD_H,
-    paddingBottom: 12,
-    zIndex: 1,
+  pcEditBtnText: { fontSize: 13, fontWeight: '700', color: TERRA },
+  pcViewBtn: {
+    flex: 1,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
+    backgroundColor: `${TERRA}10`,
+    borderRadius: 10,
+    paddingHorizontal: 10, paddingVertical: 9,
   },
-  // info row: spacer (photo width) + sport/region
-  profileInfoRow: {
-    flexDirection: 'row',
-    height: PHOTO_SIZE / 2 + 10,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  profileName: { fontSize: 20, fontWeight: '800', color: DARK },
-  profileMeta: { fontSize: 16, color: Colors.mutedFg, fontWeight: '500' },
-  profileRegion: { fontSize: 14, color: Colors.placeholder },
-  profileBioBox: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 7,
-    marginBottom: 10,
-  },
-  profileBioQuote: {
-    fontSize: 20, fontWeight: '800', color: TERRA,
-    lineHeight: 22, marginTop: -1,
-  },
-  profileBio: {
-    flex: 1, fontSize: 13, color: DARK, lineHeight: 20,
-  },
-  profileBioEmpty: {
-    flex: 1, fontSize: 13, color: Colors.placeholder, lineHeight: 20,
-  },
-  profilePrimaryBtn: {
-    flexDirection: 'row',
-    backgroundColor: `${TERRA}12`,
-    borderRadius: 12,
-    height: 44, paddingHorizontal: 14,
-    alignItems: 'center',
-    gap: 6,
-    marginHorizontal: 4,
-  },
-  profilePrimaryBtnText: { color: TERRA, fontSize: 14, fontWeight: '600', flex: 1 },
+  pcViewBtnText: { fontSize: 13, fontWeight: '600', color: TERRA },
 
   // Section cards
   sectionCard: {
@@ -1276,39 +1323,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 4, marginTop: 10,
   },
   journeyPopupBadgeText: { fontSize: 11, fontWeight: '700', color: TERRA },
-  statAssetBox: {
-    backgroundColor: TERRA_LIGHT, borderRadius: 14,
-    padding: 14, marginBottom: 16,
-  },
-  statAssetTitle: { fontSize: 13, fontWeight: '800', color: TERRA, marginBottom: 6 },
-  statAssetDesc: { fontSize: 13, color: DARK, lineHeight: 19, marginBottom: 6 },
-  statAssetSub: { fontSize: 12, color: Colors.mutedFg, lineHeight: 18, marginBottom: 6 },
-  statAssetTrust: { fontSize: 11, color: Colors.mutedFg, fontStyle: 'italic' },
-  blindBadge: {
-    backgroundColor: TERRA_LIGHT, borderRadius: 8,
-    paddingHorizontal: 8, paddingVertical: 3,
-  },
-  blindBadgeText: { fontSize: 10, fontWeight: '700', color: TERRA },
-  blindWrap: { position: 'relative', marginTop: 8 },
-  blindOverlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(255,255,255,0.88)',
-    borderRadius: 12, justifyContent: 'center', alignItems: 'center',
-    paddingVertical: 20, gap: 8,
-  },
-  blindIcon: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: TERRA_LIGHT,
-    justifyContent: 'center', alignItems: 'center', marginBottom: 2,
-  },
-  blindTitle: { fontSize: 15, fontWeight: '800', color: TERRA },
-  blindDesc: { fontSize: 12, color: '#888', textAlign: 'center', lineHeight: 18, paddingHorizontal: 16 },
-  blindBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: TERRA, borderRadius: 20,
-    paddingHorizontal: 18, paddingVertical: 9, marginTop: 4,
-  },
-  blindBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
 
   // Completion card
   completionCard: {
@@ -1332,7 +1346,7 @@ const styles = StyleSheet.create({
   },
   completionBtnText: { fontSize: 12, fontWeight: '700', color: TERRA, textAlign: 'center' },
 
-  // Intro card
+  // Career card
   cardHeader: {
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between', marginBottom: 14,
@@ -1343,14 +1357,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9, paddingVertical: 5,
   },
   editChipText: { fontSize: 12, fontWeight: '700', color: TERRA },
-  introRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 11 },
+  introRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 11 },
   introRowBorder: { borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
-  introLabel: { width: 74, fontSize: 13, color: Colors.mutedFg, fontWeight: '500' },
+  introLabel: { width: 74, fontSize: 13, color: Colors.mutedFg, fontWeight: '500', paddingTop: 1 },
   introValue: { flex: 1, fontSize: 14, color: DARK, fontWeight: '500', lineHeight: 20 },
-  introAddRow: { paddingTop: 12 },
-  introAddText: { fontSize: 13, color: TERRA, fontWeight: '600' },
-  emptyIntro: { paddingVertical: 8 },
-  emptyIntroText: { fontSize: 14, color: TERRA, fontWeight: '600' },
+  careerEmptyText: { fontSize: 14, color: Colors.mutedFg, marginBottom: 10 },
+  careerAddBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    alignSelf: 'flex-start',
+    backgroundColor: TERRA_LIGHT, borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 8,
+  },
+  careerAddBtnText: { fontSize: 13, fontWeight: '700', color: TERRA },
 
   // AI card
   aiCard: {
@@ -1385,12 +1403,54 @@ const styles = StyleSheet.create({
   actionSub: { fontSize: 12, color: Colors.mutedFg, marginBottom: 8 },
   actionArrow: { fontSize: 12, color: TERRA, fontWeight: '700', marginTop: 4 },
 
-  // Modals
+  // Modals (journey popups)
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,.4)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 48 },
   handle: { width: 40, height: 4, backgroundColor: Colors.border, borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
   modalTitle: { fontSize: 18, fontWeight: '800', color: DARK, marginBottom: 16 },
-  modalLabel: { fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6, marginTop: 12 },
+
+  // 통합 편집 모달
+  editScreen: { flex: 1, backgroundColor: '#fff' },
+  editScrollContent: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 40 },
+  editSectionHeader: {
+    fontSize: 16, fontWeight: '800', color: DARK,
+    marginTop: 16, marginBottom: 4,
+  },
+  editSectionDivider: {
+    height: 1, backgroundColor: Colors.borderLight,
+    marginVertical: 20,
+  },
+  editLabel: { fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6, marginTop: 14 },
+  editSaveBtn: {
+    backgroundColor: TERRA, borderRadius: 8,
+    paddingHorizontal: 14, paddingVertical: 7,
+    minWidth: 52, alignItems: 'center', justifyContent: 'center',
+    minHeight: 34,
+  },
+  editSaveBtnDisabled: { backgroundColor: Colors.borderLight },
+  editSaveBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+
+  // 편집 모달: 아바타
+  editAvatarSection: { alignItems: 'center', marginTop: 8, marginBottom: 4 },
+  editAvatarWrap: { position: 'relative', width: 88, height: 88 },
+  editAvatarCircle: {
+    width: 88, height: 88, borderRadius: 44,
+    backgroundColor: TERRA_LIGHT,
+    borderWidth: 2, borderColor: '#F1C9BA',
+    overflow: 'hidden',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  editAvatarImg: { width: 88, height: 88, borderRadius: 44 },
+  editAvatarInitial: { fontSize: 28, fontWeight: '800', color: TERRA },
+  editAvatarCameraBtn: {
+    position: 'absolute', bottom: 0, right: 0,
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: TERRA,
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 2, borderColor: '#fff',
+  },
+
+  // 편집 모달: 입력 필드
   input: {
     backgroundColor: Colors.mutedBg, borderRadius: Radius.md,
     paddingHorizontal: 14, paddingVertical: 12,
@@ -1398,7 +1458,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border, marginBottom: 4,
   },
   multilineInput: { minHeight: 72, textAlignVertical: 'top', paddingTop: 12 },
-  charCount: { fontSize: 11, color: Colors.placeholder, textAlign: 'right', marginBottom: 8 },
+  charCount: { fontSize: 11, color: Colors.placeholder, textAlign: 'right', marginBottom: 4 },
   picker: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: Colors.mutedBg, borderRadius: Radius.md,
@@ -1414,6 +1474,10 @@ const styles = StyleSheet.create({
   },
   pickerOptionSel: { backgroundColor: `${TERRA}08` },
   pickerOptionTxt: { fontSize: 15, color: Colors.foreground },
+  yearInputRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+  },
+  yearUnit: { fontSize: 15, color: DARK, fontWeight: '600' },
   switchRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: Colors.mutedBg, borderRadius: Radius.md,
@@ -1421,25 +1485,11 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border, marginBottom: 4,
   },
   switchLabel: { fontSize: 15, color: Colors.foreground, fontWeight: '600' },
+
+  // journey popup save btn (공유)
   saveBtn: {
     backgroundColor: TERRA, borderRadius: Radius.md,
     paddingVertical: 14, alignItems: 'center', marginTop: 20, marginBottom: 8,
   },
   saveBtnTxt: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  cancelBtn: { alignItems: 'center', paddingVertical: 10 },
-  cancelBtnTxt: { fontSize: 15, color: Colors.mutedFg, fontWeight: '600' },
-  avatarEditWrap: { alignItems: 'center', marginBottom: 8 },
-  avatarEditBtn: {
-    width: 88, height: 88, borderRadius: 44, overflow: 'hidden',
-    backgroundColor: `${TERRA}12`,
-    justifyContent: 'center', alignItems: 'center', position: 'relative',
-  },
-  avatarEditImg: { width: 88, height: 88, borderRadius: 44 },
-  avatarEditOverlay: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: 'rgba(0,0,0,.4)', paddingVertical: 5,
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 3,
-  },
-  avatarEditOverlayTxt: { fontSize: 10, color: '#fff', fontWeight: '600' },
-
 });
