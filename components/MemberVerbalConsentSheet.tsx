@@ -15,21 +15,41 @@ interface Props {
   onCancel: () => void;
 }
 
-async function insertVerbalConsents(coachId: string, memberId: string): Promise<void> {
+async function insertVerbalConsents(memberId: string): Promise<void> {
+  // coachId는 prop 대신 auth에서 직접 가져옴 (race condition/stale prop 방지)
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('인증 정보를 확인할 수 없습니다.');
+
   const now = new Date().toISOString();
-  const base = {
+  const payload = {
     consent_status: 'agreed',
     consent_version: AI_CONSENT_VERSION,
     consent_method: 'verbal',
     source: 'coach_app',
     agreed_at: now,
+    consent_type: 'member',
+    member_id: memberId,
+    coach_id: user.id,
   };
 
-  // consent_type CHECK 제약: 'coach', 'member', 'guardian' 만 허용
-  const { error } = await supabase.from('ai_consents').insert([
-    { ...base, consent_type: 'member', member_id: memberId, coach_id: coachId },
-  ]);
-  if (error) throw error;
+  // 이미 agreed 동의가 있으면 중복 삽입 생략
+  const { data: existing } = await supabase
+    .from('ai_consents')
+    .select('id')
+    .eq('coach_id', user.id)
+    .eq('member_id', memberId)
+    .eq('consent_type', 'member')
+    .eq('consent_status', 'agreed')
+    .limit(1)
+    .maybeSingle();
+
+  if (existing) return;
+
+  const { error } = await supabase.from('ai_consents').insert(payload);
+  if (error) {
+    console.error('[MemberVerbalConsent] insert error:', JSON.stringify(error));
+    throw error;
+  }
 }
 
 export default function MemberVerbalConsentSheet({
@@ -40,9 +60,11 @@ export default function MemberVerbalConsentSheet({
   async function handleConfirm() {
     setSaving(true);
     try {
-      await insertVerbalConsents(coachId, memberId);
-    } catch {
-      // DB 실패해도 구두 동의는 확인된 것으로 처리
+      await insertVerbalConsents(memberId);
+    } catch (e: any) {
+      // DB 실패해도 구두 동의는 확인된 것으로 처리 (UX 우선)
+      // 에러는 로깅해서 추적 가능하게 유지
+      console.error('[MemberVerbalConsent] handleConfirm error:', e?.message ?? e);
     } finally {
       setSaving(false);
     }
