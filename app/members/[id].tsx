@@ -1791,7 +1791,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                 </TouchableOpacity>
 
                 {/* ③ 앞으로 예정된 일정 */}
-                <TouchableOpacity style={styles.lessonMgmtRow} onPress={() => setScheduleListSheet(true)} activeOpacity={0.7}>
+                <TouchableOpacity style={[styles.lessonMgmtRow, { borderBottomWidth: 0 }]} onPress={() => setScheduleListSheet(true)} activeOpacity={0.7}>
                   <View style={styles.lessonMgmtIconWrap}><Ionicons name="calendar-outline" size={16} color={Colors.primary} /></View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.lessonMgmtLabel}>앞으로 예정된 일정</Text>
@@ -1809,20 +1809,6 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                     )}
                   </View>
                   <Text style={styles.lessonMgmtAction}>일정 보기 〉</Text>
-                </TouchableOpacity>
-
-                {/* ④ 일정 추가 */}
-                <TouchableOpacity
-                  style={[styles.lessonMgmtRow, { borderBottomWidth: 0 }]}
-                  onPress={() => { setByDateAddCalMonth({ year: new Date().getFullYear(), month: new Date().getMonth() }); setByDateAddSheet(true); }}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.lessonMgmtIconWrap}><Ionicons name="add-circle-outline" size={16} color={Colors.primary} /></View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.lessonMgmtLabel}>날짜별 일정 추가</Text>
-                    <Text style={[styles.lessonMgmtMain, { color: Colors.placeholder }]}>날짜를 직접 선택해서 추가</Text>
-                  </View>
-                  <Text style={styles.lessonMgmtAction}>추가 〉</Text>
                 </TouchableOpacity>
               </>
             )}
