@@ -7,7 +7,7 @@ import type { TodayCard } from '../lib/homeDataLoader';
 interface LessonPlanBrief {
   id: string;
   summary: string | null;
-  improvement_points: string | null;
+  improvement_points: string | string[] | null;
   session_goals: string | null;
   created_at: string;
 }
@@ -40,18 +40,58 @@ export default function NextLessonBriefingCard({
     fetchLatestPlan(nextCard.memberId);
   }, [nextCard?.memberId]);
 
+  // lesson_plans 또는 member_lesson_reports 변경 시 실시간 갱신
+  useEffect(() => {
+    if (!nextCard?.memberId) return;
+    const memberId = nextCard.memberId;
+    const channel = supabase
+      .channel('briefing_realtime_' + memberId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lesson_plans', filter: `member_id=eq.${memberId}` }, () => {
+        fetchLatestPlan(memberId);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'member_lesson_reports', filter: `member_id=eq.${memberId}` }, () => {
+        fetchLatestPlan(memberId);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [nextCard?.memberId]);
+
   async function fetchLatestPlan(memberId: string) {
     setLoading(true);
     try {
-      const { data } = await supabase
-        .from('lesson_plans')
-        .select('id, summary, improvement_points, session_goals, created_at')
-        .eq('member_id', memberId)
-        .eq('status', 'completed')
-        .order('created_at', { ascending: false })
-        .limit(1);
+      // lesson_plans(AI 분석)과 member_lesson_reports(수동 기록) 병렬 조회
+      const [planResult, reportResult] = await Promise.all([
+        supabase
+          .from('lesson_plans')
+          .select('id, summary, improvement_points, session_goals, created_at')
+          .eq('member_id', memberId)
+          .eq('status', 'completed')
+          .order('created_at', { ascending: false })
+          .limit(1),
+        supabase
+          .from('member_lesson_reports')
+          .select('id, summary, improvement_points, created_at')
+          .eq('member_id', memberId)
+          .is('lesson_plan_id', null)
+          .order('created_at', { ascending: false })
+          .limit(1),
+      ]);
 
-      if (!data || data.length === 0) {
+      const planData = planResult.data?.[0] ?? null;
+      const reportData = reportResult.data?.[0] ?? null;
+
+      let best: LessonPlanBrief | null = null;
+      if (planData && reportData) {
+        best = new Date(planData.created_at) >= new Date(reportData.created_at)
+          ? (planData as LessonPlanBrief)
+          : { ...reportData, session_goals: null };
+      } else if (planData) {
+        best = planData as LessonPlanBrief;
+      } else if (reportData) {
+        best = { ...reportData, session_goals: null };
+      }
+
+      if (!best) {
         const { count } = await supabase
           .from('lesson_members')
           .select('id', { count: 'exact', head: true })
@@ -59,7 +99,7 @@ export default function NextLessonBriefingCard({
         setIsFirstLesson((count ?? 0) <= 1);
         setPlan(null);
       } else {
-        setPlan(data[0] as LessonPlanBrief);
+        setPlan(best);
         setIsFirstLesson(false);
       }
     } finally {
@@ -75,10 +115,20 @@ export default function NextLessonBriefingCard({
   const goalLines: string[] = (() => {
     if (!plan) return [];
     if (plan.improvement_points) {
-      try {
-        const parsed: string[] = JSON.parse(plan.improvement_points);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed.slice(0, 2);
-      } catch {}
+      // member_lesson_reports.improvement_points는 Postgres ARRAY → JS array
+      if (Array.isArray(plan.improvement_points)) {
+        const arr = plan.improvement_points as string[];
+        if (arr.length > 0) return arr.slice(0, 2);
+      }
+      // lesson_plans.improvement_points는 JSON 문자열
+      if (typeof plan.improvement_points === 'string') {
+        try {
+          const parsed: string[] = JSON.parse(plan.improvement_points);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed.slice(0, 2);
+        } catch {}
+        // JSON 파싱 실패 시 plain text이면 그대로 사용
+        if (plan.improvement_points.trim()) return [plan.improvement_points.trim()];
+      }
     }
     if (plan.session_goals) return [plan.session_goals];
     return [];
