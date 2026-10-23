@@ -29,6 +29,7 @@ import {
   getMemCache,
   isFresh,
   persistHomeData,
+  patchTodayCardsCache,
   getKSTDateString,
   msUntilNextKSTMidnight,
   type HomeData,
@@ -172,6 +173,8 @@ export default function HomeScreen() {
     const date = targetDate ?? today;
     const cards = await fetchTodayCards(uid, date);
     setTodayCards(cards);
+    // 캐시도 최신 출석 상태로 패치 → 화면 재진입 시 stale 캐시가 덮어쓰는 현상 방지
+    patchTodayCardsCache(uid, cards);
   }
 
   async function handleAutoGenLessons() {

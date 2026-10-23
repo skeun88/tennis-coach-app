@@ -121,6 +121,13 @@ export async function persistHomeData(coachId: string, data: HomeData) {
   } catch {}
 }
 
+// 출석/결석 변경 후 캐시의 todayCards만 최신 상태로 교체
+export function patchTodayCardsCache(coachId: string, cards: TodayCard[]) {
+  if (memCache[coachId]) {
+    memCache[coachId] = { ...memCache[coachId], todayCards: cards };
+  }
+}
+
 export function clearHomeCache(coachId?: string) {
   if (coachId) {
     delete memCache[coachId];
