@@ -706,8 +706,8 @@ export default function HomeScreen() {
           onPressCard={(memberId, memberName, memberLevel) =>
             router.push({ pathname: '/members/ai-analysis', params: { memberId, memberName, memberLevel } } as any)
           }
-          onPressViewRecord={(planId, memberId, memberName, memberLevel) =>
-            router.push({ pathname: '/members/plan-detail', params: { planId, memberId, memberName, memberLevel } } as any)
+          onPressViewRecord={(planId, reportId, memberId, memberName, memberLevel) =>
+            router.push({ pathname: '/members/plan-detail', params: { planId, reportId, memberId, memberName, memberLevel } } as any)
           }
         />
 

@@ -6,10 +6,10 @@ import type { TodayCard } from '../lib/homeDataLoader';
 
 interface LessonPlanBrief {
   id: string;
-  summary: string | null;
   improvement_points: string | string[] | null;
   session_goals: string | null;
   created_at: string;
+  source: 'plan' | 'report';
 }
 
 interface Props {
@@ -17,7 +17,7 @@ interface Props {
   hasToday: boolean;
   allDone: boolean;
   onPressCard: (memberId: string, memberName: string, memberLevel: string) => void;
-  onPressViewRecord: (planId: string, memberId: string, memberName: string, memberLevel: string) => void;
+  onPressViewRecord: (planId: string | undefined, reportId: string | undefined, memberId: string, memberName: string, memberLevel: string) => void;
 }
 
 export default function NextLessonBriefingCard({
@@ -40,7 +40,6 @@ export default function NextLessonBriefingCard({
     fetchLatestPlan(nextCard.memberId);
   }, [nextCard?.memberId]);
 
-  // lesson_plans 또는 member_lesson_reports 변경 시 실시간 갱신
   useEffect(() => {
     if (!nextCard?.memberId) return;
     const memberId = nextCard.memberId;
@@ -59,18 +58,17 @@ export default function NextLessonBriefingCard({
   async function fetchLatestPlan(memberId: string) {
     setLoading(true);
     try {
-      // lesson_plans(AI 분석)과 member_lesson_reports(수동 기록) 병렬 조회
       const [planResult, reportResult] = await Promise.all([
         supabase
           .from('lesson_plans')
-          .select('id, summary, improvement_points, session_goals, created_at')
+          .select('id, improvement_points, session_goals, created_at')
           .eq('member_id', memberId)
           .eq('status', 'completed')
           .order('created_at', { ascending: false })
           .limit(1),
         supabase
           .from('member_lesson_reports')
-          .select('id, summary, improvement_points, created_at')
+          .select('id, improvement_points, created_at')
           .eq('member_id', memberId)
           .is('lesson_plan_id', null)
           .order('created_at', { ascending: false })
@@ -82,13 +80,15 @@ export default function NextLessonBriefingCard({
 
       let best: LessonPlanBrief | null = null;
       if (planData && reportData) {
-        best = new Date(planData.created_at) >= new Date(reportData.created_at)
-          ? (planData as LessonPlanBrief)
-          : { ...reportData, session_goals: null };
+        if (new Date(planData.created_at) >= new Date(reportData.created_at)) {
+          best = { ...planData, session_goals: planData.session_goals ?? null, source: 'plan' };
+        } else {
+          best = { id: reportData.id, improvement_points: reportData.improvement_points, session_goals: null, created_at: reportData.created_at, source: 'report' };
+        }
       } else if (planData) {
-        best = planData as LessonPlanBrief;
+        best = { ...planData, source: 'plan' };
       } else if (reportData) {
-        best = { ...reportData, session_goals: null };
+        best = { id: reportData.id, improvement_points: reportData.improvement_points, session_goals: null, created_at: reportData.created_at, source: 'report' };
       }
 
       if (!best) {
@@ -112,26 +112,17 @@ export default function NextLessonBriefingCard({
     return d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
   }
 
-  const goalLines: string[] = (() => {
-    if (!plan) return [];
-    if (plan.improvement_points) {
-      // member_lesson_reports.improvement_points는 Postgres ARRAY → JS array
-      if (Array.isArray(plan.improvement_points)) {
-        const arr = plan.improvement_points as string[];
-        if (arr.length > 0) return arr.slice(0, 2);
-      }
-      // lesson_plans.improvement_points는 JSON 문자열
-      if (typeof plan.improvement_points === 'string') {
-        try {
-          const parsed: string[] = JSON.parse(plan.improvement_points);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed.slice(0, 2);
-        } catch {}
-        // JSON 파싱 실패 시 plain text이면 그대로 사용
-        if (plan.improvement_points.trim()) return [plan.improvement_points.trim()];
-      }
+  // improvement_points: lesson_plans는 JSON 문자열, member_lesson_reports는 Postgres ARRAY
+  const keyPoints: string[] = (() => {
+    if (!plan?.improvement_points) return [];
+    if (Array.isArray(plan.improvement_points)) {
+      return (plan.improvement_points as string[]).slice(0, 2);
     }
-    if (plan.session_goals) return [plan.session_goals];
-    return [];
+    try {
+      const parsed: string[] = JSON.parse(plan.improvement_points as string);
+      if (Array.isArray(parsed)) return parsed.slice(0, 2);
+    } catch {}
+    return [(plan.improvement_points as string).trim()].filter(Boolean);
   })();
 
   if (!hasToday) {
@@ -139,7 +130,7 @@ export default function NextLessonBriefingCard({
       <View style={styles.card}>
         <View style={styles.headerRow}>
           <View style={styles.titleWrap}>
-            <Ionicons name="checkmark-circle-outline" size={14} color="#C0755A" />
+            <Ionicons name="checkmark-circle-outline" size={13} color="#C0755A" />
             <Text style={styles.cardTitle}>다음 레슨 브리핑</Text>
           </View>
         </View>
@@ -153,7 +144,7 @@ export default function NextLessonBriefingCard({
       <View style={styles.card}>
         <View style={styles.headerRow}>
           <View style={styles.titleWrap}>
-            <Ionicons name="checkmark-circle" size={14} color="#C0755A" />
+            <Ionicons name="checkmark-circle" size={13} color="#C0755A" />
             <Text style={styles.cardTitle}>다음 레슨 브리핑</Text>
           </View>
         </View>
@@ -172,7 +163,7 @@ export default function NextLessonBriefingCard({
     >
       <View style={styles.headerRow}>
         <View style={styles.titleWrap}>
-          <Ionicons name="checkmark-circle-outline" size={14} color="#C0755A" />
+          <Ionicons name="checkmark-circle-outline" size={13} color="#C0755A" />
           <Text style={styles.cardTitle}>다음 레슨 브리핑</Text>
         </View>
         <View style={styles.timeBadge}>
@@ -190,26 +181,26 @@ export default function NextLessonBriefingCard({
       <View style={styles.divider} />
 
       {loading ? (
-        <ActivityIndicator size="small" color="#C0755A" style={{ marginVertical: 12 }} />
+        <ActivityIndicator size="small" color="#C0755A" style={{ marginVertical: 10 }} />
       ) : isFirstLesson ? (
         <Text style={styles.emptyText}>첫 레슨입니다</Text>
       ) : !plan ? (
         <Text style={styles.emptyText}>이전 레슨 기록이 없습니다</Text>
       ) : (
         <View style={styles.contentWrap}>
-          {plan.summary ? (
+          {keyPoints.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>지난 레슨</Text>
-              <Text style={styles.sectionText} numberOfLines={2}>{plan.summary}</Text>
+              <Text style={styles.sectionLabel}>지난 레슨 핵심</Text>
+              {keyPoints.map((pt, i) => (
+                <Text key={i} style={styles.bulletText} numberOfLines={1}>• {pt}</Text>
+              ))}
             </View>
-          ) : null}
+          )}
 
-          {goalLines.length > 0 ? (
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>오늘의 레슨 포인트</Text>
-              <Text style={styles.sectionText} numberOfLines={2}>
-                {goalLines.join('\n')}
-              </Text>
+          {plan.session_goals ? (
+            <View style={styles.goalSection}>
+              <Text style={styles.sectionLabel}>오늘 레슨 포인트</Text>
+              <Text style={styles.sectionText} numberOfLines={2}>{plan.session_goals}</Text>
             </View>
           ) : null}
         </View>
@@ -223,11 +214,15 @@ export default function NextLessonBriefingCard({
             activeOpacity={0.7}
             onPress={(e) => {
               e.stopPropagation?.();
-              onPressViewRecord(plan.id, nextCard.memberId, nextCard.memberName, nextCard.memberLevel);
+              onPressViewRecord(
+                plan.source === 'plan' ? plan.id : undefined,
+                plan.source === 'report' ? plan.id : undefined,
+                nextCard.memberId, nextCard.memberName, nextCard.memberLevel
+              );
             }}
           >
             <Text style={styles.viewRecordText}>지난 레슨 기록 보기</Text>
-            <Ionicons name="chevron-forward" size={14} color="#C0755A" />
+            <Ionicons name="chevron-forward" size={13} color="#C0755A" />
           </TouchableOpacity>
         </>
       )}
@@ -241,7 +236,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginHorizontal: 16,
     marginTop: 6,
-    marginBottom: 22,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#EDE0D4',
     overflow: 'hidden',
@@ -251,27 +246,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingTop: 10,
+    paddingBottom: 6,
   },
   titleWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
   },
   cardTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: '#3E2B22',
   },
   timeBadge: {
     backgroundColor: '#C0755A',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
+    borderRadius: 7,
+    paddingHorizontal: 9,
+    paddingVertical: 2,
   },
   timeText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: '#fff',
   },
@@ -280,62 +275,74 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 14,
-    paddingBottom: 10,
+    paddingBottom: 8,
   },
   memberName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#3E2B22',
   },
   lastLessonDate: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#9CA3AF',
     fontWeight: '500',
   },
   divider: {
     height: 1,
     backgroundColor: '#F0EDEA',
-    marginHorizontal: 0,
   },
   contentWrap: {
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 10,
+    paddingVertical: 10,
+    gap: 8,
   },
   section: {
-    gap: 4,
+    gap: 3,
+  },
+  goalSection: {
+    gap: 3,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   sectionLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     color: '#3E2B22',
     letterSpacing: 0.3,
+    marginBottom: 2,
+  },
+  bulletText: {
+    fontSize: 12,
+    color: '#555555',
+    lineHeight: 18,
   },
   sectionText: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#555555',
-    lineHeight: 20,
+    lineHeight: 18,
   },
   emptyText: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#9CA3AF',
     fontWeight: '500',
     paddingHorizontal: 14,
-    paddingBottom: 14,
+    paddingBottom: 12,
   },
   viewRecordBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     marginHorizontal: 14,
-    marginBottom: 12,
-    paddingVertical: 9,
+    marginBottom: 10,
+    paddingVertical: 8,
     backgroundColor: '#F5F5F5',
     borderRadius: 8,
-    gap: 4,
+    gap: 3,
   },
   viewRecordText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: '#555555',
   },
