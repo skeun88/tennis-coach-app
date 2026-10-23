@@ -7,8 +7,8 @@ import type { TodayCard } from '../lib/homeDataLoader';
 interface LessonPlanBrief {
   id: string;
   summary: string | null;
-  next_goals: string[] | null;
-  coach_next_goals: string[] | null;
+  improvement_points: string | null;
+  session_goals: string | null;
   created_at: string;
 }
 
@@ -45,7 +45,7 @@ export default function NextLessonBriefingCard({
     try {
       const { data } = await supabase
         .from('lesson_plans')
-        .select('id, summary, next_goals, coach_next_goals, created_at')
+        .select('id, summary, improvement_points, session_goals, created_at')
         .eq('member_id', memberId)
         .eq('status', 'completed')
         .order('created_at', { ascending: false })
@@ -72,13 +72,17 @@ export default function NextLessonBriefingCard({
     return d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
   }
 
-  const goalLines = plan
-    ? (
-        plan.coach_next_goals && plan.coach_next_goals.length > 0
-          ? plan.coach_next_goals
-          : plan.next_goals ?? []
-      ).slice(0, 2)
-    : [];
+  const goalLines: string[] = (() => {
+    if (!plan) return [];
+    if (plan.improvement_points) {
+      try {
+        const parsed: string[] = JSON.parse(plan.improvement_points);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed.slice(0, 2);
+      } catch {}
+    }
+    if (plan.session_goals) return [plan.session_goals];
+    return [];
+  })();
 
   if (!hasToday) {
     return (
