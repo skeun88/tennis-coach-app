@@ -927,8 +927,8 @@ ${rejectMsg.trim()}`
             return lessons.map(lesson => {
               const startMin = timeToMinutes(lesson.start_time);
               const endMin = timeToMinutes(lesson.end_time);
-              const top = (startMin - START_HOUR * 60) / 60 * HOUR_HEIGHT;
-              const height = Math.max(52, (endMin - startMin) / 60 * HOUR_HEIGHT - 4);
+              const top = (startMin - START_HOUR * 60) / 60 * HOUR_HEIGHT + 2;
+              const height = Math.max(44, (endMin - startMin) / 60 * HOUR_HEIGHT - 6);
               const isDragging = draggingId === lesson.id;
               const layout = colMap.get(lesson.id) ?? { col: 0, totalCols: 1 };
               const colWidth = (GRID_WIDTH - (layout.totalCols - 1) * 3) / layout.totalCols;
@@ -1724,10 +1724,10 @@ function DraggableLesson({
             <Text style={[styles.lessonCardTimeShort, { color: cardTimeColor }]} numberOfLines={1}>{startTimeStr}</Text>
           </View>
         ) : (
-          <View style={{ flex: 1, justifyContent: 'center', gap: 2 }}>
+          <View style={{ flex: 1, justifyContent: 'center', gap: 3 }}>
             <Text style={[styles.lessonCardTitle, { color: cardNameColor }]} numberOfLines={1}>{nameStr}</Text>
             <Text style={[styles.lessonCardTime, { color: cardTimeColor }]} numberOfLines={1}>
-              {startTimeStr}{duration >= 30 ? ` · ${duration}분` : ''}
+              {startTimeStr}{duration >= 30 ? ` – ${duration}분` : ''}
             </Text>
           </View>
         )}
@@ -1891,8 +1891,8 @@ const styles = StyleSheet.create({
   // 레슨 카드 (그리드)
   lessonCard: {
     position: 'absolute',
-    borderRadius: 8, padding: 6, paddingHorizontal: 8,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2,
+    borderRadius: 12, padding: 6, paddingHorizontal: 9,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.10, shadowRadius: 4, elevation: 3,
     },
   lessonCardDragging: { opacity: 0.85, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 8 },
   lessonCardTime: { fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: '600', flexShrink: 0 },

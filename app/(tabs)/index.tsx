@@ -1210,7 +1210,7 @@ const styles = StyleSheet.create({
     borderRadius: 16, padding: 14, marginBottom: 8,
     borderWidth: 1, borderColor: '#EDE0D4',
   },
-  lessonCardAttended: { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' },
+  lessonCardAttended: { backgroundColor: '#F2F2F2', borderColor: '#C8C4C0' },
   lessonCardAbsent: { backgroundColor: '#fff1f2', borderColor: '#fecdd3' },
   lessonTimeBadge: { marginRight: 4, minWidth: 52, justifyContent: 'center' },
   lessonTimeDivider: { width: 1, alignSelf: 'stretch', backgroundColor: '#D9CFC7', marginHorizontal: 8 },
