@@ -214,6 +214,8 @@ export default function ScheduleScreen() {
   // measured screen position of the time-grid ScrollView (shared between day/week tabs)
   const scrollViewPageY = useRef(0);
   const scrollViewHeight = useRef(600);
+  // insets.bottom tracked via ref so trigger functions (defined inside component) can read it
+  const insetsBottomRef = useRef(insets.bottom);
   const weekScrollYRef = useRef(0);
   const weekAutoScrollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const weekAutoScrollSpeedRef = useRef(0);
@@ -499,6 +501,9 @@ ${rejectMsg.trim()}`
   // selectedDate 최신값을 ref로 추적 (useFocusEffect stale closure 방지)
   selectedDateRef.current = selectedDate;
 
+  // keep insets.bottom ref in sync (used by auto-scroll trigger functions)
+  useEffect(() => { insetsBottomRef.current = insets.bottom; }, [insets.bottom]);
+
   useFocusEffect(useCallback(() => {
     const newToday = getTodayKST();
     const newThisWeek = getThisWeekDates();
@@ -781,18 +786,22 @@ ${rejectMsg.trim()}`
   }
 
   function onDayDragMove(moveY: number) {
-    // Use relative Y within the scroll view so the trigger zone is reachable.
-    // Absolute screen Y minus the scroll view's measured top = position inside the scroll area.
-    const svY = scrollViewPageY.current;
-    const svH = scrollViewHeight.current;
-    const relY = moveY - svY;
-    const EDGE = 80;
+    const { height: screenH } = Dimensions.get('window');
+    const TOP_EDGE = 80;
+    const BOTTOM_EDGE = 70; // spec: 70px above the nav bar
     const MAX_SPEED = 14;
-    if (relY < EDGE) {
-      dayAutoScrollSpeedRef.current = -Math.max(2, Math.ceil(((EDGE - Math.max(0, relY)) / EDGE) * MAX_SPEED));
+    // Top boundary: measured scroll view top. Falls back to 0 (conservative) if not yet measured.
+    const svTop = scrollViewPageY.current;
+    // Bottom boundary: exact — screen H minus safe area insets minus floating tab bar.
+    // Does NOT use scrollViewHeight, which may include the tab bar overlay area.
+    const visibleBottom = screenH - insetsBottomRef.current - FLOATING_TAB_BAR_SPACE;
+    if (moveY < svTop + TOP_EDGE) {
+      const depth = Math.max(0, svTop + TOP_EDGE - moveY);
+      dayAutoScrollSpeedRef.current = -Math.max(2, Math.ceil((depth / TOP_EDGE) * MAX_SPEED));
       startDayAutoScroll();
-    } else if (relY > svH - EDGE) {
-      dayAutoScrollSpeedRef.current = Math.max(2, Math.ceil(((relY - (svH - EDGE)) / EDGE) * MAX_SPEED));
+    } else if (moveY > visibleBottom - BOTTOM_EDGE) {
+      const depth = Math.max(0, moveY - (visibleBottom - BOTTOM_EDGE));
+      dayAutoScrollSpeedRef.current = Math.max(2, Math.ceil((depth / BOTTOM_EDGE) * MAX_SPEED));
       startDayAutoScroll();
     } else {
       dayAutoScrollSpeedRef.current = 0;
@@ -823,16 +832,19 @@ ${rejectMsg.trim()}`
   }
 
   function onWeekDragMove(moveY: number) {
-    const svY = scrollViewPageY.current;
-    const svH = scrollViewHeight.current;
-    const relY = moveY - svY;
-    const EDGE = 80;
+    const { height: screenH } = Dimensions.get('window');
+    const TOP_EDGE = 80;
+    const BOTTOM_EDGE = 70;
     const MAX_SPEED = 14;
-    if (relY < EDGE) {
-      weekAutoScrollSpeedRef.current = -Math.max(2, Math.ceil(((EDGE - Math.max(0, relY)) / EDGE) * MAX_SPEED));
+    const svTop = scrollViewPageY.current;
+    const visibleBottom = screenH - insetsBottomRef.current - FLOATING_TAB_BAR_SPACE;
+    if (moveY < svTop + TOP_EDGE) {
+      const depth = Math.max(0, svTop + TOP_EDGE - moveY);
+      weekAutoScrollSpeedRef.current = -Math.max(2, Math.ceil((depth / TOP_EDGE) * MAX_SPEED));
       startWeekAutoScroll();
-    } else if (relY > svH - EDGE) {
-      weekAutoScrollSpeedRef.current = Math.max(2, Math.ceil(((relY - (svH - EDGE)) / EDGE) * MAX_SPEED));
+    } else if (moveY > visibleBottom - BOTTOM_EDGE) {
+      const depth = Math.max(0, moveY - (visibleBottom - BOTTOM_EDGE));
+      weekAutoScrollSpeedRef.current = Math.max(2, Math.ceil((depth / BOTTOM_EDGE) * MAX_SPEED));
       startWeekAutoScroll();
     } else {
       weekAutoScrollSpeedRef.current = 0;
@@ -962,7 +974,7 @@ ${rejectMsg.trim()}`
         contentContainerStyle={{ paddingBottom: insets.bottom + FLOATING_TAB_BAR_SPACE + 24 }}
         onScroll={(e) => { dayScrollYRef.current = e.nativeEvent.contentOffset.y; }}
         scrollEventThrottle={16}
-        onLayout={() => { dayScrollRef.current?.measure((_x: number, _y: number, _w: number, h: number, _px: number, py: number) => { scrollViewPageY.current = py; scrollViewHeight.current = h; }); }}
+        onLayout={() => { requestAnimationFrame(() => { dayScrollRef.current?.measure((_x: number, _y: number, _w: number, h: number, _px: number, py: number) => { if (py > 0) { scrollViewPageY.current = py; scrollViewHeight.current = h; } }); }); }}
         scrollEnabled={draggingId === null}
         refreshControl={<TerracottaRefreshControl refreshing={refreshing} onRefresh={async () => {
           setRefreshing(true);
@@ -1182,7 +1194,7 @@ ${rejectMsg.trim()}`
           scrollEnabled={weekDraggingId === null}
           onScroll={(e) => { weekScrollYRef.current = e.nativeEvent.contentOffset.y; }}
           scrollEventThrottle={16}
-          onLayout={() => { dayScrollRef.current?.measure((_x: number, _y: number, _w: number, h: number, _px: number, py: number) => { scrollViewPageY.current = py; scrollViewHeight.current = h; }); }}
+          onLayout={() => { requestAnimationFrame(() => { dayScrollRef.current?.measure((_x: number, _y: number, _w: number, h: number, _px: number, py: number) => { if (py > 0) { scrollViewPageY.current = py; scrollViewHeight.current = h; } }); }); }}
           refreshControl={<TerracottaRefreshControl refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
