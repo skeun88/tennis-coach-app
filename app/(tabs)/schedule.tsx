@@ -1781,6 +1781,7 @@ function DraggableLesson({
   const pan = useRef(new Animated.ValueXY()).current;
   const dragging = useRef(false);
   const gestureYRef = useRef(0); // latest raw g.dy; used by nudge callback
+  const lastGRef = useRef<{ dy: number; moveY: number } | null>(null);
   const [liveDragTime, setLiveDragTime] = useState<string | null>(null);
 
   // 콜백을 ref로 관리 → PanResponder가 항상 최신 콜백 참조
@@ -1812,15 +1813,19 @@ function DraggableLesson({
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => dragging.current,
     onStartShouldSetPanResponderCapture: () => dragging.current,
-    onMoveShouldSetPanResponder: (_, g) => dragging.current && Math.abs(g.dy) > 3,
-    onMoveShouldSetPanResponderCapture: (_, g) => dragging.current && Math.abs(g.dy) > 3,
+    onMoveShouldSetPanResponder: (_, g) => dragging.current && (Math.abs(g.dy) > 2 || Math.abs(g.dx) > 2),
+    onMoveShouldSetPanResponderCapture: (_, g) => dragging.current && (Math.abs(g.dy) > 2 || Math.abs(g.dx) > 2),
+    // 드래그 중 다른 뷰(ScrollView, 탭바 등)가 제스처를 빼앗지 못하도록 차단
+    onPanResponderTerminationRequest: () => !dragging.current,
     onPanResponderGrant: () => {
       pan.setOffset({ x: 0, y: (pan.y as any)._value });
       pan.setValue({ x: 0, y: 0 });
       gestureYRef.current = 0;
+      lastGRef.current = null;
     },
     onPanResponderMove: (_, g) => {
       gestureYRef.current = g.dy;
+      lastGRef.current = { dy: g.dy, moveY: g.moveY };
       // Include accumulated auto-scroll offset so card visually tracks the finger
       const scrollOffset = scrollOffsetRef?.current ?? 0;
       pan.y.setValue(g.dy + scrollOffset);
@@ -1843,10 +1848,22 @@ function DraggableLesson({
       onDragCancelRef.current();
     },
     onPanResponderTerminate: () => {
-      dragging.current = false;
-      pan.setValue({ x: 0, y: 0 });
-      setLiveDragTime(null);
-      onDragCancelRef.current();
+      // 시스템이 제스처를 강제 탈취한 경우 — 마지막 위치로 드롭 처리
+      if (dragging.current && lastGRef.current) {
+        dragging.current = false;
+        pan.flattenOffset();
+        const scrollOffset = scrollOffsetRef?.current ?? 0;
+        const effectiveDy = lastGRef.current.dy + scrollOffset;
+        pan.setValue({ x: 0, y: 0 });
+        setLiveDragTime(null);
+        onDragEndRef.current(effectiveDy);
+        onDragCancelRef.current();
+      } else {
+        dragging.current = false;
+        pan.setValue({ x: 0, y: 0 });
+        setLiveDragTime(null);
+        onDragCancelRef.current();
+      }
     },
     onShouldBlockNativeResponder: () => dragging.current,
   })).current;
@@ -1921,6 +1938,7 @@ function WeekDraggableBlock({
   const pan = useRef(new Animated.ValueXY()).current;
   const dragging = useRef(false);
   const gestureYRef = useRef(0);
+  const lastGRef = useRef<{ dy: number; dx: number } | null>(null);
 
   const onDragEndRef = useRef(onDragEnd);
   const onDragStartRef = useRef(onDragStart);
@@ -1949,15 +1967,19 @@ function WeekDraggableBlock({
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => dragging.current,
     onStartShouldSetPanResponderCapture: () => dragging.current,
-    onMoveShouldSetPanResponder: (_, g) => dragging.current && (Math.abs(g.dy) > 3 || Math.abs(g.dx) > 3),
-    onMoveShouldSetPanResponderCapture: (_, g) => dragging.current && (Math.abs(g.dy) > 3 || Math.abs(g.dx) > 3),
+    onMoveShouldSetPanResponder: (_, g) => dragging.current && (Math.abs(g.dy) > 2 || Math.abs(g.dx) > 2),
+    onMoveShouldSetPanResponderCapture: (_, g) => dragging.current && (Math.abs(g.dy) > 2 || Math.abs(g.dx) > 2),
+    // 드래그 중 다른 뷰(ScrollView, 탭바 등)가 제스처를 빼앗지 못하도록 차단
+    onPanResponderTerminationRequest: () => !dragging.current,
     onPanResponderGrant: () => {
       pan.setOffset({ x: (pan.x as any)._value, y: (pan.y as any)._value });
       pan.setValue({ x: 0, y: 0 });
       gestureYRef.current = 0;
+      lastGRef.current = null;
     },
     onPanResponderMove: (_, g) => {
       gestureYRef.current = g.dy;
+      lastGRef.current = { dy: g.dy, dx: g.dx };
       const scrollOffset = scrollOffsetRef?.current ?? 0;
       pan.setValue({ x: g.dx, y: g.dy + scrollOffset });
       onDragMoveRef.current(g.dy, g.dx, g.moveY);
@@ -1973,9 +1995,19 @@ function WeekDraggableBlock({
       onDragCancelRef.current();
     },
     onPanResponderTerminate: () => {
-      dragging.current = false;
-      pan.setValue({ x: 0, y: 0 });
-      onDragCancelRef.current();
+      // 시스템이 제스처를 강제 탈취한 경우 — 마지막 위치로 드롭 처리
+      if (dragging.current && lastGRef.current) {
+        dragging.current = false;
+        pan.flattenOffset();
+        const { dy, dx } = lastGRef.current;
+        pan.setValue({ x: 0, y: 0 });
+        onDragEndRef.current(dy, dx);
+        onDragCancelRef.current();
+      } else {
+        dragging.current = false;
+        pan.setValue({ x: 0, y: 0 });
+        onDragCancelRef.current();
+      }
     },
     onShouldBlockNativeResponder: () => dragging.current,
   })).current;
