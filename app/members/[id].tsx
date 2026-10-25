@@ -3168,24 +3168,60 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
 
                 {/* 레슨 시간 선택 */}
                 <Text style={[styles.spinnerLabelTP, { paddingHorizontal: 16, marginTop: 12, marginBottom: 8, textAlign: 'left' }]}>레슨 시간</Text>
-                <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginBottom: 12 }}>
-                  {[30, 45, 60, 90, 120].map(min => {
-                    const durLabel = min < 60 ? `${min}분` : min % 60 === 0 ? `${min / 60}시간` : `${Math.floor(min / 60)}시간 ${min % 60}분`;
+                {/* 빠른 선택 버튼: 20, 30, 40, 60분 */}
+                <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginBottom: 10 }}>
+                  {[20, 30, 40, 60].map(min => {
+                    const isActive = byDateAddTempDuration === min;
                     return (
                       <TouchableOpacity
                         key={min}
                         onPress={() => setByDateAddTempDuration(min)}
                         style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center',
-                          backgroundColor: byDateAddTempDuration === min ? Colors.primary : Colors.mutedBg,
-                          borderWidth: byDateAddTempDuration === min ? 0 : 1, borderColor: Colors.border }}
+                          backgroundColor: isActive ? Colors.primary : Colors.mutedBg,
+                          borderWidth: isActive ? 0 : 1, borderColor: Colors.border }}
                       >
-                        <Text style={{ fontSize: 12, fontWeight: '700',
-                          color: byDateAddTempDuration === min ? '#fff' : Colors.mutedFg }}>
-                          {durLabel}
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: isActive ? '#fff' : Colors.mutedFg }}>
+                          {min}분
                         </Text>
                       </TouchableOpacity>
                     );
                   })}
+                </View>
+                {/* +/- 세밀 조절 (10분 단위, 최소 10분 최대 120분) */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, paddingHorizontal: 16, marginBottom: 12 }}>
+                  <TouchableOpacity
+                    onPress={() => setByDateAddTempDuration(d => Math.max(10, d - 10))}
+                    disabled={byDateAddTempDuration <= 10}
+                    style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center',
+                      backgroundColor: byDateAddTempDuration <= 10 ? Colors.mutedBg : Colors.card,
+                      borderWidth: 1, borderColor: Colors.border }}
+                  >
+                    <Text style={{ fontSize: 20, fontWeight: '600', color: byDateAddTempDuration <= 10 ? Colors.placeholder : Colors.foreground }}>−</Text>
+                  </TouchableOpacity>
+                  <View style={{ minWidth: 80, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 17, fontWeight: '800', color: Colors.foreground }}>
+                      {byDateAddTempDuration < 60
+                        ? `${byDateAddTempDuration}분`
+                        : byDateAddTempDuration % 60 === 0
+                          ? `${byDateAddTempDuration / 60}시간`
+                          : `${Math.floor(byDateAddTempDuration / 60)}시간 ${byDateAddTempDuration % 60}분`}
+                    </Text>
+                    {byDateAddTempHour ? (() => {
+                      const startMin = parseInt(byDateAddTempHour) * 60 + parseInt(byDateAddTempMinute);
+                      const endMin = startMin + byDateAddTempDuration;
+                      const endStr = `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`;
+                      return <Text style={{ fontSize: 12, color: Colors.mutedFg, marginTop: 2 }}>→ {endStr} 종료</Text>;
+                    })() : null}
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setByDateAddTempDuration(d => Math.min(120, d + 10))}
+                    disabled={byDateAddTempDuration >= 120}
+                    style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center',
+                      backgroundColor: byDateAddTempDuration >= 120 ? Colors.mutedBg : Colors.card,
+                      borderWidth: 1, borderColor: Colors.border }}
+                  >
+                    <Text style={{ fontSize: 20, fontWeight: '600', color: byDateAddTempDuration >= 120 ? Colors.placeholder : Colors.foreground }}>+</Text>
+                  </TouchableOpacity>
                 </View>
 
                 {/* 삭제 버튼 (기존 선택된 날짜) */}
