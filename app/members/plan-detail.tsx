@@ -458,12 +458,12 @@ export default function PlanDetailScreen() {
 
             <View style={s.sourceRow}>
               <Ionicons
-                name={(plan as any).source === 'manual' ? 'pencil-outline' : 'mic-outline'}
+                name={isManual ? 'pencil-outline' : (plan.audio_storage_path || plan.transcript_id) ? 'mic-outline' : 'create-outline'}
                 size={13}
                 color={TERRACOTTA}
               />
               <Text style={s.sourceText}>
-                {(plan as any).source === 'manual' ? '직접 작성' : '음성 기록'}
+                {isManual ? '직접 작성 기록' : (plan.audio_storage_path || plan.transcript_id) ? '음성 기록' : 'AI 타이핑 기록'}
               </Text>
             </View>
           </View>
