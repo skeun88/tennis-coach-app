@@ -95,6 +95,7 @@ export default function AIAnalysisScreen() {
   const [inputFocused, setInputFocused] = useState(false);
   const [cursorPos, setCursorPos] = useState({ start: 0, end: 0 });
   const inputRef = useRef<TextInput>(null);
+  const modalScrollRef = useRef<ScrollView>(null);
 
   // 키워드 데이터 구조
   const TENNIS_TECHNIQUES = ['포핸드', '백핸드', '서브', '발리', '리턴', '풋워크', '스매시', '슬라이스'] as const;
@@ -1425,10 +1426,11 @@ export default function AIAnalysisScreen() {
                 </View>
 
                 <ScrollView
+                  ref={modalScrollRef}
                   style={{ flex: 1 }}
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
-                  contentContainerStyle={{ paddingBottom: 12 }}
+                  contentContainerStyle={{ paddingBottom: 20 }}
                 >
                   {/* 최근 사용 조합 */}
                   {recentCombos.length > 0 && (
@@ -1602,35 +1604,49 @@ export default function AIAnalysisScreen() {
                     </View>
                   )}
 
-                  {/* 직접 메모 (접기/펼치기) */}
-                  <View style={{ paddingHorizontal: 16, paddingTop: 6 }}>
+                  {/* 직접 레슨 기록하기 (접기/펼치기) */}
+                  <View style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 8 }}>
                     <TouchableOpacity
                       style={styles.memoToggleRow}
-                      onPress={() => setMemoExpanded(prev => !prev)}
+                      onPress={() => {
+                        const next = !memoExpanded;
+                        setMemoExpanded(next);
+                        if (next) {
+                          // 펼칠 때 스크롤 끝으로 이동 (키보드 등장 전)
+                          setTimeout(() => modalScrollRef.current?.scrollToEnd({ animated: true }), 80);
+                        }
+                      }}
                       activeOpacity={0.7}
                     >
                       <Ionicons name={memoExpanded ? 'chevron-down' : 'chevron-forward'} size={14} color={Colors.mutedFg} />
-                      <Text style={styles.memoToggleText}>직접 메모 {memoExpanded ? '' : '(선택)'}</Text>
+                      <Text style={styles.memoToggleText}>직접 레슨 기록하기</Text>
                       {manualContent.trim() && <View style={styles.memoDot} />}
                     </TouchableOpacity>
                     {memoExpanded && (
-                      <View style={[styles.inputWrapper, inputFocused && styles.inputWrapperFocused, { minHeight: 90, maxHeight: 150, marginHorizontal: 0, marginTop: 8 }]}>
-                        <TextInput
-                          ref={inputRef}
-                          style={styles.memoInput}
-                          value={manualContent}
-                          onChangeText={v => setManualContent(v.slice(0, 2000))}
-                          placeholder="키워드 외 기억나는 내용을 적어주세요."
-                          placeholderTextColor={Colors.placeholder}
-                          multiline
-                          textAlignVertical="top"
-                          onFocus={() => setInputFocused(true)}
-                          onBlur={() => setInputFocused(false)}
-                          onSelectionChange={e => setCursorPos(e.nativeEvent.selection)}
-                          scrollEnabled
-                        />
-                        <Text style={styles.charCounter}>{manualContent.length.toLocaleString()} / 2,000</Text>
-                      </View>
+                      <>
+                        <Text style={styles.memoToggleDesc}>AI 기능 없이 레슨 기록을 자유롭게 적고 회원에게 공유하세요.</Text>
+                        <View style={[styles.inputWrapper, inputFocused && styles.inputWrapperFocused, { minHeight: 90, maxHeight: 150, marginHorizontal: 0, marginTop: 8 }]}>
+                          <TextInput
+                            ref={inputRef}
+                            style={styles.memoInput}
+                            value={manualContent}
+                            onChangeText={v => setManualContent(v.slice(0, 2000))}
+                            placeholder="AI 기능 없이 레슨 기록을 자유롭게 적고 회원에게 공유하세요."
+                            placeholderTextColor={Colors.placeholder}
+                            multiline
+                            textAlignVertical="top"
+                            onFocus={() => {
+                              setInputFocused(true);
+                              // 키보드 올라올 때 입력칸이 키보드 위로 보이도록 스크롤
+                              setTimeout(() => modalScrollRef.current?.scrollToEnd({ animated: true }), 300);
+                            }}
+                            onBlur={() => setInputFocused(false)}
+                            onSelectionChange={e => setCursorPos(e.nativeEvent.selection)}
+                            scrollEnabled
+                          />
+                          <Text style={styles.charCounter}>{manualContent.length.toLocaleString()} / 2,000</Text>
+                        </View>
+                      </>
                     )}
                   </View>
                 </ScrollView>
@@ -2294,6 +2310,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   memoToggleText: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg },
+  memoToggleDesc: { fontSize: 12, color: Colors.mutedFg, marginTop: 4, lineHeight: 17 },
   memoDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.primary, marginLeft: 2 },
   recentComboChip: {
     paddingHorizontal: 12, paddingVertical: 7,
