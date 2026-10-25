@@ -90,12 +90,17 @@ export default function AIAnalysisScreen() {
   const [manualContent, setManualContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMode, setSubmitMode] = useState<'direct' | 'ai' | null>(null);
-  const [addedChips, setAddedChips] = useState<string[]>([]);
+  const [selectedKeywords, setSelectedKeywords] = useState<string[]>([]);
   const [inputFocused, setInputFocused] = useState(false);
   const [cursorPos, setCursorPos] = useState({ start: 0, end: 0 });
   const inputRef = useRef<TextInput>(null);
 
-  const MEMO_CHIPS = ['오늘 연습', '잘한 점', '주의할 점', '다음 목표'] as const;
+  const KEYWORD_CATEGORIES = [
+    { label: '기술', keywords: ['포핸드', '백핸드', '서브', '발리', '풋워크'] },
+    { label: '핵심 포인트', keywords: ['타점', '스윙 궤도', '자세', '체중 이동'] },
+    { label: '상태', keywords: ['늦음', '불안정', '개선 중', '좋아짐', '반복 필요'] },
+    { label: '다음 목표', keywords: ['타점 앞에서', '자세 유지', '반복 연습'] },
+  ] as const;
 
   const [usageSheetVisible, setUsageSheetVisible] = useState(false);
   const [hasSeenUsage, setHasSeenUsage] = useState(true); // true = no pulse (default until loaded)
@@ -428,15 +433,14 @@ export default function AIAnalysisScreen() {
     AsyncStorage.getItem(memoKey).then(saved => {
       if (saved) setManualContent(saved);
     });
-    setAddedChips([]);
+    setSelectedKeywords([]);
     setInputFocused(false);
-    setTimeout(() => inputRef.current?.focus(), 350);
   }, [manualModalVisible]);
 
   function handleCloseManualModal() {
-    if (manualContent.trim()) {
+    if (manualContent.trim() || selectedKeywords.length > 0) {
       Alert.alert(
-        '작성 중인 메모가 있어요',
+        '작성 중인 내용이 있어요',
         '내용을 저장하고 나갈까요?',
         [
           {
@@ -445,7 +449,7 @@ export default function AIAnalysisScreen() {
             onPress: () => {
               AsyncStorage.removeItem(memoKey);
               setManualContent('');
-              setAddedChips([]);
+              setSelectedKeywords([]);
               setManualModalVisible(false);
             },
           },
@@ -460,27 +464,26 @@ export default function AIAnalysisScreen() {
     }
   }
 
-  function insertChip(chip: string) {
-    if (addedChips.includes(chip)) return;
-    const pos = cursorPos.start;
-    const before = manualContent.slice(0, pos);
-    const after = manualContent.slice(pos);
-    const prefix = before.length > 0 && !before.endsWith('\n\n')
-      ? (before.endsWith('\n') ? '\n' : '\n\n')
-      : '';
-    const chipBlock = `${chip}\n-`;
-    const newContent = (before + prefix + chipBlock + '\n\n' + after).slice(0, 2000);
-    setManualContent(newContent);
-    setAddedChips(prev => [...prev, chip]);
-    const newPos = (before + prefix + chipBlock).length;
-    setTimeout(() => {
-      inputRef.current?.setNativeProps({ selection: { start: newPos, end: newPos } });
-      inputRef.current?.focus();
-    }, 50);
+  function buildMemoContent(): string {
+    const parts: string[] = [];
+    if (selectedKeywords.length > 0) {
+      parts.push('[키워드]\n' + selectedKeywords.join(', '));
+    }
+    if (manualContent.trim()) {
+      parts.push('[메모]\n' + manualContent.trim());
+    }
+    return parts.join('\n\n');
+  }
+
+  function toggleKeyword(kw: string) {
+    setSelectedKeywords(prev =>
+      prev.includes(kw) ? prev.filter(k => k !== kw) : [...prev, kw]
+    );
   }
 
   async function handleDirect() {
-    if (!manualContent.trim() || isSubmitting) return;
+    const content = buildMemoContent();
+    if (!content || isSubmitting) return;
     setIsSubmitting(true);
     setSubmitMode('direct');
     try {
@@ -490,7 +493,7 @@ export default function AIAnalysisScreen() {
         coach_id: user.id,
         member_id: memberId,
         lesson_date: new Date().toISOString().split('T')[0],
-        summary: manualContent,
+        summary: content,
         achievements: [],
         improvement_points: [],
         practice_plan: [],
@@ -500,7 +503,7 @@ export default function AIAnalysisScreen() {
       if (error) throw error;
       await AsyncStorage.removeItem(memoKey);
       setManualContent('');
-      setAddedChips([]);
+      setSelectedKeywords([]);
       setManualModalVisible(false);
       loadPlans();
       router.push({
@@ -516,7 +519,8 @@ export default function AIAnalysisScreen() {
   }
 
   async function handleAI() {
-    if (!manualContent.trim() || isSubmitting) return;
+    const content = buildMemoContent();
+    if (!content || isSubmitting) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
@@ -551,7 +555,7 @@ export default function AIAnalysisScreen() {
           memberName,
           memberLevel,
           lessonDate: new Date().toISOString().split('T')[0],
-          raw: { summary: manualContent },
+          raw: { summary: content },
           previousLessons: previousLessons ?? [],
         }),
       });
@@ -576,7 +580,7 @@ export default function AIAnalysisScreen() {
           ? aiPlan.lesson_comparison
           : null,
         status: 'completed',
-        raw_response: manualContent,
+        raw_response: content,
       }).select().single();
       if (planError || !savedPlan) throw planError ?? new Error('레슨 기록 저장 실패');
 
@@ -597,7 +601,7 @@ export default function AIAnalysisScreen() {
       await incrementAiAnalysisUsage(user.id);
       await AsyncStorage.removeItem(memoKey);
       setManualContent('');
-      setAddedChips([]);
+      setSelectedKeywords([]);
       setManualModalVisible(false);
       loadPlans();
       router.push({
@@ -1289,57 +1293,66 @@ export default function AIAnalysisScreen() {
                 {/* 헤더 */}
                 <View style={styles.manualHeader}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.manualHeaderTitle}>레슨 메모 입력</Text>
-                    <Text style={styles.manualHeaderSub}>기억나는 내용만 편하게 적어주세요.{'\n'}짧은 메모도 AI가 레슨 기록으로 정리해드려요.</Text>
+                    <Text style={styles.manualHeaderTitle}>레슨 기록</Text>
+                    <Text style={styles.manualHeaderSub}>키워드만 선택해도 AI가 정리해줘요</Text>
                   </View>
                   <TouchableOpacity onPress={handleCloseManualModal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                     <Ionicons name="close" size={22} color={Colors.mutedFg} />
                   </TouchableOpacity>
                 </View>
 
-                {/* 빠른 입력 칩 */}
+                {/* 키워드 + 텍스트 스크롤 영역 */}
                 <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.chipsScroll}
-                  contentContainerStyle={styles.chipsContent}
+                  style={{ flex: 1 }}
+                  showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
+                  contentContainerStyle={{ paddingBottom: 8 }}
                 >
-                  {MEMO_CHIPS.map(chip => {
-                    const added = addedChips.includes(chip);
-                    return (
-                      <TouchableOpacity
-                        key={chip}
-                        style={[styles.chip, added && styles.chipAdded]}
-                        onPress={() => insertChip(chip)}
-                        disabled={added}
-                        activeOpacity={0.7}
-                      >
-                        {added && <Ionicons name="checkmark" size={12} color={Colors.primary} style={{ marginRight: 4 }} />}
-                        <Text style={[styles.chipText, added && styles.chipTextAdded]}>{chip}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
+                  {/* 키워드 카테고리 */}
+                  {KEYWORD_CATEGORIES.map(cat => (
+                    <View key={cat.label} style={styles.kwSection}>
+                      <Text style={styles.kwCategoryLabel}>{cat.label}</Text>
+                      <View style={styles.kwChipsRow}>
+                        {cat.keywords.map(kw => {
+                          const selected = selectedKeywords.includes(kw);
+                          return (
+                            <TouchableOpacity
+                              key={kw}
+                              style={[styles.kwChip, selected && styles.kwChipSelected]}
+                              onPress={() => toggleKeyword(kw)}
+                              activeOpacity={0.7}
+                            >
+                              {selected && <Ionicons name="checkmark" size={12} color={Colors.primary} style={{ marginRight: 3 }} />}
+                              <Text style={[styles.kwChipText, selected && styles.kwChipTextSelected]}>{kw}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ))}
 
-                {/* 입력창 */}
-                <View style={[styles.inputWrapper, inputFocused && styles.inputWrapperFocused]}>
-                  <TextInput
-                    ref={inputRef}
-                    style={styles.memoInput}
-                    value={manualContent}
-                    onChangeText={v => setManualContent(v.slice(0, 2000))}
-                    placeholder={"예) 포핸드는 타점을 앞으로 잡는 연습을 했고, 백핸드는 몸이 먼저 열리는 부분을 교정했습니다. 다음 시간에는 랠리에서 자세를 유지하기."}
-                    placeholderTextColor={Colors.placeholder}
-                    multiline
-                    textAlignVertical="top"
-                    onFocus={() => setInputFocused(true)}
-                    onBlur={() => setInputFocused(false)}
-                    onSelectionChange={e => setCursorPos(e.nativeEvent.selection)}
-                    scrollEnabled
-                  />
-                  <Text style={styles.charCounter}>{manualContent.length.toLocaleString()} / 2,000</Text>
-                </View>
+                  {/* 추가 메모 (선택) */}
+                  <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+                    <Text style={styles.kwCategoryLabel}>추가 메모 (선택)</Text>
+                    <View style={[styles.inputWrapper, inputFocused && styles.inputWrapperFocused, { minHeight: 100, maxHeight: 180 }]}>
+                      <TextInput
+                        ref={inputRef}
+                        style={styles.memoInput}
+                        value={manualContent}
+                        onChangeText={v => setManualContent(v.slice(0, 2000))}
+                        placeholder="키워드 외 기억나는 내용을 적어주세요."
+                        placeholderTextColor={Colors.placeholder}
+                        multiline
+                        textAlignVertical="top"
+                        onFocus={() => setInputFocused(true)}
+                        onBlur={() => setInputFocused(false)}
+                        onSelectionChange={e => setCursorPos(e.nativeEvent.selection)}
+                        scrollEnabled
+                      />
+                      <Text style={styles.charCounter}>{manualContent.length.toLocaleString()} / 2,000</Text>
+                    </View>
+                  </View>
+                </ScrollView>
 
                 {/* AI 처리 중 오버레이 */}
                 {isSubmitting && submitMode === 'ai' && (
@@ -1351,30 +1364,35 @@ export default function AIAnalysisScreen() {
                 )}
 
                 {/* 하단 버튼 */}
-                <View style={styles.manualBtnRow}>
-                  <TouchableOpacity
-                    style={[styles.directBtn, (!manualContent.trim() || isSubmitting) && styles.btnDisabled]}
-                    onPress={handleDirect}
-                    disabled={!manualContent.trim() || isSubmitting}
-                    activeOpacity={0.8}
-                  >
-                    {isSubmitting && submitMode === 'direct'
-                      ? <ActivityIndicator color={Colors.primary} size="small" />
-                      : <Text style={[styles.directBtnText, (!manualContent.trim() || isSubmitting) && { opacity: 0.4 }]}>그대로 기록하기</Text>
-                    }
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.aiBtn, (!manualContent.trim() || isSubmitting) && styles.btnDisabled]}
-                    onPress={handleAI}
-                    disabled={!manualContent.trim() || isSubmitting}
-                    activeOpacity={0.85}
-                  >
-                    {isSubmitting && submitMode === 'ai'
-                      ? <ActivityIndicator color="#fff" size="small" />
-                      : <><Ionicons name="sparkles" size={16} color="#fff" /><Text style={styles.aiBtnText}> AI로 정리하기</Text></>
-                    }
-                  </TouchableOpacity>
-                </View>
+                {(() => {
+                  const hasContent = !!(manualContent.trim() || selectedKeywords.length > 0);
+                  return (
+                    <View style={styles.manualBtnRow}>
+                      <TouchableOpacity
+                        style={[styles.directBtn, (!hasContent || isSubmitting) && styles.btnDisabled]}
+                        onPress={handleDirect}
+                        disabled={!hasContent || isSubmitting}
+                        activeOpacity={0.8}
+                      >
+                        {isSubmitting && submitMode === 'direct'
+                          ? <ActivityIndicator color={Colors.primary} size="small" />
+                          : <Text style={[styles.directBtnText, (!hasContent || isSubmitting) && { opacity: 0.4 }]}>그대로 기록하기</Text>
+                        }
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.aiBtn, (!hasContent || isSubmitting) && styles.btnDisabled]}
+                        onPress={handleAI}
+                        disabled={!hasContent || isSubmitting}
+                        activeOpacity={0.85}
+                      >
+                        {isSubmitting && submitMode === 'ai'
+                          ? <ActivityIndicator color="#fff" size="small" />
+                          : <><Ionicons name="sparkles" size={16} color="#fff" /><Text style={styles.aiBtnText}> AI로 정리하기</Text></>
+                        }
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })()}
               </View>
             </KeyboardAvoidingView>
           </SafeAreaView>
@@ -1936,6 +1954,18 @@ const styles = StyleSheet.create({
   chipAdded: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight },
   chipText: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg },
   chipTextAdded: { color: Colors.primary },
+  kwSection: { paddingHorizontal: 16, paddingTop: 14 },
+  kwCategoryLabel: { fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  kwChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  kwChip: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 12, paddingVertical: 7,
+    borderRadius: 18, borderWidth: 1.5, borderColor: Colors.border,
+    backgroundColor: '#fff',
+  },
+  kwChipSelected: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight },
+  kwChipText: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg },
+  kwChipTextSelected: { color: Colors.primary },
   inputWrapper: {
     flex: 1,
     marginHorizontal: 16,
