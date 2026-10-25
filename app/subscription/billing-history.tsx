@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useSubscription } from '../../hooks/useSubscription';
+import { syncRevenueCatToDb } from '../../lib/purchases';
 
 const CREAM = '#F7F0E9';
 const TERRACOTTA = '#C0755A';
@@ -92,7 +93,14 @@ export default function BillingHistoryScreen() {
     }
   }, [subscription]);
 
-  useEffect(() => { loadHistory(); }, [loadHistory]);
+  useEffect(() => {
+    (async () => {
+      // RC 최신 구독 상태 동기화 → 갱신 내역 누락 시 log_iap_renewal 자동 삽입
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) await syncRevenueCatToDb(user.id).catch(() => {});
+      loadHistory();
+    })();
+  }, [loadHistory]);
 
   return (
     <SafeAreaView style={s.container}>
