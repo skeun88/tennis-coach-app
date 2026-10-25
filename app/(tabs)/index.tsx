@@ -621,9 +621,8 @@ export default function HomeScreen() {
             <Text style={styles.headerDate}>
               {new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}
             </Text>
-            <Text style={styles.headerGreeting}>
-              안녕하세요 👋
-            </Text>
+            <Text style={styles.headerGreeting}>KERRI Studio</Text>
+            <Text style={styles.headerSubtitle}>나의 코칭 공간</Text>
           </View>
           <View style={styles.headerIcons}>
             {userId ? (
@@ -1147,8 +1146,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
     paddingHorizontal: 20, paddingBottom: 20, backgroundColor: '#F7F0E9',
   },
-  headerDate: { fontSize: 15, color: '#8B7355', fontWeight: '500', marginBottom: 6 },
-  headerGreeting: { fontSize: 26, fontWeight: '700', color: '#3E2B22' },
+  headerDate: { fontSize: 13, color: '#95877E', fontWeight: '500', marginBottom: 8 },
+  headerGreeting: { fontSize: 24, fontWeight: '700', color: '#3E2B22', letterSpacing: -0.3 },
+  headerSubtitle: { fontSize: 13, color: '#95877E', fontWeight: '400', marginTop: 4 },
   headerIcons: { flexDirection: 'row', gap: 8, marginTop: 6 },
   iconBtn: { padding: 8, borderRadius: 20, backgroundColor: 'rgba(62,43,34,0.08)' },
 
