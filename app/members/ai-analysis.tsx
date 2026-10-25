@@ -136,6 +136,7 @@ export default function AIAnalysisScreen() {
   // 최근 사용 조합 (AsyncStorage, 코치별, max 5)
   const [recentCombos, setRecentCombos] = useState<MemoItem[]>([]);
   const [memoExpanded, setMemoExpanded] = useState(false);
+  const [goalExpanded, setGoalExpanded] = useState(false);
 
   // 코치별 사용자 정의 키워드
   type CustomKwStore = {
@@ -1555,6 +1556,7 @@ export default function AIAnalysisScreen() {
                               setSelPoints(combo.points ? [...combo.points] : []);
                               setSelStatus(combo.status ?? null);
                               setSelGoal(combo.goal ?? null);
+                              if (combo.goal) setGoalExpanded(true);
                             }}
                             activeOpacity={0.75}
                           >
@@ -1590,13 +1592,10 @@ export default function AIAnalysisScreen() {
                     <View style={{ height: 1, backgroundColor: Colors.borderLight, marginHorizontal: 16, marginTop: 14, marginBottom: 2 }} />
                   )}
 
-                  {/* Step 1: 기술 */}
+                  {/* 기술 */}
                   <View style={styles.stepCard}>
                     <View style={styles.stepLabelRow}>
-                      <View style={[styles.stepBadge, selTech && styles.stepBadgeDone]}>
-                        <Text style={[styles.stepBadgeText, selTech && styles.stepBadgeTextDone]}>1</Text>
-                      </View>
-                      <Text style={styles.stepTitle}>기술{selTech ? ` — ${selTech}` : ''}</Text>
+                      <Text style={styles.stepTitle}>기술{selTech ? ` · ${selTech}` : ''}</Text>
                     </View>
                     <View style={styles.kwChipsRow}>
                       {(TENNIS_TECHNIQUES as readonly string[]).map(tech => {
@@ -1647,13 +1646,10 @@ export default function AIAnalysisScreen() {
                     </View>
                   </View>
 
-                  {/* Step 2: 교정 포인트 */}
+                  {/* 교정 포인트 */}
                   <View style={styles.stepCard}>
                     <View style={styles.stepLabelRow}>
-                      <View style={[styles.stepBadge, selPoints.length > 0 && styles.stepBadgeDone]}>
-                        <Text style={[styles.stepBadgeText, selPoints.length > 0 && styles.stepBadgeTextDone]}>2</Text>
-                      </View>
-                      <Text style={styles.stepTitle}>교정 포인트{selPoints.length > 0 ? ` (${selPoints.length})` : ''}</Text>
+                      <Text style={styles.stepTitle}>교정 포인트{selPoints.length > 0 ? ` · ${selPoints.join(', ')}` : ''}</Text>
                     </View>
                     <View style={styles.kwChipsRow}>
                       {currentCorrections.map(pt => {
@@ -1689,13 +1685,10 @@ export default function AIAnalysisScreen() {
                     </View>
                   </View>
 
-                  {/* Step 3: 현재 상태 */}
+                  {/* 현재 상태 */}
                   <View style={styles.stepCard}>
                     <View style={styles.stepLabelRow}>
-                      <View style={[styles.stepBadge, selStatus && styles.stepBadgeDone]}>
-                        <Text style={[styles.stepBadgeText, selStatus && styles.stepBadgeTextDone]}>3</Text>
-                      </View>
-                      <Text style={styles.stepTitle}>현재 상태{selStatus ? ` — ${selStatus}` : ''}</Text>
+                      <Text style={styles.stepTitle}>현재 상태{selStatus ? ` · ${selStatus}` : ''}</Text>
                     </View>
                     <View style={styles.kwChipsRow}>
                       {[...(STATUS_KEYWORDS as readonly string[]), ...customKw.statuses].map(st => {
@@ -1728,48 +1721,54 @@ export default function AIAnalysisScreen() {
                     </View>
                   </View>
 
-                  {/* Step 4: 다음 목표 (선택 사항) */}
+                  {/* 다음 목표 (선택 사항, 접기/펼치기) */}
                   <View style={styles.stepCard}>
-                    <View style={styles.stepLabelRow}>
-                      <View style={[styles.stepBadge, selGoal && styles.stepBadgeDone]}>
-                        <Text style={[styles.stepBadgeText, selGoal && styles.stepBadgeTextDone]}>4</Text>
-                      </View>
-                      <Text style={styles.stepTitle}>다음 목표{selGoal ? ` — ${selGoal}` : ''}</Text>
+                    <TouchableOpacity
+                      style={[styles.stepLabelRow, { marginBottom: 0 }]}
+                      onPress={() => setGoalExpanded(v => !v)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.stepTitle}>
+                        다음 목표{selGoal ? ` · ${selGoal}` : ''}
+                      </Text>
                       <Text style={styles.stepOptional}>선택</Text>
-                    </View>
-                    <View style={styles.kwChipsRow}>
-                      {currentGoals.map(goal => {
-                        const selected = selGoal === goal;
-                        const baseGoals = selTech ? (GOAL_BY_TECH[selTech] ?? DEFAULT_GOALS) : DEFAULT_GOALS;
-                        const isCustom = !baseGoals.includes(goal);
-                        return (
-                          <TouchableOpacity
-                            key={goal}
-                            style={[styles.kwChip, isCustom && styles.kwChipCustom, selected && styles.kwChipSelected]}
-                            onPress={() => setSelGoal(prev => prev === goal ? null : goal)}
-                            onLongPress={isCustom ? () => {
-                              const techKey = selTech ?? '__all__';
-                              Alert.alert('키워드 삭제', `"${goal}"를 삭제할까요?`, [{ text: '취소', style: 'cancel' }, { text: '삭제', style: 'destructive', onPress: () => deleteCustomKeyword('goal', techKey, goal) }]);
-                            } : undefined}
-                            activeOpacity={0.7}
-                          >
-                            {selected && <Ionicons name="checkmark" size={11} color="#fff" style={{ marginRight: 3 }} />}
-                            <Text style={[styles.kwChipText, selected && styles.kwChipTextSelected]}>{goal}</Text>
+                      <Ionicons name={goalExpanded ? 'chevron-up' : 'chevron-down'} size={14} color={Colors.mutedFg} />
+                    </TouchableOpacity>
+                    {goalExpanded && (
+                      <View style={[styles.kwChipsRow, { marginTop: 8 }]}>
+                        {currentGoals.map(goal => {
+                          const selected = selGoal === goal;
+                          const baseGoals = selTech ? (GOAL_BY_TECH[selTech] ?? DEFAULT_GOALS) : DEFAULT_GOALS;
+                          const isCustom = !baseGoals.includes(goal);
+                          return (
+                            <TouchableOpacity
+                              key={goal}
+                              style={[styles.kwChip, isCustom && styles.kwChipCustom, selected && styles.kwChipSelected]}
+                              onPress={() => setSelGoal(prev => prev === goal ? null : goal)}
+                              onLongPress={isCustom ? () => {
+                                const techKey = selTech ?? '__all__';
+                                Alert.alert('키워드 삭제', `"${goal}"를 삭제할까요?`, [{ text: '취소', style: 'cancel' }, { text: '삭제', style: 'destructive', onPress: () => deleteCustomKeyword('goal', techKey, goal) }]);
+                              } : undefined}
+                              activeOpacity={0.7}
+                            >
+                              {selected && <Ionicons name="checkmark" size={11} color="#fff" style={{ marginRight: 3 }} />}
+                              <Text style={[styles.kwChipText, selected && styles.kwChipTextSelected]}>{goal}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                        {addingCategory === 'goal' ? (
+                          <View style={styles.kwAddInputRow}>
+                            <TextInput ref={addingInputRef} style={styles.kwAddInput} value={addingInput} onChangeText={v => setAddingInput(v.slice(0, 20))} placeholder="직접 입력" placeholderTextColor={Colors.placeholder} autoFocus returnKeyType="done" onSubmitEditing={confirmAddKeyword} onBlur={() => { if (!addingInput.trim()) { setAddingCategory(null); setAddingInput(''); } }} />
+                            <TouchableOpacity style={[styles.kwAddConfirmBtn, !addingInput.trim() && { opacity: 0.4 }]} onPress={confirmAddKeyword}><Text style={styles.kwAddConfirmText}>추가</Text></TouchableOpacity>
+                            <TouchableOpacity style={styles.kwAddCancelBtn} onPress={() => { setAddingCategory(null); setAddingInput(''); }}><Ionicons name="close" size={14} color={Colors.mutedFg} /></TouchableOpacity>
+                          </View>
+                        ) : (
+                          <TouchableOpacity style={styles.kwAddBtn} onPress={() => setAddingCategory('goal')} activeOpacity={0.7}>
+                            <Ionicons name="add" size={13} color={Colors.mutedFg} /><Text style={styles.kwAddBtnText}>추가</Text>
                           </TouchableOpacity>
-                        );
-                      })}
-                      {addingCategory === 'goal' ? (
-                        <View style={styles.kwAddInputRow}>
-                          <TextInput ref={addingInputRef} style={styles.kwAddInput} value={addingInput} onChangeText={v => setAddingInput(v.slice(0, 20))} placeholder="직접 입력" placeholderTextColor={Colors.placeholder} autoFocus returnKeyType="done" onSubmitEditing={confirmAddKeyword} onBlur={() => { if (!addingInput.trim()) { setAddingCategory(null); setAddingInput(''); } }} />
-                          <TouchableOpacity style={[styles.kwAddConfirmBtn, !addingInput.trim() && { opacity: 0.4 }]} onPress={confirmAddKeyword}><Text style={styles.kwAddConfirmText}>추가</Text></TouchableOpacity>
-                          <TouchableOpacity style={styles.kwAddCancelBtn} onPress={() => { setAddingCategory(null); setAddingInput(''); }}><Ionicons name="close" size={14} color={Colors.mutedFg} /></TouchableOpacity>
-                        </View>
-                      ) : (
-                        <TouchableOpacity style={styles.kwAddBtn} onPress={() => setAddingCategory('goal')} activeOpacity={0.7}>
-                          <Ionicons name="add" size={13} color={Colors.mutedFg} /><Text style={styles.kwAddBtnText}>추가</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
+                        )}
+                      </View>
+                    )}
                   </View>
 
                   {/* 선택 미리보기 + 기록 추가 */}
@@ -1854,7 +1853,7 @@ export default function AIAnalysisScreen() {
                       >
                         {isSubmitting && submitMode === 'direct'
                           ? <ActivityIndicator color={Colors.primary} size="small" />
-                          : <Text style={[styles.directBtnText, (!hasContent || isSubmitting) && { opacity: 0.4 }]}>그대로 기록하기</Text>
+                          : <Text style={[styles.directBtnText, (!hasContent || isSubmitting) && { opacity: 0.4 }]}>그대로 저장</Text>
                         }
                       </TouchableOpacity>
                       <TouchableOpacity
@@ -2435,10 +2434,10 @@ const styles = StyleSheet.create({
   chipTextAdded: { color: Colors.primary },
   kwSection: { paddingHorizontal: 16, paddingTop: 14 },
   kwCategoryLabel: { fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
-  kwChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  kwChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   kwChip: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 12, paddingVertical: 7,
+    paddingHorizontal: 11, paddingVertical: 5,
     borderRadius: 18, borderWidth: 1, borderColor: Colors.borderLight,
     backgroundColor: '#fff',
   },
@@ -2454,20 +2453,12 @@ const styles = StyleSheet.create({
   memoItemText: { flex: 1, fontSize: 13, color: Colors.foreground, fontWeight: '600', marginRight: 8 },
   memoItemGoalText: { fontSize: 12, color: Colors.primary, marginTop: 2 },
   stepCard: {
-    marginHorizontal: 16, marginTop: 12,
-    backgroundColor: '#fff', borderRadius: 14,
-    paddingHorizontal: 14, paddingVertical: 12,
+    marginHorizontal: 16, marginTop: 10,
+    backgroundColor: '#fff', borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 10,
     borderWidth: 1, borderColor: Colors.borderLight,
   },
-  stepLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  stepBadge: {
-    width: 22, height: 22, borderRadius: 11,
-    borderWidth: 1.5, borderColor: Colors.border,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  stepBadgeDone: { borderColor: Colors.primary, backgroundColor: Colors.primary },
-  stepBadgeText: { fontSize: 11, fontWeight: '800', color: Colors.mutedFg },
-  stepBadgeTextDone: { color: '#fff' },
+  stepLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   stepTitle: { fontSize: 13, fontWeight: '700', color: Colors.foreground, flex: 1 },
   stepOptional: { fontSize: 11, color: Colors.mutedFg, fontWeight: '500' },
   previewAddRow: {
@@ -2573,14 +2564,14 @@ const styles = StyleSheet.create({
   directBtn: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
     borderWidth: 1.5, borderColor: Colors.primary, borderRadius: 12,
-    paddingVertical: 14,
+    paddingVertical: 12,
   },
-  directBtnText: { fontSize: 15, fontWeight: '600', color: Colors.primary },
+  directBtnText: { fontSize: 14, fontWeight: '600', color: Colors.primary },
   aiBtn: {
     flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 14,
+    backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 12,
   },
-  aiBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  aiBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   btnDisabled: { opacity: 0.5 },
   emptyBox: { alignItems: 'center', paddingVertical: 32, gap: 8 },
   emptyText: { fontSize: 15, color: Colors.placeholder, fontWeight: '600' },
