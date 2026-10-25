@@ -1540,7 +1540,7 @@ export default function AIAnalysisScreen() {
                   style={{ flex: 1 }}
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
-                  contentContainerStyle={{ paddingBottom: memoKeyboardHeight > 0 ? 100 : 20 }}
+                  contentContainerStyle={{ paddingBottom: 16 }}
                 >
                   {/* 최근 사용 조합 */}
                   {recentCombos.length > 0 && (
@@ -1812,7 +1812,7 @@ export default function AIAnalysisScreen() {
                             value={manualContent}
                             onChangeText={v => setManualContent(v.slice(0, 2000))}
                             placeholder="AI 기능 없이 레슨 기록을 자유롭게 적고 회원에게 공유하세요."
-                            placeholderTextColor={Colors.placeholder}
+                            placeholderTextColor="#AAAAAA"
                             multiline
                             textAlignVertical="top"
                             onFocus={() => {
@@ -2410,7 +2410,7 @@ const styles = StyleSheet.create({
   manualReportBtnTitle: { fontSize: 14, fontWeight: '700', color: Colors.foreground },
   manualReportBtnSub: { fontSize: 12, color: Colors.mutedFg, marginTop: 2 },
   // 레슨 메모 입력 모달
-  manualContainer: { flex: 1, backgroundColor: '#F8F7F5' },
+  manualContainer: { flex: 1, backgroundColor: '#F8F9FA' },
   manualInner: { flex: 1, flexDirection: 'column' },
   manualHeader: {
     flexDirection: 'row', alignItems: 'flex-start',
@@ -2438,11 +2438,11 @@ const styles = StyleSheet.create({
   kwChip: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 11, paddingVertical: 5,
-    borderRadius: 18, borderWidth: 1, borderColor: Colors.borderLight,
-    backgroundColor: '#fff',
+    borderRadius: 18, borderWidth: 1, borderColor: '#E9E9E9',
+    backgroundColor: '#F8F8F7',
   },
   kwChipSelected: { borderColor: Colors.primary, backgroundColor: Colors.primary },
-  kwChipText: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg },
+  kwChipText: { fontSize: 13, fontWeight: '500', color: '#555555' },
   kwChipTextSelected: { color: '#fff' },
   memoItemRow: {
     flexDirection: 'row', alignItems: 'flex-start',
@@ -2454,12 +2454,12 @@ const styles = StyleSheet.create({
   memoItemGoalText: { fontSize: 12, color: Colors.primary, marginTop: 2 },
   stepCard: {
     marginHorizontal: 16, marginTop: 10,
-    backgroundColor: '#fff', borderRadius: 12,
+    backgroundColor: '#FFFFFF', borderRadius: 12,
     paddingHorizontal: 14, paddingVertical: 10,
-    borderWidth: 1, borderColor: Colors.borderLight,
+    borderWidth: 1, borderColor: '#E9E9E9',
   },
   stepLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-  stepTitle: { fontSize: 13, fontWeight: '700', color: Colors.foreground, flex: 1 },
+  stepTitle: { fontSize: 13, fontWeight: '700', color: '#282624', flex: 1 },
   stepOptional: { fontSize: 11, color: Colors.mutedFg, fontWeight: '500' },
   previewAddRow: {
     marginHorizontal: 16, marginTop: 12,
@@ -2521,31 +2521,32 @@ const styles = StyleSheet.create({
     flex: 1,
     marginHorizontal: 16,
     marginBottom: 8,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    borderColor: Colors.borderLight,
-    backgroundColor: '#F4EEE8',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E9E9E9',
+    backgroundColor: '#FFFFFF',
     overflow: 'hidden',
     minHeight: 240,
     maxHeight: 320,
   },
   inputWrapperFocused: {
     borderColor: Colors.primary,
+    borderWidth: 1,
   },
   memoInput: {
     flex: 1,
-    padding: 16,
-    fontSize: 15,
-    color: Colors.foreground,
-    lineHeight: 24,
+    padding: 14,
+    fontSize: 14,
+    color: '#282624',
+    lineHeight: 22,
     textAlignVertical: 'top',
   },
   charCounter: {
     alignSelf: 'flex-end',
     fontSize: 11,
-    color: Colors.mutedFg,
-    paddingHorizontal: 14,
-    paddingBottom: 10,
+    color: '#AAAAAA',
+    paddingHorizontal: 12,
+    paddingBottom: 8,
   },
   manualLoadingOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
