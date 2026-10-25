@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Pressable, ScrollView, FlatList,
   Alert, Modal, TextInput, ActivityIndicator,
-  PanResponder, Animated, Dimensions,
+  PanResponder, Animated, Dimensions, Vibration, Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -35,6 +35,17 @@ const HOURS = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => i + ST
 const SPINNER_HOURS = Array.from({ length: 18 }, (_, i) => String(i + 6).padStart(2, '0')); // 06~23
 const SPINNER_MINUTES = ['00', '10', '20', '30', '40', '50'];
 const DURATION_OPTIONS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
+
+// Haptic helpers — use Vibration (RN core, no native rebuild needed).
+// Android: short precise vibrations; iOS: system alert haptic (one pulse).
+function hapticDragStart() {
+  if (Platform.OS === 'android') { Vibration.vibrate(6); }
+  else { Vibration.vibrate(); }
+}
+function hapticDropSuccess() {
+  if (Platform.OS === 'android') { Vibration.vibrate(14); }
+  else { Vibration.vibrate(); }
+}
 
 // 스케줄 화면 전용 팔레트 (크림/테라코타)
 const S_BG = '#F7F0E9';
@@ -725,11 +736,12 @@ ${rejectMsg.trim()}`
         { text: '취소', style: 'cancel' },
         {
           text: '변경', onPress: async () => {
-            await supabase.from('lessons').update({
+            const { error: updateErr } = await supabase.from('lessons').update({
               date: targetDateStr,
               start_time: newStartStr + ':00',
               end_time: newEndStr + ':00',
             }).eq('id', lessonId);
+            if (!updateErr) hapticDropSuccess();
             loadWeekLessons(getOffsetWeekDates(weekOffset));
           },
         },
@@ -851,10 +863,11 @@ ${rejectMsg.trim()}`
         { text: '취소', style: 'cancel' },
         {
           text: '변경', onPress: async () => {
-            await supabase.from('lessons').update({
+            const { error: updateErr } = await supabase.from('lessons').update({
               start_time: newStartStr + ':00',
               end_time: newEndStr + ':00',
             }).eq('id', lessonId);
+            if (!updateErr) hapticDropSuccess();
             loadDayLessons(selectedDate);
           },
         },
@@ -1814,6 +1827,7 @@ function DraggableLesson({
         onPress={() => { if (!isDragging) onPressRef.current(); }}
         onLongPress={() => {
           dragging.current = true;
+          hapticDragStart();
           onDragStartRef.current();
         }}
         delayLongPress={350}
@@ -1942,7 +1956,7 @@ function WeekDraggableBlock({
       <TouchableOpacity
         style={{ flex: 1 }}
         onPress={() => { if (!isDragging) onPressRef.current(); }}
-        onLongPress={() => { dragging.current = true; onDragStartRef.current(); }}
+        onLongPress={() => { dragging.current = true; hapticDragStart(); onDragStartRef.current(); }}
         delayLongPress={350}
         activeOpacity={0.8}
       >
