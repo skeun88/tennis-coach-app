@@ -7,7 +7,9 @@ import type { TodayCard } from '../lib/homeDataLoader';
 interface LessonPlanBrief {
   id: string;
   improvement_points: string | string[] | null;
-  session_goals: string | null;
+  next_goals: string[] | null;
+  coach_next_goals: string[] | null;
+  next_goals_saved: boolean | null;
   created_at: string;
   source: 'plan' | 'report';
 }
@@ -18,6 +20,18 @@ interface Props {
   allDone: boolean;
   onPressCard: (memberId: string, memberName: string, memberLevel: string) => void;
   onPressViewRecord: (planId: string | undefined, reportId: string | undefined, memberId: string, memberName: string, memberLevel: string) => void;
+}
+
+// AI 원문 변경 없이 브리핑용 핵심 문구 추출 (단순 글자수 자르기 금지)
+function summarizePoint(text: string): string {
+  const t = text.trim();
+  // 첫 문장 경계 (한국어 마침표·온점)
+  const sentEnd = t.search(/[.。]/);
+  if (sentEnd > 2 && sentEnd < t.length - 1) return t.slice(0, sentEnd + 1).trim();
+  // 첫 절 경계 (쉼표·반각·전각)
+  const clauseEnd = t.search(/[,，]/);
+  if (clauseEnd > 3 && clauseEnd < 32) return t.slice(0, clauseEnd).trim();
+  return t;
 }
 
 export default function NextLessonBriefingCard({
@@ -53,7 +67,7 @@ export default function NextLessonBriefingCard({
       const [planResult, reportResult] = await Promise.all([
         supabase
           .from('lesson_plans')
-          .select('id, improvement_points, session_goals, created_at')
+          .select('id, improvement_points, next_goals, coach_next_goals, next_goals_saved, created_at')
           .eq('member_id', memberId)
           .eq('status', 'completed')
           .order('created_at', { ascending: false })
@@ -75,12 +89,12 @@ export default function NextLessonBriefingCard({
         if (new Date(planData.created_at) >= new Date(reportData.created_at)) {
           best = { ...planData, source: 'plan' };
         } else {
-          best = { id: reportData.id, improvement_points: reportData.improvement_points, session_goals: null, created_at: reportData.created_at, source: 'report' };
+          best = { id: reportData.id, improvement_points: reportData.improvement_points, next_goals: null, coach_next_goals: null, next_goals_saved: null, created_at: reportData.created_at, source: 'report' };
         }
       } else if (planData) {
         best = { ...planData, source: 'plan' };
       } else if (reportData) {
-        best = { id: reportData.id, improvement_points: reportData.improvement_points, session_goals: null, created_at: reportData.created_at, source: 'report' };
+        best = { id: reportData.id, improvement_points: reportData.improvement_points, next_goals: null, coach_next_goals: null, next_goals_saved: null, created_at: reportData.created_at, source: 'report' };
       }
 
       if (!best) {
@@ -104,14 +118,32 @@ export default function NextLessonBriefingCard({
     return d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
   }
 
+  // improvement_points → 최대 2개, 스마트 요약
   const keyPoints: string[] = (() => {
     if (!plan?.improvement_points) return [];
-    if (Array.isArray(plan.improvement_points)) return (plan.improvement_points as string[]).slice(0, 2);
-    try {
-      const parsed: string[] = JSON.parse(plan.improvement_points as string);
-      if (Array.isArray(parsed)) return parsed.slice(0, 2);
-    } catch {}
-    return [(plan.improvement_points as string).trim()].filter(Boolean);
+    let items: string[];
+    if (Array.isArray(plan.improvement_points)) {
+      items = (plan.improvement_points as string[]).filter(Boolean);
+    } else {
+      try {
+        const parsed = JSON.parse(plan.improvement_points as string);
+        if (Array.isArray(parsed)) items = (parsed as string[]).filter(Boolean);
+        else items = [(plan.improvement_points as string).trim()].filter(Boolean);
+      } catch {
+        items = [(plan.improvement_points as string).trim()].filter(Boolean);
+      }
+    }
+    return items.slice(0, 2).map(summarizePoint);
+  })();
+
+  // next_goals / coach_next_goals → 브리핑용 핵심 목표 1개 요약
+  const nextGoalText: string | null = (() => {
+    if (!plan || plan.source !== 'plan') return null;
+    const goals: string[] = (plan.next_goals_saved && plan.coach_next_goals?.length)
+      ? plan.coach_next_goals
+      : (plan.next_goals ?? []);
+    if (!goals.length) return null;
+    return summarizePoint(goals[0]);
   })();
 
   // 빈 상태 카드 (레슨 없음 / 모두 완료)
@@ -168,27 +200,27 @@ export default function NextLessonBriefingCard({
         <Text style={styles.emptyText}>이전 레슨 기록이 없습니다</Text>
       ) : (
         <View style={styles.body}>
-          {/* 지난 레슨 핵심 */}
+          {/* 지난 레슨 핵심 — 연한 뉴트럴 배경 */}
           {keyPoints.length > 0 && (
             <View style={styles.sectionCard}>
               <View style={styles.sectionHeader}>
-                <Ionicons name="clipboard-outline" size={16} color="#C0755A" />
+                <Ionicons name="clipboard-outline" size={15} color="#6B7280" />
                 <Text style={styles.sectionTitle}>지난 레슨 핵심</Text>
               </View>
               {keyPoints.map((pt, i) => (
-                <Text key={i} style={styles.sectionBody} numberOfLines={1}>• {pt}</Text>
+                <Text key={i} style={styles.sectionBody} numberOfLines={2}>• {pt}</Text>
               ))}
             </View>
           )}
 
-          {/* 오늘의 레슨 포인트 */}
-          {plan.session_goals ? (
+          {/* 오늘의 레슨 포인트 — 연한 테라코타 배경 */}
+          {nextGoalText ? (
             <View style={[styles.sectionCard, styles.goalCard]}>
               <View style={styles.sectionHeader}>
-                <Ionicons name="locate-outline" size={16} color="#8B4A30" />
-                <Text style={[styles.sectionTitle, { color: '#8B4A30' }]}>오늘의 레슨 포인트</Text>
+                <Ionicons name="locate-outline" size={15} color="#C0755A" />
+                <Text style={[styles.sectionTitle, styles.goalTitle]}>오늘의 레슨 포인트</Text>
               </View>
-              <Text style={[styles.sectionBody, { color: '#3E2B22' }]} numberOfLines={2}>{plan.session_goals}</Text>
+              <Text style={[styles.sectionBody, styles.goalBody]} numberOfLines={2}>{nextGoalText}</Text>
             </View>
           ) : null}
         </View>
@@ -286,32 +318,41 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     gap: 8,
   },
+  // 지난 레슨 핵심: 연한 뉴트럴 배경
   sectionCard: {
-    backgroundColor: '#FBF2EF',
+    backgroundColor: '#F3F4F6',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    gap: 4,
+    gap: 5,
   },
+  // 오늘의 레슨 포인트: 연한 테라코타 배경
   goalCard: {
-    backgroundColor: '#FFF8F3',
+    backgroundColor: '#FBF2EF',
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 2,
+    marginBottom: 3,
   },
   sectionTitle: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#C0755A',
+    color: '#6B7280',
     letterSpacing: 0.3,
+  },
+  goalTitle: {
+    color: '#C0755A',
   },
   sectionBody: {
     fontSize: 13,
-    color: '#555555',
-    lineHeight: 19,
+    color: '#374151',
+    lineHeight: 20,
+  },
+  goalBody: {
+    color: '#3E2B22',
+    fontWeight: '500',
   },
   emptyText: {
     fontSize: 13,
