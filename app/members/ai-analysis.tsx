@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, ActivityIndicator, Platform, Animated, Modal, TextInput, KeyboardAvoidingView,
-  AppState, AppStateStatus, SafeAreaView,
+  AppState, AppStateStatus, SafeAreaView, Keyboard,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
@@ -148,6 +148,7 @@ export default function AIAnalysisScreen() {
   const [addingCategory, setAddingCategory] = useState<'tech' | 'correction' | 'status' | 'goal' | null>(null);
   const [addingInput, setAddingInput] = useState('');
   const addingInputRef = useRef<TextInput>(null);
+  const [memoKeyboardHeight, setMemoKeyboardHeight] = useState(0);
 
   const [usageSheetVisible, setUsageSheetVisible] = useState(false);
   const [hasSeenUsage, setHasSeenUsage] = useState(true); // true = no pulse (default until loaded)
@@ -501,6 +502,16 @@ export default function AIAnalysisScreen() {
         }
       });
     }
+  }, [manualModalVisible]);
+
+  // 모달 키보드 높이 추적 — contentPadding 동적 조정에 사용
+  useEffect(() => {
+    if (!manualModalVisible) { setMemoKeyboardHeight(0); return; }
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, (e) => setMemoKeyboardHeight(e.endCoordinates.height));
+    const hideSub = Keyboard.addListener(hideEvent, () => setMemoKeyboardHeight(0));
+    return () => { showSub.remove(); hideSub.remove(); };
   }, [manualModalVisible]);
 
   function handleCloseManualModal() {
@@ -1528,7 +1539,7 @@ export default function AIAnalysisScreen() {
                   style={{ flex: 1 }}
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
-                  contentContainerStyle={{ paddingBottom: 20 }}
+                  contentContainerStyle={{ paddingBottom: memoKeyboardHeight > 0 ? 100 : 20 }}
                 >
                   {/* 최근 사용 조합 */}
                   {recentCombos.length > 0 && (
@@ -1807,8 +1818,8 @@ export default function AIAnalysisScreen() {
                             textAlignVertical="top"
                             onFocus={() => {
                               setInputFocused(true);
-                              // 키보드 올라올 때 입력칸이 키보드 위로 보이도록 스크롤
-                              setTimeout(() => modalScrollRef.current?.scrollToEnd({ animated: true }), 300);
+                              // 키보드 완전히 올라온 뒤 스크롤 (keyboardWillShow 이벤트 처리 후)
+                              setTimeout(() => modalScrollRef.current?.scrollToEnd({ animated: true }), 350);
                             }}
                             onBlur={() => setInputFocused(false)}
                             onSelectionChange={e => setCursorPos(e.nativeEvent.selection)}
