@@ -1418,7 +1418,7 @@ export default function AIAnalysisScreen() {
                 <View style={styles.manualHeader}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.manualHeaderTitle}>레슨 기록</Text>
-                    <Text style={styles.manualHeaderSub}>키워드 선택으로 간편하게 기록하세요</Text>
+                    <Text style={styles.manualHeaderSub}>키워드 또는 직접 입력으로 레슨을 기록하세요.</Text>
                   </View>
                   <TouchableOpacity onPress={handleCloseManualModal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                     <Ionicons name="close" size={22} color={Colors.mutedFg} />
@@ -1504,7 +1504,7 @@ export default function AIAnalysisScreen() {
                             }}
                             activeOpacity={0.7}
                           >
-                            {selected && <Ionicons name="checkmark" size={11} color={Colors.primary} style={{ marginRight: 3 }} />}
+                            {selected && <Ionicons name="checkmark" size={11} color="#fff" style={{ marginRight: 3 }} />}
                             <Text style={[styles.kwChipText, selected && styles.kwChipTextSelected]}>{tech}</Text>
                           </TouchableOpacity>
                         );
@@ -1530,7 +1530,7 @@ export default function AIAnalysisScreen() {
                             onPress={() => togglePoint(pt)}
                             activeOpacity={0.7}
                           >
-                            {selected && <Ionicons name="checkmark" size={11} color={Colors.primary} style={{ marginRight: 3 }} />}
+                            {selected && <Ionicons name="checkmark" size={11} color="#fff" style={{ marginRight: 3 }} />}
                             <Text style={[styles.kwChipText, selected && styles.kwChipTextSelected]}>{pt}</Text>
                           </TouchableOpacity>
                         );
@@ -1556,7 +1556,7 @@ export default function AIAnalysisScreen() {
                             onPress={() => setSelStatus(prev => prev === st ? null : st)}
                             activeOpacity={0.7}
                           >
-                            {selected && <Ionicons name="checkmark" size={11} color={Colors.primary} style={{ marginRight: 3 }} />}
+                            {selected && <Ionicons name="checkmark" size={11} color="#fff" style={{ marginRight: 3 }} />}
                             <Text style={[styles.kwChipText, selected && styles.kwChipTextSelected]}>{st}</Text>
                           </TouchableOpacity>
                         );
@@ -1583,7 +1583,7 @@ export default function AIAnalysisScreen() {
                             onPress={() => setSelGoal(prev => prev === goal ? null : goal)}
                             activeOpacity={0.7}
                           >
-                            {selected && <Ionicons name="checkmark" size={11} color={Colors.primary} style={{ marginRight: 3 }} />}
+                            {selected && <Ionicons name="checkmark" size={11} color="#fff" style={{ marginRight: 3 }} />}
                             <Text style={[styles.kwChipText, selected && styles.kwChipTextSelected]}>{goal}</Text>
                           </TouchableOpacity>
                         );
@@ -1624,7 +1624,7 @@ export default function AIAnalysisScreen() {
                     </TouchableOpacity>
                     {memoExpanded && (
                       <>
-                        <Text style={styles.memoToggleDesc}>AI 기능 없이 레슨 기록을 자유롭게 적고 회원에게 공유하세요.</Text>
+                        <Text style={styles.memoToggleDesc}>AI 기능 없이도 자유롭게 기록하고 회원에게 공유할 수 있어요.</Text>
                         <View style={[styles.inputWrapper, inputFocused && styles.inputWrapperFocused, { minHeight: 90, maxHeight: 150, marginHorizontal: 0, marginTop: 8 }]}>
                           <TextInput
                             ref={inputRef}
@@ -2230,12 +2230,13 @@ const styles = StyleSheet.create({
   manualReportBtnTitle: { fontSize: 14, fontWeight: '700', color: Colors.foreground },
   manualReportBtnSub: { fontSize: 12, color: Colors.mutedFg, marginTop: 2 },
   // 레슨 메모 입력 모달
-  manualContainer: { flex: 1, backgroundColor: Colors.background },
+  manualContainer: { flex: 1, backgroundColor: '#F8F7F5' },
   manualInner: { flex: 1, flexDirection: 'column' },
   manualHeader: {
     flexDirection: 'row', alignItems: 'flex-start',
-    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12,
-    borderBottomWidth: 1, borderBottomColor: Colors.border,
+    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.borderLight,
+    backgroundColor: '#FFFFFF',
     gap: 12,
   },
   manualHeaderTitle: { fontSize: 17, fontWeight: '800', color: Colors.foreground, marginBottom: 4 },
@@ -2257,12 +2258,12 @@ const styles = StyleSheet.create({
   kwChip: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 12, paddingVertical: 7,
-    borderRadius: 18, borderWidth: 1.5, borderColor: Colors.border,
+    borderRadius: 18, borderWidth: 1, borderColor: Colors.borderLight,
     backgroundColor: '#fff',
   },
-  kwChipSelected: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight },
+  kwChipSelected: { borderColor: Colors.primary, backgroundColor: Colors.primary },
   kwChipText: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg },
-  kwChipTextSelected: { color: Colors.primary },
+  kwChipTextSelected: { color: '#fff' },
   memoItemRow: {
     flexDirection: 'row', alignItems: 'flex-start',
     backgroundColor: Colors.primaryLight,
@@ -2359,7 +2360,8 @@ const styles = StyleSheet.create({
   manualBtnRow: {
     flexDirection: 'row', gap: 10,
     paddingHorizontal: 16, paddingVertical: 14,
-    borderTopWidth: 1, borderTopColor: Colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.borderLight,
+    backgroundColor: '#FFFFFF',
   },
   directBtn: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
