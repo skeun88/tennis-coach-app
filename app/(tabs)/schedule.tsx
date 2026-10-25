@@ -15,6 +15,7 @@ import { Colors, Radius } from '../../lib/theme';
 import TerracottaRefreshControl from '../../components/TerracottaRefreshControl';
 import SkeletonBox from '../../components/SkeletonBox';
 import { FLOATING_TAB_BAR_SPACE } from '../../components/GlassTabBar';
+import * as Haptics from 'expo-haptics';
 
 type ViewTab = '일일' | '주간' | '월간';
 
@@ -36,15 +37,23 @@ const SPINNER_HOURS = Array.from({ length: 18 }, (_, i) => String(i + 6).padStar
 const SPINNER_MINUTES = ['00', '10', '20', '30', '40', '50'];
 const DURATION_OPTIONS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
 
-// Haptic helpers — use Vibration (RN core, no native rebuild needed).
-// Android: short precise vibrations; iOS: system alert haptic (one pulse).
+// Haptic helpers — expo-haptics (Light Impact) with Vibration fallback for builds
+// that predate the expo-haptics native module inclusion.
 function hapticDragStart() {
-  if (Platform.OS === 'android') { Vibration.vibrate(6); }
-  else { Vibration.vibrate(); }
+  try {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  } catch {
+    if (Platform.OS === 'android') { Vibration.vibrate(6); }
+    else { Vibration.vibrate(); }
+  }
 }
 function hapticDropSuccess() {
-  if (Platform.OS === 'android') { Vibration.vibrate(14); }
-  else { Vibration.vibrate(); }
+  try {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  } catch {
+    if (Platform.OS === 'android') { Vibration.vibrate(14); }
+    else { Vibration.vibrate(); }
+  }
 }
 
 // 스케줄 화면 전용 팔레트 (크림/테라코타)
