@@ -220,6 +220,9 @@ export default function ScheduleScreen() {
   const weekAutoScrollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const weekAutoScrollSpeedRef = useRef(0);
   const weekAutoScrollOffsetRef = useRef(0);
+  // nudge callbacks: auto-scroll interval calls these to keep card's pan.y in sync when finger is stationary
+  const dayScrollNudgeRef = useRef<((offset: number) => void) | null>(null);
+  const weekScrollNudgeRef = useRef<((offset: number) => void) | null>(null);
 
   // 출석 상태 맵 (lessonId → 'scheduled' | 'completed' | 'absent')
   const [attendanceMap, setAttendanceMap] = useState<Map<string, 'scheduled' | 'completed' | 'absent'>>(new Map());
@@ -777,6 +780,8 @@ ${rejectMsg.trim()}`
       dayScrollRef.current?.scrollTo({ y: next, animated: false });
       dayScrollYRef.current = next;
       dayAutoScrollOffsetRef.current += delta;
+      // nudge dragging card's pan.y so it tracks the finger while stationary
+      dayScrollNudgeRef.current?.(dayAutoScrollOffsetRef.current);
     }, 16);
   }
 
@@ -823,6 +828,7 @@ ${rejectMsg.trim()}`
       dayScrollRef.current?.scrollTo({ y: next, animated: false });
       weekScrollYRef.current = next;
       weekAutoScrollOffsetRef.current += delta;
+      weekScrollNudgeRef.current?.(weekAutoScrollOffsetRef.current);
     }, 16);
   }
 
@@ -1092,6 +1098,7 @@ ${rejectMsg.trim()}`
                   onPress={() => router.push('/lessons/' + lesson.id as any)}
                   onDragMove={onDayDragMove}
                   scrollOffsetRef={dayAutoScrollOffsetRef}
+                  scrollNudgeRef={dayScrollNudgeRef}
                   onDragEnd={(dy) => {
                     stopDayAutoScroll();
                     const effectiveDy = dy; // includes scroll offset (added in DraggableLesson)
@@ -1315,6 +1322,8 @@ ${rejectMsg.trim()}`
                           setWeekDraggingId(null);
                           setWeekDragTargetColIdx(-1);
                         }}
+                        scrollOffsetRef={weekAutoScrollOffsetRef}
+                        scrollNudgeRef={weekScrollNudgeRef}
                       />
                     );
                   })}
@@ -1759,17 +1768,19 @@ ${rejectMsg.trim()}`
 // ── 드래그 가능한 레슨 카드 컴포넌트 ──────────────────────────
 function DraggableLesson({
   lesson, top, height, left, width, isDragging, onPress, onDragEnd, onDragStart, onDragCancel,
-  onDragMove, scrollOffsetRef,
+  onDragMove, scrollOffsetRef, scrollNudgeRef,
   cardBg, cardNameColor, cardTimeColor, cardBorderColor,
 }: {
   lesson: LessonWithMembers; top: number; height: number; left: number; width: number; isDragging: boolean;
   onPress: () => void; onDragEnd: (dy: number) => void; onDragStart: () => void; onDragCancel: () => void;
   onDragMove?: (moveY: number) => void;
   scrollOffsetRef?: React.MutableRefObject<number>;
+  scrollNudgeRef?: React.MutableRefObject<((offset: number) => void) | null>;
   cardBg: string; cardNameColor: string; cardTimeColor: string; cardBorderColor: string;
 }) {
   const pan = useRef(new Animated.ValueXY()).current;
   const dragging = useRef(false);
+  const gestureYRef = useRef(0); // latest raw g.dy; used by nudge callback
   const [liveDragTime, setLiveDragTime] = useState<string | null>(null);
 
   // 콜백을 ref로 관리 → PanResponder가 항상 최신 콜백 참조
@@ -1788,6 +1799,16 @@ function DraggableLesson({
     lessonStartMinRef.current = timeToMinutes(lesson.start_time);
   }, [onDragEnd, onDragStart, onDragCancel, onDragMove, onPress, lesson.start_time]);
 
+  // register nudge callback so parent's auto-scroll interval can push pan.y updates
+  useEffect(() => {
+    if (!scrollNudgeRef) return;
+    scrollNudgeRef.current = (newOffset: number) => {
+      if (!dragging.current) return;
+      pan.y.setValue(gestureYRef.current + newOffset);
+    };
+    return () => { if (scrollNudgeRef.current) scrollNudgeRef.current = null; };
+  }, [scrollNudgeRef, pan]);
+
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => dragging.current,
     onStartShouldSetPanResponderCapture: () => dragging.current,
@@ -1796,8 +1817,10 @@ function DraggableLesson({
     onPanResponderGrant: () => {
       pan.setOffset({ x: 0, y: (pan.y as any)._value });
       pan.setValue({ x: 0, y: 0 });
+      gestureYRef.current = 0;
     },
     onPanResponderMove: (_, g) => {
+      gestureYRef.current = g.dy;
       // Include accumulated auto-scroll offset so card visually tracks the finger
       const scrollOffset = scrollOffsetRef?.current ?? 0;
       pan.y.setValue(g.dy + scrollOffset);
@@ -1887,13 +1910,17 @@ function DraggableLesson({
 // ── 주간 드래그 가능한 레슨 블록 ──────────────────────────────────
 function WeekDraggableBlock({
   lesson, top, height, left, width, isDragging, attStatus, onPress, onDragMove, onDragEnd, onDragStart, onDragCancel,
+  scrollOffsetRef, scrollNudgeRef,
 }: {
   lesson: LessonWithMembers; top: number; height: number; left: number; width: number; isDragging: boolean;
   attStatus: 'scheduled' | 'completed' | 'absent';
   onPress: () => void; onDragMove: (dy: number, dx: number, moveY: number) => void; onDragEnd: (dy: number, dx: number) => void; onDragStart: () => void; onDragCancel: () => void;
+  scrollOffsetRef?: React.MutableRefObject<number>;
+  scrollNudgeRef?: React.MutableRefObject<((offset: number) => void) | null>;
 }) {
   const pan = useRef(new Animated.ValueXY()).current;
   const dragging = useRef(false);
+  const gestureYRef = useRef(0);
 
   const onDragEndRef = useRef(onDragEnd);
   const onDragStartRef = useRef(onDragStart);
@@ -1910,6 +1937,15 @@ function WeekDraggableBlock({
     lessonStartMinRef.current = timeToMinutes(lesson.start_time);
   }, [onDragEnd, onDragStart, onDragCancel, onDragMove, onPress, lesson.start_time]);
 
+  useEffect(() => {
+    if (!scrollNudgeRef) return;
+    scrollNudgeRef.current = (newOffset: number) => {
+      if (!dragging.current) return;
+      pan.y.setValue(gestureYRef.current + newOffset);
+    };
+    return () => { if (scrollNudgeRef.current) scrollNudgeRef.current = null; };
+  }, [scrollNudgeRef, pan]);
+
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => dragging.current,
     onStartShouldSetPanResponderCapture: () => dragging.current,
@@ -1918,9 +1954,12 @@ function WeekDraggableBlock({
     onPanResponderGrant: () => {
       pan.setOffset({ x: (pan.x as any)._value, y: (pan.y as any)._value });
       pan.setValue({ x: 0, y: 0 });
+      gestureYRef.current = 0;
     },
     onPanResponderMove: (_, g) => {
-      pan.setValue({ x: g.dx, y: g.dy });
+      gestureYRef.current = g.dy;
+      const scrollOffset = scrollOffsetRef?.current ?? 0;
+      pan.setValue({ x: g.dx, y: g.dy + scrollOffset });
       onDragMoveRef.current(g.dy, g.dx, g.moveY);
     },
     onPanResponderRelease: (_, g) => {
