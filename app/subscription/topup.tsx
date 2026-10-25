@@ -41,7 +41,7 @@ export default function TopupScreen() {
 
   const loadUsage = useCallback(async () => {
     if (!subscription) return;
-    const used = await getAiAnalysisUsageThisMonth(subscription.coach_id);
+    const used = await getAiAnalysisUsageThisMonth(subscription.coach_id, subscription.current_period_end);
     setAiUsed(used);
   }, [subscription]);
 

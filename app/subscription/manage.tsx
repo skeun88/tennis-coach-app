@@ -115,7 +115,7 @@ export default function ManageSubscriptionScreen() {
 
   const loadUsage = useCallback(async () => {
     if (!subscription) return;
-    const used = await getAiAnalysisUsageThisMonth(subscription.coach_id);
+    const used = await getAiAnalysisUsageThisMonth(subscription.coach_id, subscription.current_period_end);
     setAiUsed(used);
   }, [subscription]);
 
@@ -224,6 +224,10 @@ export default function ManageSubscriptionScreen() {
   const effectiveStatus = (subscription.status === 'trial' && rcResolvedNonTrial) ? 'active' : subscription.status;
 
   const nextResetDate = (() => {
+    if (subscription.current_period_end) {
+      const d = new Date(subscription.current_period_end);
+      return d.toLocaleDateString('ko-KR', { timeZone: 'UTC', year: 'numeric', month: 'long', day: 'numeric' });
+    }
     const now = new Date();
     const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     return nextMonth.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });

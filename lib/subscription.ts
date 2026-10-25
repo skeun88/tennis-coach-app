@@ -363,10 +363,24 @@ export async function canAddMember(
   return count < plan.memberLimit;
 }
 
-/** 이번 달 AI 레슨 분석 사용 횟수 조회 */
-export async function getAiAnalysisUsageThisMonth(coachId: string): Promise<number> {
+/** current_period_end에서 현재 구독 주기 시작 year_month를 역산 */
+function getPeriodYearMonth(currentPeriodEnd: string | null): string {
   const now = new Date();
-  const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  if (!currentPeriodEnd) {
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  }
+  // 구독 갱신 주기 시작 = period_end - 1개월
+  const end = new Date(currentPeriodEnd);
+  const start = new Date(end);
+  start.setMonth(start.getMonth() - 1);
+  return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** 현재 구독 주기의 AI 레슨 분석 사용 횟수 조회
+ *  periodEnd: subscription.current_period_end (구독 갱신일 기준으로 주기 시작 역산)
+ *  없으면 달력 기준 이번 달로 fallback */
+export async function getAiAnalysisUsageThisMonth(coachId: string, periodEnd?: string | null): Promise<number> {
+  const yearMonth = getPeriodYearMonth(periodEnd ?? null);
 
   const { data } = await supabase
     .from('ai_analysis_usage')
@@ -402,7 +416,7 @@ export async function checkAiAnalysisLimit(
     return { allowed: extraCredits > 0, used: 0, limit: 0, planId: subscription.plan_id, extraCredits, needsExtraCredit: extraCredits > 0 };
   }
 
-  const used = await getAiAnalysisUsageThisMonth(coachId);
+  const used = await getAiAnalysisUsageThisMonth(coachId, subscription.current_period_end);
 
   if (used < limit) {
     return { allowed: true, used, limit, planId: subscription.plan_id, extraCredits, needsExtraCredit: false };
@@ -430,7 +444,7 @@ export async function checkReportSendLimit(
 
   const plan = PLANS[subscription.plan_id];
   const freeLimit = plan.reportMonthlyLimit;
-  const freeUsed = await getAiAnalysisUsageThisMonth(coachId);
+  const freeUsed = await getAiAnalysisUsageThisMonth(coachId, subscription.current_period_end);
 
   if (freeUsed < freeLimit) {
     return { allowed: true, freeUsed, freeLimit, needsMemberCredit: false };
@@ -500,10 +514,11 @@ export async function updateAutoTopup(
     .eq('coach_id', coachId);
 }
 
-/** AI 분석 1회 사용 기록 (upsert) */
-export async function incrementAiAnalysisUsage(coachId: string): Promise<void> {
-  const now = new Date();
-  const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+/** AI 분석 1회 사용 기록 (upsert)
+ *  periodEnd: subscription.current_period_end (갱신일 역산으로 주기 시작 year_month 결정)
+ *  없으면 달력 기준 이번 달로 fallback */
+export async function incrementAiAnalysisUsage(coachId: string, periodEnd?: string | null): Promise<void> {
+  const yearMonth = getPeriodYearMonth(periodEnd ?? null);
 
   await supabase.rpc('increment_ai_analysis_usage', {
     p_coach_id: coachId,

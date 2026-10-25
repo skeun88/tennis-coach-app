@@ -830,7 +830,7 @@ export default function AIAnalysisScreen() {
         sent_to_member: false,
       });
 
-      await incrementAiAnalysisUsage(user.id);
+      await incrementAiAnalysisUsage(user.id, subscription?.current_period_end);
       await AsyncStorage.removeItem(memoKey);
       setManualContent('');
       setSelectedKeywords([]);
@@ -1077,7 +1077,7 @@ export default function AIAnalysisScreen() {
         return;
       }
 
-      if (!skipMonthlyIncrement) await incrementAiAnalysisUsage(userId);
+      if (!skipMonthlyIncrement) await incrementAiAnalysisUsage(userId, subscription?.current_period_end);
       await loadPlans();
       Alert.alert('완료', 'AI 레슨 기록이 완료됐습니다! 🎾');
 

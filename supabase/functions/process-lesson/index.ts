@@ -277,23 +277,32 @@ serve(async (req) => {
 
     // ── 서버사이드 quota 체크 (원자적 처리) ──
     if (Deno.env.get('BETA_MODE') !== 'true') {
-      const now = new Date()
-      const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-
-      // 구독 + 이번 달 사용량 병렬 조회
-      const [subRes, usageRes] = await Promise.all([
-        supabase.from('subscriptions')
-          .select('plan_id, status, extra_report_credits')
-          .eq('coach_id', coachId)
-          .single(),
-        supabase.from('ai_analysis_usage')
-          .select('count')
-          .eq('coach_id', coachId)
-          .eq('year_month', yearMonth)
-          .maybeSingle(),
-      ])
+      // 구독 먼저 조회 → current_period_end 역산으로 주기 시작 year_month 결정
+      const subRes = await supabase.from('subscriptions')
+        .select('plan_id, status, extra_report_credits, current_period_end')
+        .eq('coach_id', coachId)
+        .single()
 
       const sub = subRes.data
+      // period_end - 1개월 = 구독 주기 시작; 없으면 현재 달력 월 fallback
+      const yearMonth = (() => {
+        if (!sub?.current_period_end) {
+          const now = new Date()
+          return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+        }
+        const end = new Date(sub.current_period_end)
+        const start = new Date(end)
+        start.setMonth(start.getMonth() - 1)
+        return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`
+      })()
+
+      // 현재 구독 주기 사용량 조회
+      const usageRes = await supabase.from('ai_analysis_usage')
+        .select('count')
+        .eq('coach_id', coachId)
+        .eq('year_month', yearMonth)
+        .maybeSingle()
+
       const monthlyUsed: number = usageRes.data?.count ?? 0
 
       const PLAN_LIMITS: Record<string, number> = { free: 3, basic: 10, pro: 50 }
