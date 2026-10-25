@@ -10,6 +10,14 @@ export const PLAN_PRODUCT_IDS: Record<string, { monthly: string; annual: string 
   pro: { monthly: 'kerri_pro_monthly', annual: 'kerri_pro_yearly' },
 };
 
+// Apple IAP 상품 ID → KRW 결제 금액 매핑 (구독 갱신 로그용)
+const PRODUCT_AMOUNT_MAP: Record<string, number> = {
+  kerri_basic_monthly: 9900,
+  kerri_basic_yearly: 109000,
+  kerri_pro_monthly: 19000,
+  kerri_pro_yearly: 209000,
+};
+
 export const ENTITLEMENT_IDS = {
   BASIC: 'basic',
   PRO: 'pro',
@@ -89,23 +97,33 @@ export async function syncRevenueCatToDb(userId: string): Promise<void> {
       await Purchases.logIn(userId);
     }
 
-    const customerInfo = await Purchases.getCustomerInfo();
-    const active = customerInfo.entitlements.active;
+    let customerInfo = await Purchases.getCustomerInfo();
+    let active = customerInfo.entitlements.active;
+
+    // 활성 구독이 없으면 Apple 영수증으로 강제 재동기화 (갱신 누락 복구)
+    if (Object.keys(active).length === 0 && Object.keys(customerInfo.entitlements.all).length > 0) {
+      try {
+        const restored = await Purchases.restorePurchases();
+        active = restored.entitlements.active;
+        customerInfo = restored;
+      } catch {}
+    }
 
     let planId: 'basic' | 'pro' | null = null;
     let status: 'active' | 'trial' = 'active';
     let currentPeriodEnd: string | null = null;
+    let activeEntitlement: any = null;
 
     if (active[ENTITLEMENT_IDS.PRO]) {
       planId = 'pro';
-      const ent = active[ENTITLEMENT_IDS.PRO];
-      currentPeriodEnd = ent.expirationDate ?? null;
-      if (ent.periodType === 'TRIAL') status = 'trial';
+      activeEntitlement = active[ENTITLEMENT_IDS.PRO];
+      currentPeriodEnd = activeEntitlement.expirationDate ?? null;
+      if (activeEntitlement.periodType === 'TRIAL') status = 'trial';
     } else if (active[ENTITLEMENT_IDS.BASIC]) {
       planId = 'basic';
-      const ent = active[ENTITLEMENT_IDS.BASIC];
-      currentPeriodEnd = ent.expirationDate ?? null;
-      if (ent.periodType === 'TRIAL') status = 'trial';
+      activeEntitlement = active[ENTITLEMENT_IDS.BASIC];
+      currentPeriodEnd = activeEntitlement.expirationDate ?? null;
+      if (activeEntitlement.periodType === 'TRIAL') status = 'trial';
     }
 
     if (!planId) {
@@ -137,6 +155,23 @@ export async function syncRevenueCatToDb(userId: string): Promise<void> {
       .select('toss_billing_key')
       .eq('coach_id', userId)
       .single();
+
+    // Apple IAP 갱신 감지 → subscription_logs에 기록 (결제·충전 내역 화면에 표시)
+    if (
+      status !== 'trial' &&
+      activeEntitlement?.store === 'app_store' &&
+      activeEntitlement?.latestPurchaseDate
+    ) {
+      const productId: string = activeEntitlement.productIdentifier ?? '';
+      const amount = PRODUCT_AMOUNT_MAP[productId] ?? 0;
+      void supabase.rpc('log_iap_renewal', {
+        p_plan_id: planId,
+        p_renewal_date: activeEntitlement.latestPurchaseDate,
+        p_period_end: currentPeriodEnd ?? new Date().toISOString(),
+        p_amount: amount,
+        p_product_id: productId,
+      });
+    }
 
     const upsertPayload: Record<string, unknown> = {
       coach_id: userId,
