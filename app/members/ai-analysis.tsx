@@ -95,12 +95,31 @@ export default function AIAnalysisScreen() {
   const [cursorPos, setCursorPos] = useState({ start: 0, end: 0 });
   const inputRef = useRef<TextInput>(null);
 
-  const KEYWORD_CATEGORIES = [
-    { label: '기술', keywords: ['포핸드', '백핸드', '서브', '발리', '풋워크'] },
-    { label: '핵심 포인트', keywords: ['타점', '스윙 궤도', '자세', '체중 이동'] },
-    { label: '상태', keywords: ['늦음', '불안정', '개선 중', '좋아짐', '반복 필요'] },
-    { label: '다음 목표', keywords: ['타점 앞에서', '자세 유지', '반복 연습'] },
-  ] as const;
+  // 키워드 데이터 구조
+  const TENNIS_TECHNIQUES = ['포핸드', '백핸드', '서브', '발리', '리턴', '풋워크', '스매시', '슬라이스'] as const;
+  const CORRECTION_BY_TECH: Record<string, string[]> = {
+    '포핸드': ['타점', '테이크백', '스윙 궤도', '팔로스루', '라켓면', '체중 이동', '무릎 사용', '상체 회전', '준비 자세', '타이밍'],
+    '백핸드': ['타점', '테이크백', '스윙 궤도', '팔로스루', '라켓면', '체중 이동', '하체 회전', '준비 자세', '타이밍'],
+    '서브': ['토스', '임팩트', '회전', '리듬', '테이크백', '팔로스루', '무릎 사용', '타이밍'],
+    '발리': ['타점', '라켓면', '준비 자세', '스텝', '거리 조절', '체중 이동'],
+    '리턴': ['타점', '준비 자세', '스텝', '타이밍', '라켓면'],
+    '풋워크': ['스플릿 스텝', '첫발', '복귀', '균형', '스텝', '준비 자세'],
+    '스매시': ['타점', '토스', '임팩트', '팔로스루', '준비 자세'],
+    '슬라이스': ['타점', '라켓면', '스윙 궤도', '팔로스루', '체중 이동'],
+  };
+  const DEFAULT_CORRECTIONS = ['타점', '스윙 궤도', '준비 자세', '체중 이동', '타이밍', '라켓면'];
+  const STATUS_KEYWORDS = ['늦음', '빠름', '불안정', '부족', '과도함', '흔들림', '좋아짐', '개선 중', '안정적', '반복 필요'] as const;
+  const GOAL_KEYWORDS = ['타점 앞에서', '준비 빠르게', '자세 유지', '하체 사용', '스윙 간결하게', '정확도 향상', '일관성 유지', '반복 연습'] as const;
+
+  // 현재 선택 중인 항목
+  const [selTech, setSelTech] = useState<string | null>(null);
+  const [selPoints, setSelPoints] = useState<string[]>([]);
+  const [selStatus, setSelStatus] = useState<string | null>(null);
+  const [selGoal, setSelGoal] = useState<string | null>(null);
+
+  // 추가된 메모 항목들
+  type MemoItem = { tech?: string; points?: string[]; status?: string; goal?: string };
+  const [memoItems, setMemoItems] = useState<MemoItem[]>([]);
 
   const [usageSheetVisible, setUsageSheetVisible] = useState(false);
   const [hasSeenUsage, setHasSeenUsage] = useState(true); // true = no pulse (default until loaded)
@@ -434,11 +453,18 @@ export default function AIAnalysisScreen() {
       if (saved) setManualContent(saved);
     });
     setSelectedKeywords([]);
+    setSelTech(null);
+    setSelPoints([]);
+    setSelStatus(null);
+    setSelGoal(null);
+    setMemoItems([]);
     setInputFocused(false);
   }, [manualModalVisible]);
 
   function handleCloseManualModal() {
-    if (manualContent.trim() || selectedKeywords.length > 0) {
+    const hasAny = manualContent.trim() || memoItems.length > 0 ||
+      selTech || selPoints.length > 0 || selStatus || selGoal;
+    if (hasAny) {
       Alert.alert(
         '작성 중인 내용이 있어요',
         '내용을 저장하고 나갈까요?',
@@ -450,13 +476,12 @@ export default function AIAnalysisScreen() {
               AsyncStorage.removeItem(memoKey);
               setManualContent('');
               setSelectedKeywords([]);
+              setSelTech(null); setSelPoints([]); setSelStatus(null); setSelGoal(null);
+              setMemoItems([]);
               setManualModalVisible(false);
             },
           },
-          {
-            text: '저장하고 닫기',
-            onPress: () => setManualModalVisible(false),
-          },
+          { text: '저장하고 닫기', onPress: () => setManualModalVisible(false) },
         ]
       );
     } else {
@@ -464,13 +489,38 @@ export default function AIAnalysisScreen() {
     }
   }
 
+  function addMemoItem() {
+    if (!selTech && selPoints.length === 0 && !selStatus && !selGoal) return;
+    setMemoItems(prev => [...prev, {
+      tech: selTech ?? undefined,
+      points: selPoints.length > 0 ? [...selPoints] : undefined,
+      status: selStatus ?? undefined,
+      goal: selGoal ?? undefined,
+    }]);
+    setSelTech(null); setSelPoints([]); setSelStatus(null); setSelGoal(null);
+  }
+
+  function removeMemoItem(idx: number) {
+    setMemoItems(prev => prev.filter((_, i) => i !== idx));
+  }
+
+  function memoItemLabel(item: MemoItem): string {
+    const parts: string[] = [];
+    if (item.tech) parts.push(item.tech);
+    if (item.points?.length) parts.push(item.points.join(', '));
+    if (item.status) parts.push(item.status);
+    if (item.goal) parts.push(item.goal);
+    return parts.join(' · ');
+  }
+
   function buildMemoContent(): string {
     const parts: string[] = [];
-    if (selectedKeywords.length > 0) {
-      parts.push('[키워드]\n' + selectedKeywords.join(', '));
+    if (memoItems.length > 0) {
+      const lines = memoItems.map((item, i) => `${i + 1}. ${memoItemLabel(item)}`);
+      parts.push('[레슨 키워드]\n' + lines.join('\n'));
     }
     if (manualContent.trim()) {
-      parts.push('[메모]\n' + manualContent.trim());
+      parts.push('[추가 메모]\n' + manualContent.trim());
     }
     return parts.join('\n\n');
   }
@@ -480,6 +530,16 @@ export default function AIAnalysisScreen() {
       prev.includes(kw) ? prev.filter(k => k !== kw) : [...prev, kw]
     );
   }
+
+  function togglePoint(pt: string) {
+    setSelPoints(prev => prev.includes(pt) ? prev.filter(p => p !== pt) : [...prev, pt]);
+  }
+
+  const currentCorrections = selTech
+    ? (CORRECTION_BY_TECH[selTech] ?? DEFAULT_CORRECTIONS)
+    : DEFAULT_CORRECTIONS;
+
+  const hasCurrentSel = !!(selTech || selPoints.length > 0 || selStatus || selGoal);
 
   async function handleDirect() {
     const content = buildMemoContent();
@@ -504,6 +564,8 @@ export default function AIAnalysisScreen() {
       await AsyncStorage.removeItem(memoKey);
       setManualContent('');
       setSelectedKeywords([]);
+      setMemoItems([]);
+      setSelTech(null); setSelPoints([]); setSelStatus(null); setSelGoal(null);
       setManualModalVisible(false);
       loadPlans();
       router.push({
@@ -602,6 +664,8 @@ export default function AIAnalysisScreen() {
       await AsyncStorage.removeItem(memoKey);
       setManualContent('');
       setSelectedKeywords([]);
+      setMemoItems([]);
+      setSelTech(null); setSelPoints([]); setSelStatus(null); setSelGoal(null);
       setManualModalVisible(false);
       loadPlans();
       router.push({
@@ -1301,40 +1365,136 @@ export default function AIAnalysisScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {/* 키워드 + 텍스트 스크롤 영역 */}
                 <ScrollView
                   style={{ flex: 1 }}
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
                   contentContainerStyle={{ paddingBottom: 8 }}
                 >
-                  {/* 키워드 카테고리 */}
-                  {KEYWORD_CATEGORIES.map(cat => (
-                    <View key={cat.label} style={styles.kwSection}>
-                      <Text style={styles.kwCategoryLabel}>{cat.label}</Text>
-                      <View style={styles.kwChipsRow}>
-                        {cat.keywords.map(kw => {
-                          const selected = selectedKeywords.includes(kw);
-                          return (
-                            <TouchableOpacity
-                              key={kw}
-                              style={[styles.kwChip, selected && styles.kwChipSelected]}
-                              onPress={() => toggleKeyword(kw)}
-                              activeOpacity={0.7}
-                            >
-                              {selected && <Ionicons name="checkmark" size={12} color={Colors.primary} style={{ marginRight: 3 }} />}
-                              <Text style={[styles.kwChipText, selected && styles.kwChipTextSelected]}>{kw}</Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
+                  {/* 추가된 항목 목록 */}
+                  {memoItems.length > 0 && (
+                    <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+                      <Text style={styles.kwCategoryLabel}>기록된 항목</Text>
+                      {memoItems.map((item, idx) => (
+                        <View key={idx} style={styles.memoItemRow}>
+                          <Text style={styles.memoItemText} numberOfLines={2}>{memoItemLabel(item)}</Text>
+                          <TouchableOpacity onPress={() => removeMemoItem(idx)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                            <Ionicons name="close-circle" size={18} color={Colors.mutedFg} />
+                          </TouchableOpacity>
+                        </View>
+                      ))}
                     </View>
-                  ))}
+                  )}
+
+                  {/* 구분선 */}
+                  {memoItems.length > 0 && <View style={{ height: 1, backgroundColor: Colors.borderLight, marginHorizontal: 16, marginTop: 12 }} />}
+
+                  {/* 기술 선택 */}
+                  <View style={styles.kwSection}>
+                    <Text style={styles.kwCategoryLabel}>기술</Text>
+                    <View style={styles.kwChipsRow}>
+                      {(TENNIS_TECHNIQUES as readonly string[]).map(tech => {
+                        const selected = selTech === tech;
+                        return (
+                          <TouchableOpacity
+                            key={tech}
+                            style={[styles.kwChip, selected && styles.kwChipSelected]}
+                            onPress={() => {
+                              setSelTech(prev => prev === tech ? null : tech);
+                              setSelPoints([]); // 기술 바꾸면 교정 포인트 초기화
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            {selected && <Ionicons name="checkmark" size={12} color={Colors.primary} style={{ marginRight: 3 }} />}
+                            <Text style={[styles.kwChipText, selected && styles.kwChipTextSelected]}>{tech}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* 교정 포인트 (기술 선택 시 해당 기술 키워드, 미선택 시 기본) */}
+                  <View style={styles.kwSection}>
+                    <Text style={styles.kwCategoryLabel}>
+                      교정 포인트{selTech ? ` — ${selTech}` : ''}
+                    </Text>
+                    <View style={styles.kwChipsRow}>
+                      {currentCorrections.map(pt => {
+                        const selected = selPoints.includes(pt);
+                        return (
+                          <TouchableOpacity
+                            key={pt}
+                            style={[styles.kwChip, selected && styles.kwChipSelected]}
+                            onPress={() => togglePoint(pt)}
+                            activeOpacity={0.7}
+                          >
+                            {selected && <Ionicons name="checkmark" size={12} color={Colors.primary} style={{ marginRight: 3 }} />}
+                            <Text style={[styles.kwChipText, selected && styles.kwChipTextSelected]}>{pt}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* 상태 */}
+                  <View style={styles.kwSection}>
+                    <Text style={styles.kwCategoryLabel}>현재 상태</Text>
+                    <View style={styles.kwChipsRow}>
+                      {(STATUS_KEYWORDS as readonly string[]).map(st => {
+                        const selected = selStatus === st;
+                        return (
+                          <TouchableOpacity
+                            key={st}
+                            style={[styles.kwChip, selected && styles.kwChipSelected]}
+                            onPress={() => setSelStatus(prev => prev === st ? null : st)}
+                            activeOpacity={0.7}
+                          >
+                            {selected && <Ionicons name="checkmark" size={12} color={Colors.primary} style={{ marginRight: 3 }} />}
+                            <Text style={[styles.kwChipText, selected && styles.kwChipTextSelected]}>{st}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* 다음 목표 */}
+                  <View style={styles.kwSection}>
+                    <Text style={styles.kwCategoryLabel}>다음 목표</Text>
+                    <View style={styles.kwChipsRow}>
+                      {(GOAL_KEYWORDS as readonly string[]).map(goal => {
+                        const selected = selGoal === goal;
+                        return (
+                          <TouchableOpacity
+                            key={goal}
+                            style={[styles.kwChip, selected && styles.kwChipSelected]}
+                            onPress={() => setSelGoal(prev => prev === goal ? null : goal)}
+                            activeOpacity={0.7}
+                          >
+                            {selected && <Ionicons name="checkmark" size={12} color={Colors.primary} style={{ marginRight: 3 }} />}
+                            <Text style={[styles.kwChipText, selected && styles.kwChipTextSelected]}>{goal}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* 항목 추가 버튼 */}
+                  <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
+                    <TouchableOpacity
+                      style={[styles.addItemBtn, !hasCurrentSel && { opacity: 0.35 }]}
+                      onPress={addMemoItem}
+                      disabled={!hasCurrentSel}
+                      activeOpacity={0.75}
+                    >
+                      <Ionicons name="add-circle-outline" size={16} color={Colors.primary} />
+                      <Text style={styles.addItemBtnText}>항목 추가</Text>
+                    </TouchableOpacity>
+                  </View>
 
                   {/* 추가 메모 (선택) */}
-                  <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+                  <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
                     <Text style={styles.kwCategoryLabel}>추가 메모 (선택)</Text>
-                    <View style={[styles.inputWrapper, inputFocused && styles.inputWrapperFocused, { minHeight: 100, maxHeight: 180 }]}>
+                    <View style={[styles.inputWrapper, inputFocused && styles.inputWrapperFocused, { minHeight: 90, maxHeight: 160 }]}>
                       <TextInput
                         ref={inputRef}
                         style={styles.memoInput}
@@ -1365,7 +1525,7 @@ export default function AIAnalysisScreen() {
 
                 {/* 하단 버튼 */}
                 {(() => {
-                  const hasContent = !!(manualContent.trim() || selectedKeywords.length > 0);
+                  const hasContent = !!(manualContent.trim() || memoItems.length > 0);
                   return (
                     <View style={styles.manualBtnRow}>
                       <TouchableOpacity
@@ -1966,6 +2126,21 @@ const styles = StyleSheet.create({
   kwChipSelected: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight },
   kwChipText: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg },
   kwChipTextSelected: { color: Colors.primary },
+  memoItemRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: Colors.primaryLight,
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8,
+    marginBottom: 6,
+  },
+  memoItemText: { flex: 1, fontSize: 13, color: Colors.primary, fontWeight: '600', marginRight: 8 },
+  addItemBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 16, borderWidth: 1.5, borderColor: Colors.primary,
+    backgroundColor: Colors.primaryLight,
+  },
+  addItemBtnText: { fontSize: 13, fontWeight: '700', color: Colors.primary },
   inputWrapper: {
     flex: 1,
     marginHorizontal: 16,
