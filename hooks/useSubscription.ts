@@ -26,6 +26,8 @@ export function useSubscription(): UseSubscriptionResult {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
+  // true once RC confirms periodType is no longer TRIAL (used to override stale DB status)
+  const [rcConfirmedNotTrial, setRcConfirmedNotTrial] = useState(false);
   const channelIdRef = useRef(`${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
   const refresh = useCallback(async () => {
@@ -42,8 +44,11 @@ export function useSubscription(): UseSubscriptionResult {
       const periodType: string = (ent as any)?.periodType ?? '';
       if (periodType === 'TRIAL') {
         setTrialEndsAt((ent?.expirationDate as string | null | undefined) ?? null);
+        setRcConfirmedNotTrial(false);
       } else {
         setTrialEndsAt(null);
+        // RC confirms paid period — override stale DB trial status
+        if (periodType) setRcConfirmedNotTrial(true);
       }
     } catch {
       setTrialEndsAt(null);
@@ -94,7 +99,8 @@ export function useSubscription(): UseSubscriptionResult {
 
   const isBlocked =
     subscription?.status === 'blocked' || subscription?.status === 'cancelled';
-  const isTrial = subscription?.status === 'trial';
+  // isTrial: DB-based, but overridden when RC confirms the subscription is no longer a trial
+  const isTrial = subscription?.status === 'trial' && !rcConfirmedNotTrial;
 
   // RC 기반 남은 일수 (trialEndsAt이 있으면 사용, 없으면 0)
   const trialDaysLeft = (() => {

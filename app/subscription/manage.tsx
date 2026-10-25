@@ -48,7 +48,10 @@ async function fetchRcTrialInfo(): Promise<RcTrialInfo> {
 function formatKoreanDate(isoStr: string | null): string | null {
   if (!isoStr) return null;
   try {
-    return format(new Date(isoStr), 'yyyy년 M월 d일', { timeZone: 'Asia/Seoul' });
+    // Use UTC to extract the calendar date so it matches Apple's subscription management display.
+    // Apple's renewal date is the UTC calendar date of the billing event; converting to Seoul (+9)
+    // can shift it forward by one day when the timestamp falls in the 15:00–23:59Z window.
+    return format(new Date(isoStr), 'yyyy년 M월 d일', { timeZone: 'UTC' });
   } catch { return null; }
 }
 
@@ -214,6 +217,9 @@ export default function ManageSubscriptionScreen() {
   const willRenew = rcInfo?.willRenew ?? false;
   // RC expirationDate 기준 다음 갱신일/만료일
   const nextBillingDate = formatKoreanDate(rcInfo?.expirationDate ?? null);
+  // RC가 로드됐고 trial이 아님을 확인했으면 DB status 'trial' 무시
+  const rcResolvedNonTrial = !rcLoading && rcInfo !== null && !isTrial && rcInfo.periodType !== '';
+  const effectiveStatus = (subscription.status === 'trial' && rcResolvedNonTrial) ? 'active' : subscription.status;
 
   const nextResetDate = (() => {
     const now = new Date();
@@ -238,9 +244,9 @@ export default function ManageSubscriptionScreen() {
           <Text style={s.cardSectionLabel}>현재 플랜</Text>
           <View style={s.planRow}>
             <Text style={s.planName}>{plan.name}</Text>
-            <View style={[s.statusBadge, { backgroundColor: STATUS_COLORS[subscription.status] + '18' }]}>
-              <Text style={[s.statusText, { color: STATUS_COLORS[subscription.status] }]}>
-                {STATUS_LABELS[subscription.status] ?? subscription.status}
+            <View style={[s.statusBadge, { backgroundColor: STATUS_COLORS[effectiveStatus] + '18' }]}>
+              <Text style={[s.statusText, { color: STATUS_COLORS[effectiveStatus] }]}>
+                {STATUS_LABELS[effectiveStatus] ?? effectiveStatus}
               </Text>
             </View>
           </View>
