@@ -643,16 +643,14 @@ export default function HomeScreen() {
           activeOpacity={0.85}
         >
           <View style={styles.todayBannerLeft}>
-            <View style={styles.todayBannerLabelRow}>
-              <Text style={styles.todayBannerLabel}>오늘 레슨</Text>
-              <Text style={styles.todayBannerDate}>
-                {new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}
-              </Text>
-            </View>
+            <Text style={styles.todayBannerLabel}>오늘 레슨</Text>
             <Text style={styles.todayBannerCount}>{processedToday.length}/{todayCards.length}</Text>
             <Text style={styles.todayBannerFirst}>{getBannerSubText()}</Text>
           </View>
           <View style={styles.todayBannerRight}>
+            <Text style={styles.todayBannerDate}>
+              {new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}
+            </Text>
             <Ionicons name="calendar-outline" size={52} color="rgba(255,255,255,0.25)" />
           </View>
         </TouchableOpacity>
@@ -1161,12 +1159,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   todayBannerLeft: { flex: 1 },
-  todayBannerLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  todayBannerLabel: { fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: '600' },
-  todayBannerDate: { fontSize: 12, color: 'rgba(255,255,255,0.65)', fontWeight: '400' },
+  todayBannerLabel: { fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: '600', marginBottom: 4 },
+  todayBannerDate: { fontSize: 12, color: 'rgba(255,255,255,0.65)', fontWeight: '400', marginBottom: 14, textAlign: 'right' },
   todayBannerCount: { fontSize: 40, fontWeight: '800', color: '#fff', marginBottom: 6 },
   todayBannerFirst: { fontSize: 14, color: 'rgba(255,255,255,0.85)', fontWeight: '500' },
-  todayBannerRight: { marginLeft: 12 },
+  todayBannerRight: { marginLeft: 12, alignItems: 'flex-end', justifyContent: 'space-between' },
 
   statsRow3: { flexDirection: 'row', marginHorizontal: 16, gap: 8, marginBottom: 14 },
   stat3Card: {
