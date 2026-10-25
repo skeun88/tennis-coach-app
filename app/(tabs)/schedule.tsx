@@ -187,8 +187,14 @@ export default function ScheduleScreen() {
   const [weekAttendanceMap, setWeekAttendanceMap] = useState<Map<string, 'scheduled' | 'completed' | 'absent'>>(new Map());
   const [availability, setAvailability] = useState<{ days: number[]; start: string; end: string; times?: Record<number, { start: string; end: string }> } | null>(null);
   const dayScrollRef = useRef<any>(null);
+  const dayScrollYRef = useRef(0);
+  const dayAutoScrollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const dayAutoScrollSpeedRef = useRef(0);
+  const dayAutoScrollOffsetRef = useRef(0);
   const weekScrollYRef = useRef(0);
   const weekAutoScrollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const weekAutoScrollSpeedRef = useRef(0);
+  const weekAutoScrollOffsetRef = useRef(0);
 
   // 출석 상태 맵 (lessonId → 'scheduled' | 'completed' | 'absent')
   const [attendanceMap, setAttendanceMap] = useState<Map<string, 'scheduled' | 'completed' | 'absent'>>(new Map());
@@ -728,6 +734,82 @@ ${rejectMsg.trim()}`
     );
   }
 
+  // ── 일일 뷰 드래그 자동 스크롤 ─────────────────────────────────
+  function startDayAutoScroll() {
+    if (dayAutoScrollRef.current) return;
+    const gridMaxY = (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT;
+    dayAutoScrollRef.current = setInterval(() => {
+      const speed = dayAutoScrollSpeedRef.current;
+      if (!speed) return;
+      const current = dayScrollYRef.current;
+      const next = Math.max(0, Math.min(gridMaxY, current + speed));
+      const delta = next - current;
+      if (Math.abs(delta) < 0.5) return;
+      dayScrollRef.current?.scrollTo({ y: next, animated: false });
+      dayScrollYRef.current = next;
+      dayAutoScrollOffsetRef.current += delta;
+    }, 16);
+  }
+
+  function stopDayAutoScroll() {
+    if (dayAutoScrollRef.current) { clearInterval(dayAutoScrollRef.current); dayAutoScrollRef.current = null; }
+    dayAutoScrollSpeedRef.current = 0;
+  }
+
+  function onDayDragMove(moveY: number) {
+    const { height: screenH } = Dimensions.get('window');
+    const EDGE = 100;
+    const MAX_SPEED = 14;
+    if (moveY < EDGE) {
+      dayAutoScrollSpeedRef.current = -Math.max(2, Math.ceil(((EDGE - moveY) / EDGE) * MAX_SPEED));
+      startDayAutoScroll();
+    } else if (moveY > screenH - EDGE) {
+      dayAutoScrollSpeedRef.current = Math.max(2, Math.ceil(((moveY - (screenH - EDGE)) / EDGE) * MAX_SPEED));
+      startDayAutoScroll();
+    } else {
+      dayAutoScrollSpeedRef.current = 0;
+      stopDayAutoScroll();
+    }
+  }
+
+  // ── 주간 뷰 드래그 자동 스크롤 ─────────────────────────────────
+  function startWeekAutoScroll() {
+    if (weekAutoScrollRef.current) return;
+    const gridMaxY = (END_HOUR - START_HOUR + 1) * HOUR_HEIGHT;
+    weekAutoScrollRef.current = setInterval(() => {
+      const speed = weekAutoScrollSpeedRef.current;
+      if (!speed) return;
+      const current = weekScrollYRef.current;
+      const next = Math.max(0, Math.min(gridMaxY, current + speed));
+      const delta = next - current;
+      if (Math.abs(delta) < 0.5) return;
+      dayScrollRef.current?.scrollTo({ y: next, animated: false });
+      weekScrollYRef.current = next;
+      weekAutoScrollOffsetRef.current += delta;
+    }, 16);
+  }
+
+  function stopWeekAutoScroll() {
+    if (weekAutoScrollRef.current) { clearInterval(weekAutoScrollRef.current); weekAutoScrollRef.current = null; }
+    weekAutoScrollSpeedRef.current = 0;
+  }
+
+  function onWeekDragMove(moveY: number) {
+    const { height: screenH } = Dimensions.get('window');
+    const EDGE = 100;
+    const MAX_SPEED = 14;
+    if (moveY < EDGE) {
+      weekAutoScrollSpeedRef.current = -Math.max(2, Math.ceil(((EDGE - moveY) / EDGE) * MAX_SPEED));
+      startWeekAutoScroll();
+    } else if (moveY > screenH - EDGE) {
+      weekAutoScrollSpeedRef.current = Math.max(2, Math.ceil(((moveY - (screenH - EDGE)) / EDGE) * MAX_SPEED));
+      startWeekAutoScroll();
+    } else {
+      weekAutoScrollSpeedRef.current = 0;
+      stopWeekAutoScroll();
+    }
+  }
+
   async function handleDropLesson(lessonId: string, newStartMinutes: number) {
     const lesson = lessons.find(l => l.id === lessonId);
     if (!lesson) return;
@@ -847,6 +929,8 @@ ${rejectMsg.trim()}`
     return (
       <ScrollView ref={dayScrollRef} style={{ flex: 1, backgroundColor: S_GRID_BG }} showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + FLOATING_TAB_BAR_SPACE + 24 }}
+        onScroll={(e) => { dayScrollYRef.current = e.nativeEvent.contentOffset.y; }}
+        scrollEventThrottle={16}
         scrollEnabled={draggingId === null}
         refreshControl={<TerracottaRefreshControl refreshing={refreshing} onRefresh={async () => {
           setRefreshing(true);
@@ -962,13 +1046,18 @@ ${rejectMsg.trim()}`
                   cardTimeColor={cardTimeColor}
                   cardBorderColor={cardBorderColor}
                   onPress={() => router.push('/lessons/' + lesson.id as any)}
+                  onDragMove={onDayDragMove}
+                  scrollOffsetRef={dayAutoScrollOffsetRef}
                   onDragEnd={(dy) => {
-                    const deltaMin = Math.round((dy / HOUR_HEIGHT) * 60 / 10) * 10;
+                    stopDayAutoScroll();
+                    const effectiveDy = dy; // includes scroll offset (added in DraggableLesson)
+                    const deltaMin = Math.round((effectiveDy / HOUR_HEIGHT) * 60 / 10) * 10;
                     const newMin = startMin + deltaMin;
+                    dayAutoScrollOffsetRef.current = 0;
                     handleDropLesson(lesson.id, newMin);
                   }}
-                  onDragStart={() => setDraggingId(lesson.id)}
-                  onDragCancel={() => setDraggingId(null)}
+                  onDragStart={() => { dayAutoScrollOffsetRef.current = 0; setDraggingId(lesson.id); }}
+                  onDragCancel={() => { stopDayAutoScroll(); dayAutoScrollOffsetRef.current = 0; setDraggingId(null); }}
                 />
               );
             });
@@ -1150,44 +1239,34 @@ ${rejectMsg.trim()}`
                         onPress={() => router.push('/lessons/' + lesson.id as any)}
                         onDragMove={(dy, dx, moveY) => {
                           const sMin = timeToMinutes(lesson.start_time);
-                          const deltaMin = Math.round((dy / HOUR_HEIGHT) * 60 / 10) * 10;
+                          const effectiveDy = dy + weekAutoScrollOffsetRef.current;
+                          const deltaMin = Math.round((effectiveDy / HOUR_HEIGHT) * 60 / 10) * 10;
                           const newMin = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60 - 10, sMin + deltaMin));
                           const tCol = Math.min(6, Math.max(0, Math.floor((colIdx * COL_W + dx + COL_W / 2) / COL_W)));
                           setWeekDragTargetMin(newMin);
                           setWeekDragTargetColIdx(tCol);
-                          // 자동 스크롤
-                          if (weekAutoScrollRef.current) { clearInterval(weekAutoScrollRef.current); weekAutoScrollRef.current = null; }
-                          const { height: screenH } = Dimensions.get('window');
-                          const EDGE = 80;
-                          if (moveY < EDGE) {
-                            weekAutoScrollRef.current = setInterval(() => {
-                              const ny = Math.max(0, weekScrollYRef.current - 6);
-                              dayScrollRef.current?.scrollTo({ y: ny, animated: false });
-                              weekScrollYRef.current = ny;
-                            }, 16);
-                          } else if (moveY > screenH - EDGE) {
-                            weekAutoScrollRef.current = setInterval(() => {
-                              const ny = weekScrollYRef.current + 6;
-                              dayScrollRef.current?.scrollTo({ y: ny, animated: false });
-                              weekScrollYRef.current = ny;
-                            }, 16);
-                          }
+                          onWeekDragMove(moveY);
                         }}
                         onDragEnd={(dy, dx) => {
-                          const deltaMin = Math.round((dy / HOUR_HEIGHT) * 60 / 10) * 10;
+                          stopWeekAutoScroll();
+                          const effectiveDy = dy + weekAutoScrollOffsetRef.current;
+                          const deltaMin = Math.round((effectiveDy / HOUR_HEIGHT) * 60 / 10) * 10;
                           const newMin = startMin + deltaMin;
                           const currentColX = colIdx * COL_W;
                           const targetColIdx = Math.min(6, Math.max(0, Math.floor((currentColX + dx + COL_W / 2) / COL_W)));
                           const targetDate = displayDates[targetColIdx];
+                          weekAutoScrollOffsetRef.current = 0;
                           handleWeekDropLesson(lesson.id, date, targetDate, newMin);
                         }}
                         onDragStart={() => {
+                          weekAutoScrollOffsetRef.current = 0;
                           setWeekDraggingId(lesson.id);
                           setWeekDragTargetMin(timeToMinutes(lesson.start_time));
                           setWeekDragTargetColIdx(colIdx);
                         }}
                         onDragCancel={() => {
-                          if (weekAutoScrollRef.current) { clearInterval(weekAutoScrollRef.current); weekAutoScrollRef.current = null; }
+                          stopWeekAutoScroll();
+                          weekAutoScrollOffsetRef.current = 0;
                           setWeekDraggingId(null);
                           setWeekDragTargetColIdx(-1);
                         }}
@@ -1635,10 +1714,13 @@ ${rejectMsg.trim()}`
 // ── 드래그 가능한 레슨 카드 컴포넌트 ──────────────────────────
 function DraggableLesson({
   lesson, top, height, left, width, isDragging, onPress, onDragEnd, onDragStart, onDragCancel,
+  onDragMove, scrollOffsetRef,
   cardBg, cardNameColor, cardTimeColor, cardBorderColor,
 }: {
   lesson: LessonWithMembers; top: number; height: number; left: number; width: number; isDragging: boolean;
   onPress: () => void; onDragEnd: (dy: number) => void; onDragStart: () => void; onDragCancel: () => void;
+  onDragMove?: (moveY: number) => void;
+  scrollOffsetRef?: React.MutableRefObject<number>;
   cardBg: string; cardNameColor: string; cardTimeColor: string; cardBorderColor: string;
 }) {
   const pan = useRef(new Animated.ValueXY()).current;
@@ -1649,15 +1731,17 @@ function DraggableLesson({
   const onDragEndRef = useRef(onDragEnd);
   const onDragStartRef = useRef(onDragStart);
   const onDragCancelRef = useRef(onDragCancel);
+  const onDragMoveRef = useRef(onDragMove);
   const onPressRef = useRef(onPress);
   const lessonStartMinRef = useRef(timeToMinutes(lesson.start_time));
   useEffect(() => {
     onDragEndRef.current = onDragEnd;
     onDragStartRef.current = onDragStart;
     onDragCancelRef.current = onDragCancel;
+    onDragMoveRef.current = onDragMove;
     onPressRef.current = onPress;
     lessonStartMinRef.current = timeToMinutes(lesson.start_time);
-  }, [onDragEnd, onDragStart, onDragCancel, onPress, lesson.start_time]);
+  }, [onDragEnd, onDragStart, onDragCancel, onDragMove, onPress, lesson.start_time]);
 
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => dragging.current,
@@ -1669,19 +1753,25 @@ function DraggableLesson({
       pan.setValue({ x: 0, y: 0 });
     },
     onPanResponderMove: (_, g) => {
-      pan.y.setValue(g.dy);
-      const deltaMin = Math.round((g.dy / HOUR_HEIGHT) * 60 / 10) * 10;
+      // Include accumulated auto-scroll offset so card visually tracks the finger
+      const scrollOffset = scrollOffsetRef?.current ?? 0;
+      pan.y.setValue(g.dy + scrollOffset);
+      const effectiveDy = g.dy + scrollOffset;
+      const deltaMin = Math.round((effectiveDy / HOUR_HEIGHT) * 60 / 10) * 10;
       const newMin = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60 - 10, lessonStartMinRef.current + deltaMin));
       setLiveDragTime(minutesToTime(newMin));
+      // Notify parent to trigger auto-scroll based on finger screen position
+      onDragMoveRef.current?.(g.moveY);
     },
     onPanResponderRelease: (_, g) => {
       if (!dragging.current) return;
       dragging.current = false;
       pan.flattenOffset();
-      const dy = g.dy;
+      const scrollOffset = scrollOffsetRef?.current ?? 0;
+      const effectiveDy = g.dy + scrollOffset;
       pan.setValue({ x: 0, y: 0 });
       setLiveDragTime(null);
-      onDragEndRef.current(dy);
+      onDragEndRef.current(effectiveDy);
       onDragCancelRef.current();
     },
     onPanResponderTerminate: () => {
