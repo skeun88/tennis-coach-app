@@ -1364,6 +1364,9 @@ ${rejectMsg.trim()}`
     ];
     // pad to complete last row
     while (cells.length % 7 !== 0) cells.push(null);
+    // group into rows of 7
+    const rows: (number | null)[][] = [];
+    for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
 
     return (
       <ScrollView style={{ flex: 1, backgroundColor: S_BG }} showsVerticalScrollIndicator={false}
@@ -1386,34 +1389,39 @@ ${rejectMsg.trim()}`
 
         {/* 날짜 그리드 */}
         <View style={styles.monthGrid}>
-          {cells.map((day, idx) => {
-            if (!day) return <View key={`empty-${idx}`} style={styles.monthCell} />;
-            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const dayLessons = monthLessons.get(dateStr) ?? [];
-            const isToday = dateStr === today;
-            const isSun = idx % 7 === 0;
-            const isSat = idx % 7 === 6;
-            return (
-              <TouchableOpacity
-                key={dateStr}
-                style={[styles.monthCell, isToday && styles.monthCellToday, selectedMonthDate === dateStr && styles.monthCellSelected]}
-                onPress={() => setSelectedMonthDate(prev => prev === dateStr ? null : dateStr)}
-              >
-                <Text style={[
-                  styles.monthCellDay,
-                  isToday && styles.monthCellDayToday,
-                  isSun && !isToday && { color: Colors.destructive },
-                  isSat && !isToday && { color: Colors.info },
-                ]}>{day}</Text>
-                {dayLessons.length > 0 && (
-                  <View style={styles.monthLessonDots}>
-                    <View style={styles.monthDot} />
-                    <Text style={styles.monthLessonCount}>{dayLessons.length}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
+          {rows.map((row, rowIdx) => (
+            <View key={rowIdx} style={styles.monthRow}>
+              {row.map((day, colIdx) => {
+                const isSun = colIdx === 0;
+                const isSat = colIdx === 6;
+                const isLast = colIdx === 6;
+                if (!day) return <View key={`empty-${rowIdx}-${colIdx}`} style={[styles.monthCell, !isLast && styles.monthCellBorderRight]} />;
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const dayLessons = monthLessons.get(dateStr) ?? [];
+                const isToday = dateStr === today;
+                return (
+                  <TouchableOpacity
+                    key={dateStr}
+                    style={[styles.monthCell, !isLast && styles.monthCellBorderRight, isToday && styles.monthCellToday, selectedMonthDate === dateStr && styles.monthCellSelected]}
+                    onPress={() => setSelectedMonthDate(prev => prev === dateStr ? null : dateStr)}
+                  >
+                    <Text style={[
+                      styles.monthCellDay,
+                      isToday && styles.monthCellDayToday,
+                      isSun && !isToday && { color: Colors.destructive },
+                      isSat && !isToday && { color: Colors.info },
+                    ]}>{day}</Text>
+                    {dayLessons.length > 0 && (
+                      <View style={styles.monthLessonDots}>
+                        <View style={styles.monthDot} />
+                        <Text style={styles.monthLessonCount}>{dayLessons.length}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ))}
         </View>
 
         {/* 이번 달 레슨 요약 */}
@@ -2192,10 +2200,12 @@ const styles = StyleSheet.create({
   monthHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border },
   monthNavBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.mutedBg, justifyContent: 'center', alignItems: 'center' },
   monthTitle: { fontSize: 17, fontWeight: '800', color: Colors.navy },
-  monthDayHeaders: { flexDirection: 'row', backgroundColor: Colors.white, paddingVertical: 8, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  monthDayHeaders: { flexDirection: 'row', backgroundColor: Colors.white, paddingVertical: 8, paddingHorizontal: 0, borderBottomWidth: 1, borderBottomColor: '#D4C8B8' },
   monthDayName: { flex: 1, textAlign: 'center', fontSize: 14, fontWeight: '700', color: Colors.mutedFg },
-  monthGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 4, paddingTop: 4 },
-  monthCell: { width: '14.28%', minHeight: 64, padding: 4, alignItems: 'center', borderRadius: 8 },
+  monthGrid: { borderTopWidth: 1, borderTopColor: '#D4C8B8' },
+  monthRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#D4C8B8' },
+  monthCell: { width: '14.28%', minHeight: 66, paddingTop: 6, paddingBottom: 5, paddingHorizontal: 2, alignItems: 'center' },
+  monthCellBorderRight: { borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: '#E6DDD2' },
   monthCellToday: { backgroundColor: Colors.primary + '18' },
   monthCellDay: { fontSize: 15, fontWeight: '600', color: Colors.foreground, marginBottom: 3 },
   monthCellDayToday: { color: Colors.primary, fontWeight: '800' },
