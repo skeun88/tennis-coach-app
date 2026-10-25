@@ -137,6 +137,18 @@ export default function AIAnalysisScreen() {
   const [recentCombos, setRecentCombos] = useState<MemoItem[]>([]);
   const [memoExpanded, setMemoExpanded] = useState(false);
 
+  // 코치별 사용자 정의 키워드
+  type CustomKwStore = {
+    techniques: string[];
+    corrections: Record<string, string[]>; // tech key → custom items ('__all__' = global)
+    statuses: string[];
+    goals: Record<string, string[]>;
+  };
+  const [customKw, setCustomKw] = useState<CustomKwStore>({ techniques: [], corrections: {}, statuses: [], goals: {} });
+  const [addingCategory, setAddingCategory] = useState<'tech' | 'correction' | 'status' | 'goal' | null>(null);
+  const [addingInput, setAddingInput] = useState('');
+  const addingInputRef = useRef<TextInput>(null);
+
   const [usageSheetVisible, setUsageSheetVisible] = useState(false);
   const [hasSeenUsage, setHasSeenUsage] = useState(true); // true = no pulse (default until loaded)
 
@@ -483,6 +495,11 @@ export default function AIAnalysisScreen() {
           try { setRecentCombos(JSON.parse(raw)); } catch { /* ignore */ }
         }
       });
+      AsyncStorage.getItem(`kerri_custom_kw_${currentCoachId}`).then(raw => {
+        if (raw) {
+          try { setCustomKw(JSON.parse(raw)); } catch { /* ignore */ }
+        }
+      });
     }
   }, [manualModalVisible]);
 
@@ -582,13 +599,94 @@ export default function AIAnalysisScreen() {
     setSelPoints(prev => prev.includes(pt) ? prev.filter(p => p !== pt) : [...prev, pt]);
   }
 
-  const currentCorrections = selTech
-    ? (CORRECTION_BY_TECH[selTech] ?? DEFAULT_CORRECTIONS)
-    : DEFAULT_CORRECTIONS;
+  function saveCustomKwStore(updated: CustomKwStore) {
+    setCustomKw(updated);
+    if (currentCoachId) {
+      AsyncStorage.setItem(`kerri_custom_kw_${currentCoachId}`, JSON.stringify(updated)).catch(() => {});
+    }
+  }
 
-  const currentGoals = selTech
-    ? (GOAL_BY_TECH[selTech] ?? DEFAULT_GOALS)
-    : DEFAULT_GOALS;
+  function confirmAddKeyword() {
+    const val = addingInput.trim();
+    if (!val || val.length > 20) return;
+    const updated: CustomKwStore = {
+      techniques: [...customKw.techniques],
+      corrections: { ...customKw.corrections },
+      statuses: [...customKw.statuses],
+      goals: { ...customKw.goals },
+    };
+
+    if (addingCategory === 'tech') {
+      const all = [...(TENNIS_TECHNIQUES as readonly string[]), ...customKw.techniques];
+      if (all.includes(val)) { setAddingInput(''); setAddingCategory(null); return; }
+      updated.techniques = [...customKw.techniques, val];
+      saveCustomKwStore(updated);
+      setSelTech(val); setSelPoints([]); setSelGoal(null);
+    } else if (addingCategory === 'correction') {
+      const techKey = selTech ?? '__all__';
+      const baseList = selTech ? (CORRECTION_BY_TECH[selTech] ?? DEFAULT_CORRECTIONS) : DEFAULT_CORRECTIONS;
+      const existing = [...baseList, ...(customKw.corrections[techKey] ?? []), ...(selTech ? (customKw.corrections['__all__'] ?? []) : [])];
+      if (existing.includes(val)) { setAddingInput(''); setAddingCategory(null); return; }
+      updated.corrections = { ...customKw.corrections, [techKey]: [...(customKw.corrections[techKey] ?? []), val] };
+      saveCustomKwStore(updated);
+      setSelPoints(prev => [...prev, val]);
+    } else if (addingCategory === 'status') {
+      const all = [...(STATUS_KEYWORDS as readonly string[]), ...customKw.statuses];
+      if (all.includes(val)) { setAddingInput(''); setAddingCategory(null); return; }
+      updated.statuses = [...customKw.statuses, val];
+      saveCustomKwStore(updated);
+      setSelStatus(val);
+    } else if (addingCategory === 'goal') {
+      const techKey = selTech ?? '__all__';
+      const baseList = selTech ? (GOAL_BY_TECH[selTech] ?? DEFAULT_GOALS) : DEFAULT_GOALS;
+      const existing = [...baseList, ...(customKw.goals[techKey] ?? []), ...(selTech ? (customKw.goals['__all__'] ?? []) : [])];
+      if (existing.includes(val)) { setAddingInput(''); setAddingCategory(null); return; }
+      updated.goals = { ...customKw.goals, [techKey]: [...(customKw.goals[techKey] ?? []), val] };
+      saveCustomKwStore(updated);
+      setSelGoal(val);
+    }
+    setAddingInput('');
+    setAddingCategory(null);
+  }
+
+  function deleteCustomKeyword(category: 'tech' | 'correction' | 'status' | 'goal', techKey: string | null, val: string) {
+    const updated: CustomKwStore = {
+      techniques: [...customKw.techniques],
+      corrections: { ...customKw.corrections },
+      statuses: [...customKw.statuses],
+      goals: { ...customKw.goals },
+    };
+    if (category === 'tech') {
+      updated.techniques = customKw.techniques.filter(k => k !== val);
+      if (selTech === val) { setSelTech(null); setSelPoints([]); setSelGoal(null); }
+    } else if (category === 'correction') {
+      const key = techKey ?? '__all__';
+      updated.corrections = { ...customKw.corrections, [key]: (customKw.corrections[key] ?? []).filter(k => k !== val) };
+      setSelPoints(prev => prev.filter(p => p !== val));
+    } else if (category === 'status') {
+      updated.statuses = customKw.statuses.filter(k => k !== val);
+      if (selStatus === val) setSelStatus(null);
+    } else if (category === 'goal') {
+      const key = techKey ?? '__all__';
+      updated.goals = { ...customKw.goals, [key]: (customKw.goals[key] ?? []).filter(k => k !== val) };
+      if (selGoal === val) setSelGoal(null);
+    }
+    saveCustomKwStore(updated);
+  }
+
+  const customCorrKey = selTech ?? '__all__';
+  const currentCorrections = [
+    ...(selTech ? (CORRECTION_BY_TECH[selTech] ?? DEFAULT_CORRECTIONS) : DEFAULT_CORRECTIONS),
+    ...(customKw.corrections[customCorrKey] ?? []),
+    ...(selTech ? (customKw.corrections['__all__'] ?? []) : []),
+  ];
+
+  const customGoalKey = selTech ?? '__all__';
+  const currentGoals = [
+    ...(selTech ? (GOAL_BY_TECH[selTech] ?? DEFAULT_GOALS) : DEFAULT_GOALS),
+    ...(customKw.goals[customGoalKey] ?? []),
+    ...(selTech ? (customKw.goals['__all__'] ?? []) : []),
+  ];
 
   const hasCurrentSel = !!(selTech || selPoints.length > 0 || selStatus || selGoal);
 
@@ -1509,6 +1607,32 @@ export default function AIAnalysisScreen() {
                           </TouchableOpacity>
                         );
                       })}
+                      {customKw.techniques.map(tech => {
+                        const selected = selTech === tech;
+                        return (
+                          <TouchableOpacity
+                            key={`c_${tech}`}
+                            style={[styles.kwChip, styles.kwChipCustom, selected && styles.kwChipSelected]}
+                            onPress={() => { const next = selTech === tech ? null : tech; setSelTech(next); setSelPoints([]); if (!next) setSelGoal(null); }}
+                            onLongPress={() => Alert.alert('키워드 삭제', `"${tech}"를 삭제할까요?`, [{ text: '취소', style: 'cancel' }, { text: '삭제', style: 'destructive', onPress: () => deleteCustomKeyword('tech', null, tech) }])}
+                            activeOpacity={0.7}
+                          >
+                            {selected && <Ionicons name="checkmark" size={11} color="#fff" style={{ marginRight: 3 }} />}
+                            <Text style={[styles.kwChipText, selected && styles.kwChipTextSelected]}>{tech}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                      {addingCategory === 'tech' ? (
+                        <View style={styles.kwAddInputRow}>
+                          <TextInput ref={addingInputRef} style={styles.kwAddInput} value={addingInput} onChangeText={v => setAddingInput(v.slice(0, 20))} placeholder="직접 입력" placeholderTextColor={Colors.placeholder} autoFocus returnKeyType="done" onSubmitEditing={confirmAddKeyword} onBlur={() => { if (!addingInput.trim()) { setAddingCategory(null); setAddingInput(''); } }} />
+                          <TouchableOpacity style={[styles.kwAddConfirmBtn, !addingInput.trim() && { opacity: 0.4 }]} onPress={confirmAddKeyword}><Text style={styles.kwAddConfirmText}>추가</Text></TouchableOpacity>
+                          <TouchableOpacity style={styles.kwAddCancelBtn} onPress={() => { setAddingCategory(null); setAddingInput(''); }}><Ionicons name="close" size={14} color={Colors.mutedFg} /></TouchableOpacity>
+                        </View>
+                      ) : (
+                        <TouchableOpacity style={styles.kwAddBtn} onPress={() => setAddingCategory('tech')} activeOpacity={0.7}>
+                          <Ionicons name="add" size={13} color={Colors.mutedFg} /><Text style={styles.kwAddBtnText}>추가</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
 
@@ -1523,11 +1647,16 @@ export default function AIAnalysisScreen() {
                     <View style={styles.kwChipsRow}>
                       {currentCorrections.map(pt => {
                         const selected = selPoints.includes(pt);
+                        const isCustom = !((selTech ? (CORRECTION_BY_TECH[selTech] ?? DEFAULT_CORRECTIONS) : DEFAULT_CORRECTIONS).includes(pt));
                         return (
                           <TouchableOpacity
                             key={pt}
-                            style={[styles.kwChip, selected && styles.kwChipSelected]}
+                            style={[styles.kwChip, isCustom && styles.kwChipCustom, selected && styles.kwChipSelected]}
                             onPress={() => togglePoint(pt)}
+                            onLongPress={isCustom ? () => {
+                              const techKey = selTech ?? '__all__';
+                              Alert.alert('키워드 삭제', `"${pt}"를 삭제할까요?`, [{ text: '취소', style: 'cancel' }, { text: '삭제', style: 'destructive', onPress: () => deleteCustomKeyword('correction', techKey, pt) }]);
+                            } : undefined}
                             activeOpacity={0.7}
                           >
                             {selected && <Ionicons name="checkmark" size={11} color="#fff" style={{ marginRight: 3 }} />}
@@ -1535,6 +1664,17 @@ export default function AIAnalysisScreen() {
                           </TouchableOpacity>
                         );
                       })}
+                      {addingCategory === 'correction' ? (
+                        <View style={styles.kwAddInputRow}>
+                          <TextInput ref={addingInputRef} style={styles.kwAddInput} value={addingInput} onChangeText={v => setAddingInput(v.slice(0, 20))} placeholder="직접 입력" placeholderTextColor={Colors.placeholder} autoFocus returnKeyType="done" onSubmitEditing={confirmAddKeyword} onBlur={() => { if (!addingInput.trim()) { setAddingCategory(null); setAddingInput(''); } }} />
+                          <TouchableOpacity style={[styles.kwAddConfirmBtn, !addingInput.trim() && { opacity: 0.4 }]} onPress={confirmAddKeyword}><Text style={styles.kwAddConfirmText}>추가</Text></TouchableOpacity>
+                          <TouchableOpacity style={styles.kwAddCancelBtn} onPress={() => { setAddingCategory(null); setAddingInput(''); }}><Ionicons name="close" size={14} color={Colors.mutedFg} /></TouchableOpacity>
+                        </View>
+                      ) : (
+                        <TouchableOpacity style={styles.kwAddBtn} onPress={() => setAddingCategory('correction')} activeOpacity={0.7}>
+                          <Ionicons name="add" size={13} color={Colors.mutedFg} /><Text style={styles.kwAddBtnText}>추가</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
 
@@ -1547,13 +1687,15 @@ export default function AIAnalysisScreen() {
                       <Text style={styles.stepTitle}>현재 상태{selStatus ? ` — ${selStatus}` : ''}</Text>
                     </View>
                     <View style={styles.kwChipsRow}>
-                      {(STATUS_KEYWORDS as readonly string[]).map(st => {
+                      {[...(STATUS_KEYWORDS as readonly string[]), ...customKw.statuses].map(st => {
                         const selected = selStatus === st;
+                        const isCustom = !(STATUS_KEYWORDS as readonly string[]).includes(st);
                         return (
                           <TouchableOpacity
                             key={st}
-                            style={[styles.kwChip, selected && styles.kwChipSelected]}
+                            style={[styles.kwChip, isCustom && styles.kwChipCustom, selected && styles.kwChipSelected]}
                             onPress={() => setSelStatus(prev => prev === st ? null : st)}
+                            onLongPress={isCustom ? () => Alert.alert('키워드 삭제', `"${st}"를 삭제할까요?`, [{ text: '취소', style: 'cancel' }, { text: '삭제', style: 'destructive', onPress: () => deleteCustomKeyword('status', null, st) }]) : undefined}
                             activeOpacity={0.7}
                           >
                             {selected && <Ionicons name="checkmark" size={11} color="#fff" style={{ marginRight: 3 }} />}
@@ -1561,6 +1703,17 @@ export default function AIAnalysisScreen() {
                           </TouchableOpacity>
                         );
                       })}
+                      {addingCategory === 'status' ? (
+                        <View style={styles.kwAddInputRow}>
+                          <TextInput ref={addingInputRef} style={styles.kwAddInput} value={addingInput} onChangeText={v => setAddingInput(v.slice(0, 20))} placeholder="직접 입력" placeholderTextColor={Colors.placeholder} autoFocus returnKeyType="done" onSubmitEditing={confirmAddKeyword} onBlur={() => { if (!addingInput.trim()) { setAddingCategory(null); setAddingInput(''); } }} />
+                          <TouchableOpacity style={[styles.kwAddConfirmBtn, !addingInput.trim() && { opacity: 0.4 }]} onPress={confirmAddKeyword}><Text style={styles.kwAddConfirmText}>추가</Text></TouchableOpacity>
+                          <TouchableOpacity style={styles.kwAddCancelBtn} onPress={() => { setAddingCategory(null); setAddingInput(''); }}><Ionicons name="close" size={14} color={Colors.mutedFg} /></TouchableOpacity>
+                        </View>
+                      ) : (
+                        <TouchableOpacity style={styles.kwAddBtn} onPress={() => setAddingCategory('status')} activeOpacity={0.7}>
+                          <Ionicons name="add" size={13} color={Colors.mutedFg} /><Text style={styles.kwAddBtnText}>추가</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
 
@@ -1576,11 +1729,17 @@ export default function AIAnalysisScreen() {
                     <View style={styles.kwChipsRow}>
                       {currentGoals.map(goal => {
                         const selected = selGoal === goal;
+                        const baseGoals = selTech ? (GOAL_BY_TECH[selTech] ?? DEFAULT_GOALS) : DEFAULT_GOALS;
+                        const isCustom = !baseGoals.includes(goal);
                         return (
                           <TouchableOpacity
                             key={goal}
-                            style={[styles.kwChip, selected && styles.kwChipSelected]}
+                            style={[styles.kwChip, isCustom && styles.kwChipCustom, selected && styles.kwChipSelected]}
                             onPress={() => setSelGoal(prev => prev === goal ? null : goal)}
+                            onLongPress={isCustom ? () => {
+                              const techKey = selTech ?? '__all__';
+                              Alert.alert('키워드 삭제', `"${goal}"를 삭제할까요?`, [{ text: '취소', style: 'cancel' }, { text: '삭제', style: 'destructive', onPress: () => deleteCustomKeyword('goal', techKey, goal) }]);
+                            } : undefined}
                             activeOpacity={0.7}
                           >
                             {selected && <Ionicons name="checkmark" size={11} color="#fff" style={{ marginRight: 3 }} />}
@@ -1588,6 +1747,17 @@ export default function AIAnalysisScreen() {
                           </TouchableOpacity>
                         );
                       })}
+                      {addingCategory === 'goal' ? (
+                        <View style={styles.kwAddInputRow}>
+                          <TextInput ref={addingInputRef} style={styles.kwAddInput} value={addingInput} onChangeText={v => setAddingInput(v.slice(0, 20))} placeholder="직접 입력" placeholderTextColor={Colors.placeholder} autoFocus returnKeyType="done" onSubmitEditing={confirmAddKeyword} onBlur={() => { if (!addingInput.trim()) { setAddingCategory(null); setAddingInput(''); } }} />
+                          <TouchableOpacity style={[styles.kwAddConfirmBtn, !addingInput.trim() && { opacity: 0.4 }]} onPress={confirmAddKeyword}><Text style={styles.kwAddConfirmText}>추가</Text></TouchableOpacity>
+                          <TouchableOpacity style={styles.kwAddCancelBtn} onPress={() => { setAddingCategory(null); setAddingInput(''); }}><Ionicons name="close" size={14} color={Colors.mutedFg} /></TouchableOpacity>
+                        </View>
+                      ) : (
+                        <TouchableOpacity style={styles.kwAddBtn} onPress={() => setAddingCategory('goal')} activeOpacity={0.7}>
+                          <Ionicons name="add" size={13} color={Colors.mutedFg} /><Text style={styles.kwAddBtnText}>추가</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
 
@@ -2319,6 +2489,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', maxWidth: 220,
   },
   recentComboText: { fontSize: 12, fontWeight: '600', color: Colors.mutedFg },
+  kwChipCustom: { borderStyle: 'dashed' },
+  kwAddBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingHorizontal: 10, paddingVertical: 7,
+    borderRadius: 18, borderWidth: 1, borderColor: Colors.borderLight,
+    borderStyle: 'dashed', backgroundColor: 'transparent',
+  },
+  kwAddBtnText: { fontSize: 12, fontWeight: '500', color: Colors.mutedFg },
+  kwAddInputRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    flex: 1, minWidth: 160,
+  },
+  kwAddInput: {
+    flex: 1, height: 34,
+    borderRadius: 10, borderWidth: 1, borderColor: Colors.primary,
+    paddingHorizontal: 10, fontSize: 13, color: Colors.foreground,
+    backgroundColor: '#fff',
+  },
+  kwAddConfirmBtn: {
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: 8, backgroundColor: Colors.primary,
+  },
+  kwAddConfirmText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  kwAddCancelBtn: {
+    padding: 4,
+  },
   inputWrapper: {
     flex: 1,
     marginHorizontal: 16,
