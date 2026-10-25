@@ -22,15 +22,43 @@ interface Props {
   onPressViewRecord: (planId: string | undefined, reportId: string | undefined, memberId: string, memberName: string, memberLevel: string) => void;
 }
 
-// AI 원문 변경 없이 브리핑용 핵심 문구 추출 (단순 글자수 자르기 금지)
-function summarizePoint(text: string): string {
-  const t = text.trim();
-  // 첫 문장 경계 (한국어 마침표·온점)
-  const sentEnd = t.search(/[.。]/);
-  if (sentEnd > 2 && sentEnd < t.length - 1) return t.slice(0, sentEnd + 1).trim();
-  // 첫 절 경계 (쉼표·반각·전각)
-  const clauseEnd = t.search(/[,，]/);
-  if (clauseEnd > 3 && clauseEnd < 32) return t.slice(0, clauseEnd).trim();
+/**
+ * 한국어 문법 패턴으로 핵심절 추출 — AI 원문 미변경, 단순 글자수 자르기 금지.
+ *
+ * 실제 AI 출력 패턴 기반 (DB에서 확인):
+ *  1. "문제 → 해결책" 형식    → ' → ' 앞부분만 추출
+ *  2. "현상 경향이 있으므로, 처방" 형식  → '경향이 있' 앞부분만 추출
+ *  3. "원인이므로/하므로, 처방" 형식     → '으므로/므로' 앞부분 추출 (길이가 전체의 65% 미만일 때)
+ *  4. 쉼표가 전체의 50% 이내 위치 → 앞부분 추출
+ *  5. 위 패턴 미해당 → 그대로 반환 (numberOfLines={2}로 자연스럽게 래핑)
+ */
+function extractCorePhrase(text: string): string {
+  const t = text.trim().replace(/[.。]$/, '').trim();
+  if (t.length <= 22) return t;
+
+  // 패턴 1: "문제 설명 → 해결책" — 화살표 앞부분이 핵심 문제
+  const arrowIdx = t.indexOf(' → ');
+  if (arrowIdx > 5) return t.slice(0, arrowIdx).trim();
+
+  // 패턴 2: "...경향이 있으므로/있어서/있음" — 헤징 동사구 앞이 핵심
+  const hedgeMatch = t.match(/^(.+?)\s+경향이\s+있/);
+  if (hedgeMatch && hedgeMatch[1].length >= 5) return hedgeMatch[1].trim();
+
+  // 패턴 3: "...으므로/므로" 원인절 — 원인부가 핵심 (전체의 65% 미만일 때만)
+  const causalMatch = t.match(/^(.+?)으?므로\b/);
+  if (causalMatch && causalMatch[1].length >= 5 && causalMatch[1].length < t.length * 0.65) {
+    return causalMatch[1].trim();
+  }
+
+  // 패턴 4: 쉼표가 전체의 50% 이전 → 앞부분이 문제, 뒤가 처방
+  // 쉼표 앞에 남은 "므로"는 접속 어미이므로 함께 제거
+  const commaIdx = t.indexOf(', ');
+  if (commaIdx > 5 && commaIdx < t.length * 0.5) {
+    const part = t.slice(0, commaIdx).replace(/\s*으?므로$/, '').trim();
+    if (part.length >= 5) return part;
+  }
+
+  // 패턴 미해당: 원문 그대로 (numberOfLines={2}로 래핑)
   return t;
 }
 
@@ -118,7 +146,7 @@ export default function NextLessonBriefingCard({
     return d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
   }
 
-  // improvement_points → 최대 2개, 스마트 요약
+  // improvement_points → 최대 2개, 한국어 문법 패턴으로 핵심절 추출
   const keyPoints: string[] = (() => {
     if (!plan?.improvement_points) return [];
     let items: string[];
@@ -133,17 +161,17 @@ export default function NextLessonBriefingCard({
         items = [(plan.improvement_points as string).trim()].filter(Boolean);
       }
     }
-    return items.slice(0, 2).map(summarizePoint);
+    return items.slice(0, 2).map(extractCorePhrase);
   })();
 
-  // next_goals / coach_next_goals → 브리핑용 핵심 목표 1개 요약
+  // next_goals / coach_next_goals → 브리핑용 핵심 목표 1개 (핵심절 추출)
   const nextGoalText: string | null = (() => {
     if (!plan || plan.source !== 'plan') return null;
     const goals: string[] = (plan.next_goals_saved && plan.coach_next_goals?.length)
       ? plan.coach_next_goals
       : (plan.next_goals ?? []);
     if (!goals.length) return null;
-    return summarizePoint(goals[0]);
+    return extractCorePhrase(goals[0]);
   })();
 
   // 빈 상태 카드 (레슨 없음 / 모두 완료)
