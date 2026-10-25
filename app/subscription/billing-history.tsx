@@ -41,12 +41,16 @@ function formatDate(iso: string): string {
 
 export default function BillingHistoryScreen() {
   const router = useRouter();
-  const { subscription } = useSubscription();
+  const { subscription, loading: subscriptionLoading } = useSubscription();
   const [items, setItems] = useState<BillingItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadHistory = useCallback(async () => {
-    if (!subscription?.coach_id) { setLoading(false); return; }
+    if (!subscription?.coach_id) {
+      // subscription 훅이 아직 로딩 중이면 loading 유지, 완료됐는데 coach_id 없으면 false
+      if (!subscriptionLoading) setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const [logsRes, topupRes] = await Promise.all([
@@ -91,7 +95,7 @@ export default function BillingHistoryScreen() {
     } finally {
       setLoading(false);
     }
-  }, [subscription]);
+  }, [subscription, subscriptionLoading]);
 
   useEffect(() => {
     (async () => {

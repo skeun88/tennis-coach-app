@@ -164,7 +164,7 @@ export async function syncRevenueCatToDb(userId: string): Promise<void> {
     ) {
       const productId: string = activeEntitlement.productIdentifier ?? '';
       const amount = PRODUCT_AMOUNT_MAP[productId] ?? 0;
-      void supabase.rpc('log_iap_renewal', {
+      await supabase.rpc('log_iap_renewal', {
         p_plan_id: planId,
         p_renewal_date: activeEntitlement.latestPurchaseDate,
         p_period_end: currentPeriodEnd ?? new Date().toISOString(),
