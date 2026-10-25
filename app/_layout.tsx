@@ -7,7 +7,7 @@ import * as Updates from 'expo-updates';
 import { supabase } from '../lib/supabase';
 import { Text } from 'react-native';
 import * as Font from 'expo-font';
-import { Manrope_400Regular, Manrope_600SemiBold } from '@expo-google-fonts/manrope';
+import { Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold } from '@expo-google-fonts/manrope';
 import { getCurrentSubscription } from '../lib/subscription';
 import { registerCoachPushToken } from '../lib/notifications';
 import { IS_BETA } from '../lib/beta';
@@ -40,7 +40,7 @@ export default function RootLayout() {
   const segments = useSegments();
 
   useEffect(() => {
-    Font.loadAsync({ Manrope_400Regular, Manrope_600SemiBold })
+    Font.loadAsync({ Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold })
       .catch(() => {})
       .finally(() => setFontsLoaded(true));
   }, []);
