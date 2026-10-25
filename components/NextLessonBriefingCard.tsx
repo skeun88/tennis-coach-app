@@ -1,8 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import type { TodayCard } from '../lib/homeDataLoader';
+
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+const CACHE_PREFIX = 'briefing_v3_';
 
 interface LessonPlanBrief {
   id: string;
@@ -14,6 +19,11 @@ interface LessonPlanBrief {
   source: 'plan' | 'report';
 }
 
+interface BriefingSummary {
+  keyPoints: string[];
+  nextGoal: string | null;
+}
+
 interface Props {
   nextCard: TodayCard | null;
   hasToday: boolean;
@@ -22,50 +32,15 @@ interface Props {
   onPressViewRecord: (planId: string | undefined, reportId: string | undefined, memberId: string, memberName: string, memberLevel: string) => void;
 }
 
-/**
- * 한국어 문법 패턴으로 핵심절 추출 — AI 원문 미변경, 단순 글자수 자르기 금지.
- *
- * 실제 AI 출력 패턴 기반 (DB에서 확인):
- *  1. "문제 → 해결책" 형식    → ' → ' 앞부분만 추출
- *  2. "현상 경향이 있으므로, 처방" 형식  → '경향이 있' 앞부분만 추출
- *  3. "원인이므로/하므로, 처방" 형식     → '으므로/므로' 앞부분 추출 (길이가 전체의 65% 미만일 때)
- *  4. 쉼표가 전체의 50% 이내 위치 → 앞부분 추출
- *  5. 위 패턴 미해당 → 그대로 반환 (numberOfLines={2}로 자연스럽게 래핑)
- */
-function extractCorePhrase(text: string): string {
-  const t = text.trim().replace(/[.。]$/, '').trim();
-  if (t.length <= 22) return t;
-
-  // 패턴 1: "문제 설명 → 해결책" — 화살표 앞부분이 핵심 문제
-  const arrowIdx = t.indexOf(' → ');
-  if (arrowIdx > 5) return t.slice(0, arrowIdx).trim();
-
-  // 패턴 2: "...경향이 있으므로/있어서/있음" — 헤징 동사구 앞이 핵심
-  const hedgeMatch = t.match(/^(.+?)\s+경향이\s+있/);
-  if (hedgeMatch && hedgeMatch[1].length >= 5) return hedgeMatch[1].trim();
-
-  // 패턴 3: "...으므로/므로" 원인절 — 원인부가 핵심 (전체의 65% 미만일 때만)
-  const causalMatch = t.match(/^(.+?)으?므로\b/);
-  if (causalMatch && causalMatch[1].length >= 5 && causalMatch[1].length < t.length * 0.65) {
-    return causalMatch[1].trim();
-  }
-
-  // 패턴 4: 쉼표가 전체의 50% 이전 → 앞부분이 문제, 뒤가 처방
-  // 쉼표 앞에 남은 "므로"는 접속 어미이므로 함께 제거
-  const commaIdx = t.indexOf(', ');
-  if (commaIdx > 5 && commaIdx < t.length * 0.5) {
-    const part = t.slice(0, commaIdx).replace(/\s*으?므로$/, '').trim();
-    if (part.length >= 5) return part;
-  }
-
-  // 패턴 5: "핵심 목표 - 세부 훈련 방법" 형식 (next_goals 스타일)
-  const dashIdx = t.indexOf(' - ');
-  if (dashIdx > 5 && dashIdx < t.length * 0.6) {
-    return t.slice(0, dashIdx).trim();
-  }
-
-  // 패턴 미해당: 원문 그대로 (numberOfLines={2}로 래핑)
-  return t;
+/** improvement_points를 원문 그대로 최대 2개 배열로 변환 (자르기 금지) */
+function parseImprovementPoints(val: string | string[] | null): string[] {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.filter(Boolean).slice(0, 2);
+  try {
+    const parsed = JSON.parse(val as string);
+    if (Array.isArray(parsed)) return (parsed as string[]).filter(Boolean).slice(0, 2);
+  } catch {}
+  return [(val as string).trim()].filter(Boolean);
 }
 
 export default function NextLessonBriefingCard({
@@ -78,9 +53,11 @@ export default function NextLessonBriefingCard({
   const [plan, setPlan] = useState<LessonPlanBrief | null>(null);
   const [loading, setLoading] = useState(false);
   const [isFirstLesson, setIsFirstLesson] = useState(false);
+  const [summary, setSummary] = useState<BriefingSummary | null>(null);
+  const summarizing = useRef(false);
 
   useEffect(() => {
-    if (!nextCard) { setPlan(null); setIsFirstLesson(false); return; }
+    if (!nextCard) { setPlan(null); setIsFirstLesson(false); setSummary(null); return; }
     fetchLatestPlan(nextCard.memberId);
   }, [nextCard?.memberId]);
 
@@ -120,11 +97,9 @@ export default function NextLessonBriefingCard({
 
       let best: LessonPlanBrief | null = null;
       if (planData && reportData) {
-        if (new Date(planData.created_at) >= new Date(reportData.created_at)) {
-          best = { ...planData, source: 'plan' };
-        } else {
-          best = { id: reportData.id, improvement_points: reportData.improvement_points, next_goals: null, coach_next_goals: null, next_goals_saved: null, created_at: reportData.created_at, source: 'report' };
-        }
+        best = new Date(planData.created_at) >= new Date(reportData.created_at)
+          ? { ...planData, source: 'plan' }
+          : { id: reportData.id, improvement_points: reportData.improvement_points, next_goals: null, coach_next_goals: null, next_goals_saved: null, created_at: reportData.created_at, source: 'report' };
       } else if (planData) {
         best = { ...planData, source: 'plan' };
       } else if (reportData) {
@@ -138,12 +113,52 @@ export default function NextLessonBriefingCard({
           .eq('member_id', memberId);
         setIsFirstLesson((count ?? 0) <= 1);
         setPlan(null);
+        setSummary(null);
       } else {
         setPlan(best);
         setIsFirstLesson(false);
+        await loadOrRequestSummary(best);
       }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadOrRequestSummary(p: LessonPlanBrief) {
+    // 캐시 확인
+    try {
+      const cached = await AsyncStorage.getItem(CACHE_PREFIX + p.id);
+      if (cached) {
+        setSummary(JSON.parse(cached));
+        return;
+      }
+    } catch {}
+
+    // 캐시 없음 → 원문 표시 상태로 두고 백그라운드 AI 호출
+    setSummary(null);
+    if (summarizing.current) return;
+    summarizing.current = true;
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/summarize-briefing`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({
+          improvement_points: p.improvement_points,
+          next_goals: p.next_goals,
+          coach_next_goals: p.coach_next_goals,
+          next_goals_saved: p.next_goals_saved,
+        }),
+      });
+      if (!res.ok) return;
+      const data: BriefingSummary = await res.json();
+      if (data.keyPoints?.length || data.nextGoal) {
+        await AsyncStorage.setItem(CACHE_PREFIX + p.id, JSON.stringify(data));
+        setSummary(data);
+      }
+    } catch {
+      // 실패 시 원문 그대로 표시 (setSummary(null) 유지)
+    } finally {
+      summarizing.current = false;
     }
   }
 
@@ -152,48 +167,22 @@ export default function NextLessonBriefingCard({
     return d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
   }
 
-  // improvement_points → 최대 2개, 한국어 문법 패턴으로 핵심절 추출
-  const keyPoints: string[] = (() => {
-    if (!plan?.improvement_points) return [];
-    let items: string[];
-    if (Array.isArray(plan.improvement_points)) {
-      items = (plan.improvement_points as string[]).filter(Boolean);
-    } else {
-      try {
-        const parsed = JSON.parse(plan.improvement_points as string);
-        if (Array.isArray(parsed)) items = (parsed as string[]).filter(Boolean);
-        else items = [(plan.improvement_points as string).trim()].filter(Boolean);
-      } catch {
-        items = [(plan.improvement_points as string).trim()].filter(Boolean);
-      }
-    }
-    return items
-      .filter(item => !item.startsWith('레슨 내용 없음'))
-      .slice(0, 2)
-      .map(extractCorePhrase);
-  })();
+  // 표시할 핵심 포인트: AI 요약 캐시 우선 → 원문 (자르기 없음)
+  const keyPoints: string[] = summary?.keyPoints?.length
+    ? summary.keyPoints
+    : parseImprovementPoints(plan?.improvement_points ?? null);
 
-  // next_goals / coach_next_goals → 브리핑용 핵심 목표 1개 (핵심절 추출)
+  // 표시할 목표: AI 요약 캐시 우선 → next_goals 원문 → null
   const nextGoalText: string | null = (() => {
+    if (summary?.nextGoal) return summary.nextGoal;
     if (!plan || plan.source !== 'plan') return null;
-    const rawGoals: string[] = (plan.next_goals_saved && plan.coach_next_goals?.length)
+    const goals = (plan.next_goals_saved && plan.coach_next_goals?.length)
       ? plan.coach_next_goals
       : (plan.next_goals ?? []);
-    if (!rawGoals.length) return null;
-
-    // 중첩 JSON 처리: goals[0]이 '["...", "..."]' 형식인 경우 파싱
-    let goals = rawGoals;
-    if (rawGoals.length === 1 && rawGoals[0].trim().startsWith('[')) {
-      try {
-        const parsed = JSON.parse(rawGoals[0]);
-        if (Array.isArray(parsed) && parsed.length > 0) goals = parsed as string[];
-      } catch {}
-    }
-
-    return extractCorePhrase(goals[0]);
+    return goals[0] ?? null;
   })();
 
-  // 빈 상태 카드 (레슨 없음 / 모두 완료)
+  // 빈 상태 카드
   if (!hasToday || allDone || !nextCard) {
     return (
       <View style={styles.card}>
@@ -247,7 +236,7 @@ export default function NextLessonBriefingCard({
         <Text style={styles.emptyText}>이전 레슨 기록이 없습니다</Text>
       ) : (
         <View style={styles.body}>
-          {/* 지난 레슨 핵심 — 연한 뉴트럴 배경 */}
+          {/* 지난 레슨 핵심 — 뉴트럴 배경 */}
           {keyPoints.length > 0 && (
             <View style={styles.sectionCard}>
               <View style={styles.sectionHeader}>
@@ -260,7 +249,7 @@ export default function NextLessonBriefingCard({
             </View>
           )}
 
-          {/* 오늘의 레슨 포인트 — 연한 테라코타 배경 */}
+          {/* 오늘의 레슨 포인트 — 테라코타 배경 */}
           {nextGoalText ? (
             <View style={[styles.sectionCard, styles.goalCard]}>
               <View style={styles.sectionHeader}>
@@ -365,7 +354,6 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     gap: 8,
   },
-  // 지난 레슨 핵심: 연한 뉴트럴 배경
   sectionCard: {
     backgroundColor: '#F3F4F6',
     borderRadius: 12,
@@ -373,7 +361,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     gap: 5,
   },
-  // 오늘의 레슨 포인트: 연한 테라코타 배경
   goalCard: {
     backgroundColor: '#FBF2EF',
   },
