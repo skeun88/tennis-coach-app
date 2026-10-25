@@ -48,10 +48,12 @@ async function fetchRcTrialInfo(): Promise<RcTrialInfo> {
 function formatKoreanDate(isoStr: string | null): string | null {
   if (!isoStr) return null;
   try {
-    // Use UTC to extract the calendar date so it matches Apple's subscription management display.
-    // Apple's renewal date is the UTC calendar date of the billing event; converting to Seoul (+9)
-    // can shift it forward by one day when the timestamp falls in the 15:00–23:59Z window.
-    return format(new Date(isoStr), 'yyyy년 M월 d일', { timeZone: 'UTC' });
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return null;
+    // Use native UTC accessors to match Apple's billing date display.
+    // Apple shows the UTC calendar date of the renewal event; date-fns-tz format() with
+    // timeZone:'UTC' can behave unexpectedly across major version combinations.
+    return `${d.getUTCFullYear()}년 ${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`;
   } catch { return null; }
 }
 
