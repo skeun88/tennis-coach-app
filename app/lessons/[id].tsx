@@ -7,12 +7,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import SettingsHeader from '../../components/SettingsHeader';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
-import { Lesson, AttendanceStatus, LessonComparison } from '../../types';
+import { Lesson, AttendanceStatus } from '../../types';
 import { Colors } from '../../lib/theme';
-import { useSubscription } from '../../hooks/useSubscription';
 import { notifyScheduleChange, notifyLessonCancel, notifyMemberAbsent } from '../../lib/notifications';
-import LessonBriefingModal from '../../components/LessonBriefingModal';
-import PlanUpsellModal from '../../components/PlanUpsellModal';
+import LessonDetailBriefingCard from '../../components/LessonDetailBriefingCard';
 
 const STATUS_OPTIONS: AttendanceStatus[] = ['출석', '결석'];
 const ABSENCE_REASONS = ['개인사정', '부상', '일정충돌', '무단결석', '기타'] as const;
@@ -66,19 +64,6 @@ export default function LessonDetailScreen() {
   const [calOpen, setCalOpen] = useState(false);
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
-
-  // ② 레슨 브리핑 모달 상태
-  const [briefingVisible, setBriefingVisible] = useState(false);
-  const [showProModal, setShowProModal] = useState(false);
-  const { canUse, subscription } = useSubscription();
-
-  // 회원별 이전 레슨 브리핑
-  interface MemberBriefing {
-    prevGoals: string[];
-    comparison: LessonComparison[] | null;
-    isFirst: boolean;
-  }
-  const [briefings, setBriefings] = useState<Record<string, MemberBriefing>>({});
 
   // 결석 처리 모달
   const [absenceModal, setAbsenceModal] = useState(false);
@@ -140,68 +125,6 @@ export default function LessonDetailScreen() {
     setAttendance(merged);
     setLoading(false);
 
-    if (merged.length > 0) {
-      const memberIds = merged.map(m => m.member_id);
-      const { data: lessonData } = await supabase.from('lessons').select('date').eq('id', id).single();
-      loadBriefings(memberIds, lessonData?.date ?? '');
-    }
-  }
-
-  async function loadBriefings(memberIds: string[], _lessonDate: string) {
-    const results: Record<string, MemberBriefing> = {};
-    await Promise.all(memberIds.map(async (memberId) => {
-      // 이번 레슨 플랜 (AI 분석 완료 시) — lesson_comparison 포함
-      const { data: currentPlan } = await supabase
-        .from('lesson_plans')
-        .select('id, lesson_comparison, compared_lesson_id')
-        .eq('member_id', memberId)
-        .eq('lesson_id', id)
-        .eq('status', 'completed')
-        .maybeSingle();
-
-      // 이전 플랜 조회: compared_lesson_id 있으면 그것을, 없으면 최근 플랜 (이번 레슨 제외)
-      let prevPlan: any = null;
-      if (currentPlan?.compared_lesson_id) {
-        const { data } = await supabase
-          .from('lesson_plans')
-          .select('id, next_goals, coach_next_goals, next_goals_saved')
-          .eq('id', currentPlan.compared_lesson_id)
-          .maybeSingle();
-        prevPlan = data;
-      }
-      if (!prevPlan) {
-        const { data } = await supabase
-          .from('lesson_plans')
-          .select('id, next_goals, coach_next_goals, next_goals_saved')
-          .eq('member_id', memberId)
-          .eq('status', 'completed')
-          .neq('lesson_id', id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        prevPlan = data;
-      }
-
-      if (!prevPlan) {
-        results[memberId] = { prevGoals: [], comparison: null, isFirst: true };
-        return;
-      }
-
-      const goals: string[] = (
-        prevPlan.next_goals_saved && Array.isArray(prevPlan.coach_next_goals) && prevPlan.coach_next_goals.length > 0
-          ? prevPlan.coach_next_goals
-          : (Array.isArray(prevPlan.next_goals) ? prevPlan.next_goals : [])
-      );
-
-      results[memberId] = {
-        prevGoals: goals,
-        comparison: currentPlan && Array.isArray(currentPlan.lesson_comparison) && currentPlan.lesson_comparison.length > 0
-          ? currentPlan.lesson_comparison
-          : null,
-        isFirst: false,
-      };
-    }));
-    setBriefings(results);
   }
 
   useEffect(() => {
@@ -441,25 +364,6 @@ export default function LessonDetailScreen() {
           </View>
         )}
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-          {/* ② 레슨 브리핑 버튼 (프로 전용) */}
-          <TouchableOpacity
-            style={styles.briefingBtn}
-            onPress={() => {
-              if (canUse('ai_analysis')) {
-                setBriefingVisible(true);
-              } else {
-                setShowProModal(true);
-              }
-            }}
-          >
-            <Ionicons name="clipboard-outline" size={14} color="#8B5CF6" />
-            <Text style={styles.briefingBtnText}>레슨 브리핑</Text>
-            {!canUse('ai_analysis') && (
-              <View style={styles.proBadgeInline}>
-                <Text style={styles.proBadgeInlineText}>PRO</Text>
-              </View>
-            )}
-          </TouchableOpacity>
           <TouchableOpacity style={styles.editBtn} onPress={openEditModal}>
             <Ionicons name="create-outline" size={14} color={Colors.primary} />
             <Text style={styles.editBtnText}>시간 수정</Text>
@@ -477,45 +381,23 @@ export default function LessonDetailScreen() {
         <Text style={styles.noticeText}>출석 → 1회 차감 · 결석 → 처리방식 선택</Text>
       </View>
 
-      {/* 회원별 이전 레슨 브리핑 */}
-      {Object.keys(briefings).length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>이전 레슨 브리핑</Text>
-          {attendance.map(a => {
-            const b = briefings[a.member_id];
-            if (!b) return null;
-            return (
-              <View key={a.member_id} style={styles.briefingCard}>
-                <Text style={styles.briefingMemberName}>{a.member?.name}</Text>
-                {b.isFirst ? (
-                  <Text style={styles.briefingFirstLesson}>이 회원의 첫 레슨입니다</Text>
-                ) : (
-                  <>
-                    {b.prevGoals.length > 0 && (
-                      <View style={styles.briefingGoalsRow}>
-                        <Ionicons name="flag-outline" size={13} color={Colors.mutedFg} />
-                        <Text style={styles.briefingGoalsLabel}>이전 목표: </Text>
-                        <Text style={styles.briefingGoalsText}>{b.prevGoals.join(' · ')}</Text>
-                      </View>
-                    )}
-                    {b.comparison && b.comparison.map((c, i) => (
-                      <View key={i} style={styles.briefingCompRow}>
-                        <Text style={[styles.briefingCompIcon, c.status === 'improved' ? { color: Colors.success } : c.status === 'regressed' ? { color: Colors.destructive } : { color: Colors.mutedFg }]}>
-                          {c.status === 'improved' ? '✅' : c.status === 'regressed' ? '⬇' : '→'}
-                        </Text>
-                        <Text style={styles.briefingCompText}>{c.point} — {c.reason}</Text>
-                      </View>
-                    ))}
-                    {b.prevGoals.length === 0 && !b.comparison && (
-                      <Text style={styles.briefingFirstLesson}>이전 레슨 목표 없음</Text>
-                    )}
-                  </>
-                )}
-              </View>
-            );
-          })}
-        </View>
-      )}
+      {/* 회원별 레슨 브리핑 카드 */}
+      {attendance.length > 0 && lesson && attendance.map(a => (
+        <LessonDetailBriefingCard
+          key={a.member_id}
+          memberId={a.member_id}
+          memberName={a.member?.name ?? ''}
+          memberLevel={a.member?.level ?? ''}
+          lessonId={id!}
+          beforeDate={lesson.date}
+          onPressViewRecord={(planId, reportId, memberId, memberName, memberLevel) => {
+            router.push({
+              pathname: '/members/plan-detail',
+              params: { planId, reportId, memberId, memberName, memberLevel },
+            });
+          }}
+        />
+      ))}
 
       {/* Attendance */}
       <View style={styles.section}>
@@ -771,20 +653,6 @@ export default function LessonDetailScreen() {
         </View>
       </Modal>
 
-      {/* ② 레슨 브리핑 모달 (프로 전용) */}
-      <LessonBriefingModal
-        visible={briefingVisible}
-        onClose={() => setBriefingVisible(false)}
-        memberIds={attendance.map(a => a.member_id)}
-      />
-
-      {/* Plan Upsell 모달 */}
-      <PlanUpsellModal
-        visible={showProModal}
-        onClose={() => setShowProModal(false)}
-        context="tagging"
-        currentPlanId={subscription?.plan_id ?? 'free'}
-      />
     </View>
   );
 }
@@ -836,19 +704,6 @@ const styles = StyleSheet.create({
   summaryCount: { fontSize: 18, fontWeight: '800', color: Colors.foreground },
   editBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: Colors.primaryLight, borderRadius: 8, borderWidth: 1, borderColor: Colors.successLight },
   editBtnText: { fontSize: 13, color: Colors.navy, fontWeight: '600' },
-  briefingBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#F3E8FF', borderRadius: 8, borderWidth: 1, borderColor: '#DDD6FE' },
-  briefingBtnText: { fontSize: 13, color: '#7C3AED', fontWeight: '600' },
-  briefingCard: { backgroundColor: Colors.card, borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: Colors.border },
-  briefingMemberName: { fontSize: 14, fontWeight: '700', color: Colors.foreground, marginBottom: 8 },
-  briefingFirstLesson: { fontSize: 13, color: Colors.mutedFg, fontStyle: 'italic' },
-  briefingGoalsRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, marginBottom: 6, flexWrap: 'wrap' },
-  briefingGoalsLabel: { fontSize: 12, color: Colors.mutedFg, fontWeight: '600' },
-  briefingGoalsText: { fontSize: 12, color: Colors.foreground, flex: 1, flexWrap: 'wrap' },
-  briefingCompRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 4 },
-  briefingCompIcon: { fontSize: 13, width: 18 },
-  briefingCompText: { fontSize: 12, color: Colors.foreground, flex: 1, flexWrap: 'wrap', lineHeight: 18 },
-  proBadgeInline: { backgroundColor: '#8B5CF6', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1, marginLeft: 2 },
-  proBadgeInlineText: { fontSize: 9, color: '#fff', fontWeight: '800', letterSpacing: 0.5 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   modalSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
