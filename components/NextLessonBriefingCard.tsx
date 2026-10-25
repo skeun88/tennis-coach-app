@@ -58,6 +58,12 @@ function extractCorePhrase(text: string): string {
     if (part.length >= 5) return part;
   }
 
+  // 패턴 5: "핵심 목표 - 세부 훈련 방법" 형식 (next_goals 스타일)
+  const dashIdx = t.indexOf(' - ');
+  if (dashIdx > 5 && dashIdx < t.length * 0.6) {
+    return t.slice(0, dashIdx).trim();
+  }
+
   // 패턴 미해당: 원문 그대로 (numberOfLines={2}로 래핑)
   return t;
 }
@@ -161,16 +167,29 @@ export default function NextLessonBriefingCard({
         items = [(plan.improvement_points as string).trim()].filter(Boolean);
       }
     }
-    return items.slice(0, 2).map(extractCorePhrase);
+    return items
+      .filter(item => !item.startsWith('레슨 내용 없음'))
+      .slice(0, 2)
+      .map(extractCorePhrase);
   })();
 
   // next_goals / coach_next_goals → 브리핑용 핵심 목표 1개 (핵심절 추출)
   const nextGoalText: string | null = (() => {
     if (!plan || plan.source !== 'plan') return null;
-    const goals: string[] = (plan.next_goals_saved && plan.coach_next_goals?.length)
+    const rawGoals: string[] = (plan.next_goals_saved && plan.coach_next_goals?.length)
       ? plan.coach_next_goals
       : (plan.next_goals ?? []);
-    if (!goals.length) return null;
+    if (!rawGoals.length) return null;
+
+    // 중첩 JSON 처리: goals[0]이 '["...", "..."]' 형식인 경우 파싱
+    let goals = rawGoals;
+    if (rawGoals.length === 1 && rawGoals[0].trim().startsWith('[')) {
+      try {
+        const parsed = JSON.parse(rawGoals[0]);
+        if (Array.isArray(parsed) && parsed.length > 0) goals = parsed as string[];
+      } catch {}
+    }
+
     return extractCorePhrase(goals[0]);
   })();
 
