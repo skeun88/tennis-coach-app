@@ -390,6 +390,7 @@ export default function LessonDetailScreen() {
           memberLevel={a.member?.level ?? ''}
           lessonId={id!}
           beforeDate={lesson.date}
+          lessonStartTime={lesson.start_time}
           onPressViewRecord={(planId, reportId, memberId, memberName, memberLevel) => {
             router.push({
               pathname: '/members/plan-detail',

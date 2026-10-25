@@ -28,7 +28,8 @@ interface Props {
   memberName: string;
   memberLevel: string;
   lessonId: string;
-  beforeDate: string; // YYYY-MM-DD — exclude records from this lesson and future lessons
+  beforeDate: string;    // YYYY-MM-DD — the current lesson's date
+  lessonStartTime?: string; // HH:MM:SS — used for precise created_at cutoff
   onPressViewRecord: (planId: string | undefined, reportId: string | undefined, memberId: string, memberName: string, memberLevel: string) => void;
 }
 
@@ -48,42 +49,72 @@ export default function LessonDetailBriefingCard({
   memberLevel,
   lessonId,
   beforeDate,
+  lessonStartTime,
   onPressViewRecord,
 }: Props) {
   const [plan, setPlan] = useState<LessonPlanBrief | null>(null);
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
   const [isFirstLesson, setIsFirstLesson] = useState(false);
   const [summary, setSummary] = useState<BriefingSummary | null>(null);
   const summarizing = useRef(false);
 
   useEffect(() => {
     fetchLatestPlan();
-  }, [memberId, lessonId, beforeDate]);
+  }, [memberId, lessonId, beforeDate, lessonStartTime]);
+
+  // Realtime: refresh when lesson_plans or reports change for this member
+  useEffect(() => {
+    const channel = supabase
+      .channel('briefing_detail_rt_' + memberId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lesson_plans', filter: `member_id=eq.${memberId}` }, () => fetchLatestPlan())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'member_lesson_reports', filter: `member_id=eq.${memberId}` }, () => fetchLatestPlan())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [memberId]);
 
   async function fetchLatestPlan() {
     setLoading(true);
+    setFetchError(false);
     try {
-      // Exclude current lesson; also exclude records from dates after this lesson
-      const cutoff = beforeDate + 'T23:59:59';
+      // lesson_plans: lesson_id is always NULL in current data, so we cannot use lesson_id
+      // to exclude the current lesson. Use created_at < lesson start as proxy.
+      // lesson_plans has no lesson_date column — created_at is the only date available.
+      const planCutoff = beforeDate + 'T' + (lessonStartTime ?? '00:00:00');
+
       const [planResult, reportResult] = await Promise.all([
         supabase
           .from('lesson_plans')
           .select('id, improvement_points, next_goals, coach_next_goals, next_goals_saved, created_at')
           .eq('member_id', memberId)
           .eq('status', 'completed')
-          .neq('lesson_id', lessonId)
-          .lte('created_at', cutoff)
+          // Do NOT use .neq('lesson_id', lessonId): lesson_id is NULL for all records,
+          // and NULL != X evaluates to NULL (false) in PostgreSQL, filtering out everything.
+          .lt('created_at', planCutoff)
           .order('created_at', { ascending: false })
           .limit(1),
         supabase
           .from('member_lesson_reports')
-          .select('id, improvement_points, created_at')
+          .select('id, improvement_points, created_at, lesson_date')
           .eq('member_id', memberId)
-          .is('lesson_plan_id', null)
-          .lte('created_at', cutoff)
+          .is('lesson_plan_id', null) // standalone manual reports only; AI reports are covered by lesson_plans
+          // Use actual lesson_date for date comparison (not created_at)
+          .lt('lesson_date', beforeDate)
+          .order('lesson_date', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(1),
       ]);
+
+      if (planResult.error) {
+        console.error('[LessonDetailBriefingCard] lesson_plans error:', planResult.error);
+        setFetchError(true);
+        return;
+      }
+      if (reportResult.error) {
+        console.error('[LessonDetailBriefingCard] member_lesson_reports error:', reportResult.error);
+        setFetchError(true);
+        return;
+      }
 
       const planData = planResult.data?.[0] ?? null;
       const reportData = reportResult.data?.[0] ?? null;
@@ -112,6 +143,9 @@ export default function LessonDetailBriefingCard({
         setIsFirstLesson(false);
         await loadOrRequestSummary(best);
       }
+    } catch (err) {
+      console.error('[LessonDetailBriefingCard] unexpected error:', err);
+      setFetchError(true);
     } finally {
       setLoading(false);
     }
@@ -194,6 +228,8 @@ export default function LessonDetailBriefingCard({
       {/* 본문 */}
       {loading ? (
         <ActivityIndicator size="small" color="#C0755A" style={{ marginVertical: 14 }} />
+      ) : fetchError ? (
+        <Text style={styles.errorText}>브리핑 데이터를 불러오지 못했어요</Text>
       ) : isFirstLesson ? (
         <Text style={styles.emptyText}>첫 레슨입니다</Text>
       ) : !plan ? (
@@ -225,7 +261,7 @@ export default function LessonDetailBriefingCard({
       )}
 
       {/* 하단 버튼 */}
-      {plan && !loading && (
+      {plan && !loading && !fetchError && (
         <TouchableOpacity
           style={styles.viewRecordBtn}
           activeOpacity={0.7}
@@ -339,6 +375,13 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 13,
     color: '#9CA3AF',
+    fontWeight: '500',
+    paddingHorizontal: 18,
+    paddingBottom: 16,
+  },
+  errorText: {
+    fontSize: 13,
+    color: '#EF4444',
     fontWeight: '500',
     paddingHorizontal: 18,
     paddingBottom: 16,
