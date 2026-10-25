@@ -618,9 +618,6 @@ export default function HomeScreen() {
         {/* ── 헤더 ── */}
         <View style={[styles.header, { paddingTop: 16 }]}>
           <View>
-            <Text style={styles.headerDate}>
-              {new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}
-            </Text>
             <Text style={styles.headerGreeting}>KERRI Studio</Text>
             <Text style={styles.headerSubtitle}>나의 코칭 공간</Text>
           </View>
@@ -646,7 +643,12 @@ export default function HomeScreen() {
           activeOpacity={0.85}
         >
           <View style={styles.todayBannerLeft}>
-            <Text style={styles.todayBannerLabel}>오늘 레슨</Text>
+            <View style={styles.todayBannerLabelRow}>
+              <Text style={styles.todayBannerLabel}>오늘 레슨</Text>
+              <Text style={styles.todayBannerDate}>
+                {new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}
+              </Text>
+            </View>
             <Text style={styles.todayBannerCount}>{processedToday.length}/{todayCards.length}</Text>
             <Text style={styles.todayBannerFirst}>{getBannerSubText()}</Text>
           </View>
@@ -1159,7 +1161,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   todayBannerLeft: { flex: 1 },
-  todayBannerLabel: { fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: '600', marginBottom: 4 },
+  todayBannerLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  todayBannerLabel: { fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: '600' },
+  todayBannerDate: { fontSize: 12, color: 'rgba(255,255,255,0.65)', fontWeight: '400' },
   todayBannerCount: { fontSize: 40, fontWeight: '800', color: '#fff', marginBottom: 6 },
   todayBannerFirst: { fontSize: 14, color: 'rgba(255,255,255,0.85)', fontWeight: '500' },
   todayBannerRight: { marginLeft: 12 },
