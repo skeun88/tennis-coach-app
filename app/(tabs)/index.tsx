@@ -703,6 +703,7 @@ export default function HomeScreen() {
           nextCard={unprocessedToday[0] ?? null}
           hasToday={todayCards.length > 0}
           allDone={todayCards.length > 0 && unprocessedToday.length === 0}
+          upcomingMemberIds={unprocessedToday.map(c => c.memberId)}
           onPressCard={(memberId, memberName, memberLevel) =>
             router.push({ pathname: '/members/ai-analysis', params: { memberId, memberName, memberLevel } } as any)
           }

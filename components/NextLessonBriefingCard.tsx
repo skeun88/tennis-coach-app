@@ -24,15 +24,28 @@ interface BriefingSummary {
   nextGoal: string | null;
 }
 
+interface BriefingDisplayState {
+  plan: LessonPlanBrief | null;
+  summary: BriefingSummary | null;
+  isFirstLesson: boolean;
+  fetchError: boolean;
+}
+
 interface Props {
   nextCard: TodayCard | null;
   hasToday: boolean;
   allDone: boolean;
+  /** All today's unprocessed member IDs — used to prefetch in background */
+  upcomingMemberIds?: string[];
   onPressCard: (memberId: string, memberName: string, memberLevel: string) => void;
   onPressViewRecord: (planId: string | undefined, reportId: string | undefined, memberId: string, memberName: string, memberLevel: string) => void;
 }
 
-/** improvement_points를 원문 그대로 최대 2개 배열로 변환 (자르기 금지) */
+// Module-level cache — survives re-renders, cleared on app restart
+const _stateCache = new Map<string, BriefingDisplayState>();
+const _inflight = new Set<string>();
+const _summarizing = new Set<string>();
+
 function parseImprovementPoints(val: string | string[] | null): string[] {
   if (!val) return [];
   if (Array.isArray(val)) return val.filter(Boolean).slice(0, 2);
@@ -47,33 +60,76 @@ export default function NextLessonBriefingCard({
   nextCard,
   hasToday,
   allDone,
+  upcomingMemberIds = [],
   onPressCard,
   onPressViewRecord,
 }: Props) {
-  const [plan, setPlan] = useState<LessonPlanBrief | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [isFirstLesson, setIsFirstLesson] = useState(false);
-  const [summary, setSummary] = useState<BriefingSummary | null>(null);
-  const summarizing = useRef(false);
+  // What's currently rendered (may lag behind nextCard during fetch)
+  const [displayedMemberId, setDisplayedMemberId] = useState<string | null>(null);
+  const [displayState, setDisplayState] = useState<BriefingDisplayState | null>(null);
+  const [spinnerVisible, setSpinnerVisible] = useState(false); // only for very first load with no prior data
+  const currentMemberIdRef = useRef<string | null>(null);
 
+  // Effect: switch to new member
   useEffect(() => {
-    if (!nextCard) { setPlan(null); setIsFirstLesson(false); setSummary(null); return; }
-    fetchLatestPlan(nextCard.memberId);
+    if (!nextCard) {
+      currentMemberIdRef.current = null;
+      setDisplayedMemberId(null);
+      setDisplayState(null);
+      setSpinnerVisible(false);
+      return;
+    }
+    currentMemberIdRef.current = nextCard.memberId;
+
+    const cached = _stateCache.get(nextCard.memberId);
+    if (cached) {
+      // Cache hit → instant display, no spinner
+      setDisplayedMemberId(nextCard.memberId);
+      setDisplayState(cached);
+      setSpinnerVisible(false);
+      return;
+    }
+
+    // Cache miss: if we have NO previous data at all, show spinner
+    // If we do have previous data, keep displaying it (no flash) while fetching
+    if (!displayState) {
+      setSpinnerVisible(true);
+    }
+    doFetch(nextCard.memberId);
   }, [nextCard?.memberId]);
 
+  // Effect: prefetch upcoming members in background whenever the list changes
+  useEffect(() => {
+    for (const id of upcomingMemberIds) {
+      if (!_stateCache.has(id) && !_inflight.has(id)) {
+        doFetch(id);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [upcomingMemberIds.join(',')]);
+
+  // Realtime: invalidate cache and re-fetch on record changes
   useEffect(() => {
     if (!nextCard?.memberId) return;
     const memberId = nextCard.memberId;
     const channel = supabase
       .channel('briefing_rt_' + memberId)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'lesson_plans', filter: `member_id=eq.${memberId}` }, () => fetchLatestPlan(memberId))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'member_lesson_reports', filter: `member_id=eq.${memberId}` }, () => fetchLatestPlan(memberId))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'lesson_plans', filter: `member_id=eq.${memberId}` }, () => {
+        _stateCache.delete(memberId);
+        if (currentMemberIdRef.current === memberId) doFetch(memberId);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'member_lesson_reports', filter: `member_id=eq.${memberId}` }, () => {
+        _stateCache.delete(memberId);
+        if (currentMemberIdRef.current === memberId) doFetch(memberId);
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nextCard?.memberId]);
 
-  async function fetchLatestPlan(memberId: string) {
-    setLoading(true);
+  async function doFetch(memberId: string) {
+    if (_inflight.has(memberId)) return;
+    _inflight.add(memberId);
     try {
       const [planResult, reportResult] = await Promise.all([
         supabase
@@ -92,6 +148,9 @@ export default function NextLessonBriefingCard({
           .limit(1),
       ]);
 
+      if (planResult.error) throw planResult.error;
+      if (reportResult.error) throw reportResult.error;
+
       const planData = planResult.data?.[0] ?? null;
       const reportData = reportResult.data?.[0] ?? null;
 
@@ -106,59 +165,88 @@ export default function NextLessonBriefingCard({
         best = { id: reportData.id, improvement_points: reportData.improvement_points, next_goals: null, coach_next_goals: null, next_goals_saved: null, created_at: reportData.created_at, source: 'report' };
       }
 
+      let isFirstLesson = false;
       if (!best) {
         const { count } = await supabase
           .from('lesson_members')
           .select('id', { count: 'exact', head: true })
           .eq('member_id', memberId);
-        setIsFirstLesson((count ?? 0) <= 1);
-        setPlan(null);
-        setSummary(null);
-      } else {
-        setPlan(best);
-        setIsFirstLesson(false);
-        await loadOrRequestSummary(best);
+        isFirstLesson = (count ?? 0) <= 1;
+      }
+
+      // Check AsyncStorage for existing AI summary
+      let cachedSummary: BriefingSummary | null = null;
+      if (best) {
+        try {
+          const raw = await AsyncStorage.getItem(CACHE_PREFIX + best.id);
+          if (raw) cachedSummary = JSON.parse(raw);
+        } catch {}
+      }
+
+      const newState: BriefingDisplayState = {
+        plan: best,
+        summary: cachedSummary,
+        isFirstLesson,
+        fetchError: false,
+      };
+
+      _stateCache.set(memberId, newState);
+
+      // Update display only if this is still the active member
+      if (currentMemberIdRef.current === memberId) {
+        setDisplayedMemberId(memberId);
+        setDisplayState(newState);
+        setSpinnerVisible(false);
+      }
+
+      // Background AI summary (if no cached summary)
+      if (best && !cachedSummary) {
+        doSummary(memberId, best);
+      }
+    } catch {
+      // Don't overwrite existing display with error; just hide spinner
+      if (currentMemberIdRef.current === memberId) {
+        setSpinnerVisible(false);
+        // Only update display if we have nothing yet
+        if (!displayedMemberId || displayedMemberId === memberId) {
+          setDisplayedMemberId(memberId);
+          setDisplayState({ plan: null, summary: null, isFirstLesson: false, fetchError: true });
+        }
       }
     } finally {
-      setLoading(false);
+      _inflight.delete(memberId);
     }
   }
 
-  async function loadOrRequestSummary(p: LessonPlanBrief) {
-    // 캐시 확인
-    try {
-      const cached = await AsyncStorage.getItem(CACHE_PREFIX + p.id);
-      if (cached) {
-        setSummary(JSON.parse(cached));
-        return;
-      }
-    } catch {}
-
-    // 캐시 없음 → 원문 표시 상태로 두고 백그라운드 AI 호출
-    setSummary(null);
-    if (summarizing.current) return;
-    summarizing.current = true;
+  async function doSummary(memberId: string, plan: LessonPlanBrief) {
+    if (_summarizing.has(memberId)) return;
+    _summarizing.add(memberId);
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/summarize-briefing`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
         body: JSON.stringify({
-          improvement_points: p.improvement_points,
-          next_goals: p.next_goals,
-          coach_next_goals: p.coach_next_goals,
-          next_goals_saved: p.next_goals_saved,
+          improvement_points: plan.improvement_points,
+          next_goals: plan.next_goals,
+          coach_next_goals: plan.coach_next_goals,
+          next_goals_saved: plan.next_goals_saved,
         }),
       });
       if (!res.ok) return;
       const data: BriefingSummary = await res.json();
       if (data.keyPoints?.length || data.nextGoal) {
-        await AsyncStorage.setItem(CACHE_PREFIX + p.id, JSON.stringify(data));
-        setSummary(data);
+        await AsyncStorage.setItem(CACHE_PREFIX + plan.id, JSON.stringify(data));
+        const existing = _stateCache.get(memberId);
+        if (existing) {
+          const updated = { ...existing, summary: data };
+          _stateCache.set(memberId, updated);
+          if (currentMemberIdRef.current === memberId) {
+            setDisplayState(updated);
+          }
+        }
       }
-    } catch {
-      // 실패 시 원문 그대로 표시 (setSummary(null) 유지)
-    } finally {
-      summarizing.current = false;
+    } catch {} finally {
+      _summarizing.delete(memberId);
     }
   }
 
@@ -167,22 +255,25 @@ export default function NextLessonBriefingCard({
     return d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
   }
 
-  // 표시할 핵심 포인트: AI 요약 캐시 우선 → 원문 (자르기 없음)
-  const keyPoints: string[] = summary?.keyPoints?.length
-    ? summary.keyPoints
-    : parseImprovementPoints(plan?.improvement_points ?? null);
+  // Whether data is still being fetched for the active member
+  const isTransitioning = nextCard != null && displayedMemberId !== nextCard.memberId;
 
-  // 표시할 목표: AI 요약 캐시 우선 → next_goals 원문 → null
+  // Derive display values from current display state
+  const ds = displayState;
+  const keyPoints: string[] = ds?.summary?.keyPoints?.length
+    ? ds.summary.keyPoints
+    : parseImprovementPoints(ds?.plan?.improvement_points ?? null);
+
   const nextGoalText: string | null = (() => {
-    if (summary?.nextGoal) return summary.nextGoal;
-    if (!plan || plan.source !== 'plan') return null;
-    const goals = (plan.next_goals_saved && plan.coach_next_goals?.length)
-      ? plan.coach_next_goals
-      : (plan.next_goals ?? []);
+    if (ds?.summary?.nextGoal) return ds.summary.nextGoal;
+    if (!ds?.plan || ds.plan.source !== 'plan') return null;
+    const goals = (ds.plan.next_goals_saved && ds.plan.coach_next_goals?.length)
+      ? ds.plan.coach_next_goals
+      : (ds.plan.next_goals ?? []);
     return goals[0] ?? null;
   })();
 
-  // 빈 상태 카드
+  // Empty / all-done card
   if (!hasToday || allDone || !nextCard) {
     return (
       <View style={styles.card}>
@@ -220,23 +311,28 @@ export default function NextLessonBriefingCard({
       <View style={styles.memberRow}>
         <View style={styles.memberInfo}>
           <Text style={styles.memberName}>{nextCard.memberName}</Text>
-          {plan && (
-            <Text style={styles.lastDate}>지난 레슨 {formatDate(plan.created_at)}</Text>
+          {!isTransitioning && ds?.plan && (
+            <Text style={styles.lastDate}>지난 레슨 {formatDate(ds.plan.created_at)}</Text>
           )}
         </View>
         <Ionicons name="chevron-forward" size={18} color="#C0755A" />
       </View>
 
       {/* 본문 */}
-      {loading ? (
+      {spinnerVisible ? (
+        // 최초 로드 (이전 데이터 없음): 스피너
         <ActivityIndicator size="small" color="#C0755A" style={{ marginVertical: 14 }} />
-      ) : isFirstLesson ? (
+      ) : isTransitioning ? (
+        // 회원 전환 중: 높이를 유지하는 빈 공간 (깜빡임 방지)
+        <View style={styles.transitionPlaceholder} />
+      ) : ds?.fetchError ? (
+        <Text style={styles.emptyText}>브리핑 데이터를 불러오지 못했어요</Text>
+      ) : ds?.isFirstLesson ? (
         <Text style={styles.emptyText}>첫 레슨입니다</Text>
-      ) : !plan ? (
-        <Text style={styles.emptyText}>이전 레슨 기록이 없습니다</Text>
+      ) : !ds?.plan ? (
+        <Text style={styles.emptyText}>아직 이전 레슨 기록이 없어요</Text>
       ) : (
         <View style={styles.body}>
-          {/* 지난 레슨 핵심 — 뉴트럴 배경 */}
           {keyPoints.length > 0 && (
             <View style={styles.sectionCard}>
               <View style={styles.sectionHeader}>
@@ -249,7 +345,6 @@ export default function NextLessonBriefingCard({
             </View>
           )}
 
-          {/* 오늘의 레슨 포인트 — 테라코타 배경 */}
           {nextGoalText ? (
             <View style={[styles.sectionCard, styles.goalCard]}>
               <View style={styles.sectionHeader}>
@@ -263,15 +358,15 @@ export default function NextLessonBriefingCard({
       )}
 
       {/* 하단 버튼 */}
-      {plan && !loading && (
+      {!isTransitioning && !spinnerVisible && ds?.plan && (
         <TouchableOpacity
           style={styles.viewRecordBtn}
           activeOpacity={0.7}
           onPress={(e) => {
             e.stopPropagation?.();
             onPressViewRecord(
-              plan.source === 'plan' ? plan.id : undefined,
-              plan.source === 'report' ? plan.id : undefined,
+              ds.plan!.source === 'plan' ? ds.plan!.id : undefined,
+              ds.plan!.source === 'report' ? ds.plan!.id : undefined,
               nextCard.memberId, nextCard.memberName, nextCard.memberLevel
             );
           }}
@@ -394,6 +489,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     paddingHorizontal: 18,
     paddingBottom: 16,
+  },
+  // Fixed-height placeholder during member transition — prevents layout jump
+  transitionPlaceholder: {
+    height: 120,
+    marginHorizontal: 16,
+    marginBottom: 12,
   },
   viewRecordBtn: {
     flexDirection: 'row',
