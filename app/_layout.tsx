@@ -6,6 +6,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as Updates from 'expo-updates';
 import { supabase } from '../lib/supabase';
 import { Text } from 'react-native';
+import * as Font from 'expo-font';
+import { Manrope_400Regular, Manrope_600SemiBold } from '@expo-google-fonts/manrope';
 import { getCurrentSubscription } from '../lib/subscription';
 import { registerCoachPushToken } from '../lib/notifications';
 import { IS_BETA } from '../lib/beta';
@@ -32,9 +34,16 @@ export default function RootLayout() {
   const [startupError, setStartupError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [updateChecked, setUpdateChecked] = useState(false);
+  const [fontsLoaded, setFontsLoaded] = useState(false);
   const syncPromiseRef = useRef<Promise<void> | null>(null);
   const router = useRouter();
   const segments = useSegments();
+
+  useEffect(() => {
+    Font.loadAsync({ Manrope_400Regular, Manrope_600SemiBold })
+      .catch(() => {})
+      .finally(() => setFontsLoaded(true));
+  }, []);
 
   // Check for OTA update before showing any UI; reload immediately if found.
   // Native splash stays visible throughout (preventAutoHideAsync above).

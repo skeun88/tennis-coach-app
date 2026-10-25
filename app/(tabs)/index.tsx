@@ -618,7 +618,10 @@ export default function HomeScreen() {
         {/* ── 헤더 ── */}
         <View style={[styles.header, { paddingTop: 16 }]}>
           <View>
-            <Text style={styles.headerGreeting}>KERRI Studio</Text>
+            <Text style={styles.headerGreeting}>
+              <Text style={styles.headerGreetingBold}>KERRI</Text>
+              <Text style={styles.headerGreetingLight}> Studio</Text>
+            </Text>
             <Text style={styles.headerSubtitle}>나의 코칭 공간</Text>
           </View>
           <View style={styles.headerIcons}>
@@ -1147,8 +1150,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, paddingBottom: 20, backgroundColor: '#F7F0E9',
   },
   headerDate: { fontSize: 13, color: '#95877E', fontWeight: '500', marginBottom: 8 },
-  headerGreeting: { fontSize: 24, fontWeight: '700', color: '#3E2B22', letterSpacing: -0.3 },
-  headerSubtitle: { fontSize: 13, color: '#95877E', fontWeight: '400', marginTop: 4 },
+  headerGreeting: { fontSize: 27, color: '#3E2B22', letterSpacing: -0.7 },
+  headerGreetingBold: { fontFamily: 'Manrope_600SemiBold', fontWeight: '600', fontSize: 27, color: '#3E2B22', letterSpacing: -0.7 },
+  headerGreetingLight: { fontFamily: 'Manrope_400Regular', fontWeight: '400', fontSize: 27, color: '#3E2B22', letterSpacing: -0.7 },
+  headerSubtitle: { fontSize: 13, color: '#96877D', fontWeight: '400', marginTop: 4 },
   headerIcons: { flexDirection: 'row', gap: 8, marginTop: 6 },
   iconBtn: { padding: 8, borderRadius: 20, backgroundColor: 'rgba(62,43,34,0.08)' },
 
