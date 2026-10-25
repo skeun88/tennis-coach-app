@@ -535,6 +535,15 @@ export default function AIAnalysisScreen() {
     setIsSubmitting(true);
     setSubmitMode('ai');
     try {
+      // 이전 레슨 기록 조회 (lesson_comparison 생성 및 홈 브리핑 연동용)
+      const { data: previousLessons } = await supabase
+        .from('lesson_plans')
+        .select('summary, improvement_points, next_goals, coach_next_goals, created_at')
+        .eq('member_id', memberId)
+        .eq('status', 'completed')
+        .order('created_at', { ascending: false })
+        .limit(3);
+
       const res = await fetch(`${SUPABASE_URL}/functions/v1/polish-manual-report`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
@@ -543,24 +552,47 @@ export default function AIAnalysisScreen() {
           memberLevel,
           lessonDate: new Date().toISOString().split('T')[0],
           raw: { summary: manualContent },
+          previousLessons: previousLessons ?? [],
         }),
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error ?? 'AI 생성 실패');
 
-      const report = data.report;
-      const { data: saved, error } = await supabase.from('member_lesson_reports').insert({
+      const aiPlan = data.plan;
+      const aiReport = data.report;
+
+      // lesson_plans에 저장 (음성 AI와 동일한 구조, raw_response에 원본 메모 보존)
+      const { data: savedPlan, error: planError } = await supabase.from('lesson_plans').insert({
         coach_id: user.id,
-        member_id: memberId,
+        member_id: memberId as string,
+        lesson_id: lessonId ?? null,
+        ai_title: aiPlan.ai_title ?? '',
+        summary: aiPlan.summary ?? '',
+        session_goals: aiPlan.session_goals ?? '',
+        improvement_points: aiPlan.improvement_points ?? [],
+        next_goals: aiPlan.next_goals ?? [],
+        drill_suggestions: aiPlan.drill_suggestions ?? [],
+        lesson_comparison: Array.isArray(aiPlan.lesson_comparison) && aiPlan.lesson_comparison.length > 0
+          ? aiPlan.lesson_comparison
+          : null,
+        status: 'completed',
+        raw_response: manualContent,
+      }).select().single();
+      if (planError || !savedPlan) throw planError ?? new Error('레슨 기록 저장 실패');
+
+      // member_lesson_reports에 저장 (lesson_plan_id 연결)
+      await supabase.from('member_lesson_reports').insert({
+        coach_id: user.id,
+        member_id: memberId as string,
+        lesson_plan_id: savedPlan.id,
         lesson_date: new Date().toISOString().split('T')[0],
-        summary: report.summary,
-        achievements: report.achievements ?? [],
-        improvement_points: report.improvement_points ?? [],
-        practice_plan: report.practice_plan ?? [],
+        summary: aiReport.summary ?? aiPlan.summary ?? '',
+        achievements: aiReport.achievements ?? [],
+        improvement_points: aiReport.improvement_points ?? aiPlan.improvement_points ?? [],
+        practice_plan: aiReport.practice_plan ?? [],
         source: 'manual',
         sent_to_member: false,
-      }).select().single();
-      if (error) throw error;
+      });
 
       await incrementAiAnalysisUsage(user.id);
       await AsyncStorage.removeItem(memoKey);
@@ -570,7 +602,7 @@ export default function AIAnalysisScreen() {
       loadPlans();
       router.push({
         pathname: '/members/plan-detail',
-        params: { reportId: saved.id, memberId, memberName, memberLevel },
+        params: { planId: savedPlan.id, memberId, memberName, memberLevel },
       } as any);
     } catch {
       Alert.alert('AI 정리 실패', '잠시 후 다시 시도해주세요.\n작성한 내용은 그대로 유지됩니다.');
