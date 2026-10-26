@@ -111,6 +111,7 @@ export default function ManageSubscriptionScreen() {
   const [aiUsed, setAiUsed] = useState(0);
   const [rcInfo, setRcInfo] = useState<RcTrialInfo | null>(null);
   const [rcLoading, setRcLoading] = useState(true);
+  const rcInitializedRef = useRef(false);
   const appStateRef = useRef(AppState.currentState);
 
   const loadUsage = useCallback(async () => {
@@ -122,20 +123,26 @@ export default function ManageSubscriptionScreen() {
   useEffect(() => { loadUsage(); }, [loadUsage]);
 
   // RevenueCat 직접 조회 — DB 날짜 사용 안 함
+  // 첫 로드만 스피너, 이후 포커스 복귀 시엔 백그라운드 갱신
   const loadRcInfo = useCallback(async () => {
+    const isInitial = !rcInitializedRef.current;
     try {
-      setRcLoading(true);
+      if (isInitial) setRcLoading(true);
       const info = await fetchRcTrialInfo();
       setRcInfo(info);
+      rcInitializedRef.current = true;
     } catch (e) {
       console.warn('[RC] fetchRcTrialInfo error:', e);
     } finally {
-      setRcLoading(false);
+      if (isInitial) setRcLoading(false);
     }
   }, []);
 
-  // 화면 진입 시 갱신
-  useFocusEffect(useCallback(() => { loadRcInfo(); }, [loadRcInfo]));
+  // 화면 진입 시 갱신 — RC 정보 + 구독 DB 데이터 동시 갱신
+  useFocusEffect(useCallback(() => {
+    loadRcInfo();
+    refresh();
+  }, [loadRcInfo, refresh]));
 
   // foreground 복귀 시 갱신
   useEffect(() => {
@@ -279,7 +286,7 @@ export default function ManageSubscriptionScreen() {
             </View>
           )}
 
-          {/* willRenew=false: 가격 동의 미완료 안내 */}
+          {/* willRenew=false: 가격 동의 미완료 안내 (Trial) */}
           {isTrial && !willRenew && nextBillingDate && (
             <TouchableOpacity style={s.noRenewBanner} onPress={openStoreManagement}>
               <Ionicons name="alert-circle-outline" size={15} color="#DC4444" />
@@ -287,6 +294,17 @@ export default function ManageSubscriptionScreen() {
                 {nextBillingDate}까지 무료 체험 · 계속 이용하려면 App Store에서 결제에 동의해 주세요
               </Text>
               <Ionicons name="chevron-forward" size={13} color="#DC4444" />
+            </TouchableOpacity>
+          )}
+
+          {/* 유료 구독 변경/종료 예정 안내 (willRenew=false, Trial 아님) */}
+          {isPaid && !isTrial && !willRenew && nextBillingDate && (
+            <TouchableOpacity style={s.scheduledChangeBanner} onPress={openStoreManagement}>
+              <Ionicons name="information-circle-outline" size={15} color={TERRACOTTA} />
+              <Text style={s.scheduledChangeText}>
+                {nextBillingDate}에 구독이 변경되거나 종료될 예정이에요. App Store에서 확인하세요.
+              </Text>
+              <Ionicons name="chevron-forward" size={13} color={TERRACOTTA} />
             </TouchableOpacity>
           )}
 
@@ -436,6 +454,12 @@ const s = StyleSheet.create({
     padding: 10, marginTop: 8,
   },
   noRenewText: { flex: 1, fontSize: 12, color: '#DC4444', lineHeight: 17 },
+  scheduledChangeBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: TERRACOTTA + '10', borderRadius: 10,
+    padding: 10, marginTop: 8,
+  },
+  scheduledChangeText: { flex: 1, fontSize: 12, color: TERRACOTTA, lineHeight: 17 },
 
   divider: { height: 1, backgroundColor: '#F5EDE5', marginVertical: 12 },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 5 },
