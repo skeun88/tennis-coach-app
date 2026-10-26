@@ -28,10 +28,6 @@ const WARM_GRAY = '#9E8E85';
 const WARM_GRAY_BORDER = '#D9CFC9';
 const CREAM_CARD = '#FDFAF7';
 
-// 출시가 vs 정가 (할인율 표시용)
-const REGULAR_PRICES = { basic: 19000, pro: 39000 };
-const DISCOUNT_PCTS = { basic: 48, pro: 51 };
-
 type BillingCycle = 'monthly' | 'annual';
 
 interface PlanFeatureRow {
@@ -46,11 +42,10 @@ const FEATURE_ROWS: PlanFeatureRow[] = [
   { label: '일정·출석·횟수·결제 관리', free: true, basic: true, pro: true },
   { label: '회원 운영 관리', free: false, basic: true, pro: true },
   { label: '회원 관리 자동 알림', free: false, basic: true, pro: true },
-  { label: 'AI 레슨 기록', free: '월 3개', basic: '월 10개', pro: '월 50개' },
+  { label: 'AI 레슨 기록', free: '월 3개', basic: '월 10회', pro: '월 50회' },
   { label: 'AI 레슨 기록 충전권', free: '충전 불가', basic: true, pro: true },
   { label: '14일 무료 체험', free: false, basic: true, pro: true },
   { label: 'AI 맞춤 코칭 분석', free: false, basic: '기본', pro: '상세' },
-  { label: '개인화 AI·코치 브랜딩', free: false, basic: false, pro: true },
 ];
 
 function FeatureCell({ value }: { value: boolean | string }) {
@@ -60,9 +55,14 @@ function FeatureCell({ value }: { value: boolean | string }) {
 }
 
 const ANNUAL_SAVINGS: Partial<Record<'basic' | 'pro', number>> = {
-  basic: 9800,   // 9,900 × 12 - 109,000
-  pro: 19000,    // 19,000 × 12 - 209,000
+  basic: 9800,
+  pro: 19000,
 };
+
+function formatScheduledDate(d: Date): string {
+  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  return `${kst.getUTCMonth() + 1}월 ${kst.getUTCDate()}일`;
+}
 
 export default function SelectPlanScreen() {
   const router = useRouter();
@@ -71,9 +71,10 @@ export default function SelectPlanScreen() {
   const { subscription, isTrial, refresh } = useSubscription();
   const [billing, setBilling] = useState<BillingCycle>('monthly');
   const [compareVisible, setCompareVisible] = useState(false);
-  const [purchasing, setPurchasing] = useState<string | null>(null); // planId being purchased
+  const [purchasing, setPurchasing] = useState<string | null>(null);
   const [currentBillingCycle, setCurrentBillingCycle] = useState<'monthly' | 'annual' | null>(null);
   const [willRenew, setWillRenew] = useState<boolean | null>(null);
+  const [expirationDate, setExpirationDate] = useState<Date | null>(null);
 
   const currentPlanId = subscription?.plan_id ?? 'free';
 
@@ -82,7 +83,6 @@ export default function SelectPlanScreen() {
     getCurrentBillingCycle(currentPlanId as 'basic' | 'pro').then(setCurrentBillingCycle);
   }, [currentPlanId]);
 
-  // RC에서 willRenew 직접 조회 — 구독 변경 예약 여부 감지
   useEffect(() => {
     (async () => {
       try {
@@ -90,6 +90,8 @@ export default function SelectPlanScreen() {
         const active = info.entitlements.active;
         const ent = active[ENTITLEMENT_IDS.PRO] ?? active[ENTITLEMENT_IDS.BASIC] ?? null;
         setWillRenew((ent as any)?.willRenew ?? true);
+        const expStr = (ent as any)?.expirationDate;
+        if (expStr) setExpirationDate(new Date(expStr));
       } catch {
         setWillRenew(true);
       }
@@ -108,11 +110,8 @@ export default function SelectPlanScreen() {
     }
   }
 
-  // Pro active + willRenew=false: Basic으로 다운그레이드 예약 상태
   const isScheduledDowngradeToBasic = currentPlanId === 'pro' && willRenew === false;
 
-  // 신규 유료 구독 자격: Free 플랜이고 trial을 한 번도 사용하지 않은 사용자
-  // (createFreeSubscription은 trial_starts_at === trial_ends_at로 기록)
   const isTrialEligible = (() => {
     if (!subscription) return true;
     if (subscription.plan_id !== 'free') return false;
@@ -130,13 +129,13 @@ export default function SelectPlanScreen() {
 
   function isCurrentPlan(planId: 'basic' | 'pro'): boolean {
     if (currentPlanId !== planId) return false;
-    if (currentBillingCycle === null) return true; // Toss 구독 등 주기 미확인
+    if (currentBillingCycle === null) return true;
     return billing === currentBillingCycle;
   }
 
   function getCtaText(planId: 'basic' | 'pro'): string {
     if (currentPlanId === planId) {
-      if (isCurrentPlan(planId)) return '현재 플랜';
+      if (isCurrentPlan(planId)) return '이용 중';
       return billing === 'annual' ? '연간으로 전환' : '월간으로 전환';
     }
     if (isTrialEligible) return '14일 무료로 시작하기';
@@ -162,7 +161,6 @@ export default function SelectPlanScreen() {
       return;
     }
 
-    // entitlement가 안 붙은 경우: 다른 계정 점유인지 확인
     const activeIds = Object.keys(customerInfo.entitlements.active ?? {});
     const boundElsewhere =
       customerInfo.originalAppUserId &&
@@ -225,7 +223,6 @@ export default function SelectPlanScreen() {
     } catch (e: any) {
       const code = String(e.code ?? '');
       if (code === '6' || code === '7') {
-        // 같은 사용자의 재구매·복원 필요(Apple 결제창 중복, 영수증 갱신 필요) → 자동 복원
         try {
           const restored = await restorePurchases();
           await applySubscription(restored, planId);
@@ -237,7 +234,6 @@ export default function SelectPlanScreen() {
           }
         }
       } else if (code === '13') {
-        // 다른 계정에서 이미 구독 중 → 복원 시도 없이 안내만
         setPurchasing(null);
         showOtherSubscriberAlert();
         return;
@@ -249,8 +245,11 @@ export default function SelectPlanScreen() {
     }
   }
 
+  const isPaidUser = currentPlanId !== 'free';
+
   return (
     <SafeAreaView style={s.container}>
+      {/* 플랜 전체 비교 모달 */}
       <Modal visible={compareVisible} animationType="slide" transparent onRequestClose={() => setCompareVisible(false)}>
         <View style={s.modalOverlay}>
           <View style={s.compareSheet}>
@@ -285,11 +284,10 @@ export default function SelectPlanScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
           <Ionicons name="chevron-back" size={24} color={DARK_BROWN} />
         </TouchableOpacity>
+        <Text style={s.headerTitle}>요금제 변경</Text>
       </View>
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={s.title}>나에게 맞는 플랜을{'\n'}선택하세요</Text>
-        <Text style={s.subtitle}>Basic과 Pro는 신규 구독 시 {TRIAL_DAYS}일 동안 무료로 이용할 수 있어요.</Text>
 
         {reason === 'member_limit' && (
           <View style={s.reasonBanner}>
@@ -310,14 +308,6 @@ export default function SelectPlanScreen() {
           </View>
         )}
 
-        {/* 출시가 안내 배너 */}
-        <View style={s.launchBanner}>
-          <Ionicons name="pricetag-outline" size={13} color={TERRACOTTA} />
-          <Text style={s.launchBannerText}>
-            출시가는 첫 유료 결제일부터 12개월간 적용되며, 이후 다음 갱신부터 정가가 적용됩니다.
-          </Text>
-        </View>
-
         {/* 월간/연간 토글 */}
         <View style={s.billingToggle}>
           <TouchableOpacity
@@ -333,192 +323,200 @@ export default function SelectPlanScreen() {
             <Text style={[s.billingBtnText, billing === 'annual' && s.billingBtnTextActive]}>연간</Text>
             {billing !== 'annual' && (
               <View style={s.savingsBadge}>
-                <Text style={s.savingsBadgeText}>최대 19,000원 절약</Text>
+                <Text style={s.savingsBadgeText}>할인</Text>
               </View>
             )}
           </TouchableOpacity>
         </View>
 
-        {/* Free 카드 */}
-        <View style={[s.planCard, currentPlanId === 'free' && s.planCardCurrent]}>
-          <View style={s.planCardHeader}>
-            <Text style={s.planName}>Free</Text>
-            {currentPlanId === 'free' && (
-              <View style={s.currentBadge}>
-                <Text style={s.currentBadgeText}>현재 플랜</Text>
-              </View>
-            )}
-          </View>
-          <Text style={s.planPrice}>무료</Text>
-          <Text style={s.planDesc}>기본 회원 관리를 가볍게 시작해 보세요.</Text>
-          <View style={s.featureList}>
-            <FeatureItem icon="people-outline" text="회원 3명까지 등록" />
-            <FeatureItem icon="grid-outline" text="일정·출석·횟수·결제 관리" />
-            <FeatureItem icon="mic-outline" text="AI 레슨 기록 월 3개" />
-          </View>
-          {currentPlanId === 'free' ? (
-            <TouchableOpacity style={s.freeCta} disabled>
+        {/* Free 카드 — 유료 구독 중이면 숨김 */}
+        {!isPaidUser && (
+          <View style={[s.planCard, currentPlanId === 'free' && s.planCardCurrent]}>
+            <View style={s.planCardHeader}>
+              <Text style={s.planName}>Free</Text>
+              {currentPlanId === 'free' && (
+                <View style={s.currentBadge}>
+                  <Text style={s.currentBadgeText}>현재 플랜</Text>
+                </View>
+              )}
+            </View>
+            <Text style={s.planPrice}>무료</Text>
+            <View style={s.featureList}>
+              <FeatureItem icon="people-outline" text="회원 3명까지 등록" />
+              <FeatureItem icon="grid-outline" text="일정·출석·결제 관리" />
+              <FeatureItem icon="mic-outline" text="AI 레슨 기록 월 3회" />
+            </View>
+            <View style={s.freeCta}>
               <Text style={s.freeCtaText}>현재 플랜</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={s.freeCta}
-              onPress={() => {
-                const url = Platform.OS === 'ios'
-                  ? 'https://apps.apple.com/account/subscriptions'
-                  : 'https://play.google.com/store/account/subscriptions';
-                Linking.openURL(url);
-              }}
-            >
-              <Text style={[s.freeCtaText, { color: TERRACOTTA }]}>
-                {Platform.OS === 'ios' ? 'App Store에서 구독 관리' : 'Google Play에서 구독 관리'}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
+            </View>
+          </View>
+        )}
 
         {/* Basic 카드 */}
-        <View style={[s.planCard, s.planCardPaid, isCurrentPlan('basic') && s.planCardCurrent, isScheduledDowngradeToBasic && s.planCardScheduled]}>
-          {isScheduledDowngradeToBasic ? (
-            <View style={s.scheduledBadge}>
-              <Ionicons name="swap-horizontal-outline" size={12} color={TERRACOTTA} />
-              <Text style={s.scheduledBadgeText}>변경 예정</Text>
-            </View>
-          ) : isTrialEligible ? (
-            <View style={s.trialBadge}>
-              <Ionicons name="gift-outline" size={12} color={TERRACOTTA} />
-              <Text style={s.trialBadgeText}>{TRIAL_DAYS}일 무료 체험</Text>
-            </View>
-          ) : null}
+        <View style={[s.planCard, s.planCardPaid,
+          isCurrentPlan('basic') && s.planCardCurrent,
+          isScheduledDowngradeToBasic && s.planCardScheduled,
+        ]}>
           <View style={s.planCardHeader}>
             <Text style={[s.planName, s.planNamePaid]}>Basic</Text>
-            {isCurrentPlan('basic') && (
-              <View style={s.currentBadge}>
-                <Text style={s.currentBadgeText}>이용 중</Text>
-              </View>
-            )}
-          </View>
-          {billing === 'monthly' ? (
-            <View style={s.priceBlock}>
-              <View style={s.priceTopRow}>
-                <Text style={[s.planPrice, s.planPricePaid]}>{PLANS.basic.price.toLocaleString()}원/월</Text>
-                <View style={s.discountBadge}>
-                  <Text style={s.discountBadgeText}>정가 대비 {DISCOUNT_PCTS.basic}% 할인</Text>
+            <View style={s.badgeRow}>
+              {isScheduledDowngradeToBasic && (
+                <View style={s.scheduledBadge}>
+                  <Text style={s.scheduledBadgeText}>변경 예정</Text>
                 </View>
-              </View>
-              <View style={s.regularPriceRow}>
-                <Text style={s.launchLabel}>출시가</Text>
-                <Text style={s.regularPrice}>정가 {REGULAR_PRICES.basic.toLocaleString()}원</Text>
-              </View>
-              <Text style={s.launchPeriodNote}>첫 유료 결제일부터 12개월 적용</Text>
+              )}
+              {isCurrentPlan('basic') && (
+                <View style={s.currentBadge}>
+                  <Text style={s.currentBadgeText}>이용 중</Text>
+                </View>
+              )}
+              {!isScheduledDowngradeToBasic && !isCurrentPlan('basic') && isTrialEligible && (
+                <View style={s.trialBadge}>
+                  <Text style={s.trialBadgeText}>{TRIAL_DAYS}일 무료</Text>
+                </View>
+              )}
             </View>
+          </View>
+
+          {billing === 'monthly' ? (
+            <Text style={[s.planPrice, s.planPricePaid]}>{PLANS.basic.price.toLocaleString()}원/월</Text>
           ) : (
-            <View style={s.priceBlock}>
+            <View>
               <Text style={[s.planPrice, s.planPricePaid]}>{ANNUAL_PRICES.basic?.toLocaleString()}원/년</Text>
-              <Text style={s.annualSavings}>월 약 {monthlyEquivalent('basic').toLocaleString()}원 · 연간 {ANNUAL_SAVINGS.basic?.toLocaleString()}원 절약</Text>
+              <Text style={s.annualNote}>월 약 {monthlyEquivalent('basic').toLocaleString()}원</Text>
             </View>
           )}
-          <Text style={s.planDesc}>회원 관리와 기본 AI 분석이 필요한 코치</Text>
+
+          <Text style={s.planDesc}>회원 관리와 기본 AI 코칭</Text>
+
           <View style={s.featureList}>
-            <FeatureItem icon="people-outline" text="회원 무제한 등록" />
-            <FeatureItem icon="grid-outline" text="일정·출석·횟수·결제 관리" />
-            <FeatureItem icon="notifications-outline" text="회원 관리 자동 알림" />
-            <FeatureItem icon="mic-outline" text="AI 레슨 기록 월 10개" />
-            <FeatureItem icon="analytics-outline" text="AI 맞춤 코칭 분석 기본 제공" />
-            <FeatureItem icon="add-circle-outline" text="AI 레슨 기록 충전 가능" />
+            <FeatureItem icon="grid-outline" text="일정·출석·결제 관리" />
+            <FeatureItem icon="mic-outline" text="AI 레슨 기록 월 10회" />
+            <FeatureItem icon="analytics-outline" text="기본 AI 코칭 분석" />
           </View>
-          <TouchableOpacity
-            style={[s.paidCta, (isCurrentPlan('basic') || isScheduledDowngradeToBasic || !!purchasing) && s.paidCtaDisabled]}
-            onPress={
-              isScheduledDowngradeToBasic ? openStoreManagement
-              : (!isCurrentPlan('basic') && !purchasing ? () => handleSelectPlan('basic') : undefined)
-            }
-            disabled={isCurrentPlan('basic') || isScheduledDowngradeToBasic || !!purchasing}
-            activeOpacity={0.85}
-          >
-            {purchasing === 'basic'
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={s.paidCtaText}>{isScheduledDowngradeToBasic ? 'Basic 변경 예약 완료' : getCtaText('basic')}</Text>
-            }
-          </TouchableOpacity>
+
+          {isScheduledDowngradeToBasic && expirationDate && (
+            <View style={s.scheduledDateRow}>
+              <Ionicons name="calendar-outline" size={12} color={TERRACOTTA} />
+              <Text style={s.scheduledDateText}>{formatScheduledDate(expirationDate)}부터 적용 예정</Text>
+            </View>
+          )}
+
+          {isScheduledDowngradeToBasic ? (
+            <View style={s.statusView}>
+              <Ionicons name="checkmark-circle" size={16} color={TERRACOTTA} />
+              <Text style={s.statusViewText}>변경 예약 완료</Text>
+            </View>
+          ) : isCurrentPlan('basic') ? (
+            <View style={[s.statusView, s.statusViewCurrent]}>
+              <Ionicons name="checkmark-circle" size={16} color={TERRACOTTA} />
+              <Text style={[s.statusViewText, { color: TERRACOTTA }]}>이용 중</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[s.paidCta, !!purchasing && s.paidCtaDisabled]}
+              onPress={!purchasing ? () => handleSelectPlan('basic') : undefined}
+              disabled={!!purchasing}
+              activeOpacity={0.85}
+            >
+              {purchasing === 'basic'
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={s.paidCtaText}>{getCtaText('basic')}</Text>
+              }
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* Pro 카드 (추천) */}
-        <View style={[s.planCard, s.planCardPaid, s.planCardPro, isCurrentPlan('pro') && s.planCardProCurrent]}>
-          <View style={[s.trialBadge, s.trialBadgePro]}>
-            <Ionicons name="star-outline" size={12} color={DARK_BROWN} />
-            <Text style={[s.trialBadgeText, { color: DARK_BROWN }]}>
-              {isTrialEligible ? `추천 · ${TRIAL_DAYS}일 무료 체험` : '추천'}
-            </Text>
-          </View>
+        {/* Pro 카드 */}
+        <View style={[s.planCard, s.planCardPaid, s.planCardPro,
+          isCurrentPlan('pro') && s.planCardProCurrent,
+        ]}>
           <View style={s.planCardHeader}>
             <Text style={[s.planName, s.planNamePro]}>Pro</Text>
-            {isCurrentPlan('pro') && (
-              <View style={[s.currentBadge, { backgroundColor: DARK_BROWN }]}>
-                <Text style={s.currentBadgeText}>이용 중</Text>
-              </View>
-            )}
-          </View>
-          {billing === 'monthly' ? (
-            <View style={s.priceBlock}>
-              <View style={s.priceTopRow}>
-                <Text style={[s.planPrice, s.planPricePro]}>{PLANS.pro.price.toLocaleString()}원/월</Text>
-                <View style={[s.discountBadge, { backgroundColor: DARK_BROWN }]}>
-                  <Text style={s.discountBadgeText}>정가 대비 {DISCOUNT_PCTS.pro}% 할인</Text>
+            <View style={s.badgeRow}>
+              {!isScheduledDowngradeToBasic && (
+                <View style={[s.trialBadge, s.trialBadgePro]}>
+                  <Ionicons name="star-outline" size={11} color={DARK_BROWN} />
+                  <Text style={[s.trialBadgeText, { color: DARK_BROWN }]}>
+                    {isTrialEligible ? `추천 · ${TRIAL_DAYS}일 무료` : '추천'}
+                  </Text>
                 </View>
-              </View>
-              <View style={s.regularPriceRow}>
-                <Text style={[s.launchLabel, { color: DARK_BROWN }]}>출시가</Text>
-                <Text style={s.regularPrice}>정가 {REGULAR_PRICES.pro.toLocaleString()}원</Text>
-              </View>
-              <Text style={[s.launchPeriodNote, { color: DARK_BROWN + 'AA' }]}>첫 유료 결제일부터 12개월 적용</Text>
+              )}
+              {isCurrentPlan('pro') && (
+                <View style={[s.currentBadge, { backgroundColor: DARK_BROWN }]}>
+                  <Text style={s.currentBadgeText}>이용 중</Text>
+                </View>
+              )}
             </View>
+          </View>
+
+          {billing === 'monthly' ? (
+            <Text style={[s.planPrice, s.planPricePro]}>{PLANS.pro.price.toLocaleString()}원/월</Text>
           ) : (
-            <View style={s.priceBlock}>
+            <View>
               <Text style={[s.planPrice, s.planPricePro]}>{ANNUAL_PRICES.pro?.toLocaleString()}원/년</Text>
-              <Text style={s.annualSavings}>월 약 {monthlyEquivalent('pro').toLocaleString()}원 · 연간 {ANNUAL_SAVINGS.pro?.toLocaleString()}원 절약</Text>
+              <Text style={s.annualNote}>월 약 {monthlyEquivalent('pro').toLocaleString()}원</Text>
             </View>
           )}
-          <Text style={s.planDesc}>AI 분석을 적극적으로 활용하는 전문 코치</Text>
+
+          <Text style={s.planDesc}>AI 코칭을 적극적으로 활용하는 코치</Text>
+
           <View style={s.featureList}>
-            <FeatureItem icon="people-outline" text="회원 무제한 등록" />
-            <FeatureItem icon="grid-outline" text="일정·출석·횟수·결제 관리" />
-            <FeatureItem icon="notifications-outline" text="회원 관리 자동 알림" />
-            <FeatureItem icon="mic-outline" text="AI 레슨 기록 월 50개" />
-            <FeatureItem icon="analytics-outline" text="AI 맞춤 코칭 분석 상세 제공" />
-            <FeatureItem icon="key-outline" text="회원별 반복 이슈·키워드 분석" />
-            <FeatureItem icon="person-circle-outline" text="개인화 AI · 코치 브랜딩" />
-            <FeatureItem icon="add-circle-outline" text="AI 레슨 기록 충전 가능" />
+            <FeatureItem icon="grid-outline" text="Basic의 모든 기능" />
+            <FeatureItem icon="mic-outline" text="AI 레슨 기록 월 50회" />
+            <FeatureItem icon="analytics-outline" text="상세 AI 분석·반복 이슈 추적" />
           </View>
-          <TouchableOpacity
-            style={[s.paidCta, s.paidCtaPro, (isCurrentPlan('pro') || !!purchasing) && s.paidCtaDisabled]}
-            onPress={!isCurrentPlan('pro') && !purchasing ? () => handleSelectPlan('pro') : undefined}
-            disabled={isCurrentPlan('pro') || !!purchasing}
-            activeOpacity={0.85}
-          >
-            {purchasing === 'pro'
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={s.paidCtaText}>{getCtaText('pro')}</Text>
-            }
-          </TouchableOpacity>
+
+          {isScheduledDowngradeToBasic && expirationDate && (
+            <View style={s.scheduledDateRow}>
+              <Ionicons name="information-circle-outline" size={12} color={WARM_GRAY} />
+              <Text style={[s.scheduledDateText, { color: WARM_GRAY }]}>{formatScheduledDate(expirationDate)}까지 Pro 혜택 유지</Text>
+            </View>
+          )}
+
+          {isCurrentPlan('pro') ? (
+            <View style={[s.statusView, s.statusViewPro]}>
+              <Ionicons name="checkmark-circle" size={16} color={DARK_BROWN} />
+              <Text style={[s.statusViewText, { color: DARK_BROWN }]}>이용 중</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[s.paidCta, s.paidCtaPro, !!purchasing && s.paidCtaDisabled]}
+              onPress={!purchasing ? () => handleSelectPlan('pro') : undefined}
+              disabled={!!purchasing}
+              activeOpacity={0.85}
+            >
+              {purchasing === 'pro'
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={s.paidCtaText}>{getCtaText('pro')}</Text>
+              }
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* 전체 비교 링크 */}
-        <TouchableOpacity style={s.compareLink} onPress={() => setCompareVisible(true)}>
-          <Text style={s.compareLinkText}>플랜 전체 비교 보기</Text>
-          <Ionicons name="chevron-forward" size={14} color={TERRACOTTA} />
-        </TouchableOpacity>
-
-        <Text style={s.legalNote}>
-          * 출시가는 한시적 특별가로, 종료 시 정가로 변경됩니다{'\n'}
-          * 가격은 부가세 포함 · 체험 기간 중 언제든 취소 가능{'\n'}
-          * 연간 결제 시 {ANNUAL_PRICES.basic?.toLocaleString()}원 / {ANNUAL_PRICES.pro?.toLocaleString()}원 일괄 결제
-        </Text>
+        {/* 하단 링크 */}
+        <View style={s.bottomLinks}>
+          <TouchableOpacity style={s.bottomLink} onPress={() => setCompareVisible(true)}>
+            <Text style={s.bottomLinkText}>전체 기능 비교</Text>
+            <Ionicons name="chevron-forward" size={13} color={TERRACOTTA} />
+          </TouchableOpacity>
+          <View style={s.bottomLinkDivider} />
+          <TouchableOpacity style={s.bottomLink} onPress={openStoreManagement}>
+            <Text style={s.bottomLinkText}>
+              {Platform.OS === 'ios' ? 'App Store에서 구독 관리' : 'Google Play에서 구독 관리'}
+            </Text>
+            <Ionicons name="chevron-forward" size={13} color={TERRACOTTA} />
+          </TouchableOpacity>
+        </View>
 
         {/* Apple 가이드라인 3.1.2 구독 필수 고지 */}
         <View style={s.subscriptionDisclosure}>
           <Text style={s.subscriptionDisclosureText}>
-            구독은 선택한 기간마다 자동으로 갱신되며, 현재 기간 만료 24시간 전까지 취소하지 않으면 갱신됩니다. App Store 계정 설정에서 언제든 관리·해지할 수 있습니다.
+            구독은 선택한 기간마다 자동으로 갱신되며, 현재 기간 만료 24시간 전까지 취소하지 않으면 갱신됩니다.{'\n'}
+            App Store 계정 설정에서 언제든 관리·해지할 수 있습니다.
+          </Text>
+          <Text style={s.subscriptionDisclosureText}>
+            월간 {PLANS.basic.price.toLocaleString()}원(Basic) / {PLANS.pro.price.toLocaleString()}원(Pro){ANNUAL_PRICES.basic ? ` · 연간 ${ANNUAL_PRICES.basic.toLocaleString()}원(Basic) / ${ANNUAL_PRICES.pro?.toLocaleString()}원(Pro)` : ''}
           </Text>
           <View style={s.subscriptionDisclosureLinks}>
             <TouchableOpacity onPress={() => Linking.openURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/')}>
@@ -535,133 +533,28 @@ export default function SelectPlanScreen() {
   );
 }
 
-function FeatureItem({ icon, text, dim }: { icon: string; text: string; dim?: boolean }) {
+function FeatureItem({ icon, text }: { icon: string; text: string }) {
   return (
     <View style={s.featureItem}>
-      <Ionicons name={icon as any} size={14} color={dim ? WARM_GRAY_BORDER : TERRACOTTA} />
-      <Text style={[s.featureItemText, dim && s.featureItemTextDim]}>{text}</Text>
+      <Ionicons name={icon as any} size={14} color={TERRACOTTA} />
+      <Text style={s.featureItemText}>{text}</Text>
     </View>
   );
 }
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: CREAM },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
+  header: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4,
+  },
+  headerTitle: {
+    fontSize: 17, fontWeight: '700', color: DARK_BROWN,
+    flex: 1, textAlign: 'center', marginRight: 40,
+  },
   backBtn: { padding: 8 },
-  scroll: { paddingHorizontal: 20, paddingBottom: 48 },
-  title: { fontSize: 26, fontWeight: '800', color: DARK_BROWN, marginBottom: 6, lineHeight: 34 },
-  subtitle: { fontSize: 13, color: WARM_GRAY, marginBottom: 12, lineHeight: 18 },
-  launchBanner: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 6,
-    backgroundColor: TERRACOTTA + '12', borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 8, marginBottom: 16,
-  },
-  launchBannerText: { fontSize: 11, color: TERRACOTTA, fontWeight: '500', flex: 1, lineHeight: 16 },
-  planDesc: { fontSize: 12, color: WARM_GRAY, marginBottom: 12, lineHeight: 17 },
-  launchPeriodNote: { fontSize: 10, color: TERRACOTTA + 'AA', marginTop: 2 },
+  scroll: { paddingHorizontal: 20, paddingBottom: 48, paddingTop: 8 },
 
-  billingToggle: {
-    flexDirection: 'row', alignSelf: 'flex-start',
-    backgroundColor: '#EDE6DE', borderRadius: 12, padding: 3, marginBottom: 20,
-  },
-  billingBtn: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  billingBtnActive: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 },
-  billingBtnText: { fontSize: 14, color: WARM_GRAY, fontWeight: '600' },
-  billingBtnTextActive: { color: DARK_BROWN },
-  savingsBadge: { backgroundColor: TERRACOTTA, borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 },
-  savingsBadgeText: { fontSize: 9, color: '#fff', fontWeight: '700' },
-
-  planCard: {
-    backgroundColor: CREAM_CARD, borderRadius: 16,
-    borderWidth: 1.5, borderColor: WARM_GRAY_BORDER,
-    padding: 20, marginBottom: 14,
-  },
-  planCardPaid: { borderColor: WARM_GRAY_BORDER },
-  planCardPro: { borderColor: DARK_BROWN + '50', backgroundColor: '#FEFCFA' },
-  planCardCurrent: { borderColor: TERRACOTTA },
-  planCardProCurrent: { borderColor: DARK_BROWN },
-  planCardScheduled: { borderColor: TERRACOTTA + '80' },
-
-  scheduledBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    alignSelf: 'flex-start',
-    backgroundColor: TERRACOTTA + '20', borderRadius: 8,
-    paddingHorizontal: 8, paddingVertical: 4, marginBottom: 10,
-    borderWidth: 1, borderColor: TERRACOTTA + '40',
-  },
-  scheduledBadgeText: { fontSize: 11, color: TERRACOTTA, fontWeight: '700' },
-
-  trialBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    alignSelf: 'flex-start',
-    backgroundColor: TERRACOTTA + '15', borderRadius: 8,
-    paddingHorizontal: 8, paddingVertical: 4, marginBottom: 10,
-  },
-  trialBadgePro: { backgroundColor: DARK_BROWN + '12' },
-  trialBadgeText: { fontSize: 11, color: TERRACOTTA, fontWeight: '700' },
-
-  planCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  planName: { fontSize: 20, fontWeight: '800', color: WARM_GRAY },
-  planNamePaid: { color: DARK_BROWN },
-  planNamePro: { color: DARK_BROWN },
-  currentBadge: { backgroundColor: TERRACOTTA, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
-  currentBadgeText: { fontSize: 11, color: '#fff', fontWeight: '700' },
-
-  priceBlock: { marginBottom: 16 },
-  priceTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 3 },
-  planPrice: { fontSize: 24, fontWeight: '800', color: WARM_GRAY },
-  planPricePaid: { color: TERRACOTTA },
-  planPricePro: { color: DARK_BROWN },
-  discountBadge: {
-    backgroundColor: TERRACOTTA, borderRadius: 6,
-    paddingHorizontal: 6, paddingVertical: 2,
-  },
-  discountBadgeText: { fontSize: 11, color: '#fff', fontWeight: '800' },
-  regularPriceRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  launchLabel: { fontSize: 11, color: TERRACOTTA, fontWeight: '700' },
-  regularPrice: { fontSize: 11, color: WARM_GRAY, textDecorationLine: 'line-through' },
-  annualSavings: { fontSize: 11, color: WARM_GRAY, marginTop: 3 },
-
-  featureList: { gap: 10, marginBottom: 18 },
-  featureItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  featureItemText: { fontSize: 13, color: DARK_BROWN, fontWeight: '500', flex: 1 },
-  featureItemTextDim: { color: WARM_GRAY },
-
-  freeCta: {
-    backgroundColor: 'transparent', borderRadius: 12,
-    borderWidth: 1.5, borderColor: WARM_GRAY_BORDER,
-    paddingVertical: 14, alignItems: 'center',
-  },
-  freeCtaText: { fontSize: 14, color: WARM_GRAY, fontWeight: '600' },
-  paidCta: {
-    backgroundColor: TERRACOTTA, borderRadius: 12,
-    paddingVertical: 15, alignItems: 'center',
-  },
-  paidCtaPro: { backgroundColor: DARK_BROWN },
-  paidCtaDisabled: { opacity: 0.4 },
-  paidCtaText: { fontSize: 15, color: '#fff', fontWeight: '700' },
-
-  compareLink: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 4, paddingVertical: 12, marginBottom: 12,
-  },
-  compareLinkText: { fontSize: 13, color: TERRACOTTA, fontWeight: '600', textDecorationLine: 'underline' },
-
-  legalNote: { fontSize: 11, color: WARM_GRAY, textAlign: 'center', lineHeight: 18, marginTop: 4 },
-  subscriptionDisclosure: {
-    marginTop: 16, paddingTop: 16,
-    borderTopWidth: 1, borderTopColor: WARM_GRAY_BORDER,
-  },
-  subscriptionDisclosureText: {
-    fontSize: 10, color: WARM_GRAY, lineHeight: 15, textAlign: 'center',
-  },
-  subscriptionDisclosureLinks: {
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 8,
-  },
-  subscriptionDisclosureLink: {
-    fontSize: 10, color: TERRACOTTA, textDecorationLine: 'underline',
-  },
-  subscriptionDisclosureSeparator: { fontSize: 10, color: WARM_GRAY },
   reasonBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: TERRACOTTA + '12', borderRadius: 10,
@@ -670,11 +563,148 @@ const s = StyleSheet.create({
   },
   reasonBannerText: { fontSize: 13, color: TERRACOTTA, fontWeight: '600', flex: 1, lineHeight: 18 },
 
+  billingToggle: {
+    flexDirection: 'row', alignSelf: 'flex-start',
+    backgroundColor: '#EDE6DE', borderRadius: 10, padding: 3, marginBottom: 16,
+  },
+  billingBtn: {
+    paddingHorizontal: 16, paddingVertical: 6, borderRadius: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+  },
+  billingBtnActive: {
+    backgroundColor: '#fff',
+    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+  },
+  billingBtnText: { fontSize: 13, color: WARM_GRAY, fontWeight: '600' },
+  billingBtnTextActive: { color: DARK_BROWN },
+  savingsBadge: {
+    backgroundColor: TERRACOTTA, borderRadius: 5, paddingHorizontal: 4, paddingVertical: 1,
+  },
+  savingsBadgeText: { fontSize: 9, color: '#fff', fontWeight: '700' },
+
+  planCard: {
+    backgroundColor: CREAM_CARD, borderRadius: 16,
+    borderWidth: 1.5, borderColor: WARM_GRAY_BORDER,
+    padding: 18, marginBottom: 12,
+  },
+  planCardPaid: { borderColor: WARM_GRAY_BORDER },
+  planCardPro: { borderColor: DARK_BROWN + '40', backgroundColor: '#FEFCFA' },
+  planCardCurrent: { borderColor: TERRACOTTA },
+  planCardProCurrent: { borderColor: DARK_BROWN },
+  planCardScheduled: { borderColor: TERRACOTTA + '70' },
+
+  planCardHeader: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: 8,
+  },
+  planName: { fontSize: 20, fontWeight: '800', color: WARM_GRAY },
+  planNamePaid: { color: DARK_BROWN },
+  planNamePro: { color: DARK_BROWN },
+
+  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+
+  currentBadge: {
+    backgroundColor: TERRACOTTA, borderRadius: 7,
+    paddingHorizontal: 8, paddingVertical: 3,
+  },
+  currentBadgeText: { fontSize: 11, color: '#fff', fontWeight: '700' },
+
+  scheduledBadge: {
+    backgroundColor: TERRACOTTA + '20', borderRadius: 7,
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderWidth: 1, borderColor: TERRACOTTA + '40',
+  },
+  scheduledBadgeText: { fontSize: 11, color: TERRACOTTA, fontWeight: '700' },
+
+  trialBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: TERRACOTTA + '15', borderRadius: 7,
+    paddingHorizontal: 7, paddingVertical: 3,
+  },
+  trialBadgePro: { backgroundColor: DARK_BROWN + '12' },
+  trialBadgeText: { fontSize: 11, color: TERRACOTTA, fontWeight: '700' },
+
+  planPrice: { fontSize: 22, fontWeight: '800', color: WARM_GRAY, marginBottom: 4 },
+  planPricePaid: { color: TERRACOTTA },
+  planPricePro: { color: DARK_BROWN },
+  annualNote: { fontSize: 11, color: WARM_GRAY, marginBottom: 4 },
+
+  planDesc: { fontSize: 12, color: WARM_GRAY, marginBottom: 12, lineHeight: 17 },
+
+  featureList: { gap: 9, marginBottom: 16 },
+  featureItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  featureItemText: { fontSize: 13, color: DARK_BROWN, fontWeight: '500', flex: 1 },
+
+  scheduledDateRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    marginBottom: 12,
+  },
+  scheduledDateText: { fontSize: 12, color: TERRACOTTA, fontWeight: '600' },
+
+  statusView: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    borderRadius: 12, paddingVertical: 13,
+    borderWidth: 1.5, borderColor: TERRACOTTA + '40',
+  },
+  statusViewCurrent: { borderColor: TERRACOTTA + '40' },
+  statusViewPro: { borderColor: DARK_BROWN + '30' },
+  statusViewText: { fontSize: 14, color: TERRACOTTA, fontWeight: '700' },
+
+  freeCta: {
+    backgroundColor: 'transparent', borderRadius: 12,
+    borderWidth: 1.5, borderColor: WARM_GRAY_BORDER,
+    paddingVertical: 13, alignItems: 'center',
+  },
+  freeCtaText: { fontSize: 14, color: WARM_GRAY, fontWeight: '600' },
+
+  paidCta: {
+    backgroundColor: TERRACOTTA, borderRadius: 12,
+    paddingVertical: 14, alignItems: 'center',
+  },
+  paidCtaPro: { backgroundColor: DARK_BROWN },
+  paidCtaDisabled: { opacity: 0.4 },
+  paidCtaText: { fontSize: 15, color: '#fff', fontWeight: '700' },
+
+  bottomLinks: {
+    backgroundColor: CREAM_CARD, borderRadius: 14,
+    borderWidth: 1, borderColor: WARM_GRAY_BORDER,
+    marginTop: 4, marginBottom: 16, overflow: 'hidden',
+  },
+  bottomLink: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 14,
+  },
+  bottomLinkText: { fontSize: 14, color: DARK_BROWN, fontWeight: '500' },
+  bottomLinkDivider: { height: 1, backgroundColor: WARM_GRAY_BORDER, marginHorizontal: 16 },
+
+  subscriptionDisclosure: {
+    paddingTop: 12, borderTopWidth: 1, borderTopColor: WARM_GRAY_BORDER, gap: 6,
+  },
+  subscriptionDisclosureText: {
+    fontSize: 10, color: WARM_GRAY, lineHeight: 15, textAlign: 'center',
+  },
+  subscriptionDisclosureLinks: {
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 2,
+  },
+  subscriptionDisclosureLink: {
+    fontSize: 10, color: TERRACOTTA, textDecorationLine: 'underline',
+  },
+  subscriptionDisclosureSeparator: { fontSize: 10, color: WARM_GRAY },
+
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  compareSheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingBottom: 40, maxHeight: '85%' },
-  sheetHandle: { width: 40, height: 4, backgroundColor: '#E0D8D0', borderRadius: 2, alignSelf: 'center', marginVertical: 12 },
+  compareSheet: {
+    backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: 20, paddingBottom: 40, maxHeight: '85%',
+  },
+  sheetHandle: {
+    width: 40, height: 4, backgroundColor: '#E0D8D0', borderRadius: 2,
+    alignSelf: 'center', marginVertical: 12,
+  },
   compareTitle: { fontSize: 17, fontWeight: '800', color: DARK_BROWN, marginBottom: 16 },
-  compareHeaderRow: { flexDirection: 'row', paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#F0E8E0', marginBottom: 4 },
+  compareHeaderRow: {
+    flexDirection: 'row', paddingBottom: 8,
+    borderBottomWidth: 1, borderBottomColor: '#F0E8E0', marginBottom: 4,
+  },
   compareHeaderCell: { flex: 1, alignItems: 'center' },
   compareHeaderText: { fontSize: 12, fontWeight: '700', color: WARM_GRAY },
   compareRow: { flexDirection: 'row', paddingVertical: 10, alignItems: 'center' },
