@@ -7,25 +7,23 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSubscription } from '../../hooks/useSubscription';
-import { format } from 'date-fns-tz';
 import Purchases from 'react-native-purchases';
 import {
   PLANS, getAiAnalysisUsageThisMonth,
-  TOPUP_PRODUCTS, TRIAL_DAYS, ANNUAL_PRICES,
+  TOPUP_PRODUCTS,
 } from '../../lib/subscription';
 import { restorePurchases, ENTITLEMENT_IDS } from '../../lib/purchases';
 
-/** RevenueCat entitlement 기반 trial 정보 */
-interface RcTrialInfo {
+interface RcInfo {
   isTrial: boolean;
-  expirationDate: string | null; // ISO UTC
+  expirationDate: string | null;
   willRenew: boolean;
   daysLeft: number;
   appUserId: string;
   periodType: string;
 }
 
-async function fetchRcTrialInfo(): Promise<RcTrialInfo> {
+async function fetchRcInfo(): Promise<RcInfo> {
   const customerInfo = await Purchases.getCustomerInfo();
   const appUserId = await Purchases.getAppUserID();
   const active = customerInfo.entitlements.active;
@@ -50,9 +48,6 @@ function formatKoreanDate(isoStr: string | null): string | null {
   try {
     const d = new Date(isoStr);
     if (isNaN(d.getTime())) return null;
-    // Use native UTC accessors to match Apple's billing date display.
-    // Apple shows the UTC calendar date of the renewal event; date-fns-tz format() with
-    // timeZone:'UTC' can behave unexpectedly across major version combinations.
     return `${d.getUTCFullYear()}년 ${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`;
   } catch { return null; }
 }
@@ -63,24 +58,6 @@ const DARK_BROWN = '#3E2B22';
 const WARM_GRAY = '#9E8E85';
 const WARM_GRAY_BORDER = '#D9CFC9';
 
-const STATUS_LABELS: Record<string, string> = {
-  trial: '무료 체험 중',
-  active: '이용 중',
-  free: '이용 중',
-  past_due: '결제 실패',
-  cancelled: '취소됨',
-  blocked: '차단됨',
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  trial: TERRACOTTA,
-  active: '#22A566',
-  free: WARM_GRAY,
-  past_due: '#DC4444',
-  cancelled: WARM_GRAY,
-  blocked: '#DC4444',
-};
-
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={s.infoRow}>
@@ -90,17 +67,16 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function MenuRow({ icon, label, value, onPress, destructive }: { icon: string; label: string; value?: string; onPress: () => void; destructive?: boolean }) {
+function MenuRow({ icon, label, onPress, destructive }: {
+  icon: string; label: string; onPress: () => void; destructive?: boolean;
+}) {
   return (
     <TouchableOpacity style={s.menuRow} onPress={onPress} activeOpacity={0.7}>
       <View style={s.menuRowLeft}>
         <Ionicons name={icon as any} size={18} color={destructive ? '#DC4444' : DARK_BROWN} />
         <Text style={[s.menuRowLabel, destructive && s.menuRowLabelDestructive]}>{label}</Text>
       </View>
-      <View style={s.menuRowRight}>
-        {value ? <Text style={s.menuRowValue}>{value}</Text> : null}
-        <Ionicons name="chevron-forward" size={16} color={WARM_GRAY_BORDER} />
-      </View>
+      <Ionicons name="chevron-forward" size={16} color={WARM_GRAY_BORDER} />
     </TouchableOpacity>
   );
 }
@@ -109,7 +85,7 @@ export default function ManageSubscriptionScreen() {
   const router = useRouter();
   const { subscription, loading, refresh } = useSubscription();
   const [aiUsed, setAiUsed] = useState(0);
-  const [rcInfo, setRcInfo] = useState<RcTrialInfo | null>(null);
+  const [rcInfo, setRcInfo] = useState<RcInfo | null>(null);
   const [rcLoading, setRcLoading] = useState(true);
   const rcInitializedRef = useRef(false);
   const appStateRef = useRef(AppState.currentState);
@@ -122,29 +98,25 @@ export default function ManageSubscriptionScreen() {
 
   useEffect(() => { loadUsage(); }, [loadUsage]);
 
-  // RevenueCat 직접 조회 — DB 날짜 사용 안 함
-  // 첫 로드만 스피너, 이후 포커스 복귀 시엔 백그라운드 갱신
   const loadRcInfo = useCallback(async () => {
     const isInitial = !rcInitializedRef.current;
     try {
       if (isInitial) setRcLoading(true);
-      const info = await fetchRcTrialInfo();
+      const info = await fetchRcInfo();
       setRcInfo(info);
       rcInitializedRef.current = true;
     } catch (e) {
-      console.warn('[RC] fetchRcTrialInfo error:', e);
+      console.warn('[RC] fetchRcInfo error:', e);
     } finally {
       if (isInitial) setRcLoading(false);
     }
   }, []);
 
-  // 화면 진입 시 갱신 — RC 정보 + 구독 DB 데이터 동시 갱신
   useFocusEffect(useCallback(() => {
     loadRcInfo();
     refresh();
   }, [loadRcInfo, refresh]));
 
-  // foreground 복귀 시 갱신
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
       if (appStateRef.current.match(/inactive|background/) && next === 'active') {
@@ -171,7 +143,7 @@ export default function ManageSubscriptionScreen() {
     try {
       await restorePurchases();
       await refresh();
-      await loadRcInfo(); // 복원 완료 후 RC 정보 즉시 갱신
+      await loadRcInfo();
       Alert.alert('구매 복원 완료', '이전 구매 내역이 복원됐습니다.');
     } catch (e: any) {
       if (!e.userCancelled) {
@@ -184,6 +156,13 @@ export default function ManageSubscriptionScreen() {
   if (loading || rcLoading) {
     return (
       <SafeAreaView style={s.container}>
+        <View style={s.header}>
+          <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+            <Ionicons name="arrow-back" size={22} color={DARK_BROWN} />
+          </TouchableOpacity>
+          <Text style={s.headerTitle}>구독 및 요금제</Text>
+          <View style={{ width: 40 }} />
+        </View>
         <ActivityIndicator size="large" color={TERRACOTTA} style={{ marginTop: 60 }} />
       </SafeAreaView>
     );
@@ -212,7 +191,6 @@ export default function ManageSubscriptionScreen() {
 
   const plan = PLANS[subscription.plan_id];
   const isPaid = subscription.plan_id !== 'free';
-  const isBasic = subscription.plan_id === 'basic';
   const isPro = subscription.plan_id === 'pro';
 
   const aiLimit = plan.aiAnalysisMonthlyLimit;
@@ -220,15 +198,28 @@ export default function ManageSubscriptionScreen() {
   const aiRemain = Math.max(0, aiLimit - aiUsed);
   const aiProgress = aiLimit > 0 ? Math.min(1, aiUsed / aiLimit) : 0;
 
-  // ── RevenueCat 기반 trial 정보 (DB 날짜 사용 안 함) ──
-  const isTrial = rcInfo?.isTrial ?? false;
-  const trialDaysLeft = rcInfo?.daysLeft ?? 0;
-  const willRenew = rcInfo?.willRenew ?? false;
-  // RC expirationDate 기준 다음 갱신일/만료일
-  const nextBillingDate = formatKoreanDate(rcInfo?.expirationDate ?? null);
-  // RC가 로드됐고 trial이 아님을 확인했으면 DB status 'trial' 무시
-  const rcResolvedNonTrial = !rcLoading && rcInfo !== null && !isTrial && rcInfo.periodType !== '';
-  const effectiveStatus = (subscription.status === 'trial' && rcResolvedNonTrial) ? 'active' : subscription.status;
+  // ── 구독 상태 판단 ──
+  // RC가 로드됐을 때만 trial 여부를 RC 기준으로 결정.
+  // RC에서 periodType을 확인할 수 없거나 active entitlement가 없더라도
+  // 유료 플랜(plan_id !== 'free')이면 trial 배지를 억제한다.
+  const rcPeriodType = rcInfo?.periodType ?? '';
+  const isTrial = rcPeriodType === 'TRIAL';
+  const willRenew = rcInfo?.willRenew ?? true;
+
+  const effectiveStatus = (() => {
+    if (rcPeriodType === 'TRIAL') return 'trial';
+    if (rcPeriodType === 'NORMAL' || rcPeriodType === 'INTRO') return 'active';
+    // RC 결과 없음 — 유료 플랜이면 active로 간주 (무료체험 배지 방지)
+    if (subscription.plan_id !== 'free') return 'active';
+    return subscription.status;
+  })();
+
+  // 갱신일: RC expirationDate 우선, 없으면 DB current_period_end 폴백
+  const billingDateIso = rcInfo?.expirationDate ?? subscription.current_period_end ?? null;
+  const nextBillingDate = formatKoreanDate(billingDateIso);
+
+  // Pro willRenew=false → Basic으로 다운그레이드 예약 (앱에서 다운그레이드 옵션은 Basic뿐)
+  const isScheduledDowngradeToBasic = isPro && willRenew === false;
 
   const nextResetDate = (() => {
     if (subscription.current_period_end) {
@@ -239,6 +230,23 @@ export default function ManageSubscriptionScreen() {
     const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     return nextMonth.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
   })();
+
+  const STATUS_LABEL: Record<string, string> = {
+    trial: '무료 체험 중',
+    active: '이용 중',
+    free: '이용 중',
+    past_due: '결제 실패',
+    cancelled: '취소됨',
+    blocked: '차단됨',
+  };
+  const STATUS_COLOR: Record<string, string> = {
+    trial: TERRACOTTA,
+    active: '#22A566',
+    free: WARM_GRAY,
+    past_due: '#DC4444',
+    cancelled: WARM_GRAY,
+    blocked: '#DC4444',
+  };
 
   return (
     <SafeAreaView style={s.container}>
@@ -252,70 +260,43 @@ export default function ManageSubscriptionScreen() {
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
-        {/* ── 현재 플랜 카드 ── */}
+        {/* ── 현재 구독 카드 ── */}
         <View style={s.card}>
-          <Text style={s.cardSectionLabel}>현재 플랜</Text>
+          {/* 플랜명 + 상태 배지 */}
           <View style={s.planRow}>
             <Text style={s.planName}>{plan.name}</Text>
-            <View style={[s.statusBadge, { backgroundColor: STATUS_COLORS[effectiveStatus] + '18' }]}>
-              <Text style={[s.statusText, { color: STATUS_COLORS[effectiveStatus] }]}>
-                {STATUS_LABELS[effectiveStatus] ?? effectiveStatus}
+            <View style={[s.statusBadge, { backgroundColor: STATUS_COLOR[effectiveStatus] + '1A' }]}>
+              <Text style={[s.statusText, { color: STATUS_COLOR[effectiveStatus] }]}>
+                {STATUS_LABEL[effectiveStatus] ?? effectiveStatus}
               </Text>
             </View>
           </View>
 
+          {/* 무료체험 남은 기간 */}
           {isTrial && (
             <View style={s.trialRow}>
               <Ionicons name="time-outline" size={14} color={TERRACOTTA} />
               <Text style={s.trialText}>
-                {rcLoading
-                  ? '확인 중...'
-                  : (() => {
-                      const exp = rcInfo?.expirationDate ?? null;
-                      if (!exp) return '무료 체험 중';
-                      const ms = new Date(exp).getTime() - Date.now();
-                      if (ms <= 0) return '무료 체험 종료';
-                      if (ms < 24 * 60 * 60 * 1000) return '무료 체험 1일 미만 남음';
-                      return `무료 체험 ${Math.ceil(ms / (24 * 60 * 60 * 1000))}일 남음`;
-                    })()
-                }
+                {(() => {
+                  const exp = rcInfo?.expirationDate ?? null;
+                  if (!exp) return '무료 체험 중';
+                  const ms = new Date(exp).getTime() - Date.now();
+                  if (ms <= 0) return '무료 체험 종료';
+                  if (ms < 24 * 60 * 60 * 1000) return '무료 체험 1일 미만 남음';
+                  return `무료 체험 ${Math.ceil(ms / (24 * 60 * 60 * 1000))}일 남음`;
+                })()}
               </Text>
-              {nextBillingDate && willRenew && (
-                <Text style={s.trialSubText}>· {nextBillingDate}부터 자동 결제</Text>
-              )}
             </View>
           )}
 
-          {/* willRenew=false: 가격 동의 미완료 안내 (Trial) */}
-          {isTrial && !willRenew && nextBillingDate && (
-            <TouchableOpacity style={s.noRenewBanner} onPress={openStoreManagement}>
-              <Ionicons name="alert-circle-outline" size={15} color="#DC4444" />
-              <Text style={s.noRenewText}>
-                {nextBillingDate}까지 무료 체험 · 계속 이용하려면 App Store에서 결제에 동의해 주세요
-              </Text>
-              <Ionicons name="chevron-forward" size={13} color="#DC4444" />
-            </TouchableOpacity>
-          )}
-
-          {/* 유료 구독 변경/종료 예정 안내 (willRenew=false, Trial 아님) */}
-          {isPaid && !isTrial && !willRenew && nextBillingDate && (
-            <TouchableOpacity style={s.scheduledChangeBanner} onPress={openStoreManagement}>
-              <Ionicons name="information-circle-outline" size={15} color={TERRACOTTA} />
-              <Text style={s.scheduledChangeText}>
-                {nextBillingDate}에 구독이 변경되거나 종료될 예정이에요. App Store에서 확인하세요.
-              </Text>
-              <Ionicons name="chevron-forward" size={13} color={TERRACOTTA} />
-            </TouchableOpacity>
-          )}
-
+          {/* 가격 + 갱신일 */}
           {isPaid && plan.price > 0 && (
             <>
               <View style={s.divider} />
-              {isTrial ? (
-                <InfoRow label="체험 후 결제" value={`${plan.price.toLocaleString()}원/월`} />
-              ) : (
-                <InfoRow label="현재 결제" value={`${plan.price.toLocaleString()}원/월`} />
-              )}
+              <InfoRow
+                label={isTrial ? '체험 후 결제' : '현재 결제'}
+                value={`${plan.price.toLocaleString()}원/월`}
+              />
               {nextBillingDate && (
                 <InfoRow
                   label={isTrial ? '다음 결제 예정일' : '다음 갱신일'}
@@ -324,13 +305,52 @@ export default function ManageSubscriptionScreen() {
               )}
             </>
           )}
+
+          {/* Basic 변경 예약 배너 */}
+          {isScheduledDowngradeToBasic && nextBillingDate && (
+            <TouchableOpacity style={s.scheduledBanner} onPress={openStoreManagement} activeOpacity={0.8}>
+              <View style={s.scheduledBannerLeft}>
+                <View style={s.scheduledBannerIconWrap}>
+                  <Ionicons name="swap-horizontal-outline" size={16} color={TERRACOTTA} />
+                </View>
+                <View style={s.scheduledBannerText}>
+                  <Text style={s.scheduledBannerTitle}>Basic으로 변경 예정</Text>
+                  <Text style={s.scheduledBannerDesc}>
+                    {nextBillingDate}부터 Basic 플랜 · 9,900원/월
+                  </Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={14} color={TERRACOTTA} />
+            </TouchableOpacity>
+          )}
+
+          {/* 구독 취소/종료 예정 (willRenew=false, 다운그레이드 아닌 경우) */}
+          {isPaid && !isTrial && !willRenew && !isScheduledDowngradeToBasic && nextBillingDate && (
+            <TouchableOpacity style={s.cancelBanner} onPress={openStoreManagement} activeOpacity={0.8}>
+              <Ionicons name="information-circle-outline" size={15} color={WARM_GRAY} />
+              <Text style={s.cancelBannerText}>
+                {nextBillingDate}에 구독이 종료될 예정입니다. App Store에서 확인하세요.
+              </Text>
+              <Ionicons name="chevron-forward" size={13} color={WARM_GRAY} />
+            </TouchableOpacity>
+          )}
+
+          {/* Trial willRenew=false: 결제 동의 필요 */}
+          {isTrial && !willRenew && nextBillingDate && (
+            <TouchableOpacity style={s.noRenewBanner} onPress={openStoreManagement} activeOpacity={0.8}>
+              <Ionicons name="alert-circle-outline" size={15} color="#DC4444" />
+              <Text style={s.noRenewText}>
+                {nextBillingDate}까지 무료 체험 · 계속 이용하려면 App Store에서 결제에 동의해 주세요
+              </Text>
+              <Ionicons name="chevron-forward" size={13} color="#DC4444" />
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* ── AI 레슨 기록 사용량 ── */}
+        {/* ── AI 레슨 기록 ── */}
         <View style={s.card}>
-          <Text style={s.cardSectionLabel}>AI 레슨 기록</Text>
+          <Text style={s.cardLabel}>AI 레슨 기록</Text>
 
-          {/* 기본 제공량 */}
           <View style={s.usageHeader}>
             <Text style={s.usageTitle}>이번 달 기본 제공</Text>
             <Text style={s.usageCount}>
@@ -340,14 +360,16 @@ export default function ManageSubscriptionScreen() {
             </Text>
           </View>
           <View style={s.progressTrack}>
-            <View style={[s.progressFill, { width: `${Math.round(aiProgress * 100)}%` as any, backgroundColor: aiProgress >= 0.9 ? '#DC4444' : TERRACOTTA }]} />
+            <View style={[s.progressFill, {
+              width: `${Math.round(aiProgress * 100)}%` as any,
+              backgroundColor: aiProgress >= 0.9 ? '#DC4444' : TERRACOTTA,
+            }]} />
           </View>
           <View style={s.usageFooter}>
             <Text style={s.usageRemain}>{aiRemain}개 남음</Text>
             <Text style={s.usageReset}>다음 초기화 {nextResetDate}</Text>
           </View>
 
-          {/* 추가 충전 */}
           {aiExtra > 0 && (
             <View style={s.extraSection}>
               <View style={s.extraRow}>
@@ -359,34 +381,34 @@ export default function ManageSubscriptionScreen() {
             </View>
           )}
 
-          {/* 충전 버튼 (Basic/Pro만) */}
           {isPaid && (
-            <TouchableOpacity style={s.topupBtn} onPress={() => router.push('/subscription/topup')} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={s.topupBtn}
+              onPress={() => router.push('/subscription/topup')}
+              activeOpacity={0.8}
+            >
               <Ionicons name="flash-outline" size={15} color={TERRACOTTA} />
-              <Text style={s.topupBtnText}>AI 레슨 기록 {TOPUP_PRODUCTS[0].credits}개 충전 · {TOPUP_PRODUCTS[0].price.toLocaleString()}원</Text>
+              <Text style={s.topupBtnText}>
+                AI 레슨 기록 {TOPUP_PRODUCTS[0].credits}개 충전 · {TOPUP_PRODUCTS[0].price.toLocaleString()}원
+              </Text>
             </TouchableOpacity>
           )}
         </View>
 
-        {/* ── 하단 메뉴 ── */}
+        {/* ── 구독 관리 메뉴 ── */}
         <View style={s.menuCard}>
-          {/* 플랜 변경 */}
           {subscription.status !== 'cancelled' && subscription.status !== 'blocked' && (
             <MenuRow
               icon="swap-horizontal-outline"
-              label="플랜 변경"
+              label="요금제 변경"
               onPress={() => router.push('/subscription/select-plan')}
             />
           )}
-
-          {/* 결제·충전 내역 */}
           <MenuRow
             icon="receipt-outline"
             label="결제·충전 내역"
             onPress={() => router.push('/subscription/billing-history')}
           />
-
-          {/* 스토어 구독 관리 */}
           <MenuRow
             icon="storefront-outline"
             label={Platform.OS === 'android' ? 'Google Play에서 구독 관리' : 'App Store에서 구독 관리'}
@@ -394,7 +416,7 @@ export default function ManageSubscriptionScreen() {
           />
         </View>
 
-        {/* 구매 복원 / 정책 링크 */}
+        {/* 하단 링크 */}
         <View style={s.footerLinks}>
           <TouchableOpacity onPress={handleRestorePurchase}>
             <Text style={s.footerLink}>구매 복원</Text>
@@ -405,7 +427,6 @@ export default function ManageSubscriptionScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* 구독 종료 후 충전권 안내 */}
         {aiExtra > 0 && !isPaid && (
           <View style={s.retainedCreditCard}>
             <Ionicons name="information-circle-outline" size={16} color={WARM_GRAY} />
@@ -417,7 +438,6 @@ export default function ManageSubscriptionScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
-
     </SafeAreaView>
   );
 }
@@ -435,50 +455,84 @@ const s = StyleSheet.create({
   scroll: { padding: 20, gap: 14 },
 
   card: {
-    backgroundColor: '#fff', borderRadius: 16,
-    padding: 18, borderWidth: 1, borderColor: WARM_GRAY_BORDER,
+    backgroundColor: '#fff', borderRadius: 18,
+    padding: 20, borderWidth: 1, borderColor: WARM_GRAY_BORDER,
   },
-  cardSectionLabel: { fontSize: 11, fontWeight: '700', color: WARM_GRAY, marginBottom: 10, letterSpacing: 0.5, textTransform: 'uppercase' },
+  cardLabel: {
+    fontSize: 11, fontWeight: '700', color: WARM_GRAY,
+    letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 14,
+  },
 
-  planRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  planName: { fontSize: 26, fontWeight: '800', color: DARK_BROWN },
-  statusBadge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 },
+  planRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  planName: { fontSize: 28, fontWeight: '800', color: DARK_BROWN },
+  statusBadge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5 },
   statusText: { fontSize: 12, fontWeight: '700' },
 
-  trialRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 },
+  trialRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 6 },
   trialText: { fontSize: 13, color: TERRACOTTA, fontWeight: '700' },
-  trialSubText: { fontSize: 12, color: WARM_GRAY },
-  noRenewBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#FFF0F0', borderRadius: 10,
-    padding: 10, marginTop: 8,
-  },
-  noRenewText: { flex: 1, fontSize: 12, color: '#DC4444', lineHeight: 17 },
-  scheduledChangeBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: TERRACOTTA + '10', borderRadius: 10,
-    padding: 10, marginTop: 8,
-  },
-  scheduledChangeText: { flex: 1, fontSize: 12, color: TERRACOTTA, lineHeight: 17 },
 
-  divider: { height: 1, backgroundColor: '#F5EDE5', marginVertical: 12 },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 5 },
+  divider: { height: 1, backgroundColor: '#F5EDE5', marginVertical: 14 },
+  infoRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', paddingVertical: 5,
+  },
   infoLabel: { fontSize: 13, color: WARM_GRAY },
   infoValue: { fontSize: 13, color: DARK_BROWN, fontWeight: '600' },
 
+  // Basic 변경 예정 배너
+  scheduledBanner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: TERRACOTTA + '0F', borderRadius: 12,
+    padding: 12, marginTop: 14,
+    borderWidth: 1, borderColor: TERRACOTTA + '30',
+  },
+  scheduledBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  scheduledBannerIconWrap: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: TERRACOTTA + '18',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  scheduledBannerText: { flex: 1 },
+  scheduledBannerTitle: { fontSize: 13, fontWeight: '700', color: TERRACOTTA, marginBottom: 2 },
+  scheduledBannerDesc: { fontSize: 12, color: WARM_GRAY, lineHeight: 17 },
+
+  // 구독 종료 예정 배너 (willRenew=false, 취소)
+  cancelBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#F5EDE5', borderRadius: 10,
+    padding: 10, marginTop: 14,
+  },
+  cancelBannerText: { flex: 1, fontSize: 12, color: WARM_GRAY, lineHeight: 17 },
+
+  noRenewBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#FFF0F0', borderRadius: 10,
+    padding: 10, marginTop: 10,
+  },
+  noRenewText: { flex: 1, fontSize: 12, color: '#DC4444', lineHeight: 17 },
+
   // AI 사용량
-  usageHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 },
+  usageHeader: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'baseline', marginBottom: 10,
+  },
   usageTitle: { fontSize: 13, color: WARM_GRAY, fontWeight: '600' },
   usageCount: { fontSize: 15, color: WARM_GRAY },
   usageUsed: { fontSize: 22, fontWeight: '800', color: DARK_BROWN },
   usageSep: { color: WARM_GRAY_BORDER },
-  progressTrack: { height: 7, backgroundColor: '#F0E8E0', borderRadius: 4, overflow: 'hidden', marginBottom: 6 },
+  progressTrack: {
+    height: 7, backgroundColor: '#F0E8E0',
+    borderRadius: 4, overflow: 'hidden', marginBottom: 6,
+  },
   progressFill: { height: '100%', borderRadius: 4 },
   usageFooter: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
   usageRemain: { fontSize: 13, color: TERRACOTTA, fontWeight: '700' },
   usageReset: { fontSize: 12, color: WARM_GRAY },
 
-  extraSection: { borderTopWidth: 1, borderTopColor: '#F5EDE5', marginTop: 12, paddingTop: 12, gap: 5 },
+  extraSection: {
+    borderTopWidth: 1, borderTopColor: '#F5EDE5',
+    marginTop: 12, paddingTop: 12, gap: 5,
+  },
   extraRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   extraLabel: { fontSize: 13, color: DARK_BROWN, fontWeight: '600', flex: 1 },
   extraCount: { fontSize: 14, fontWeight: '700', color: TERRACOTTA },
@@ -491,8 +545,9 @@ const s = StyleSheet.create({
   },
   topupBtnText: { fontSize: 13, color: TERRACOTTA, fontWeight: '700' },
 
+  // 메뉴
   menuCard: {
-    backgroundColor: '#fff', borderRadius: 16,
+    backgroundColor: '#fff', borderRadius: 18,
     borderWidth: 1, borderColor: WARM_GRAY_BORDER,
     overflow: 'hidden',
   },
@@ -504,8 +559,6 @@ const s = StyleSheet.create({
   menuRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   menuRowLabel: { fontSize: 14, color: DARK_BROWN, fontWeight: '500' },
   menuRowLabelDestructive: { color: '#DC4444' },
-  menuRowRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  menuRowValue: { fontSize: 12, color: WARM_GRAY },
 
   footerLinks: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
@@ -522,6 +575,9 @@ const s = StyleSheet.create({
 
   emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16, padding: 32 },
   emptyTitle: { fontSize: 16, color: WARM_GRAY, fontWeight: '600' },
-  startBtn: { backgroundColor: TERRACOTTA, borderRadius: 14, paddingHorizontal: 28, paddingVertical: 14 },
+  startBtn: {
+    backgroundColor: TERRACOTTA, borderRadius: 14,
+    paddingHorizontal: 28, paddingVertical: 14,
+  },
   startBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });
