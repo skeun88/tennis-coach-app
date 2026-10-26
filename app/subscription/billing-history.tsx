@@ -44,10 +44,20 @@ export default function BillingHistoryScreen() {
   const { subscription, loading: subscriptionLoading } = useSubscription();
   const [items, setItems] = useState<BillingItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const coachId = subscription?.coach_id ?? null;
 
+  // RC 동기화: 마운트 1회만 실행 (subscription 변경에 반응하지 않음)
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) await syncRevenueCatToDb(user.id).catch(() => {});
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 내역 조회: coachId가 확정됐을 때만 실행
   const loadHistory = useCallback(async () => {
-    if (!subscription?.coach_id) {
-      // subscription 훅이 아직 로딩 중이면 loading 유지, 완료됐는데 coach_id 없으면 false
+    if (!coachId) {
       if (!subscriptionLoading) setLoading(false);
       return;
     }
@@ -57,14 +67,14 @@ export default function BillingHistoryScreen() {
         supabase
           .from('subscription_logs')
           .select('id, event_type, amount, created_at')
-          .eq('coach_id', subscription.coach_id)
+          .eq('coach_id', coachId)
           .not('event_type', 'eq', 'revenuecat_sync')
           .order('created_at', { ascending: false })
           .limit(40),
         supabase
           .from('report_topup_transactions')
           .select('id, credits_added, amount, created_at')
-          .eq('coach_id', subscription.coach_id)
+          .eq('coach_id', coachId)
           .eq('status', 'completed')
           .order('created_at', { ascending: false })
           .limit(20),
@@ -86,24 +96,21 @@ export default function BillingHistoryScreen() {
         created_at: row.created_at,
       }));
 
-      const merged = [...subItems, ...topupItems].sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
+      // id 기준 중복 제거 후 정렬
+      const seen = new Set<string>();
+      const merged = [...subItems, ...topupItems]
+        .filter(item => { if (seen.has(item.id)) return false; seen.add(item.id); return true; })
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setItems(merged);
     } catch {
       // fallback: show empty state
     } finally {
       setLoading(false);
     }
-  }, [subscription, subscriptionLoading]);
+  }, [coachId, subscriptionLoading]);
 
   useEffect(() => {
-    (async () => {
-      // RC 최신 구독 상태 동기화 → 갱신 내역 누락 시 log_iap_renewal 자동 삽입
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) await syncRevenueCatToDb(user.id).catch(() => {});
-      loadHistory();
-    })();
+    loadHistory();
   }, [loadHistory]);
 
   return (
