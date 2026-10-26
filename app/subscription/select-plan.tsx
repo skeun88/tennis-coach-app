@@ -111,6 +111,8 @@ export default function SelectPlanScreen() {
   }
 
   const isScheduledDowngradeToBasic = currentPlanId === 'pro' && willRenew === false;
+  // Pro인데 willRenew 아직 조회 중 → CTA 눌러서 Apple 팝업 뜨지 않도록 로딩 표시
+  const isProAndLoadingWillRenew = currentPlanId === 'pro' && willRenew === null;
 
   const isTrialEligible = (() => {
     if (!subscription) return true;
@@ -390,9 +392,13 @@ export default function SelectPlanScreen() {
           <Text style={s.planDesc}>회원 관리와 기본 AI 코칭</Text>
 
           <View style={s.featureList}>
-            <FeatureItem icon="grid-outline" text="일정·출석·결제 관리" />
+            <FeatureItem icon="people-outline" text="회원 무제한 등록" />
+            <FeatureItem icon="grid-outline" text="일정·출석·회차 관리" />
+            <FeatureItem icon="card-outline" text="레슨권·결제 관리" />
+            <FeatureItem icon="notifications-outline" text="회원 관리 자동 알림" />
             <FeatureItem icon="mic-outline" text="AI 레슨 기록 월 10회" />
             <FeatureItem icon="analytics-outline" text="기본 AI 코칭 분석" />
+            <FeatureItem icon="add-circle-outline" text="AI 레슨 기록 추가 충전 가능" />
           </View>
 
           {isScheduledDowngradeToBasic && expirationDate && (
@@ -406,6 +412,10 @@ export default function SelectPlanScreen() {
             <View style={s.statusView}>
               <Ionicons name="checkmark-circle" size={16} color={TERRACOTTA} />
               <Text style={s.statusViewText}>변경 예약 완료</Text>
+            </View>
+          ) : isProAndLoadingWillRenew ? (
+            <View style={[s.paidCta, s.paidCtaDisabled]}>
+              <ActivityIndicator color="#fff" />
             </View>
           ) : isCurrentPlan('basic') ? (
             <View style={[s.statusView, s.statusViewCurrent]}>
@@ -464,7 +474,11 @@ export default function SelectPlanScreen() {
           <View style={s.featureList}>
             <FeatureItem icon="grid-outline" text="Basic의 모든 기능" />
             <FeatureItem icon="mic-outline" text="AI 레슨 기록 월 50회" />
-            <FeatureItem icon="analytics-outline" text="상세 AI 분석·반복 이슈 추적" />
+            <FeatureItem icon="analytics-outline" text="상세 AI 코칭 분석" />
+            <FeatureItem icon="refresh-outline" text="회원별 반복 이슈 분석" />
+            <FeatureItem icon="trending-up-outline" text="레슨 기록 기반 키워드·성장 변화 추적" />
+            <FeatureItem icon="bulb-outline" text="개인화 AI 코칭 기능" />
+            <FeatureItem icon="add-circle-outline" text="AI 레슨 기록 추가 충전 가능" />
           </View>
 
           {isScheduledDowngradeToBasic && expirationDate && (
