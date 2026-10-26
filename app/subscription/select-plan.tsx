@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Purchases from 'react-native-purchases';
 import { PLANS, ANNUAL_PRICES, TRIAL_DAYS } from '../../lib/subscription';
 import { IS_BETA } from '../../lib/beta';
 import { supabase } from '../../lib/supabase';
@@ -72,6 +73,7 @@ export default function SelectPlanScreen() {
   const [compareVisible, setCompareVisible] = useState(false);
   const [purchasing, setPurchasing] = useState<string | null>(null); // planId being purchased
   const [currentBillingCycle, setCurrentBillingCycle] = useState<'monthly' | 'annual' | null>(null);
+  const [willRenew, setWillRenew] = useState<boolean | null>(null);
 
   const currentPlanId = subscription?.plan_id ?? 'free';
 
@@ -79,6 +81,35 @@ export default function SelectPlanScreen() {
     if (currentPlanId === 'free') { setCurrentBillingCycle(null); return; }
     getCurrentBillingCycle(currentPlanId as 'basic' | 'pro').then(setCurrentBillingCycle);
   }, [currentPlanId]);
+
+  // RC에서 willRenew 직접 조회 — 구독 변경 예약 여부 감지
+  useEffect(() => {
+    (async () => {
+      try {
+        const info = await Purchases.getCustomerInfo();
+        const active = info.entitlements.active;
+        const ent = active[ENTITLEMENT_IDS.PRO] ?? active[ENTITLEMENT_IDS.BASIC] ?? null;
+        setWillRenew((ent as any)?.willRenew ?? true);
+      } catch {
+        setWillRenew(true);
+      }
+    })();
+  }, []);
+
+  async function openStoreManagement() {
+    const url = Platform.OS === 'android'
+      ? 'https://play.google.com/store/account/subscriptions'
+      : 'https://apps.apple.com/account/subscriptions';
+    const canOpen = await Linking.canOpenURL(url);
+    if (canOpen) {
+      Linking.openURL(url);
+    } else {
+      Alert.alert('구독 관리', 'App Store 또는 설정 앱에서 구독을 관리하세요.');
+    }
+  }
+
+  // Pro active + willRenew=false: Basic으로 다운그레이드 예약 상태
+  const isScheduledDowngradeToBasic = currentPlanId === 'pro' && willRenew === false;
 
   // 신규 유료 구독 자격: Free 플랜이고 trial을 한 번도 사용하지 않은 사용자
   // (createFreeSubscription은 trial_starts_at === trial_ends_at로 기록)
@@ -347,13 +378,18 @@ export default function SelectPlanScreen() {
         </View>
 
         {/* Basic 카드 */}
-        <View style={[s.planCard, s.planCardPaid, isCurrentPlan('basic') && s.planCardCurrent]}>
-          {isTrialEligible && (
+        <View style={[s.planCard, s.planCardPaid, isCurrentPlan('basic') && s.planCardCurrent, isScheduledDowngradeToBasic && s.planCardScheduled]}>
+          {isScheduledDowngradeToBasic ? (
+            <View style={s.scheduledBadge}>
+              <Ionicons name="swap-horizontal-outline" size={12} color={TERRACOTTA} />
+              <Text style={s.scheduledBadgeText}>변경 예정</Text>
+            </View>
+          ) : isTrialEligible ? (
             <View style={s.trialBadge}>
               <Ionicons name="gift-outline" size={12} color={TERRACOTTA} />
               <Text style={s.trialBadgeText}>{TRIAL_DAYS}일 무료 체험</Text>
             </View>
-          )}
+          ) : null}
           <View style={s.planCardHeader}>
             <Text style={[s.planName, s.planNamePaid]}>Basic</Text>
             {isCurrentPlan('basic') && (
@@ -392,14 +428,17 @@ export default function SelectPlanScreen() {
             <FeatureItem icon="add-circle-outline" text="AI 레슨 기록 충전 가능" />
           </View>
           <TouchableOpacity
-            style={[s.paidCta, (isCurrentPlan('basic') || !!purchasing) && s.paidCtaDisabled]}
-            onPress={!isCurrentPlan('basic') && !purchasing ? () => handleSelectPlan('basic') : undefined}
-            disabled={isCurrentPlan('basic') || !!purchasing}
+            style={[s.paidCta, (isCurrentPlan('basic') || isScheduledDowngradeToBasic || !!purchasing) && s.paidCtaDisabled]}
+            onPress={
+              isScheduledDowngradeToBasic ? openStoreManagement
+              : (!isCurrentPlan('basic') && !purchasing ? () => handleSelectPlan('basic') : undefined)
+            }
+            disabled={isCurrentPlan('basic') || isScheduledDowngradeToBasic || !!purchasing}
             activeOpacity={0.85}
           >
             {purchasing === 'basic'
               ? <ActivityIndicator color="#fff" />
-              : <Text style={s.paidCtaText}>{getCtaText('basic')}</Text>
+              : <Text style={s.paidCtaText}>{isScheduledDowngradeToBasic ? 'Basic 변경 예약 완료' : getCtaText('basic')}</Text>
             }
           </TouchableOpacity>
         </View>
@@ -541,6 +580,16 @@ const s = StyleSheet.create({
   planCardPro: { borderColor: DARK_BROWN + '50', backgroundColor: '#FEFCFA' },
   planCardCurrent: { borderColor: TERRACOTTA },
   planCardProCurrent: { borderColor: DARK_BROWN },
+  planCardScheduled: { borderColor: TERRACOTTA + '80' },
+
+  scheduledBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    alignSelf: 'flex-start',
+    backgroundColor: TERRACOTTA + '20', borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 4, marginBottom: 10,
+    borderWidth: 1, borderColor: TERRACOTTA + '40',
+  },
+  scheduledBadgeText: { fontSize: 11, color: TERRACOTTA, fontWeight: '700' },
 
   trialBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
