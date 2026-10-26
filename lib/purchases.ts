@@ -92,16 +92,13 @@ export function getPlanProductId(planId: string, isAnnual: boolean): string {
 /** RevenueCat CustomerInfo → Supabase DB 동기화 (활성 구독이 있을 때만 업데이트) */
 export async function syncRevenueCatToDb(userId: string): Promise<void> {
   try {
-    const appUserId = await Purchases.getAppUserID();
-    if (appUserId !== userId) {
-      await Purchases.logIn(userId);
-    }
-
+    // logIn을 먼저 호출하면 RC 사용자가 전환되어 Apple IAP 엔타이틀먼트가 사라지는 버그 발생.
+    // 현재 RC 세션의 customerInfo를 먼저 확인한 뒤, 엔타이틀먼트가 없을 때만 복구 시도.
     let customerInfo = await Purchases.getCustomerInfo();
     let active = customerInfo.entitlements.active;
 
-    // 활성 구독이 없으면 Apple 영수증으로 강제 재동기화 (갱신 누락 복구)
-    if (Object.keys(active).length === 0 && Object.keys(customerInfo.entitlements.all).length > 0) {
+    // 활성 구독이 없으면 restorePurchases로 Apple 영수증 재동기화
+    if (Object.keys(active).length === 0) {
       try {
         const restored = await Purchases.restorePurchases();
         active = restored.entitlements.active;
@@ -156,10 +153,11 @@ export async function syncRevenueCatToDb(userId: string): Promise<void> {
       .eq('coach_id', userId)
       .single();
 
-    // Apple IAP 갱신 감지 → subscription_logs에 기록 (결제·충전 내역 화면에 표시)
+    // Apple/RC IAP 갱신 감지 → subscription_logs에 기록 (결제·충전 내역 화면에 표시)
+    // store 체크 제거: Toss 결제는 process-billing이 별도 로그를 남기므로 중복 무관
+    // log_iap_renewal 내부의 2일 중복 방지가 중복 삽입을 막아줌
     if (
       status !== 'trial' &&
-      activeEntitlement?.store === 'app_store' &&
       activeEntitlement?.latestPurchaseDate
     ) {
       const productId: string = activeEntitlement.productIdentifier ?? '';
