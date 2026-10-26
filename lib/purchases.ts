@@ -94,11 +94,20 @@ export async function syncRevenueCatToDb(userId: string): Promise<void> {
   try {
     // logIn을 먼저 호출하면 RC 사용자가 전환되어 Apple IAP 엔타이틀먼트가 사라지는 버그 발생.
     // 현재 RC 세션의 customerInfo를 먼저 확인한 뒤, 엔타이틀먼트가 없을 때만 복구 시도.
+    // DB 상태를 먼저 확인 — free 유저는 auto-restore 스킵 (과거 영수증이 되살아나 Pro로 덮이는 버그 방지)
+    const { data: dbSubCheck } = await supabase
+      .from('subscriptions')
+      .select('status')
+      .eq('coach_id', userId)
+      .single();
+    const dbIsFree = !dbSubCheck || dbSubCheck.status === 'free';
+
     let customerInfo = await Purchases.getCustomerInfo();
     let active = customerInfo.entitlements.active;
 
     // 활성 구독이 없으면 restorePurchases로 Apple 영수증 재동기화
-    if (Object.keys(active).length === 0) {
+    // 단, DB가 이미 free이면 복원 시도 안 함 (과거 영수증으로 잘못 업그레이드 방지)
+    if (Object.keys(active).length === 0 && !dbIsFree) {
       try {
         const restored = await Purchases.restorePurchases();
         active = restored.entitlements.active;
@@ -111,16 +120,32 @@ export async function syncRevenueCatToDb(userId: string): Promise<void> {
     let currentPeriodEnd: string | null = null;
     let activeEntitlement: any = null;
 
-    if (active[ENTITLEMENT_IDS.PRO]) {
+    const proEnt = active[ENTITLEMENT_IDS.PRO];
+    const basicEnt = active[ENTITLEMENT_IDS.BASIC];
+
+    if (proEnt && basicEnt) {
+      // 둘 다 active인 경우: 유료(NORMAL) entitlement 우선
+      // Pro Trial 중 Basic 유료 구독 시 Basic이 표시돼야 함
+      const basicIsPaid = (basicEnt as any).periodType !== 'TRIAL';
+      const proIsPaid = (proEnt as any).periodType !== 'TRIAL';
+      if (basicIsPaid && !proIsPaid) {
+        planId = 'basic';
+        activeEntitlement = basicEnt;
+      } else {
+        planId = 'pro';
+        activeEntitlement = proEnt;
+      }
+    } else if (proEnt) {
       planId = 'pro';
-      activeEntitlement = active[ENTITLEMENT_IDS.PRO];
-      currentPeriodEnd = activeEntitlement.expirationDate ?? null;
-      if (activeEntitlement.periodType === 'TRIAL') status = 'trial';
-    } else if (active[ENTITLEMENT_IDS.BASIC]) {
+      activeEntitlement = proEnt;
+    } else if (basicEnt) {
       planId = 'basic';
-      activeEntitlement = active[ENTITLEMENT_IDS.BASIC];
+      activeEntitlement = basicEnt;
+    }
+
+    if (activeEntitlement) {
       currentPeriodEnd = activeEntitlement.expirationDate ?? null;
-      if (activeEntitlement.periodType === 'TRIAL') status = 'trial';
+      if ((activeEntitlement as any).periodType === 'TRIAL') status = 'trial';
     }
 
     if (!planId) {
