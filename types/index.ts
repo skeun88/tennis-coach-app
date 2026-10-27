@@ -122,6 +122,7 @@ export interface LessonPlan {
   member_report_status?: string;
   lesson_id?: string;
   lesson_comparison?: LessonComparison[];
+  achievements?: string[];
   coach_next_goals?: string[];
   next_goals_saved?: boolean;
   compared_lesson_id?: string;

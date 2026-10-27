@@ -252,9 +252,14 @@ export default function PlanDetailScreen() {
         setPlan(prev => prev ? { ...prev, ai_title: trimmed } : prev);
       } else if (editingSection === 'achievements') {
         const lines = editingValue.split('\n').map(l => l.trim()).filter(Boolean);
-        if (!report?.id) { setSavingSection(false); return; }
-        await supabase.from('member_lesson_reports').update({ achievements: lines }).eq('id', report.id);
-        setReport((prev: any) => prev ? { ...prev, achievements: lines } : prev);
+        if (isManual) {
+          if (!report?.id) { setSavingSection(false); return; }
+          await supabase.from('member_lesson_reports').update({ achievements: lines }).eq('id', report.id);
+          setReport((prev: any) => prev ? { ...prev, achievements: lines } : prev);
+        } else {
+          await supabase.from('lesson_plans').update({ achievements: lines }).eq('id', plan.id);
+          setPlan(prev => prev ? { ...prev, achievements: lines } : prev);
+        }
       } else if (editingSection === 'coach_next_goals') {
         const lines = editingValue.split('\n').map(l => l.trim()).filter(Boolean);
         await supabase.from('lesson_plans').update({
@@ -353,7 +358,9 @@ export default function PlanDetailScreen() {
     );
   }
 
-  const achievements: string[] = report?.achievements ?? [];
+  const achievements: string[] = isManual
+    ? (report?.achievements ?? [])
+    : ((plan.achievements?.length ?? 0) > 0 ? plan.achievements! : (report?.achievements ?? []));
   const improvementPoints = toStringArray(plan.improvement_points);
   const isSent = report?.sent_to_member === true;
   const hasReport = !!report;

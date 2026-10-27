@@ -132,6 +132,9 @@ const SYSTEM_PROMPT = `당신은 USTA/ITF 자격증을 보유한 전문 테니�
   - 기술별·주제별로 자연스럽게 단락을 구분해 읽기 편하게 작성
   - 무조건 짧게 줄이지 말 것; 반복·과장으로 분량을 채우지도 말 것
   - 레슨 내용이 실제로 적으면 그만큼만 작성해도 됨
+• achievements: 핵심 1~3개, 각 1~2문장 (녹음에서 확인된 긍정적 성과만 — 코치의 칭찬·긍정 피드백·성공 동작 기반)
+  - 코치가 교정만 하고 칭찬이 없었다면 빈 배열([]) 허용
+  - 창작·추정 금지. 녹음에서 확인되지 않은 성과 절대 포함 금지
 • session_goals: 1문장 이내
 • improvement_points: 핵심 1~3항목, 각 1~2문장 (문제점 + 교정 방향, summary와 중복 금지)
 • next_goals: 핵심 1~2항목, 각 1문장 이내
@@ -141,6 +144,10 @@ const SYSTEM_PROMPT = `당신은 USTA/ITF 자격증을 보유한 전문 테니�
 {
   "ai_title": "이번 레슨 핵심 주제 (5-8단어, 명사형)",
   "summary": "오늘 레슨 흐름 요약 (2문장 이내)",
+  "achievements": [
+    "오늘 잘한 점 / 확인된 성과 1 (구체적 동작 기반, 1~2문장)",
+    "성과 2 (녹음에서 확인된 경우만 추가)"
+  ],
   "session_goals": "이번 레슨 핵심 목표 (1문장)",
   "improvement_points": [
     "개선 포인트 1: 원인 → 교정법 (1문장)",
@@ -713,6 +720,7 @@ ${knowledgeContext || '(없음)'}
       court_type: effectiveCourtType,
       ai_title: parsed.ai_title || '',
       summary: parsed.summary || '',
+      achievements: normalizeList(parsed.achievements),
       improvement_points: normalizeList(parsed.improvement_points),
       next_goals: normalizeList(parsed.next_goals),
       session_goals: parsed.session_goals || '',
@@ -774,12 +782,34 @@ ${knowledgeContext || '(없음)'}
     // save 완료 후 즉시 코치 응답 반환, 나머지는 EdgeRuntime.waitUntil()로 처리
     const bgTask = (async () => {
       try {
-        await generateMemberReport({
-          supabase, fetchClaude,
-          coachId, memberId,
-          plan, parsed, member, effectiveCourtType,
-          durationSeconds: durationSeconds ?? null,
-        })
+        // haiku 제거: Sonnet 분석 결과(lesson_plans)를 직접 member_lesson_reports에 저장
+        // 중복 방지: lesson_plan_id로 기존 레코드 확인 후 없을 때만 insert
+        if (plan?.id) {
+          const { data: existing } = await supabase
+            .from('member_lesson_reports')
+            .select('id')
+            .eq('lesson_plan_id', plan.id)
+            .maybeSingle()
+
+          if (existing) {
+            console.log('member_lesson_reports already exists, skipping insert:', plan.id)
+          } else {
+            const { error: insertErr } = await supabase.from('member_lesson_reports').insert({
+              coach_id: coachId,
+              member_id: memberId,
+              lesson_plan_id: plan.id,
+              lesson_date: new Date().toISOString().split('T')[0],
+              summary: plan.summary || '',
+              achievements: Array.isArray(plan.achievements) ? plan.achievements : [],
+              improvement_points: normalizeList(parsed.improvement_points),
+              practice_plan: [],
+            })
+            if (insertErr) {
+              console.error('member_lesson_reports_insert_error:', insertErr)
+              throw insertErr
+            }
+          }
+        }
 
         // 성공: completed 표시
         if (plan?.id) {
