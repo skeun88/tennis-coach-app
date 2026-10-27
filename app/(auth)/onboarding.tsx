@@ -7,7 +7,15 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
-import { Colors, Radius, Shadow } from '../../lib/theme';
+import { Radius, Shadow } from '../../lib/theme';
+
+const CREAM = '#F7F0E9';
+const DARK_BROWN = '#3E2B22';
+const WARM_GRAY = '#9A8B82';
+const TERRACOTTA = '#C0755A';
+const INPUT_BORDER = '#DDD2CA';
+const PLACEHOLDER = '#B0A49C';
+const PROGRESS_TRACK = '#E4D9D0';
 
 const TOTAL_STEPS = 3;
 
@@ -144,7 +152,7 @@ export default function OnboardingScreen() {
             <TextInput
               style={styles.textInput}
               placeholder="예: 김민준"
-              placeholderTextColor={Colors.placeholder}
+              placeholderTextColor={PLACEHOLDER}
               value={displayName}
               onChangeText={setDisplayName}
               autoFocus
@@ -182,7 +190,7 @@ export default function OnboardingScreen() {
             <TextInput
               style={styles.textInput}
               placeholder="예: 마포구"
-              placeholderTextColor={Colors.placeholder}
+              placeholderTextColor={PLACEHOLDER}
               value={regionDistrict}
               onChangeText={setRegionDistrict}
               returnKeyType="done"
@@ -211,7 +219,7 @@ export default function OnboardingScreen() {
             </View>
 
             <View style={styles.infoBox}>
-              <Ionicons name="information-circle-outline" size={16} color="rgba(255,255,255,0.5)" />
+              <Ionicons name="information-circle-outline" size={16} color={WARM_GRAY} />
               <Text style={styles.infoText}>
                 코칭 경력, 아카데미명, 전문 분야 등{'\n'}추가 정보는 가입 후 프로필에서 설정할 수 있어요.
               </Text>
@@ -223,7 +231,7 @@ export default function OnboardingScreen() {
         <View style={styles.btnRow}>
           {step > 1 && (
             <TouchableOpacity style={styles.backBtn} onPress={() => setStep(s => s - 1)}>
-              <Ionicons name="arrow-back" size={20} color={Colors.mutedFg} />
+              <Ionicons name="arrow-back" size={20} color={DARK_BROWN} />
             </TouchableOpacity>
           )}
           <TouchableOpacity
@@ -232,12 +240,12 @@ export default function OnboardingScreen() {
             disabled={!canNext() || loading}
           >
             {loading
-              ? <ActivityIndicator color={Colors.navy} />
+              ? <ActivityIndicator color="#fff" />
               : <>
                   <Text style={styles.nextBtnText}>
                     {step === TOTAL_STEPS ? '시작하기 🎾' : '다음'}
                   </Text>
-                  {step < TOTAL_STEPS && <Ionicons name="arrow-forward" size={18} color={Colors.navy} />}
+                  {step < TOTAL_STEPS && <Ionicons name="arrow-forward" size={18} color="#fff" />}
                 </>
             }
           </TouchableOpacity>
@@ -248,96 +256,96 @@ export default function OnboardingScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.navy },
+  container: { flex: 1, backgroundColor: CREAM },
   scroll: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 60, paddingBottom: 40 },
 
   progressBg: {
-    height: 4, backgroundColor: 'rgba(255,255,255,0.2)',
+    height: 4, backgroundColor: PROGRESS_TRACK,
     borderRadius: 2, marginBottom: 8,
   },
   progressFill: {
-    height: 4, backgroundColor: '#fff', borderRadius: 2,
+    height: 4, backgroundColor: TERRACOTTA, borderRadius: 2,
   },
   stepLabel: {
-    color: 'rgba(255,255,255,0.5)', fontSize: 13,
+    color: WARM_GRAY, fontSize: 13,
     textAlign: 'right', marginBottom: 44,
   },
 
   stepWrap: { flex: 1, marginBottom: 32 },
   emoji: { fontSize: 48, marginBottom: 16 },
   question: {
-    fontSize: 26, fontWeight: '800', color: '#fff',
+    fontSize: 26, fontWeight: '800', color: DARK_BROWN,
     lineHeight: 34, marginBottom: 8,
   },
   hint: {
-    fontSize: 15, color: 'rgba(255,255,255,0.6)',
+    fontSize: 15, color: WARM_GRAY,
     marginBottom: 28, lineHeight: 22,
   },
 
   textInput: {
     backgroundColor: '#fff', borderRadius: Radius.md,
     paddingHorizontal: 16, paddingVertical: 14,
-    fontSize: 18, color: Colors.foreground, fontWeight: '600',
-    ...Shadow.sm,
+    fontSize: 18, color: DARK_BROWN, fontWeight: '600',
+    borderWidth: 1, borderColor: INPUT_BORDER,
   },
 
   chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     paddingHorizontal: 14, paddingVertical: 10,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: '#fff',
+    borderWidth: 1.5, borderColor: INPUT_BORDER,
   },
-  chipActive: { backgroundColor: '#fff', borderColor: '#fff' },
-  chipText: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.8)' },
-  chipTextActive: { color: Colors.navy },
+  chipActive: { backgroundColor: TERRACOTTA, borderColor: TERRACOTTA },
+  chipText: { fontSize: 14, fontWeight: '600', color: DARK_BROWN },
+  chipTextActive: { color: '#fff' },
 
   optionList: { gap: 10, marginBottom: 24 },
   optionRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: '#fff',
     borderRadius: Radius.md, paddingHorizontal: 18, paddingVertical: 18,
-    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 1.5, borderColor: INPUT_BORDER,
   },
-  optionRowActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  optionText: { fontSize: 17, fontWeight: '700', color: 'rgba(255,255,255,0.85)' },
+  optionRowActive: { backgroundColor: TERRACOTTA, borderColor: TERRACOTTA },
+  optionText: { fontSize: 17, fontWeight: '700', color: DARK_BROWN },
   optionTextActive: { color: '#fff' },
 
   infoBox: {
     flexDirection: 'row', gap: 8, alignItems: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#F5EDE5',
     borderRadius: Radius.md, padding: 14,
   },
   infoText: {
-    flex: 1, fontSize: 13, color: 'rgba(255,255,255,0.5)', lineHeight: 20,
+    flex: 1, fontSize: 13, color: WARM_GRAY, lineHeight: 20,
   },
 
   btnRow: { flexDirection: 'row', gap: 10, marginTop: 8 },
   backBtn: {
     width: 52, height: 52, borderRadius: 26,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: '#fff',
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 1.5, borderColor: INPUT_BORDER,
   },
   nextBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, backgroundColor: '#fff',
+    gap: 8, backgroundColor: TERRACOTTA,
     borderRadius: Radius.md, paddingVertical: 16,
     ...Shadow.sm,
   },
   nextBtnDisabled: { opacity: 0.35 },
-  nextBtnText: { fontSize: 16, fontWeight: '800', color: Colors.navy },
+  nextBtnText: { fontSize: 16, fontWeight: '800', color: '#fff' },
   emailRow: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     marginTop: 12, opacity: 0.6,
   },
-  emailText: { fontSize: 13, color: 'rgba(255,255,255,0.7)' },
+  emailText: { fontSize: 13, color: WARM_GRAY },
   socialCard: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#fff',
     borderRadius: Radius.md, padding: 14,
     marginBottom: 16,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 1, borderColor: INPUT_BORDER,
   },
   socialBadge: {
     backgroundColor: '#03C75A', borderRadius: 6,
@@ -345,11 +353,11 @@ const styles = StyleSheet.create({
   },
   socialBadgeText: { fontSize: 12, fontWeight: '800', color: '#fff' },
   socialInfo: { flex: 1 },
-  socialLabel: { fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 2 },
-  socialName: { fontSize: 16, fontWeight: '700', color: '#fff' },
-  socialEmail: { fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 },
+  socialLabel: { fontSize: 11, color: WARM_GRAY, marginBottom: 2 },
+  socialName: { fontSize: 16, fontWeight: '700', color: DARK_BROWN },
+  socialEmail: { fontSize: 12, color: WARM_GRAY, marginTop: 2 },
   socialHint: {
-    fontSize: 12, color: 'rgba(255,255,255,0.45)',
+    fontSize: 12, color: WARM_GRAY,
     marginTop: 8, textAlign: 'center',
   },
 });
