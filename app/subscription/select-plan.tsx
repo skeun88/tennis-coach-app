@@ -68,7 +68,7 @@ export default function SelectPlanScreen() {
   const router = useRouter();
   const { reason } = useLocalSearchParams<{ reason?: string }>();
 
-  const { subscription, isTrial, refresh } = useSubscription();
+  const { subscription, isTrial, refresh, loading } = useSubscription();
   const [billing, setBilling] = useState<BillingCycle>('monthly');
   const [compareVisible, setCompareVisible] = useState(false);
   const [purchasing, setPurchasing] = useState<string | null>(null);
@@ -248,6 +248,20 @@ export default function SelectPlanScreen() {
   }
 
   const isPaidUser = currentPlanId !== 'free';
+
+  if (loading && !subscription) {
+    return (
+      <SafeAreaView style={s.container}>
+        <View style={s.header}>
+          <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+            <Ionicons name="chevron-back" size={24} color={DARK_BROWN} />
+          </TouchableOpacity>
+          <Text style={s.headerTitle}>요금제 변경</Text>
+        </View>
+        <ActivityIndicator size="large" color={TERRACOTTA} style={{ marginTop: 60 }} />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={s.container}>

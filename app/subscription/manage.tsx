@@ -104,10 +104,10 @@ export default function ManageSubscriptionScreen() {
       if (isInitial) setRcLoading(true);
       const info = await fetchRcInfo();
       setRcInfo(info);
-      rcInitializedRef.current = true;
     } catch (e) {
       console.warn('[RC] fetchRcInfo error:', e);
     } finally {
+      rcInitializedRef.current = true;
       if (isInitial) setRcLoading(false);
     }
   }, []);
