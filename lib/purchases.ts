@@ -89,6 +89,19 @@ export function getPlanProductId(planId: string, isAnnual: boolean): string {
   return isAnnual ? map.annual : map.monthly;
 }
 
+/**
+ * Apple IAP 다운그레이드 예약 감지 — Edge Function으로 RC v2 API 조회 후 DB 업데이트.
+ * 실패 시 기존 DB 데이터 유지 (조회 실패 ≠ 예약 없음).
+ */
+export async function syncDowngradeStatus(): Promise<void> {
+  try {
+    const { error } = await supabase.functions.invoke('sync-subscription-downgrade');
+    if (error) console.warn('[syncDowngrade] edge fn error:', error.message);
+  } catch (e) {
+    console.warn('[syncDowngrade] invoke error:', e);
+  }
+}
+
 /** RevenueCat CustomerInfo → Supabase DB 동기화 (활성 구독이 있을 때만 업데이트) */
 export async function syncRevenueCatToDb(userId: string): Promise<void> {
   try {

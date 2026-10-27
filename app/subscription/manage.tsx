@@ -12,7 +12,7 @@ import {
   PLANS, getAiAnalysisUsageThisMonth,
   TOPUP_PRODUCTS,
 } from '../../lib/subscription';
-import { restorePurchases, ENTITLEMENT_IDS } from '../../lib/purchases';
+import { restorePurchases, ENTITLEMENT_IDS, syncDowngradeStatus } from '../../lib/purchases';
 
 interface RcInfo {
   isTrial: boolean;
@@ -116,6 +116,8 @@ export default function ManageSubscriptionScreen() {
   useFocusEffect(useCallback(() => {
     loadRcInfo();
     refresh();
+    // Apple IAP Pro→Basic 다운그레이드 예약 감지 (RC v2 API → DB 업데이트 → Realtime 반영)
+    syncDowngradeStatus().then(() => refresh());
   }, [loadRcInfo, refresh]));
 
   useEffect(() => {

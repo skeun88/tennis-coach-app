@@ -19,7 +19,7 @@ import { PLANS, ANNUAL_PRICES, TRIAL_DAYS } from '../../lib/subscription';
 import { IS_BETA } from '../../lib/beta';
 import { supabase } from '../../lib/supabase';
 import { useSubscription } from '../../hooks/useSubscription';
-import { purchaseProductById, getPlanProductId, ENTITLEMENT_IDS, restorePurchases, getAppUserID, getCurrentBillingCycle } from '../../lib/purchases';
+import { purchaseProductById, getPlanProductId, ENTITLEMENT_IDS, restorePurchases, getAppUserID, getCurrentBillingCycle, syncDowngradeStatus } from '../../lib/purchases';
 
 const CREAM = '#F7F0E9';
 const TERRACOTTA = '#C0755A';
@@ -98,6 +98,9 @@ export default function SelectPlanScreen() {
       } catch {
         // 네트워크 오류: null 유지 (true 가정 금지)
       }
+      // Apple IAP 다운그레이드 예약 감지 (RC v2 → DB 업데이트)
+      await syncDowngradeStatus();
+      await refresh();
     })();
   }, []);
 
