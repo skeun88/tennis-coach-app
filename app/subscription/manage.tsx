@@ -24,6 +24,7 @@ interface RcInfo {
 }
 
 async function fetchRcInfo(): Promise<RcInfo> {
+  await Purchases.invalidateCustomerInfoCache();
   const customerInfo = await Purchases.getCustomerInfo();
   const appUserId = await Purchases.getAppUserID();
   const active = customerInfo.entitlements.active;

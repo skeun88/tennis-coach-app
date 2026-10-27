@@ -86,6 +86,7 @@ export default function SelectPlanScreen() {
   useEffect(() => {
     (async () => {
       try {
+        await Purchases.invalidateCustomerInfoCache();
         const info = await Purchases.getCustomerInfo();
         const active = info.entitlements.active;
         const ent = active[ENTITLEMENT_IDS.PRO] ?? active[ENTITLEMENT_IDS.BASIC] ?? null;
