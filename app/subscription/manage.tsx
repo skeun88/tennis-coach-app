@@ -204,7 +204,8 @@ export default function ManageSubscriptionScreen() {
   // 유료 플랜(plan_id !== 'free')이면 trial 배지를 억제한다.
   const rcPeriodType = rcInfo?.periodType ?? '';
   const isTrial = rcPeriodType === 'TRIAL';
-  const willRenew = rcInfo?.willRenew ?? true;
+  // rcInfo 미로드 시 null(미확인) 처리 — true 가정 시 downgrade 배너가 잘못 숨겨짐
+  const willRenew: boolean | null = rcInfo !== null ? rcInfo.willRenew : null;
 
   const effectiveStatus = (() => {
     if (rcPeriodType === 'TRIAL') return 'trial';
@@ -218,8 +219,10 @@ export default function ManageSubscriptionScreen() {
   const billingDateIso = rcInfo?.expirationDate ?? subscription.current_period_end ?? null;
   const nextBillingDate = formatKoreanDate(billingDateIso);
 
-  // Pro willRenew=false → Basic으로 다운그레이드 예약 (앱에서 다운그레이드 옵션은 Basic뿐)
-  const isScheduledDowngradeToBasic = isPro && willRenew === false;
+  // Pro willRenew=false → Basic으로 다운그레이드 예약
+  // DB pending_plan_id(Toss 결제용) 또는 RC willRenew=false(Apple IAP용) 둘 다 체크
+  const dbScheduledDowngrade = subscription.pending_plan_id === 'basic' && !!subscription.downgrade_at;
+  const isScheduledDowngradeToBasic = isPro && (dbScheduledDowngrade || willRenew === false);
 
   const nextResetDate = (() => {
     if (subscription.current_period_end) {

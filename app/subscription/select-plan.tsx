@@ -89,11 +89,13 @@ export default function SelectPlanScreen() {
         const info = await Purchases.getCustomerInfo();
         const active = info.entitlements.active;
         const ent = active[ENTITLEMENT_IDS.PRO] ?? active[ENTITLEMENT_IDS.BASIC] ?? null;
-        setWillRenew((ent as any)?.willRenew ?? true);
+        // null(미확인) 유지 → true 가정 시 downgrade 배지가 잘못 숨겨짐
+        const rv = (ent as any)?.willRenew;
+        if (typeof rv === 'boolean') setWillRenew(rv);
         const expStr = (ent as any)?.expirationDate;
         if (expStr) setExpirationDate(new Date(expStr));
       } catch {
-        setWillRenew(true);
+        // 네트워크 오류: null 유지 (true 가정 금지)
       }
     })();
   }, []);
@@ -110,9 +112,11 @@ export default function SelectPlanScreen() {
     }
   }
 
-  const isScheduledDowngradeToBasic = currentPlanId === 'pro' && willRenew === false;
+  // DB pending_plan_id(Toss 결제용) 또는 RC willRenew=false(Apple IAP용)
+  const dbScheduledDowngrade = subscription?.pending_plan_id === 'basic' && !!subscription?.downgrade_at;
+  const isScheduledDowngradeToBasic = currentPlanId === 'pro' && (dbScheduledDowngrade || willRenew === false);
   // Pro인데 willRenew 아직 조회 중 → CTA 눌러서 Apple 팝업 뜨지 않도록 로딩 표시
-  const isProAndLoadingWillRenew = currentPlanId === 'pro' && willRenew === null;
+  const isProAndLoadingWillRenew = currentPlanId === 'pro' && !dbScheduledDowngrade && willRenew === null;
 
   const isTrialEligible = (() => {
     if (!subscription) return true;
@@ -345,28 +349,32 @@ export default function SelectPlanScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Free 카드 — 유료 구독 중이면 숨김 */}
-        {!isPaidUser && (
-          <View style={[s.planCard, currentPlanId === 'free' && s.planCardCurrent]}>
-            <View style={s.planCardHeader}>
-              <Text style={s.planName}>Free</Text>
-              {currentPlanId === 'free' && (
-                <View style={s.currentBadge}>
-                  <Text style={s.currentBadgeText}>현재 플랜</Text>
-                </View>
-              )}
-            </View>
-            <Text style={s.planPrice}>무료</Text>
-            <View style={s.featureList}>
-              <FeatureItem icon="people-outline" text="회원 3명까지 등록" />
-              <FeatureItem icon="grid-outline" text="일정·출석·결제 관리" />
-              <FeatureItem icon="mic-outline" text="AI 레슨 기록 월 3회" />
-            </View>
+        {/* Free 카드 */}
+        <View style={[s.planCard, currentPlanId === 'free' && s.planCardCurrent]}>
+          <View style={s.planCardHeader}>
+            <Text style={s.planName}>Free</Text>
+            {currentPlanId === 'free' && (
+              <View style={s.currentBadge}>
+                <Text style={s.currentBadgeText}>현재 플랜</Text>
+              </View>
+            )}
+          </View>
+          <Text style={s.planPrice}>무료</Text>
+          <View style={s.featureList}>
+            <FeatureItem icon="people-outline" text="회원 3명까지 등록" />
+            <FeatureItem icon="grid-outline" text="일정·출석·결제 관리" />
+            <FeatureItem icon="mic-outline" text="AI 레슨 기록 월 3회" />
+          </View>
+          {isPaidUser ? (
+            <TouchableOpacity style={s.freeCta} onPress={openStoreManagement} activeOpacity={0.8}>
+              <Text style={s.freeCtaText}>구독 취소 시 자동 전환</Text>
+            </TouchableOpacity>
+          ) : (
             <View style={s.freeCta}>
               <Text style={s.freeCtaText}>현재 플랜</Text>
             </View>
-          </View>
-        )}
+          )}
+        </View>
 
         {/* Basic 카드 */}
         <View style={[s.planCard, s.planCardPaid,
