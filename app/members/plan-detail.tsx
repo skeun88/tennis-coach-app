@@ -38,9 +38,6 @@ async function submitEditFeedback(coachId: string, token: string, section: strin
 const CREAM = '#F7F0E9';
 const TERRACOTTA = '#C0755A';
 const DARK_BROWN = '#3E2B22';
-const SAGE_BG = '#EEF5EE';
-const SAGE_TEXT = '#4A7A4A';
-const WARM_BG = '#FDF3ED';
 const INPUT_BG = '#FCF9F6';
 const WARM_GRAY = '#9E9289';
 
@@ -496,31 +493,25 @@ export default function PlanDetailScreen() {
 
           {/* 1.5 이전 레슨 대비 변화 */}
           {Array.isArray(plan.lesson_comparison) && plan.lesson_comparison.length > 0 && (
-            <View style={[s.card, s.cardComparison]}>
+            <View style={s.card}>
               <View style={s.cardTitleRow}>
-                <Ionicons name="swap-vertical-outline" size={18} color="#0EA5E9" />
-                <View style={{ flex: 1 }}>
-                  <Text style={[s.cardTitle, { color: '#0369A1' }]}>이전 레슨 대비 변화</Text>
-                  <Text style={s.compSubtitle}>지난 기록과 비교</Text>
-                </View>
+                <Ionicons name="swap-vertical-outline" size={18} color={TERRACOTTA} />
+                <Text style={s.cardTitle}>이전 레슨 대비 변화</Text>
               </View>
               {plan.lesson_comparison.slice(0, 3).map((c: any, i: number) => {
-                const isImproved = c.status === 'improved';
-                const isRegressed = c.status === 'regressed';
-                const badgeColor = isImproved ? '#16a34a' : isRegressed ? '#dc2626' : '#64748b';
-                const badgeBg = isImproved ? '#dcfce7' : isRegressed ? '#fee2e2' : '#f1f5f9';
-                const badgeLabel = isImproved ? '개선 중' : isRegressed ? '반복 확인' : '유지';
+                const status: string = c.status ?? '';
+                const isImproved = status === 'improved';
+                const isNeedsWork = status === 'needs_work' || status === 'regressed';
+                const badgeLabel = isImproved ? '개선 확인' : isNeedsWork ? '반복 교정 필요' : '비교 기록 없음';
                 return (
-                  <View key={i} style={s.compRow}>
-                    <View style={{ flex: 1 }}>
-                      <View style={s.compTopRow}>
-                        <Text style={s.compPoint}>{c.point}</Text>
-                        <View style={[s.compBadge, { backgroundColor: badgeBg }]}>
-                          <Text style={[s.compBadgeText, { color: badgeColor }]}>{badgeLabel}</Text>
-                        </View>
+                  <View key={i} style={[s.compRow, i < (plan.lesson_comparison?.length ?? 0) - 1 && s.compRowBorder]}>
+                    <View style={s.compTopRow}>
+                      <Text style={s.compPoint}>{c.point}</Text>
+                      <View style={[s.compBadge, isImproved ? s.compBadgeImproved : isNeedsWork ? s.compBadgeNeeds : s.compBadgeNeutral]}>
+                        <Text style={[s.compBadgeText, isImproved ? s.compBadgeTextImproved : isNeedsWork ? s.compBadgeTextNeeds : s.compBadgeTextNeutral]}>{badgeLabel}</Text>
                       </View>
-                      <Text style={s.compReason}>{c.reason}</Text>
                     </View>
+                    {!!c.reason && <Text style={s.compReason}>{c.reason}</Text>}
                   </View>
                 );
               })}
@@ -528,10 +519,10 @@ export default function PlanDetailScreen() {
           )}
 
           {/* 2. 오늘 잘한 점 */}
-          <View style={[s.card, s.cardSage]}>
+          <View style={s.card}>
             <View style={s.cardTitleRow}>
-              <Ionicons name="checkmark-circle-outline" size={18} color={SAGE_TEXT} />
-              <Text style={[s.cardTitle, { color: SAGE_TEXT }]}>오늘 잘한 점</Text>
+              <Ionicons name="checkmark-circle" size={18} color={TERRACOTTA} />
+              <Text style={s.cardTitle}>오늘 잘한 점</Text>
               {hasReport && (
                 editingSection === 'achievements'
                   ? <EditBadge />
@@ -554,12 +545,7 @@ export default function PlanDetailScreen() {
               />
             ) : achievements.length > 0 ? (
               achievements.map((item, i) => (
-                <View key={i} style={s.checkRow}>
-                  <View style={s.checkIcon}>
-                    <Ionicons name="checkmark" size={12} color={SAGE_TEXT} />
-                  </View>
-                  <Text style={s.checkText}>{item}</Text>
-                </View>
+                <AchievementRow key={i} text={item} />
               ))
             ) : (
               <Text style={s.emptyText}>
@@ -570,11 +556,11 @@ export default function PlanDetailScreen() {
             )}
           </View>
 
-          {/* 3. 주의 포인트 */}
-          <View style={[s.card, s.cardWarm]}>
+          {/* 3. 교정 포인트 */}
+          <View style={s.card}>
             <View style={s.cardTitleRow}>
-              <Ionicons name="radio-button-on-outline" size={18} color={TERRACOTTA} />
-              <Text style={[s.cardTitle, { color: TERRACOTTA }]}>주의 포인트</Text>
+              <Ionicons name="locate" size={18} color={TERRACOTTA} />
+              <Text style={s.cardTitle}>교정 포인트</Text>
               {editingSection === 'improvement_points'
                 ? <EditBadge />
                 : <PencilBtn onPress={() => startEdit('improvement_points', improvementPoints.join('\n'))} />}
@@ -595,15 +581,10 @@ export default function PlanDetailScreen() {
               />
             ) : improvementPoints.length > 0 ? (
               improvementPoints.map((item, i) => (
-                <View key={i} style={s.targetRow}>
-                  <View style={s.targetIcon}>
-                    <Ionicons name="navigate-circle-outline" size={16} color={TERRACOTTA} />
-                  </View>
-                  <Text style={s.targetText}>{item}</Text>
-                </View>
+                <ImprovementRow key={i} text={item} index={i} />
               ))
             ) : (
-              <Text style={s.emptyText}>주의 포인트가 없습니다</Text>
+              <Text style={s.emptyText}>교정 포인트가 없습니다</Text>
             )}
           </View>
 
@@ -630,10 +611,10 @@ export default function PlanDetailScreen() {
 
           {/* 5. 다음 레슨 목표 */}
           {(toStringArray(plan.next_goals).length > 0 || (plan.coach_next_goals && plan.coach_next_goals.length > 0)) && (
-            <View style={[s.card, s.cardGoals]}>
+            <View style={s.card}>
               <View style={s.cardTitleRow}>
-                <Ionicons name="flag-outline" size={18} color="#8B5CF6" />
-                <Text style={[s.cardTitle, { color: '#8B5CF6' }]}>다음 레슨 목표</Text>
+                <Ionicons name="flag-outline" size={18} color={TERRACOTTA} />
+                <Text style={s.cardTitle}>다음 레슨 목표</Text>
                 {editingSection === 'coach_next_goals' ? <EditBadge /> : (
                   <PencilBtn onPress={() => {
                     const currentGoals = (plan.next_goals_saved && plan.coach_next_goals?.length)
@@ -661,12 +642,12 @@ export default function PlanDetailScreen() {
                 <>
                   {plan.next_goals_saved ? (
                     <View style={s.goalsBadgeRow}>
-                      <Ionicons name="checkmark-circle-outline" size={12} color="#22c55e" />
+                      <Ionicons name="checkmark-circle-outline" size={12} color={TERRACOTTA} />
                       <Text style={s.goalsBadgeTextSaved}>코치 확정 목표</Text>
                     </View>
                   ) : (
                     <View style={s.goalsBadgeRow}>
-                      <Ionicons name="sparkles-outline" size={12} color="#8B5CF6" />
+                      <Ionicons name="sparkles-outline" size={12} color={WARM_GRAY} />
                       <Text style={s.goalsBadgeTextDraft}>AI 초안 — 수정 버튼으로 확정하세요</Text>
                     </View>
                   )}
@@ -780,35 +761,85 @@ export default function PlanDetailScreen() {
   );
 }
 
+function AchievementRow({ text }: { text: string }) {
+  const colonIdx = text.indexOf(':');
+  const hasColon = colonIdx > 0 && colonIdx < 20;
+  const title = hasColon ? text.slice(0, colonIdx).trim() : null;
+  const body = hasColon ? text.slice(colonIdx + 1).trim() : text;
+  return (
+    <View style={s.achieveRow}>
+      <View style={s.achieveDot} />
+      <View style={{ flex: 1 }}>
+        {title ? <Text style={s.achieveTitle}>{title}</Text> : null}
+        <Text style={s.achieveBody}>{body}</Text>
+      </View>
+    </View>
+  );
+}
+
+function ImprovementRow({ text, index }: { text: string; index: number }) {
+  const colonIdx = text.indexOf(':');
+  const hasColon = colonIdx > 0 && colonIdx < 20;
+  const title = hasColon ? text.slice(0, colonIdx).trim() : null;
+  const body = hasColon ? text.slice(colonIdx + 1).trim() : text;
+  return (
+    <View style={[s.improveRow, index > 0 && s.improveRowBorder]}>
+      <View style={{ flex: 1 }}>
+        {title ? <Text style={s.improveTitle}>{title}</Text> : null}
+        <Text style={s.improveBody}>{body}</Text>
+      </View>
+    </View>
+  );
+}
+
 function DrillCardComponent({ drill }: { drill: DrillSuggestion }) {
+  const [expanded, setExpanded] = useState(false);
   const d = drill as any;
   const hasMeta = drill.reps || d.duration || d.frequency;
+  const hasDetail = drill.purpose || drill.method || drill.court_adaptation || hasMeta;
   return (
     <View style={s.drillCard}>
-      <Text style={s.drillName}>{drill.name}</Text>
-      {drill.purpose ? (
-        <View style={s.drillRow}>
-          <Text style={s.drillLabel}>목적</Text>
-          <Text style={s.drillValue}>{drill.purpose}</Text>
-        </View>
-      ) : null}
-      {drill.method ? (
-        <View style={s.drillRow}>
-          <Text style={s.drillLabel}>방법</Text>
-          <Text style={s.drillValue}>{drill.method}</Text>
-        </View>
-      ) : null}
-      {drill.court_adaptation ? (
-        <View style={s.drillRow}>
-          <Text style={s.drillLabel}>코트 위치</Text>
-          <Text style={s.drillValue}>{drill.court_adaptation}</Text>
-        </View>
-      ) : null}
-      {hasMeta && (
-        <View style={s.drillMetaRow}>
-          {drill.reps ? <View style={s.drillMetaBadge}><Text style={s.drillMetaText}>{drill.reps}</Text></View> : null}
-          {d.duration ? <View style={s.drillMetaBadge}><Text style={s.drillMetaText}>{d.duration}</Text></View> : null}
-          {d.frequency ? <View style={s.drillMetaBadge}><Text style={s.drillMetaText}>{d.frequency}</Text></View> : null}
+      <TouchableOpacity
+        style={s.drillHeaderRow}
+        onPress={() => hasDetail && setExpanded(v => !v)}
+        activeOpacity={hasDetail ? 0.7 : 1}
+      >
+        <Text style={s.drillName}>{drill.name}</Text>
+        {hasDetail && (
+          <Ionicons
+            name={expanded ? 'chevron-up' : 'chevron-down'}
+            size={16}
+            color={WARM_GRAY}
+          />
+        )}
+      </TouchableOpacity>
+      {expanded && (
+        <View style={s.drillDetail}>
+          {drill.purpose ? (
+            <View style={s.drillRow}>
+              <Text style={s.drillLabel}>목적</Text>
+              <Text style={s.drillValue}>{drill.purpose}</Text>
+            </View>
+          ) : null}
+          {drill.method ? (
+            <View style={s.drillRow}>
+              <Text style={s.drillLabel}>방법</Text>
+              <Text style={s.drillValue}>{drill.method}</Text>
+            </View>
+          ) : null}
+          {drill.court_adaptation ? (
+            <View style={s.drillRow}>
+              <Text style={s.drillLabel}>코트 위치</Text>
+              <Text style={s.drillValue}>{drill.court_adaptation}</Text>
+            </View>
+          ) : null}
+          {hasMeta && (
+            <View style={s.drillMetaRow}>
+              {drill.reps ? <View style={s.drillMetaBadge}><Text style={s.drillMetaText}>{drill.reps}</Text></View> : null}
+              {d.duration ? <View style={s.drillMetaBadge}><Text style={s.drillMetaText}>{d.duration}</Text></View> : null}
+              {d.frequency ? <View style={s.drillMetaBadge}><Text style={s.drillMetaText}>{d.frequency}</Text></View> : null}
+            </View>
+          )}
         </View>
       )}
     </View>
@@ -962,26 +993,28 @@ const s = StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 5,
     shadowOffset: { width: 0, height: 1 }, elevation: 1,
   },
-  cardSage: { backgroundColor: SAGE_BG },
-  cardWarm: { backgroundColor: WARM_BG },
-  cardComparison: { backgroundColor: '#F0F9FF', borderLeftWidth: 3, borderLeftColor: '#0EA5E9' },
-  compSubtitle: { fontSize: 11, color: '#64748b', marginTop: 1 },
-  compRow: { marginBottom: 12 },
+  compRow: { paddingVertical: 12 },
+  compRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#EDE5DE' },
   compTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 },
   compPoint: { fontSize: 14, fontWeight: '700', color: DARK_BROWN, flex: 1 },
   compBadge: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
+  compBadgeImproved: { backgroundColor: '#F2F9F2', borderWidth: 1, borderColor: '#C3E0C3' },
+  compBadgeNeeds: { backgroundColor: '#FDF4F0', borderWidth: 1, borderColor: '#EDD5C8' },
+  compBadgeNeutral: { backgroundColor: '#F5F2EF', borderWidth: 1, borderColor: '#DDD5CC' },
   compBadgeText: { fontSize: 11, fontWeight: '700' },
-  compReason: { fontSize: 13, color: '#64748b', lineHeight: 18 },
-  cardGoals: { backgroundColor: '#F5F0FF', borderLeftWidth: 3, borderLeftColor: '#8B5CF6' },
+  compBadgeTextImproved: { color: '#3A7A3A' },
+  compBadgeTextNeeds: { color: TERRACOTTA },
+  compBadgeTextNeutral: { color: WARM_GRAY },
+  compReason: { fontSize: 13, color: WARM_GRAY, lineHeight: 18 },
   goalsBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 12 },
-  goalsBadgeTextDraft: { fontSize: 11, color: '#8B5CF6', fontWeight: '600' },
-  goalsBadgeTextSaved: { fontSize: 11, color: '#22c55e', fontWeight: '600' },
+  goalsBadgeTextDraft: { fontSize: 11, color: WARM_GRAY, fontWeight: '600' },
+  goalsBadgeTextSaved: { fontSize: 11, color: TERRACOTTA, fontWeight: '600' },
   goalRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 8 },
   goalIndex: {
     width: 22, height: 22, borderRadius: 11,
-    backgroundColor: '#8B5CF620', alignItems: 'center', justifyContent: 'center', marginTop: 1,
+    backgroundColor: '#F2EBE5', alignItems: 'center', justifyContent: 'center', marginTop: 1,
   },
-  goalIndexText: { fontSize: 11, color: '#8B5CF6', fontWeight: '700' },
+  goalIndexText: { fontSize: 11, color: TERRACOTTA, fontWeight: '700' },
   goalText: { flex: 1, fontSize: 14, color: DARK_BROWN, lineHeight: 21 },
 
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
@@ -990,17 +1023,15 @@ const s = StyleSheet.create({
   summaryText: { fontSize: 16, color: DARK_BROWN, lineHeight: 26 },
   emptyText: { fontSize: 14, color: Colors.placeholder, fontStyle: 'italic' },
 
-  checkRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 10 },
-  checkIcon: {
-    width: 20, height: 20, borderRadius: 10,
-    backgroundColor: '#C8E8C8', justifyContent: 'center', alignItems: 'center',
-    marginTop: 2, flexShrink: 0,
-  },
-  checkText: { fontSize: 16, color: DARK_BROWN, lineHeight: 26, flex: 1 },
+  achieveRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 8 },
+  achieveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: TERRACOTTA, marginTop: 9, flexShrink: 0 },
+  achieveTitle: { fontSize: 14, fontWeight: '700', color: DARK_BROWN, marginBottom: 2 },
+  achieveBody: { fontSize: 14, color: DARK_BROWN, lineHeight: 21 },
 
-  targetRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 10 },
-  targetIcon: { marginTop: 2, flexShrink: 0 },
-  targetText: { fontSize: 16, color: DARK_BROWN, lineHeight: 26, flex: 1 },
+  improveRow: { paddingVertical: 8 },
+  improveRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#EDE5DE' },
+  improveTitle: { fontSize: 14, fontWeight: '700', color: DARK_BROWN, marginBottom: 2 },
+  improveBody: { fontSize: 14, color: DARK_BROWN, lineHeight: 21 },
 
   drillSection: { gap: 10 },
   drillSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
@@ -1010,7 +1041,9 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 }, elevation: 1,
   },
   drillCardEditing: { borderWidth: 1, borderColor: TERRACOTTA },
-  drillName: { fontSize: 16, fontWeight: '800', color: DARK_BROWN, marginBottom: 12 },
+  drillHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  drillName: { fontSize: 15, fontWeight: '700', color: DARK_BROWN, flex: 1 },
+  drillDetail: { marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#EDE5DE' },
   drillEditName: { fontWeight: '800', marginBottom: 12 },
   drillEditField: {
     fontSize: 15, color: DARK_BROWN, lineHeight: 22,
