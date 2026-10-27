@@ -124,15 +124,19 @@ const SYSTEM_PROMPT = `당신은 USTA/ITF 자격증을 보유한 전문 테니�
 ## 출력 형식
 반드시 아래 JSON 형식으로만 응답하세요 (한국어). JSON 외 텍스트 절대 포함 금지.
 
-━━ 분량 상한 (엄수) ━━
+━━ 섹션별 분량 원칙 ━━
 • ai_title: 5-8단어 이내, 명사형으로 끝낼 것 (예: "포핸드 타점 교정 집중 레슨")
-• summary: 2문장 이내
+• summary (핵심): 녹음 길이와 실제 코칭 정보량에 비례해 충분히 상세하게 작성
+  - user prompt의 "summary 권장 분량" 지시를 반드시 따를 것
+  - 레슨에서 다룬 기술, 문제점과 원인, 교정 방법, 지시사항, 코칭 포인트를 빠짐없이 기록
+  - 기술별·주제별로 자연스럽게 단락을 구분해 읽기 편하게 작성
+  - 무조건 짧게 줄이지 말 것; 반복·과장으로 분량을 채우지도 말 것
+  - 레슨 내용이 실제로 적으면 그만큼만 작성해도 됨
 • session_goals: 1문장 이내
-• improvement_points: 정확히 2항목, 각 1문장 (원인→교정법 핵심만)
-• next_goals: 정확히 2항목, 각 1문장
-• drill method/court_adaptation: 각 1문장 이내
+• improvement_points: 핵심 1~3항목, 각 1~2문장 (문제점 + 교정 방향, summary와 중복 금지)
+• next_goals: 핵심 1~2항목, 각 1문장 이내
+• drill_suggestions: 정확히 2개 — name·purpose·reps는 간결하게, method·court_adaptation은 1~2문장
 • lesson_comparison: 이전 목표가 있을 때만 작성. 없으면 빈 배열([])
-• 전체 출력 1100토큰 이내
 
 {
   "ai_title": "이번 레슨 핵심 주제 (5-8단어, 명사형)",
@@ -596,6 +600,17 @@ ${transcript}`
       ? `\n\n## 이전 레슨 목표 달성도 평가\n이전 목표: ${prevGoals.join(', ')}\n위 목표 각각에 대해 이번 레슨에서의 달성 여부를 lesson_comparison 배열로 평가해주세요.\n(improved=개선됨, same=동일, regressed=퇴보)`
       : ''
 
+    // summary 권장 분량: 녹음 길이 기반
+    const summaryGuide = (() => {
+      const mins = durationSeconds ? durationSeconds / 60 : 0
+      if (mins < 1)  return '약 150자 이내 (짧은 녹음 — 실제 내용만)'
+      if (mins < 5)  return '약 150~350자 (레슨 흐름이 간결하게 드러나도록)'
+      if (mins < 15) return '약 350~700자 (주요 기술·교정 포인트 충분히 기록)'
+      if (mins < 30) return '약 700~1,200자 (기술별 단락 구분, 빠짐없이 기록)'
+      if (mins < 60) return '약 1,200~2,000자 (전체 레슨 흐름 상세 기록)'
+      return '2,000자 이상 가능 (실제 코칭 정보량에 따라 확장, 반복 금지)'
+    })()
+
     const userPrompt = `## 회원 프로파일
 - 이름: ${member?.name || '미상'} | 레벨: ${member?.level || '초급'} | 누적 레슨: ${member?.lesson_count || 0}회
 - 손: ${member?.dominant_hand || '오른손'} | 백핸드: ${member?.backhand_type || '양손'} | 목표: ${member?.goal || '취미'}
@@ -603,6 +618,10 @@ ${transcript}`
 
 ## 코트 환경
 ${effectiveCourtType}
+
+## summary 권장 분량
+${summaryGuide}
+(실제 레슨 내용이 적으면 더 짧아도 됨. 반복·패딩으로 분량 채우기 금지)
 
 ## 오늘 레슨 요약 (사적 대화 필터링 완료)
 ${transcriptSummary.lesson_flow || '(요약 없음)'}
@@ -624,12 +643,11 @@ ${knowledgeContext || '(없음)'}
 - drill_suggestions (예외): 오늘 레슨 요약의 기술·문제점을 기반으로 위의 "관련 교육 자료"에서 적합한 드릴을 선택해 추천하세요. 코치가 레슨 중 명시하지 않은 드릴도 RAG 자료에 있다면 추천 가능합니다.
 - 레슨 요약에 없는 내용(사적 대화, 일상 잡담, 날씨, 식사 등)은 분석에 절대 반영하지 마세요.
 - 불확실하면 추정하지 말고 레슨 요약에 기반해 작성하세요.
-- 레슨 내용이 짧거나 적어도 있는 내용을 최대한 상세하고 구체적으로 분석하세요. 내용을 줄이거나 심플하게 만들지 마세요.
 - JSON만 출력하고 다른 텍스트는 포함하지 마세요.${prevGoalsSection}`
 
     const claudeRes = await fetchClaude({
       model: 'claude-sonnet-4-5',
-      max_tokens: 3500,
+      max_tokens: 4096,
       system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral', ttl: '1h' } }],
       messages: [{ role: 'user', content: userPrompt }],
     })
@@ -836,31 +854,35 @@ async function generateMemberReport({
 }) {
   const MEMBER_SYSTEM_PROMPT = `당신은 테니스 회원에게 오늘 레슨 결과를 친절하게 전달하는 KERRI AI입니다.
 전문 용어는 쉽게 풀어쓰고, 회원이 집에서 혼자 연습할 수 있도록 구체적이고 실용적인 안내를 제공합니다.
-칭찬과 격려를 적절히 섞어 동기부여가 되도록 작성하세요.
+
+━━ 분량 원칙 ━━
+• summary: 2~3문장 (코치 전문용어 최소화)
+• achievements: 핵심 1~3개, 각 1~2문장 (구체적인 동작 기반, 과장 금지, 녹음 미확인 성과 창작 금지)
+• improvement_points: 핵심 1~3개, 각 1~2문장 (왜 중요한지 + 어떻게 고치면 되는지)
+• practice_plan: 2개 (연습 이름·방법·시간·빈도·팁 간결하게)
 
 반드시 아래 JSON 형식으로만 응답하세요 (한국어):
 {
-  "summary": "오늘 레슨 전체 흐름을 회원 시각에서 2-3문장으로 요약 (코치 전문용어 최소화)",
+  "summary": "오늘 레슨 전체 흐름을 회원 시각에서 2~3문장으로 요약 (코치 전문용어 최소화)",
   "achievements": [
-    "오늘 잘한 것 / 발전한 것 1 (구체적으로, 긍정적 톤)",
-    "성과 2",
-    "성과 3"
+    "오늘 잘한 것 / 발전한 것 1 (구체적 동작 설명, 1~2문장)",
+    "성과 2 (있을 때만 추가)"
   ],
   "improvement_points": [
-    "개선할 점 1 (왜 중요한지 + 어떻게 고치면 되는지 쉽게 설명)",
-    "보완 포인트 2"
+    "개선할 점 1 (왜 중요한지 + 어떻게 고치면 되는지, 1~2문장)",
+    "보완 포인트 2 (있을 때만 추가)"
   ],
   "practice_plan": [
     {
       "title": "연습 이름",
-      "description": "집/코트에서 혼자 할 수 있는 구체적인 연습 방법",
+      "description": "집/코트에서 혼자 할 수 있는 구체적인 방법 (1~2문장)",
       "duration": "1회 소요 시간 (예: 10분)",
       "frequency": "권장 빈도 (예: 주 3회)",
-      "tip": "이 연습을 효과적으로 하는 핵심 팁 1가지"
+      "tip": "핵심 팁 1가지 (1문장)"
     }
   ]
 }
-practice_plan은 2-3개 작성. JSON 외 텍스트 절대 포함 금지.`
+practice_plan은 정확히 2개 작성. JSON 외 텍스트 절대 포함 금지.`
 
   const userPrompt = `## 회원 정보
 이름: ${member?.name || '회원'} | 레벨: ${member?.level || '초급'} | 목표: ${member?.goal || '취미'}
