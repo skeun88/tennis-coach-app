@@ -19,7 +19,7 @@ import { PLANS, ANNUAL_PRICES, TRIAL_DAYS } from '../../lib/subscription';
 import { IS_BETA } from '../../lib/beta';
 import { supabase } from '../../lib/supabase';
 import { useSubscription } from '../../hooks/useSubscription';
-import { purchaseProductById, getPlanProductId, ENTITLEMENT_IDS, restorePurchases, getAppUserID, getCurrentBillingCycle, syncDowngradeStatus } from '../../lib/purchases';
+import { purchaseProductById, getPlanProductId, ENTITLEMENT_IDS, restorePurchases, getAppUserID, getCurrentBillingCycle, syncDowngradeStatus, syncRevenueCatToDb } from '../../lib/purchases';
 
 const CREAM = '#F7F0E9';
 const TERRACOTTA = '#C0755A';
@@ -164,6 +164,9 @@ export default function SelectPlanScreen() {
         plan_id: planId,
         amount: billing === 'annual' ? (ANNUAL_PRICES[planId] ?? PLANS[planId].price) : PLANS[planId].price,
       });
+    }
+    if (isActive && subscription?.coach_id) {
+      await syncRevenueCatToDb(subscription.coach_id).catch(() => {});
     }
     await refresh();
     if (isActive) {
