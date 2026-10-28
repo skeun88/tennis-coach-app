@@ -1013,7 +1013,7 @@ export default function ProfileScreen() {
                 <>
                   <View style={styles.journeyPopupIconWrap}>
                     {journeyPopup === 'duration'
-                      ? <Image source={require('../../assets/images/kerri-symbol.jpg')} style={{ width: 48, height: 48, resizeMode: 'contain' }} />
+                      ? <Image source={require('../../assets/images/kerri-symbol.jpg')} style={{ width: 52, height: 52, resizeMode: 'cover' }} />
                       : <Ionicons name={info.icon as any} size={26} color={TERRA} />}
                   </View>
                   <Text style={styles.journeyPopupTitle}>{info.title}</Text>
@@ -1300,6 +1300,7 @@ const styles = StyleSheet.create({
     backgroundColor: TERRA_LIGHT,
     justifyContent: 'center', alignItems: 'center',
     marginTop: 12, marginBottom: 10,
+    overflow: 'hidden' as const,
   },
   journeyPopupTitle: { fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 2 },
   journeyPopupValue: { fontSize: 28, fontWeight: '800', color: DARK, marginBottom: 10 },
