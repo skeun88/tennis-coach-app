@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import Purchases from 'react-native-purchases';
 import { PLANS, ANNUAL_PRICES, TRIAL_DAYS } from '../../lib/subscription';
@@ -72,9 +73,9 @@ export default function SelectPlanScreen() {
   const [compareVisible, setCompareVisible] = useState(false);
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const [currentBillingCycle, setCurrentBillingCycle] = useState<'monthly' | 'annual' | null>(null);
-  const [willRenew, setWillRenew] = useState<boolean | null>(null);
   const [expirationDate, setExpirationDate] = useState<Date | null>(null);
   const [scheduledBasicBilling, setScheduledBasicBilling] = useState<'monthly' | 'annual' | null>(null);
+  const [syncLoading, setSyncLoading] = useState(true);
 
   const currentPlanId = subscription?.plan_id ?? 'free';
 
@@ -83,37 +84,38 @@ export default function SelectPlanScreen() {
     getCurrentBillingCycle(currentPlanId as 'basic' | 'pro').then(setCurrentBillingCycle);
   }, [currentPlanId]);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        await Purchases.invalidateCustomerInfoCache();
-        const info = await Purchases.getCustomerInfo();
-        const active = info.entitlements.active;
-        const proEnt = active[ENTITLEMENT_IDS.PRO];
-        const basicEnt = active[ENTITLEMENT_IDS.BASIC];
-        const ent = proEnt ?? basicEnt ?? null;
-        // Pro + Basic 둘 다 active = Pro 기간 중 Basic 구매 → 다운그레이드 예약 케이스
-        if (proEnt && basicEnt) {
-          setWillRenew(false);
-          const basicProductId: string = (basicEnt as any)?.productIdentifier ?? '';
-          setScheduledBasicBilling(
-            basicProductId === PLAN_PRODUCT_IDS.basic.annual ? 'annual' : 'monthly'
-          );
-        } else {
-          // null(미확인) 유지 → true 가정 시 downgrade 배지가 잘못 숨겨짐
-          const rv = (ent as any)?.willRenew;
-          if (typeof rv === 'boolean') setWillRenew(rv);
-        }
-        const expStr = (proEnt as any)?.expirationDate ?? (ent as any)?.expirationDate;
-        if (expStr) setExpirationDate(new Date(expStr));
-      } catch {
-        // 네트워크 오류: null 유지 (true 가정 금지)
+  const runSync = useCallback(async () => {
+    setSyncLoading(true);
+    try {
+      await Purchases.invalidateCustomerInfoCache();
+      const info = await Purchases.getCustomerInfo();
+      const active = info.entitlements.active;
+      const proEnt = active[ENTITLEMENT_IDS.PRO];
+      const basicEnt = active[ENTITLEMENT_IDS.BASIC];
+      const ent = proEnt ?? basicEnt ?? null;
+      // Pro + Basic 둘 다 active = Pro 기간 중 Basic 구매 → billing 타입 감지용
+      if (proEnt && basicEnt) {
+        const basicProductId: string = (basicEnt as any)?.productIdentifier ?? '';
+        setScheduledBasicBilling(
+          basicProductId === PLAN_PRODUCT_IDS.basic.annual ? 'annual' : 'monthly'
+        );
+      } else {
+        setScheduledBasicBilling(null);
       }
-      // Apple IAP 다운그레이드 예약 감지 (RC v2 → DB 업데이트)
-      await syncDowngradeStatus();
-      await refresh();
-    })();
-  }, []);
+      const expStr = (proEnt as any)?.expirationDate ?? (ent as any)?.expirationDate;
+      if (expStr) setExpirationDate(new Date(expStr));
+    } catch {
+      // 네트워크 오류: 기존 UI 유지
+    }
+    // RC v2 API로 다운그레이드 예약 확인 후 DB 업데이트 — DB가 primary source
+    await syncDowngradeStatus();
+    await refresh();
+    setSyncLoading(false);
+  }, [refresh]);
+
+  useFocusEffect(useCallback(() => {
+    runSync();
+  }, [runSync]));
 
   async function openStoreManagement() {
     const url = Platform.OS === 'android'
@@ -127,14 +129,14 @@ export default function SelectPlanScreen() {
     }
   }
 
-  // DB pending_plan_id(Toss 결제용) 또는 RC willRenew=false(Apple IAP용)
+  // DB pending_plan_id가 primary source — syncDowngradeStatus()가 RC v2 API로 확인 후 DB 업데이트
   const dbScheduledDowngrade = subscription?.pending_plan_id === 'basic' && !!subscription?.downgrade_at;
-  const isScheduledDowngradeToBasic = currentPlanId === 'pro' && (dbScheduledDowngrade || willRenew === false);
+  const isScheduledDowngradeToBasic = currentPlanId === 'pro' && dbScheduledDowngrade;
   // Basic 카드 UI: 예약된 billing 타입과 현재 탭이 일치할 때만 "변경 완료예정" 표시
   const isScheduledDowngradeToThisBilling = isScheduledDowngradeToBasic &&
     (scheduledBasicBilling === null || scheduledBasicBilling === billing);
-  // Pro인데 willRenew 아직 조회 중 → CTA 눌러서 Apple 팝업 뜨지 않도록 로딩 표시
-  const isProAndLoadingWillRenew = currentPlanId === 'pro' && !dbScheduledDowngrade && willRenew === null;
+  // sync 완료 전 Basic CTA 로딩 표시 (Apple IAP 팝업 방지)
+  const isProAndLoadingWillRenew = currentPlanId === 'pro' && !dbScheduledDowngrade && syncLoading;
 
   const isTrialEligible = (() => {
     if (!subscription) return true;
