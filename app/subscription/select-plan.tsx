@@ -19,7 +19,7 @@ import { PLANS, ANNUAL_PRICES, TRIAL_DAYS } from '../../lib/subscription';
 import { IS_BETA } from '../../lib/beta';
 import { supabase } from '../../lib/supabase';
 import { useSubscription } from '../../hooks/useSubscription';
-import { purchaseProductById, getPlanProductId, ENTITLEMENT_IDS, restorePurchases, getAppUserID, getCurrentBillingCycle, syncDowngradeStatus, syncRevenueCatToDb } from '../../lib/purchases';
+import { purchaseProductById, getPlanProductId, PLAN_PRODUCT_IDS, ENTITLEMENT_IDS, restorePurchases, getAppUserID, getCurrentBillingCycle, syncDowngradeStatus, syncRevenueCatToDb } from '../../lib/purchases';
 
 const CREAM = '#F7F0E9';
 const TERRACOTTA = '#C0755A';
@@ -75,6 +75,7 @@ export default function SelectPlanScreen() {
   const [currentBillingCycle, setCurrentBillingCycle] = useState<'monthly' | 'annual' | null>(null);
   const [willRenew, setWillRenew] = useState<boolean | null>(null);
   const [expirationDate, setExpirationDate] = useState<Date | null>(null);
+  const [scheduledBasicBilling, setScheduledBasicBilling] = useState<'monthly' | 'annual' | null>(null);
 
   const currentPlanId = subscription?.plan_id ?? 'free';
 
@@ -95,6 +96,10 @@ export default function SelectPlanScreen() {
         // Pro + Basic 둘 다 active = Pro 기간 중 Basic 구매 → 다운그레이드 예약 케이스
         if (proEnt && basicEnt) {
           setWillRenew(false);
+          const basicProductId: string = (basicEnt as any)?.productIdentifier ?? '';
+          setScheduledBasicBilling(
+            basicProductId === PLAN_PRODUCT_IDS.basic.annual ? 'annual' : 'monthly'
+          );
         } else {
           // null(미확인) 유지 → true 가정 시 downgrade 배지가 잘못 숨겨짐
           const rv = (ent as any)?.willRenew;
@@ -126,6 +131,9 @@ export default function SelectPlanScreen() {
   // DB pending_plan_id(Toss 결제용) 또는 RC willRenew=false(Apple IAP용)
   const dbScheduledDowngrade = subscription?.pending_plan_id === 'basic' && !!subscription?.downgrade_at;
   const isScheduledDowngradeToBasic = currentPlanId === 'pro' && (dbScheduledDowngrade || willRenew === false);
+  // Basic 카드 UI: 예약된 billing 타입과 현재 탭이 일치할 때만 "변경 완료예정" 표시
+  const isScheduledDowngradeToThisBilling = isScheduledDowngradeToBasic &&
+    (scheduledBasicBilling === null || scheduledBasicBilling === billing);
   // Pro인데 willRenew 아직 조회 중 → CTA 눌러서 Apple 팝업 뜨지 않도록 로딩 표시
   const isProAndLoadingWillRenew = currentPlanId === 'pro' && !dbScheduledDowngrade && willRenew === null;
 
@@ -398,12 +406,12 @@ export default function SelectPlanScreen() {
         {/* Basic 카드 */}
         <View style={[s.planCard, s.planCardPaid,
           isCurrentPlan('basic') && s.planCardCurrent,
-          isScheduledDowngradeToBasic && s.planCardScheduled,
+          isScheduledDowngradeToThisBilling && s.planCardScheduled,
         ]}>
           <View style={s.planCardHeader}>
             <Text style={[s.planName, s.planNamePaid]}>Basic</Text>
             <View style={s.badgeRow}>
-              {isScheduledDowngradeToBasic && (
+              {isScheduledDowngradeToThisBilling && (
                 <View style={s.scheduledBadge}>
                   <Text style={s.scheduledBadgeText}>변경 예정</Text>
                 </View>
@@ -413,7 +421,7 @@ export default function SelectPlanScreen() {
                   <Text style={s.currentBadgeText}>이용 중</Text>
                 </View>
               )}
-              {!isScheduledDowngradeToBasic && !isCurrentPlan('basic') && isTrialEligible && (
+              {!isScheduledDowngradeToThisBilling && !isCurrentPlan('basic') && isTrialEligible && (
                 <View style={s.trialBadge}>
                   <Text style={s.trialBadgeText}>{TRIAL_DAYS}일 무료</Text>
                 </View>
@@ -442,14 +450,14 @@ export default function SelectPlanScreen() {
             <FeatureItem icon="add-circle-outline" text="AI 레슨 기록 추가 충전 가능" />
           </View>
 
-          {isScheduledDowngradeToBasic && expirationDate && (
+          {isScheduledDowngradeToThisBilling && expirationDate && (
             <View style={s.scheduledDateRow}>
               <Ionicons name="calendar-outline" size={12} color={TERRACOTTA} />
               <Text style={s.scheduledDateText}>{formatScheduledDate(expirationDate)}부터 적용 예정</Text>
             </View>
           )}
 
-          {isScheduledDowngradeToBasic ? (
+          {isScheduledDowngradeToThisBilling ? (
             <View style={[s.statusView, s.statusViewScheduled]}>
               <Ionicons name="checkmark-circle" size={16} color={TERRACOTTA} />
               <Text style={s.statusViewText}>베이직으로 변경 완료예정</Text>

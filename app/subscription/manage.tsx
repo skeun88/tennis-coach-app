@@ -28,12 +28,15 @@ async function fetchRcInfo(): Promise<RcInfo> {
   const customerInfo = await Purchases.getCustomerInfo();
   const appUserId = await Purchases.getAppUserID();
   const active = customerInfo.entitlements.active;
-  const ent = active[ENTITLEMENT_IDS.PRO] ?? active[ENTITLEMENT_IDS.BASIC] ?? null;
+  const proEnt = active[ENTITLEMENT_IDS.PRO];
+  const basicEnt = active[ENTITLEMENT_IDS.BASIC];
+  const ent = proEnt ?? basicEnt ?? null;
 
   const periodType: string = (ent as any)?.periodType ?? '';
   const isTrial = periodType === 'TRIAL';
-  const expirationDate: string | null = ent?.expirationDate ?? null;
-  const willRenew: boolean = (ent as any)?.willRenew ?? false;
+  const expirationDate: string | null = (proEnt as any)?.expirationDate ?? ent?.expirationDate ?? null;
+  // Pro + Basic 동시 active = 다운그레이드 예약, Pro willRenew=false로 처리
+  const willRenew: boolean = (proEnt && basicEnt) ? false : ((ent as any)?.willRenew ?? false);
 
   let daysLeft = 0;
   if (isTrial && expirationDate) {
@@ -49,7 +52,8 @@ function formatKoreanDate(isoStr: string | null): string | null {
   try {
     const d = new Date(isoStr);
     if (isNaN(d.getTime())) return null;
-    return `${d.getUTCFullYear()}년 ${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`;
+    const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+    return `${kst.getUTCFullYear()}년 ${kst.getUTCMonth() + 1}월 ${kst.getUTCDate()}일`;
   } catch { return null; }
 }
 
@@ -310,24 +314,6 @@ export default function ManageSubscriptionScreen() {
                 />
               )}
             </>
-          )}
-
-          {/* Basic 변경 예약 배너 */}
-          {isScheduledDowngradeToBasic && nextBillingDate && (
-            <TouchableOpacity style={s.scheduledBanner} onPress={openStoreManagement} activeOpacity={0.8}>
-              <View style={s.scheduledBannerLeft}>
-                <View style={s.scheduledBannerIconWrap}>
-                  <Ionicons name="swap-horizontal-outline" size={16} color={TERRACOTTA} />
-                </View>
-                <View style={s.scheduledBannerText}>
-                  <Text style={s.scheduledBannerTitle}>Basic으로 변경 예정</Text>
-                  <Text style={s.scheduledBannerDesc}>
-                    {nextBillingDate}부터 Basic 플랜 · 9,900원/월
-                  </Text>
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={14} color={TERRACOTTA} />
-            </TouchableOpacity>
           )}
 
           {/* 구독 취소/종료 예정 (willRenew=false, 다운그레이드 아닌 경우) */}
