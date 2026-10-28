@@ -1013,7 +1013,7 @@ export default function ProfileScreen() {
                 <>
                   <View style={styles.journeyPopupIconWrap}>
                     {journeyPopup === 'duration'
-                      ? <Image source={require('../../assets/images/kerri-symbol.jpg')} style={{ width: 30, height: 30, resizeMode: 'contain' }} />
+                      ? <Image source={require('../../assets/images/kerri-symbol.jpg')} style={{ width: 48, height: 48, resizeMode: 'contain' }} />
                       : <Ionicons name={info.icon as any} size={26} color={TERRA} />}
                   </View>
                   <Text style={styles.journeyPopupTitle}>{info.title}</Text>
