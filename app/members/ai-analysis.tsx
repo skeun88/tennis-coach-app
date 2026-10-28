@@ -1422,6 +1422,7 @@ export default function AIAnalysisScreen() {
                   ]}
                   onPress={isRecording && !isPaused ? () => stopAndAnalyze('main') : (!isRecording && !isPaused ? () => startRecording() : undefined)}
                   disabled={isPaused}
+                  activeOpacity={isPaused ? 1 : 0.7}
                 >
                   <Ionicons
                     name={isRecording && !isPaused ? 'stop' : isPaused ? 'pause' : 'mic'}
@@ -1429,7 +1430,7 @@ export default function AIAnalysisScreen() {
                     color="#fff"
                   />
                   <Text style={styles.recordBtnText}>
-                    {isRecording && !isPaused ? '분석 시작' : isPaused ? '일시정지' : '녹음 시작'}
+                    {isRecording && !isPaused ? '녹음 종료' : isPaused ? '일시정지됨' : '녹음 시작'}
                   </Text>
                 </TouchableOpacity>
               </Animated.View>
@@ -1449,7 +1450,7 @@ export default function AIAnalysisScreen() {
               )}
 
               {isRecording && !isPaused && (
-                <Text style={styles.recordHint}>버튼을 눌러 녹음을 멈추고 AI 분석을 시작하세요</Text>
+                <Text style={styles.recordHint}>녹음을 종료하면 AI 리포트를 생성해요</Text>
               )}
             </View>
           )}
@@ -1486,15 +1487,16 @@ export default function AIAnalysisScreen() {
           {/* 6. 사용량 한 줄 */}
           {usageInfo && (
             <View style={styles.usageSummaryRow}>
-              <Text style={styles.usageSummaryText}>{usageInfo.used} / {usageInfo.limit}회 사용</Text>
+              <TouchableOpacity onPress={() => setTopupModalVisible(true)} activeOpacity={0.7}>
+                <Text style={styles.usageSummaryRemaining}>
+                  AI 기록 {Math.max(0, usageInfo.limit - usageInfo.used)}회 남음
+                </Text>
+              </TouchableOpacity>
               {(subscription?.extra_report_credits ?? 0) > 0 && (
                 <View style={styles.extraCreditBadge}>
                   <Text style={styles.extraCreditText}>추가 {subscription!.extra_report_credits}회</Text>
                 </View>
               )}
-              <TouchableOpacity onPress={() => setTopupModalVisible(true)} style={{ marginLeft: 'auto' as any }}>
-                <Text style={styles.usageSummaryRemaining}>{Math.max(0, usageInfo.limit - usageInfo.used)}회 남음</Text>
-              </TouchableOpacity>
             </View>
           )}
         </View>
