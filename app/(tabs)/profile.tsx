@@ -14,7 +14,6 @@ import * as FileSystem from 'expo-file-system/legacy';
 import PlanUpsellModal from '../../components/PlanUpsellModal';
 import { supabase } from '../../lib/supabase';
 import { useSubscription } from '../../hooks/useSubscription';
-import { PLANS } from '../../lib/subscription';
 import { Colors, Radius, Shadow } from '../../lib/theme';
 import CoachQRModal from '../../components/CoachQRModal';
 import CoachingStyleModal from '../../components/CoachingStyleModal';
@@ -105,19 +104,6 @@ export default function ProfileScreen() {
   const [voiceUsedSeconds, setVoiceUsedSeconds] = useState(0);
   const VOICE_MONTHLY_LIMIT = 1800;
 
-  const planLabel = subscription ? PLANS[subscription.plan_id]?.name ?? subscription.plan_id : null;
-  const statusLabel = isTrial
-    ? (() => {
-        if (!trialEndsAt) return '무료 체험 중';
-        const ms = new Date(trialEndsAt).getTime() - Date.now();
-        if (ms <= 0) return '무료 체험 종료';
-        if (ms < 24 * 60 * 60 * 1000) return '무료 체험 1일 미만 남음';
-        return `무료 체험 ${Math.ceil(ms / (24 * 60 * 60 * 1000))}일 남음`;
-      })()
-    : subscription?.status === 'active' ? '구독 중'
-    : subscription?.status === 'cancelled' ? '해지됨'
-    : subscription?.status === 'past_due' ? '결제 실패'
-    : null;
 
   const [coachId, setCoachId] = useState<string | null>(null);
   const [qrModalVisible, setQrModalVisible] = useState(false);
@@ -523,18 +509,16 @@ export default function ProfileScreen() {
                   </View>
                 ))}
               </View>
-              {/* 구독 카드 스켈레톤 */}
-              <View style={styles.actionRow}>
-                <View style={[styles.actionCard, { gap: 8 }]}>
-                  <SkeletonBox width={36} height={36} borderRadius={18} />
-                  <SkeletonBox width={80} height={15} borderRadius={6} />
-                  <SkeletonBox width={60} height={12} borderRadius={4} />
+              {/* QR 카드 스켈레톤 */}
+              <View style={[styles.aiCard, { gap: 0 }]}>
+                <View style={styles.aiLeft}>
+                  <SkeletonBox width={46} height={46} borderRadius={13} />
+                  <View style={{ flex: 1, gap: 8 }}>
+                    <SkeletonBox width={90} height={15} borderRadius={6} />
+                    <SkeletonBox width={120} height={12} borderRadius={4} />
+                  </View>
                 </View>
-                <View style={[styles.actionCard, { gap: 8 }]}>
-                  <SkeletonBox width={36} height={36} borderRadius={18} />
-                  <SkeletonBox width={80} height={15} borderRadius={6} />
-                  <SkeletonBox width={60} height={12} borderRadius={4} />
-                </View>
+                <SkeletonBox width={50} height={12} borderRadius={4} />
               </View>
             </>
           )}
@@ -745,37 +729,37 @@ export default function ProfileScreen() {
             <Text style={styles.aiArrow}>관리하기 →</Text>
           </TouchableOpacity>
 
-          {/* ── 구독 + QR ── */}
-          <View style={styles.actionRow}>
+          {/* ── 내 초대 QR ── */}
+          {coachId ? (
             <TouchableOpacity
-              style={styles.actionCard}
-              onPress={() => router.push('/subscription/manage')}
+              style={styles.aiCard}
+              onPress={() => (FEATURE_SHARED_QR ? router.push('/connect/qr') : setQrModalVisible(true))}
               activeOpacity={0.8}
             >
-              <Ionicons name="card-outline" size={22} color={TERRA} style={{ marginBottom: 8 }} />
-              <Text style={styles.actionTitle}>{planLabel ? `${planLabel} 플랜` : '구독'}</Text>
-              {statusLabel ? <Text style={styles.actionSub}>{statusLabel}</Text> : null}
-              <Text style={styles.actionArrow}>구독 관리 →</Text>
-            </TouchableOpacity>
-
-            {coachId ? (
-              <TouchableOpacity
-                style={styles.actionCard}
-                onPress={() => (FEATURE_SHARED_QR ? router.push('/connect/qr') : setQrModalVisible(true))}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="qr-code-outline" size={22} color={TERRA} style={{ marginBottom: 8 }} />
-                <Text style={styles.actionTitle}>내 초대 QR</Text>
-                <Text style={styles.actionSub}>회원을 초대해보세요</Text>
-                <Text style={styles.actionArrow}>QR 보기 →</Text>
-              </TouchableOpacity>
-            ) : (
-              <View style={[styles.actionCard, { opacity: 0.4 }]}>
-                <Ionicons name="qr-code-outline" size={22} color={TERRA} style={{ marginBottom: 8 }} />
-                <Text style={styles.actionTitle}>내 초대 QR</Text>
+              <View style={styles.aiLeft}>
+                <View style={styles.aiIconWrap}>
+                  <Ionicons name="qr-code-outline" size={22} color={TERRA} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.aiTitle}>내 초대 QR</Text>
+                  <Text style={styles.aiSub}>회원을 초대해보세요</Text>
+                </View>
               </View>
-            )}
-          </View>
+              <Text style={styles.aiArrow}>QR 보기 →</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={[styles.aiCard, { opacity: 0.4 }]}>
+              <View style={styles.aiLeft}>
+                <View style={styles.aiIconWrap}>
+                  <Ionicons name="qr-code-outline" size={22} color={TERRA} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.aiTitle}>내 초대 QR</Text>
+                  <Text style={styles.aiSub}>회원을 초대해보세요</Text>
+                </View>
+              </View>
+            </View>
+          )}
 
           <View style={{ height: 24 }} />
           </>}
@@ -1390,18 +1374,6 @@ const styles = StyleSheet.create({
   aiSub: { fontSize: 13, color: Colors.mutedFg, marginBottom: 1 },
   aiVoice: { fontSize: 12, color: TERRA, fontWeight: '600' },
   aiArrow: { fontSize: 12, color: TERRA, fontWeight: '700' },
-
-  // Action row (Subscription + QR)
-  actionRow: { flexDirection: 'row', gap: 12, marginBottom: 14 },
-  actionCard: {
-    flex: 1, backgroundColor: '#fff', borderRadius: 20, padding: 18,
-    alignItems: 'flex-start',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
-  },
-  actionTitle: { fontSize: 15, fontWeight: '700', color: DARK, marginBottom: 3 },
-  actionSub: { fontSize: 12, color: Colors.mutedFg, marginBottom: 8 },
-  actionArrow: { fontSize: 12, color: TERRA, fontWeight: '700', marginTop: 4 },
 
   // Modals (journey popups)
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,.4)', justifyContent: 'flex-end' },
