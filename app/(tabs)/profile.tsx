@@ -589,7 +589,7 @@ export default function ProfileScreen() {
           <View style={styles.sectionCard}>
             <View style={styles.statsHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Image source={require('../../assets/images/kerri-symbol.jpg')} style={styles.kerriLogoSmall} />
+                <Ionicons name="flame-outline" size={22} color="#C0755A" strokeWidth={1.8} />
                 <Text style={styles.sectionTitle}>나의 코칭 여정</Text>
               </View>
               <TouchableOpacity
