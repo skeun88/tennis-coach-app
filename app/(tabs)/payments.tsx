@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Alert, Modal, FlatList, TextInput, KeyboardAvoidingView, Platform,
+  Alert, Modal, FlatList, TextInput, KeyboardAvoidingView, Platform, Animated,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -92,6 +92,7 @@ export default function PaymentsScreen() {
   const [actionMembers, setActionMembers] = useState<ActionMember[]>([]);
   const [initialLoaded, setInitialLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const contentOpacity = useRef(new Animated.Value(0)).current;
 
   const [payModal, setPayModal] = useState(false);
   const [payTarget, setPayTarget] = useState<ActionMember | null>(null);
@@ -171,6 +172,12 @@ export default function PaymentsScreen() {
   }
 
   useFocusEffect(useCallback(() => { loadData(); }, []));
+
+  useEffect(() => {
+    if (initialLoaded) {
+      Animated.timing(contentOpacity, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+    }
+  }, [initialLoaded]);
 
   useEffect(() => {
     const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((event) => {
@@ -453,7 +460,7 @@ export default function PaymentsScreen() {
   }
 
   return (
-    <View style={[s.container, { paddingTop: insets.top }]}>
+    <Animated.View style={[s.container, { paddingTop: insets.top, opacity: contentOpacity }]}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: insets.bottom + FLOATING_TAB_BAR_SPACE + 24 }}
@@ -681,7 +688,7 @@ export default function PaymentsScreen() {
           </TouchableOpacity>
         </KeyboardAvoidingView>
       </Modal>
-    </View>
+    </Animated.View>
   );
 }
 

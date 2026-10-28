@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
   TextInput, ActivityIndicator, KeyboardAvoidingView, Platform,
-  Modal, FlatList, Linking, Switch,
+  Modal, FlatList, Linking, Switch, Animated,
 } from 'react-native';
 import SkeletonBox from '../../components/SkeletonBox';
 import { useLocalSearchParams, useRouter, Link, useFocusEffect } from 'expo-router';
@@ -250,6 +250,15 @@ export default function MemberDetailScreen() {
   const [tab, setTab] = useState<Tab>('info');
   const [loading, setLoading] = useState(true);
   const [tabLoading, setTabLoading] = useState<Tab | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const isMountedRef = useRef(true);
+  const contentOpacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => { return () => { isMountedRef.current = false; }; }, []);
+  useEffect(() => {
+    if (!loading) {
+      Animated.timing(contentOpacity, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+    }
+  }, [loading]);
   const [memberListUnreadCount, setMemberListUnreadCount] = useState(0);
 
   // 결제 완료 모달
@@ -1500,31 +1509,40 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                   style: 'destructive',
                   onPress: async () => {
                     if (!id) return;
-                    // 이 회원이 속한 레슨 ID 먼저 수집
-                    const { data: memberLessonRows } = await supabase
-                      .from('lesson_members').select('lesson_id').eq('member_id', id);
-                    const lessonIds = (memberLessonRows ?? []).map((r: any) => r.lesson_id);
+                    if (isMountedRef.current) setDeleting(true);
+                    try {
+                      // 이 회원이 속한 레슨 ID 먼저 수집
+                      const { data: memberLessonRows } = await supabase
+                        .from('lesson_members').select('lesson_id').eq('member_id', id);
+                      const lessonIds = (memberLessonRows ?? []).map((r: any) => r.lesson_id);
 
-                    await supabase.from('member_notes').delete().eq('member_id', id);
-                    await supabase.from('attendance').delete().eq('member_id', id);
-                    await supabase.from('payments').delete().eq('member_id', id);
-                    await supabase.from('lesson_members').delete().eq('member_id', id);
-                    await supabase.from('messages').delete().eq('member_id', id);
+                      await supabase.from('member_notes').delete().eq('member_id', id);
+                      await supabase.from('attendance').delete().eq('member_id', id);
+                      await supabase.from('payments').delete().eq('member_id', id);
+                      await supabase.from('lesson_members').delete().eq('member_id', id);
+                      await supabase.from('messages').delete().eq('member_id', id);
 
-                    // 멤버 제거 후 비어버린 레슨 슬롯 삭제 (다른 회원 없는 경우만)
-                    if (lessonIds.length > 0) {
-                      const { data: remaining } = await supabase
-                        .from('lesson_members').select('lesson_id').in('lesson_id', lessonIds);
-                      const stillUsed = new Set((remaining ?? []).map((r: any) => r.lesson_id));
-                      const emptyIds = lessonIds.filter((lid: string) => !stillUsed.has(lid));
-                      if (emptyIds.length > 0) {
-                        await supabase.from('attendance').delete().in('lesson_id', emptyIds);
-                        await supabase.from('lessons').delete().in('id', emptyIds);
+                      // 멤버 제거 후 비어버린 레슨 슬롯 삭제 (다른 회원 없는 경우만)
+                      if (lessonIds.length > 0) {
+                        const { data: remaining } = await supabase
+                          .from('lesson_members').select('lesson_id').in('lesson_id', lessonIds);
+                        const stillUsed = new Set((remaining ?? []).map((r: any) => r.lesson_id));
+                        const emptyIds = lessonIds.filter((lid: string) => !stillUsed.has(lid));
+                        if (emptyIds.length > 0) {
+                          await supabase.from('attendance').delete().in('lesson_id', emptyIds);
+                          await supabase.from('lessons').delete().in('id', emptyIds);
+                        }
+                      }
+
+                      await supabase.from('members').delete().eq('id', id);
+                      router.replace('/(tabs)/members');
+                    } catch (e) {
+                      console.error('[memberDelete]', e);
+                      if (isMountedRef.current) {
+                        setDeleting(false);
+                        Alert.alert('삭제 실패', '삭제 중 오류가 발생했습니다. 다시 시도해주세요.');
                       }
                     }
-
-                    await supabase.from('members').delete().eq('id', id);
-                    router.replace('/(tabs)/members');
                   },
                 },
               ]
@@ -1670,7 +1688,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   const ATTENDANCE_STATUS_COLOR: Record<string, string> = { '출석': Colors.primary, '결석': Colors.destructive, '지각': Colors.warning, '조퇴': Colors.accentWarm, '보강예정': Colors.accentWarm };
 
   return (
-    <View style={{ flex: 1 }}>
+    <Animated.View style={{ flex: 1, opacity: contentOpacity }}>
       {/* 메시지 탭: 헤더 제목 변경 + 뒤로가기 → 탭 복귀 */}
       <SettingsHeader
         title={tab === 'messages' ? member.name : '회원 상세'}
@@ -3749,7 +3767,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
           </View>
         </View>
       </Modal>
-    </View>
+    </Animated.View>
   );
 }
 

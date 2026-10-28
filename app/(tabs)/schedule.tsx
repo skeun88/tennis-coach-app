@@ -137,6 +137,7 @@ export default function ScheduleScreen() {
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<ViewTab>('주간');
   const [initialLoaded, setInitialLoaded] = useState(false);
+  const contentOpacity = useRef(new Animated.Value(0)).current;
   const [lessons, setLessons] = useState<LessonWithMembers[]>([]);
   const [weekData, setWeekData] = useState<WeekLesson[]>([]);
   const [monthLessons, setMonthLessons] = useState<Map<string, LessonWithMembers[]>>(new Map());
@@ -178,6 +179,12 @@ export default function ScheduleScreen() {
     highlightDate?: string; highlightTime?: string;
     highlightEnd?: string; highlightMember?: string; requestId?: string;
   }>();
+  useEffect(() => {
+    if (initialLoaded) {
+      Animated.timing(contentOpacity, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+    }
+  }, [initialLoaded]);
+
   useEffect(() => {
     if (!params.highlightDate || !params.highlightTime) return;
     setActiveTab('일일');
@@ -1383,7 +1390,7 @@ ${rejectMsg.trim()}`
     for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
 
     return (
-      <ScrollView style={{ flex: 1, backgroundColor: S_BG }} showsVerticalScrollIndicator={false}
+      <ScrollView style={{ flex: 1, backgroundColor: S_GRID_BG }} showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + FLOATING_TAB_BAR_SPACE + 24 }}
         refreshControl={<TerracottaRefreshControl refreshing={refreshing} onRefresh={async () => {
           setRefreshing(true);
@@ -1531,7 +1538,7 @@ ${rejectMsg.trim()}`
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: S_BG }]}>
+    <Animated.View style={[styles.container, { backgroundColor: S_BG, opacity: contentOpacity }]}>
       {/* 통합 헤더 */}
       <View style={[styles.unifiedHeader, { paddingTop: insets.top + 8 }]}>
         <View style={styles.unifiedTitleRow}>
@@ -1783,7 +1790,7 @@ ${rejectMsg.trim()}`
           </View>
         </View>
       </Modal>
-    </View>
+    </Animated.View>
   );
 }
 

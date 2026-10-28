@@ -3,7 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, Modal, TextInput, ActivityIndicator,
-  Image, Switch, Pressable, Platform, KeyboardAvoidingView,
+  Image, Switch, Pressable, Platform, KeyboardAvoidingView, Animated,
 } from 'react-native';
 import SkeletonBox from '../../components/SkeletonBox';
 import { Ionicons } from '@expo/vector-icons';
@@ -110,6 +110,7 @@ export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [initialLoaded, setInitialLoaded] = useState(false);
+  const contentOpacity = useRef(new Animated.Value(0)).current;
 
   const [perf, setPerf] = useState<Performance>({
     totalLessons: 0, avgRetentionMonths: null,
@@ -149,6 +150,12 @@ export default function ProfileScreen() {
     editData.certifications !== career.certifications ||
     editData.awards !== career.awards
   );
+
+  useEffect(() => {
+    if (initialLoaded) {
+      Animated.timing(contentOpacity, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+    }
+  }, [initialLoaded]);
 
   useEffect(() => {
     if (editModal && editScrollTarget === 'career') {
@@ -445,7 +452,7 @@ export default function ProfileScreen() {
   }
 
   return (
-    <View style={styles.screen}>
+    <Animated.View style={[styles.screen, { opacity: contentOpacity }]}>
       {/* 헤더 */}
       <View style={[styles.headerBar, { paddingTop: insets.top }]}>
         <Text style={styles.headerTitle}>마이</Text>
@@ -1130,7 +1137,7 @@ export default function ProfileScreen() {
           coachName={profile.name}
         />
       ) : null}
-    </View>
+    </Animated.View>
   );
 }
 
