@@ -644,7 +644,7 @@ export default function ProfileScreen() {
                   onPress={() => setJourneyPopup('duration')}
                   style={({ pressed }) => [styles.journeyFooter, pressed && styles.journeyFooterPressed]}
                 >
-                  <Image source={require('../../assets/images/kerri-logo.png')} style={styles.kerriLogoSmall} />
+                  <Image source={require('../../assets/images/kerri-symbol.jpg')} style={styles.kerriLogoSmall} />
                   <Text style={styles.journeyFooterText}>
                     {joinedMonths > 0
                       ? `KERRI와 함께한 지 ${joinedMonths}개월`
@@ -1281,7 +1281,7 @@ const styles = StyleSheet.create({
   journeyFooter: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
   },
-  kerriLogoSmall: { width: 42, height: 14, resizeMode: 'contain' },
+  kerriLogoSmall: { width: 20, height: 20, resizeMode: 'contain' },
   journeyFooterText: { fontSize: 13, color: TERRA, fontWeight: '600' },
   journeyFooterPressed: { backgroundColor: CREAM, borderRadius: 8 },
   journeyCellPressed: { backgroundColor: CREAM },
