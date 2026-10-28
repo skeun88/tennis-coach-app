@@ -89,11 +89,18 @@ export default function SelectPlanScreen() {
         await Purchases.invalidateCustomerInfoCache();
         const info = await Purchases.getCustomerInfo();
         const active = info.entitlements.active;
-        const ent = active[ENTITLEMENT_IDS.PRO] ?? active[ENTITLEMENT_IDS.BASIC] ?? null;
-        // null(미확인) 유지 → true 가정 시 downgrade 배지가 잘못 숨겨짐
-        const rv = (ent as any)?.willRenew;
-        if (typeof rv === 'boolean') setWillRenew(rv);
-        const expStr = (ent as any)?.expirationDate;
+        const proEnt = active[ENTITLEMENT_IDS.PRO];
+        const basicEnt = active[ENTITLEMENT_IDS.BASIC];
+        const ent = proEnt ?? basicEnt ?? null;
+        // Pro + Basic 둘 다 active = Pro 기간 중 Basic 구매 → 다운그레이드 예약 케이스
+        if (proEnt && basicEnt) {
+          setWillRenew(false);
+        } else {
+          // null(미확인) 유지 → true 가정 시 downgrade 배지가 잘못 숨겨짐
+          const rv = (ent as any)?.willRenew;
+          if (typeof rv === 'boolean') setWillRenew(rv);
+        }
+        const expStr = (proEnt as any)?.expirationDate ?? (ent as any)?.expirationDate;
         if (expStr) setExpirationDate(new Date(expStr));
       } catch {
         // 네트워크 오류: null 유지 (true 가정 금지)
