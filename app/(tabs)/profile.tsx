@@ -589,7 +589,7 @@ export default function ProfileScreen() {
           <View style={styles.sectionCard}>
             <View style={styles.statsHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="flame-outline" size={22} color={TERRA} />
+                <Image source={require('../../assets/images/kerri-symbol.jpg')} style={styles.kerriLogoSmall} />
                 <Text style={styles.sectionTitle}>나의 코칭 여정</Text>
               </View>
               <TouchableOpacity
@@ -1012,7 +1012,9 @@ export default function ProfileScreen() {
               return (
                 <>
                   <View style={styles.journeyPopupIconWrap}>
-                    <Ionicons name={info.icon as any} size={26} color={TERRA} />
+                    {journeyPopup === 'duration'
+                      ? <Image source={require('../../assets/images/kerri-symbol.jpg')} style={{ width: 30, height: 30, resizeMode: 'contain' }} />
+                      : <Ionicons name={info.icon as any} size={26} color={TERRA} />}
                   </View>
                   <Text style={styles.journeyPopupTitle}>{info.title}</Text>
                   <Text style={styles.journeyPopupValue}>{value}</Text>
