@@ -878,7 +878,6 @@ export default function NewMemberScreen() {
                   if (num && parseInt(num) >= 1) setTrialDuration(num);
                 }}
                 keyboardType="number-pad"
-                autoFocus
               />
               <Text style={{ fontSize: 15, color: Colors.mutedFg, fontWeight: '600' }}>분</Text>
             </View>
