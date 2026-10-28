@@ -60,8 +60,7 @@ const ANNUAL_SAVINGS: Partial<Record<'basic' | 'pro', number>> = {
 };
 
 function formatScheduledDate(d: Date): string {
-  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
-  return `${kst.getUTCMonth() + 1}월 ${kst.getUTCDate()}일`;
+  return `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`;
 }
 
 export default function SelectPlanScreen() {

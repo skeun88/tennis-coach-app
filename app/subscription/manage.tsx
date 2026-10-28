@@ -52,8 +52,7 @@ function formatKoreanDate(isoStr: string | null): string | null {
   try {
     const d = new Date(isoStr);
     if (isNaN(d.getTime())) return null;
-    const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
-    return `${kst.getUTCFullYear()}년 ${kst.getUTCMonth() + 1}월 ${kst.getUTCDate()}일`;
+    return `${d.getUTCFullYear()}년 ${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`;
   } catch { return null; }
 }
 
