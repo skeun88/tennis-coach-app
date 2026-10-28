@@ -1513,7 +1513,7 @@ export default function AIAnalysisScreen() {
             </View>
             <View>
               <Text style={styles.manualReportBtnTitle}>타이핑으로 기록</Text>
-              <Text style={styles.manualReportBtnSub}>녹음을 놓쳤다면 직접 작성해 보세요</Text>
+              <Text style={styles.manualReportBtnSub}>녹음 없이 레슨 내용을 직접 작성해요</Text>
             </View>
           </View>
           <Ionicons name="chevron-forward" size={16} color={Colors.mutedFg} />
@@ -2400,11 +2400,13 @@ const styles = StyleSheet.create({
   manualReportBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     marginHorizontal: 16, marginBottom: 20, paddingVertical: 14, paddingHorizontal: 16,
-    backgroundColor: Colors.primaryLight, borderRadius: 18,
+    backgroundColor: '#fff', borderRadius: 20,
+    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 }, elevation: 2,
   },
   manualReportIconWrap: {
     width: 36, height: 36, borderRadius: 11,
-    backgroundColor: 'rgba(192,117,90,0.15)',
+    backgroundColor: '#F7F0E9',
     justifyContent: 'center', alignItems: 'center',
   },
   manualReportBtnTitle: { fontSize: 14, fontWeight: '700', color: Colors.foreground },
