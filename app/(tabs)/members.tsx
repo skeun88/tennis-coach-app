@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, ScrollView, Alert,
+  TextInput, ScrollView, Alert, Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -42,6 +42,7 @@ export default function MembersScreen() {
   const [packageCount, setPackageCount] = useState(0);
   const [initialLoaded, setInitialLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const contentOpacity = useRef(new Animated.Value(0)).current;
 
   async function loadMembers() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -127,6 +128,12 @@ export default function MembersScreen() {
   }, []);
 
   useEffect(() => {
+    if (initialLoaded) {
+      Animated.timing(contentOpacity, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+    }
+  }, [initialLoaded]);
+
+  useEffect(() => {
     const q = search.toLowerCase();
     let base = members;
     if (filter === '체험') base = members.filter(m => (m as any).is_trial);
@@ -187,7 +194,7 @@ export default function MembersScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <Animated.View style={[styles.container, { paddingTop: insets.top, opacity: contentOpacity }]}>
       {/* 헤더 */}
       <View style={styles.header}>
         <View>
@@ -330,7 +337,7 @@ export default function MembersScreen() {
         }}
       />
 
-    </View>
+    </Animated.View>
   );
 }
 

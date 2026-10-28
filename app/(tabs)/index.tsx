@@ -108,6 +108,7 @@ export default function HomeScreen() {
   const [trialCardShown, setTrialCardShown] = useState(false);
   const trialCardOpacity = useRef(new Animated.Value(1)).current;
   const prevTrialCountRef = useRef(0);
+  const contentOpacity = useRef(new Animated.Value(0)).current;
 
   // ③ 관심 회원 (member_interest)
   const [interestList, setInterestList] = useState<InterestMember[]>([]);
@@ -257,6 +258,13 @@ export default function HomeScreen() {
   }
 
   useFocusEffect(useCallback(() => { loadAll(); }, []));
+
+  // 스켈레톤 → 실제 콘텐츠 fade-in
+  useEffect(() => {
+    if (initialLoaded) {
+      Animated.timing(contentOpacity, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+    }
+  }, [initialLoaded]);
 
   // 체험 회원 카드 페이드 인/아웃
   useEffect(() => {
@@ -621,7 +629,7 @@ export default function HomeScreen() {
   }
 
   return (
-    <View style={[styles.screenWrapper, { paddingTop: insets.top }]}>
+    <Animated.View style={[styles.screenWrapper, { paddingTop: insets.top, opacity: contentOpacity }]}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={{ paddingBottom: insets.bottom + FLOATING_TAB_BAR_SPACE + 24 }}
@@ -1163,7 +1171,7 @@ export default function HomeScreen() {
           </View>
         </View>
       )}
-    </View>
+    </Animated.View>
   );
 }
 
