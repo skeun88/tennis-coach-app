@@ -15,12 +15,14 @@ import { extractIssueTags } from '../lib/issueTagUtils';
 interface MemberIssueTagsProps {
   memberId: string;
   isPro: boolean;
+  subLoading?: boolean;
   onUpgrade: () => void;
 }
 
 export default function MemberIssueTags({
   memberId,
   isPro,
+  subLoading = false,
   onUpgrade,
 }: MemberIssueTagsProps) {
   const [tags, setTags] = useState<string[]>([]);
@@ -47,13 +49,16 @@ export default function MemberIssueTags({
     setLoading(false);
   }
 
+  // 구독 로딩 중 — 잠금 UI 플래시 방지
+  if (subLoading) return null;
+
   // 잠금 상태 (베이직 코치)
   if (!isPro) {
     return (
       <View style={styles.lockedContainer}>
         <View style={styles.lockedHeader}>
           <View style={styles.lockedIconWrap}>
-            <Ionicons name="pricetag" size={14} color="#8B5CF6" />
+            <Ionicons name="pricetag" size={14} color={Colors.primary} />
           </View>
           <Text style={styles.sectionTitle}>반복 이슈 태그</Text>
           <View style={styles.proBadge}>
@@ -71,7 +76,7 @@ export default function MemberIssueTags({
         </View>
 
         <TouchableOpacity style={styles.upgradeBtn} onPress={onUpgrade}>
-          <Ionicons name="lock-closed" size={13} color="#8B5CF6" />
+          <Ionicons name="lock-closed" size={13} color={Colors.primary} />
           <Text style={styles.upgradeBtnText}>Pro로 업그레이드하면 이 기능을 쓸 수 있어요</Text>
         </TouchableOpacity>
       </View>
@@ -188,12 +193,12 @@ const styles = StyleSheet.create({
   },
   // 잠금 상태
   lockedContainer: {
-    backgroundColor: '#F8F4FF',
+    backgroundColor: Colors.primaryLight,
     borderRadius: Radius.md,
     padding: 12,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: '#DDD6FE',
+    borderColor: Colors.primary + '30',
   },
   lockedHeader: {
     flexDirection: 'row',
@@ -205,12 +210,12 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#EDE9FE',
+    backgroundColor: Colors.primary + '20',
     alignItems: 'center',
     justifyContent: 'center',
   },
   proBadge: {
-    backgroundColor: '#8B5CF6',
+    backgroundColor: Colors.primary,
     borderRadius: Radius.full,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -229,7 +234,7 @@ const styles = StyleSheet.create({
     opacity: 0.35,
   },
   tagDummy: {
-    backgroundColor: '#C4B5FD',
+    backgroundColor: Colors.primary + '60',
     borderRadius: Radius.full,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -238,7 +243,7 @@ const styles = StyleSheet.create({
   tagTextDummy: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#5B21B6',
+    color: Colors.primary,
   },
   upgradeBtn: {
     flexDirection: 'row',
@@ -247,7 +252,7 @@ const styles = StyleSheet.create({
   },
   upgradeBtnText: {
     fontSize: 12,
-    color: '#8B5CF6',
+    color: Colors.primary,
     fontWeight: '600',
   },
 });

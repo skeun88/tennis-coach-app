@@ -298,7 +298,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   const [memberNotes, setMemberNotes] = useState<MemberNote[]>([]);
   const [newNote, setNewNote] = useState('');
   const [showProModal, setShowProModal] = useState(false);
-  const { canUse, subscription } = useSubscription();
+  const { canUse, subscription, loading: subLoading } = useSubscription();
   const [sendingReregister, setSendingReregister] = useState(false);
   const [convertingTrial, setConvertingTrial] = useState(false);
   const [timePickerVisible, setTimePickerVisible] = useState(false);
@@ -1715,6 +1715,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
           <MemberIssueTags
             memberId={member.id}
             isPro={canUse('tagging')}
+            subLoading={subLoading}
             onUpgrade={() => setShowProModal(true)}
           />
         </View>
