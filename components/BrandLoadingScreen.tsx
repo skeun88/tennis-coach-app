@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Animated, Easing, StyleSheet, StatusBar, useWindowDimensions, TouchableOpacity } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Image, Animated, Easing, StyleSheet, StatusBar, useWindowDimensions, TouchableOpacity, Text } from 'react-native';
 
 const CREAM = '#F7F0E9';
 const TERRA = '#C0755A';
@@ -9,6 +8,8 @@ const WARM_GRAY = '#9E9289';
 const HINT_DELAY_MS = 3000;
 const SPINNER_SIZE = 26;
 const SPINNER_STROKE = 2.5;
+// Matches SplashScreen.storyboard: imageView frame width/height = 240 pt
+const LOGO_SIZE = 240;
 
 interface Props {
   retry?: boolean;
@@ -16,14 +17,12 @@ interface Props {
 }
 
 export default function BrandLoadingScreen({ retry, onRetry }: Props) {
-  const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { height } = useWindowDimensions();
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const [showHint, setShowHint] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowHint(true), HINT_DELAY_MS);
-
     const spin = Animated.loop(
       Animated.timing(rotateAnim, {
         toValue: 1,
@@ -33,7 +32,6 @@ export default function BrandLoadingScreen({ retry, onRetry }: Props) {
       })
     );
     spin.start();
-
     return () => {
       clearTimeout(timer);
       spin.stop();
@@ -45,33 +43,37 @@ export default function BrandLoadingScreen({ retry, onRetry }: Props) {
     outputRange: ['0deg', '360deg'],
   });
 
+  // Logo center = screen center (matches native splash storyboard centerX/centerY constraints)
+  const logoTop = height / 2 - LOGO_SIZE / 2;
+  const spinnerTop = height / 2 + LOGO_SIZE / 2 + 32;
+  const hintTop = spinnerTop + SPINNER_SIZE + 12;
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 20) }]}>
+    <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={CREAM} />
 
-      <View style={styles.center}>
-        <Text
-          style={[styles.wordmark, { width: width * 0.81 }]}
-          adjustsFontSizeToFit
-          numberOfLines={1}
-        >
-          KERRI
-        </Text>
+      {/* Same image as SplashScreenLogo.imageset — 240 pt, scaleAspectFit, screen center */}
+      <Image
+        source={require('../assets/images/kerri-logo.png')}
+        style={[styles.logo, { top: logoTop }]}
+        resizeMode="contain"
+      />
 
-        <View style={styles.spinnerContainer}>
-          <View style={styles.spinnerTrack} />
-          <Animated.View style={[styles.spinnerArc, { transform: [{ rotate }] }]} />
-        </View>
+      {/* Spinner: absolute position — does not shift logo */}
+      <View style={[styles.spinnerContainer, { top: spinnerTop }]}>
+        <View style={styles.spinnerTrack} />
+        <Animated.View style={[styles.spinnerArc, { transform: [{ rotate }] }]} />
+      </View>
 
-        <View style={styles.hintReserved}>
-          {retry ? (
-            <TouchableOpacity onPress={onRetry} style={styles.retryButton}>
-              <Text style={styles.retryText}>재시도</Text>
-            </TouchableOpacity>
-          ) : showHint ? (
-            <Text style={styles.hint}>잠시만 기다려 주세요</Text>
-          ) : null}
-        </View>
+      {/* Hint / retry: absolute position */}
+      <View style={[styles.hintReserved, { top: hintTop }]}>
+        {retry ? (
+          <TouchableOpacity onPress={onRetry} style={styles.retryButton}>
+            <Text style={styles.retryText}>재시도</Text>
+          </TouchableOpacity>
+        ) : showHint ? (
+          <Text style={styles.hint}>잠시만 기다려 주세요</Text>
+        ) : null}
       </View>
     </View>
   );
@@ -81,25 +83,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: CREAM,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  center: {
-    alignItems: 'center',
-  },
-  wordmark: {
-    fontSize: 180,
-    fontWeight: '900',
-    color: TERRA,
-    letterSpacing: -2,
-    textAlign: 'center',
+  logo: {
+    position: 'absolute',
+    alignSelf: 'center',
+    width: LOGO_SIZE,
+    height: LOGO_SIZE,
   },
   spinnerContainer: {
+    position: 'absolute',
+    alignSelf: 'center',
     width: SPINNER_SIZE,
     height: SPINNER_SIZE,
-    marginTop: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   spinnerTrack: {
     position: 'absolute',
@@ -121,8 +116,9 @@ const styles = StyleSheet.create({
     borderLeftColor: 'transparent',
   },
   hintReserved: {
+    position: 'absolute',
+    alignSelf: 'center',
     height: 32,
-    marginTop: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
