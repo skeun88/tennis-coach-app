@@ -23,7 +23,6 @@ const LEVELS: MemberLevel[] = MEMBER_LEVELS;
 const DAYS_KR = ['일', '월', '화', '수', '목', '금', '토'];
 const PRESET_COLORS = [Colors.primary, Colors.info, Colors.navy, Colors.destructive, '#ea580c', '#0891b2', '#65a30d'];
 const PACKAGE_DURATIONS = ['30', '60', '90'];
-const TRIAL_DURATIONS = ['20', '30', '40', '50', '60'];
 
 function timeToMinutes(t: string): number {
   const [h, m] = t.slice(0, 5).split(':').map(Number);
@@ -319,6 +318,15 @@ export default function NewMemberScreen() {
   const [notes, setNotes] = useState('');
   // 체험 회원 토글
   const [isTrial, setIsTrial] = useState(false);
+  function toggleTrial(v: boolean) {
+    setIsTrial(v);
+    if (v) {
+      setScheduleType('by_date');
+      setByDateEntries([]);
+    } else {
+      setScheduleType('regular');
+    }
+  }
   // 추가 정보(이메일/생년월일/가입일/레벨/메모) 펼침
   const [extraInfoOpen, setExtraInfoOpen] = useState(false);
 
@@ -339,9 +347,7 @@ export default function NewMemberScreen() {
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // 체험 회원 일정
-  const [trialDate, setTrialDate] = useState(toKSTDateStr(new Date()));
-  const [trialTime, setTrialTime] = useState('10:00');
+  // 체험 레슨 설정 (레슨권 섹션)
   const [trialDuration, setTrialDuration] = useState('60');
   const [trialFee, setTrialFee] = useState('');
 
@@ -581,7 +587,7 @@ export default function NewMemberScreen() {
       remaining_credits: isTrial ? 0 : remainingCreditsInt,
       lesson_package_id: isTrial ? null : (selectedPackageId || null),
       is_trial: isTrial,
-      trial_started_at: isTrial ? trialDate : null,
+      trial_started_at: isTrial ? (byDateEntries[0]?.date ?? toKSTDateStr(new Date())) : null,
       trial_lesson_count: 0,
     }).select('id').single();
     if (error || !newMember) { setLoading(false); Alert.alert('오류', '회원 등록에 실패했습니다.'); return; }
@@ -594,22 +600,7 @@ export default function NewMemberScreen() {
     }
 
     let genResult: { successCount: number; errors: string[] } | null | undefined = null;
-    if (isTrial) {
-      const dur = parseInt(trialDuration) || 60;
-      const [hh, mm] = trialTime.split(':').map(Number);
-      const endMin = hh * 60 + mm + dur;
-      const startSt = trialTime + ':00';
-      const endSt = `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}:00`;
-      const { data: lesson, error: lErr } = await supabase.from('lessons')
-        .insert({ coach_id: userId, title: name.trim(), date: trialDate, start_time: startSt, end_time: endSt })
-        .select('id').single();
-      if (lErr || !lesson) {
-        genResult = { successCount: 0, errors: [lErr?.message ?? 'unknown'] };
-      } else {
-        const { error: lmErr } = await supabase.from('lesson_members').insert({ lesson_id: lesson.id, member_id: newMember.id });
-        genResult = { successCount: lmErr ? 0 : 1, errors: lmErr ? [lmErr.message] : [] };
-      }
-    } else if (scheduleType === 'regular' && allDaysHaveTimes && credits > 0) {
+    if (scheduleType === 'regular' && allDaysHaveTimes && credits > 0) {
       genResult = await generateScheduleLessons({
         coachId: userId, memberId: newMember.id, memberName: name.trim(),
         scheduleDays, dayTimes, lessonDuration: duration, totalCredits: credits,
@@ -618,11 +609,13 @@ export default function NewMemberScreen() {
         repeatType, repeatInterval,
       });
     } else if (scheduleType === 'by_date' && byDateEntries.length > 0) {
+      const triaDur = isTrial ? (parseInt(trialDuration) || 60) : duration;
+      const entries = isTrial ? byDateEntries.slice(0, 1) : byDateEntries;
       let successCount = 0;
       const errors: string[] = [];
-      for (const entry of byDateEntries) {
+      for (const entry of entries) {
         const [hh, mm] = entry.time.split(':').map(Number);
-        const endMin = hh * 60 + mm + duration;
+        const endMin = hh * 60 + mm + triaDur;
         const startSt = entry.time + ':00';
         const endSt = `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}:00`;
         const { data: lesson, error: lErr } = await supabase.from('lessons')
@@ -726,26 +719,7 @@ export default function NewMemberScreen() {
       }
     }
 
-    if (isTrial) {
-      const dur = parseInt(trialDuration) || 60;
-      const conflicts = await checkConflictsForDates(user.id, [{ date: trialDate, time: trialTime }], dur);
-      if (conflicts.length > 0) {
-        setLoading(false);
-        const conflictMsg = conflicts.slice(0, 3).map(cf => {
-          const d = new Date(cf.date + 'T00:00:00');
-          return d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }) + ' ' + cf.startTime + ' - ' + cf.memberName;
-        }).join('\n') + (conflicts.length > 3 ? ('\n외 ' + (conflicts.length - 3) + '건') : '');
-        Alert.alert(
-          '⚠️ 시간 충돌',
-          '선택한 날짜에 이미 레슨이 있습니다:\n\n' + conflictMsg + '\n\n그래도 등록하시겠어요?',
-          [
-            { text: '시간 변경', style: 'cancel' },
-            { text: '그대로 등록', style: 'destructive', onPress: async () => { setLoading(true); await doSave(user.id); } },
-          ]
-        );
-        return;
-      }
-    } else if (scheduleType === 'regular' && allDaysHaveTimes) {
+    if (scheduleType === 'regular' && allDaysHaveTimes) {
       const selectedPkg2 = lessonPackages.find(p => p.id === selectedPackageId);
       const duration = selectedPkg2?.duration_minutes ?? (parseInt(lessonDuration) || 60);
       const conflicts = await checkConflicts(user.id, scheduleDays, dayTimes, duration);
@@ -767,8 +741,8 @@ export default function NewMemberScreen() {
       }
     } else if (scheduleType === 'by_date' && byDateEntries.length > 0) {
       const selectedPkg2 = lessonPackages.find(p => p.id === selectedPackageId);
-      const duration = selectedPkg2?.duration_minutes ?? (parseInt(lessonDuration) || 60);
-      const conflicts = await checkConflictsForDates(user.id, byDateEntries, duration);
+      const duration = isTrial ? (parseInt(trialDuration) || 60) : (selectedPkg2?.duration_minutes ?? (parseInt(lessonDuration) || 60));
+      const conflicts = await checkConflictsForDates(user.id, isTrial ? byDateEntries.slice(0, 1) : byDateEntries, duration);
       if (conflicts.length > 0) {
         setLoading(false);
         const conflictMsg = conflicts.slice(0, 3).map(cf => {
@@ -802,61 +776,24 @@ export default function NewMemberScreen() {
           <View style={trialStyles.toggleRow}>
             <TouchableOpacity
               style={[trialStyles.toggleBtn, !isTrial && trialStyles.toggleBtnActive]}
-              onPress={() => setIsTrial(false)}
+              onPress={() => toggleTrial(false)}
             >
               <Ionicons name="person-circle" size={16} color={!isTrial ? '#fff' : Colors.mutedFg} />
               <Text style={[trialStyles.toggleBtnText, !isTrial && trialStyles.toggleBtnTextActive]}>정규 회원</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[trialStyles.toggleBtn, isTrial && trialStyles.toggleBtnTrial]}
-              onPress={() => setIsTrial(true)}
+              onPress={() => toggleTrial(true)}
             >
               <Ionicons name="star-half" size={16} color={isTrial ? '#fff' : Colors.mutedFg} />
               <Text style={[trialStyles.toggleBtnText, isTrial && trialStyles.toggleBtnTextActive]}>체험 회원</Text>
             </TouchableOpacity>
           </View>
           {isTrial && (
-            <>
-              <View style={[trialStyles.trialNotice, { marginBottom: 12 }]}>
-                <Ionicons name="information-circle-outline" size={14} color="#52616B" />
-                <Text style={trialStyles.trialNoticeText}>체험 회원은 크레딧 없이 1회 레슨만 생성돼요.</Text>
-              </View>
-              <Text style={styles.label}>레슨 날짜</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="YYYY-MM-DD"
-                value={trialDate}
-                onChangeText={v => setTrialDate(formatDate(v))}
-              />
-              <Text style={styles.label}>시작 시간</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="HH:MM (예: 10:00)"
-                value={trialTime}
-                onChangeText={setTrialTime}
-                keyboardType="numbers-and-punctuation"
-              />
-              <Text style={styles.label}>소요 시간</Text>
-              <View style={[styles.intervalRow, { marginBottom: 12 }]}>
-                {TRIAL_DURATIONS.map(d => (
-                  <TouchableOpacity
-                    key={d}
-                    style={[styles.intervalBtn, trialDuration === d && styles.intervalBtnActive]}
-                    onPress={() => setTrialDuration(d)}
-                  >
-                    <Text style={[styles.intervalBtnText, trialDuration === d && styles.intervalBtnTextActive]}>{d}분</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <Text style={styles.label}>체험 레슨비 <Text style={styles.labelHint}>(선택)</Text></Text>
-              <TextInput
-                style={[styles.input, { marginBottom: 4 }]}
-                placeholder="예: 30000"
-                value={trialFee}
-                onChangeText={setTrialFee}
-                keyboardType="number-pad"
-              />
-            </>
+            <View style={[trialStyles.trialNotice, { marginBottom: 12 }]}>
+              <Ionicons name="information-circle-outline" size={14} color="#52616B" />
+              <Text style={trialStyles.trialNoticeText}>체험 회원은 1회 레슨만 생성돼요. 아래에서 레슨 설정을 완료해주세요.</Text>
+            </View>
           )}
           <Text style={styles.label}>이름 *</Text>
           <TextInput style={styles.input} placeholder="홍길동" value={name} onChangeText={setName} />
@@ -892,8 +829,42 @@ export default function NewMemberScreen() {
           )}
         </View>
 
-        {/* 레슨권 선택 (체험 회원이면 스킵) */}
-        {!isTrial && (
+        {/* 레슨권 선택 */}
+        {isTrial ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>체험 레슨 설정</Text>
+          <View style={[styles.packageCard, { width: '100%', borderColor: '#52616B', borderWidth: 2, backgroundColor: '#52616B' + '12' }]}>
+            <View style={styles.packageCardHeader}>
+              <View style={[styles.packageDot, { backgroundColor: '#52616B' }]} />
+              <Text style={[styles.packageTitle, { color: Colors.foreground }]}>체험 레슨권</Text>
+              <View style={[styles.packageCheckmark, { backgroundColor: '#52616B' }]}>
+                <Ionicons name="checkmark" size={13} color="#fff" />
+              </View>
+            </View>
+            <Text style={styles.packageMeta}>1회 체험 레슨</Text>
+          </View>
+          <Text style={[styles.label, { marginTop: 12 }]}>소요 시간</Text>
+          <View style={[styles.intervalRow, { marginBottom: 12 }]}>
+            {['30', '40', '50', '60', '90'].map(d => (
+              <TouchableOpacity
+                key={d}
+                style={[styles.intervalBtn, trialDuration === d && styles.intervalBtnActive]}
+                onPress={() => setTrialDuration(d)}
+              >
+                <Text style={[styles.intervalBtnText, trialDuration === d && styles.intervalBtnTextActive]}>{d}분</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={styles.label}>체험 레슨비 <Text style={styles.labelHint}>(선택)</Text></Text>
+          <TextInput
+            style={styles.input}
+            placeholder="예: 30000"
+            value={trialFee}
+            onChangeText={setTrialFee}
+            keyboardType="number-pad"
+          />
+        </View>
+        ) : (
         <View
           style={[styles.section, packageHighlight && styles.sectionHighlight]}
           onLayout={(e) => setPackageSectionY(e.nativeEvent.layout.y)}
@@ -985,8 +956,7 @@ export default function NewMemberScreen() {
         </View>
         )}
 
-        {/* 일정 설정 (정규 회원만) */}
-        {!isTrial && (
+        {/* 일정 설정 */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>언제 레슨하나요?</Text>
           <ScheduleSection
@@ -1002,6 +972,8 @@ export default function NewMemberScreen() {
             onStartDateChange={setLessonStartDate}
             startDateLabel="첫 레슨 날짜"
             onDayAdded={(day) => setTimeout(() => fetchAvailableSlots(day), 0)}
+            hideRegularOption={isTrial}
+            lessonDuration={isTrial ? parseInt(trialDuration) : undefined}
           />
           {todayTimesAllPast && scheduleType === 'regular' && (
             <View style={styles.inlineNotice}>
@@ -1010,7 +982,6 @@ export default function NewMemberScreen() {
             </View>
           )}
         </View>
-        )}
 
         {/* 등록 요약 */}
         <View style={styles.summaryBox}>
@@ -1019,7 +990,7 @@ export default function NewMemberScreen() {
           </Text>
           {isTrial ? (
             <>
-              {trialDate ? <Text style={styles.summaryLine}>{new Date(trialDate + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })} {trialTime} · {trialDuration}분</Text> : null}
+              {byDateEntries[0] ? <Text style={styles.summaryLine}>{new Date(byDateEntries[0].date + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })} {byDateEntries[0].time} · {trialDuration}분</Text> : null}
               <Text style={styles.summaryCount}>체험 레슨 1회 생성됩니다.</Text>
             </>
           ) : (

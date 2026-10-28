@@ -34,6 +34,7 @@ interface Props {
   onStartDateChange: (date: string) => void;
   startDateLabel?: string;
   hideNeverOption?: boolean;
+  hideRegularOption?: boolean;
   byDateContent?: React.ReactNode;
   onDayAdded?: (day: number) => void;
   lessonDuration?: number;
@@ -58,6 +59,7 @@ export function ScheduleSection({
   onStartDateChange,
   startDateLabel = '첫 레슨 날짜',
   hideNeverOption = false,
+  hideRegularOption = false,
   byDateContent,
   onDayAdded,
   lessonDuration,
@@ -139,7 +141,7 @@ export function ScheduleSection({
   }
 
   const options: { key: ScheduleType; label: string; icon: string }[] = [
-    { key: 'regular', label: '매주 같은 요일', icon: 'repeat' },
+    ...(hideRegularOption ? [] : [{ key: 'regular' as const, label: '매주 같은 요일', icon: 'repeat' }]),
     { key: 'by_date', label: '날짜 직접 선택', icon: 'calendar' },
     ...(hideNeverOption ? [] : [{ key: 'later' as const, label: '나중에 설정', icon: 'time-outline' }]),
   ];
