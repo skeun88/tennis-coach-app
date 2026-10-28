@@ -3921,11 +3921,11 @@ const styles = StyleSheet.create({
   confirmBtnTPText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   // 메시지 탭 배지
   unreadBadge: {
-    position: 'absolute', top: 0, right: 0,
-    minWidth: 12, height: 12, borderRadius: 6,
+    position: 'absolute', top: 2, right: 2,
+    minWidth: 14, height: 14, borderRadius: 7,
     backgroundColor: '#C0755A',
     justifyContent: 'center', alignItems: 'center',
-    paddingHorizontal: 2,
+    paddingHorizontal: 3,
   },
   unreadBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
   // 일정 설정 행
