@@ -66,8 +66,8 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (updateChecked) SplashScreen.hideAsync().catch(() => {});
-  }, [updateChecked]);
+    if (updateChecked && fontsLoaded) SplashScreen.hideAsync().catch(() => {});
+  }, [updateChecked, fontsLoaded]);
 
   const setNavReady = useCallback(() => {
     setIsNavigationReady(true);
