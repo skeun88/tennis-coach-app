@@ -297,6 +297,7 @@ export default function PlanDetailScreen() {
       }
       setInputFocused(false);
       setEditingSection(null);
+      if (isSent) Alert.alert('저장 완료', '수정 내용이 저장되었습니다.');
     } catch {
       setSaveError(true);
     } finally {
@@ -597,20 +598,20 @@ export default function PlanDetailScreen() {
 
           {/* 4. 개인 맞춤 연습 플랜 */}
           {Array.isArray(plan.drill_suggestions) && plan.drill_suggestions.length > 0 && (
-            <View style={s.drillSection}>
-              <View style={s.drillSectionHeader}>
+            <View style={s.card}>
+              <View style={s.cardTitleRow}>
                 <Ionicons name="barbell-outline" size={18} color={TERRACOTTA} />
-                <Text style={[s.cardTitle, { flex: 1 }]}>개인 맞춤 연습 플랜</Text>
+                <Text style={s.cardTitle}>개인 맞춤 연습 플랜</Text>
                 {editingSection === 'drill_suggestions'
                   ? <EditBadge />
                   : <PencilBtn onPress={startEditDrills} />}
               </View>
               {editingSection === 'drill_suggestions'
                 ? editingDrills.map((drill, i) => (
-                  <DrillEditCard key={i} drill={drill} onChange={(f, v) => updateDrill(i, f, v)} />
+                  <DrillEditCard key={i} drill={drill} onChange={(f, v) => updateDrill(i, f, v)} isLast={i === editingDrills.length - 1} />
                 ))
-                : plan.drill_suggestions.map((drill, i) => (
-                  <DrillCardComponent key={i} drill={drill} />
+                : plan.drill_suggestions!.map((drill, i) => (
+                  <DrillInlineRow key={i} drill={drill} isLast={i === plan.drill_suggestions!.length - 1} />
                 ))
               }
             </View>
@@ -694,7 +695,7 @@ export default function PlanDetailScreen() {
             </View>
           ) : null}
 
-          <View style={{ height: editingSection ? 20 : 100 }} />
+          <View style={{ height: editingSection ? 20 : isSent ? 20 : 100 }} />
         </ScrollView>
         </Animated.View>
 
@@ -728,18 +729,13 @@ export default function PlanDetailScreen() {
         )}
       </KeyboardAvoidingView>
 
-      {/* 하단 전송 버튼 — 편집 중 숨김 */}
-      {!editingSection && (
+      {/* 하단 전송 버튼 — 편집 중 또는 전송 완료 시 숨김 */}
+      {!editingSection && !isSent && (
         <View style={s.bottomBar}>
           <SafeAreaView>
             {!hasReport ? (
               <View style={[s.sendBtn, s.sendBtnDisabled]}>
                 <Text style={s.sendBtnTextDisabled}>리포트 생성 중...</Text>
-              </View>
-            ) : isSent ? (
-              <View style={[s.sendBtn, s.sendBtnDone]}>
-                <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
-                <Text style={[s.sendBtnText, { color: Colors.success }]}>전송 완료</Text>
               </View>
             ) : (
               <TouchableOpacity
@@ -799,13 +795,13 @@ function ImprovementRow({ text, index }: { text: string; index: number }) {
   );
 }
 
-function DrillCardComponent({ drill }: { drill: DrillSuggestion }) {
+function DrillInlineRow({ drill, isLast }: { drill: DrillSuggestion; isLast: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const d = drill as any;
   const hasMeta = drill.reps || d.duration || d.frequency;
   const hasDetail = drill.purpose || drill.method || drill.court_adaptation || hasMeta;
   return (
-    <View style={s.drillCard}>
+    <View style={[s.drillInlineRow, !isLast && s.drillInlineRowBorder]}>
       <TouchableOpacity
         style={s.drillHeaderRow}
         onPress={() => hasDetail && setExpanded(v => !v)}
@@ -854,10 +850,10 @@ function DrillCardComponent({ drill }: { drill: DrillSuggestion }) {
 }
 
 function DrillEditCard({
-  drill, onChange,
-}: { drill: DrillSuggestion; onChange: (field: keyof DrillSuggestion, value: string) => void }) {
+  drill, onChange, isLast,
+}: { drill: DrillSuggestion; onChange: (field: keyof DrillSuggestion, value: string) => void; isLast: boolean }) {
   return (
-    <View style={[s.drillCard, s.drillCardEditing]}>
+    <View style={[s.drillInlineRow, s.drillCardEditing, !isLast && s.drillInlineRowBorder]}>
       <TextInput
         style={[s.drillEditField, s.drillEditName]}
         value={drill.name}
@@ -1032,16 +1028,16 @@ const s = StyleSheet.create({
 
   achieveRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 8 },
   achieveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: TERRACOTTA, marginTop: 9, flexShrink: 0 },
-  achieveTitle: { fontSize: 14, fontWeight: '700', color: DARK_BROWN, marginBottom: 2 },
-  achieveBody: { fontSize: 14, color: DARK_BROWN, lineHeight: 21 },
+  achieveTitle: { fontSize: 15, fontWeight: '800', color: DARK_BROWN, marginBottom: 2 },
+  achieveBody: { fontSize: 14, color: '#6B5445', lineHeight: 21 },
 
   improveRow: { paddingVertical: 8 },
   improveRowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#EDE5DE' },
-  improveTitle: { fontSize: 14, fontWeight: '700', color: DARK_BROWN, marginBottom: 2 },
-  improveBody: { fontSize: 14, color: DARK_BROWN, lineHeight: 21 },
+  improveTitle: { fontSize: 15, fontWeight: '800', color: DARK_BROWN, marginBottom: 2 },
+  improveBody: { fontSize: 14, color: '#6B5445', lineHeight: 21 },
 
-  drillSection: { gap: 10 },
-  drillSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
+  drillInlineRow: { paddingVertical: 12 },
+  drillInlineRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#EDE5DE' },
   drillCard: {
     backgroundColor: '#fff', borderRadius: 18, padding: 18,
     shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 5,
