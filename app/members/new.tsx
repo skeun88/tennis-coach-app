@@ -349,7 +349,10 @@ export default function NewMemberScreen() {
 
   // 체험 레슨 설정 (레슨권 섹션)
   const [trialDuration, setTrialDuration] = useState('60');
+  const [trialDurationCustom, setTrialDurationCustom] = useState('');
   const [trialFee, setTrialFee] = useState('');
+  const TRIAL_DURATION_PRESETS = ['20', '30', '40', '50', '60'];
+  const isTrialCustomDuration = !TRIAL_DURATION_PRESETS.includes(trialDuration);
 
   // 반복 설정
   const [repeatType, setRepeatType] = useState<'none' | 'weekly' | 'custom'>('weekly');
@@ -844,17 +847,42 @@ export default function NewMemberScreen() {
             <Text style={styles.packageMeta}>1회 체험 레슨</Text>
           </View>
           <Text style={[styles.label, { marginTop: 12 }]}>소요 시간</Text>
-          <View style={[styles.intervalRow, { marginBottom: 12 }]}>
-            {['30', '40', '50', '60', '90'].map(d => (
+          <View style={[styles.intervalRow, { marginBottom: isTrialCustomDuration ? 8 : 12, flexWrap: 'wrap' }]}>
+            {TRIAL_DURATION_PRESETS.map(d => (
               <TouchableOpacity
                 key={d}
                 style={[styles.intervalBtn, trialDuration === d && styles.intervalBtnActive]}
-                onPress={() => setTrialDuration(d)}
+                onPress={() => { setTrialDuration(d); setTrialDurationCustom(''); }}
               >
                 <Text style={[styles.intervalBtnText, trialDuration === d && styles.intervalBtnTextActive]}>{d}분</Text>
               </TouchableOpacity>
             ))}
+            <TouchableOpacity
+              style={[styles.intervalBtn, isTrialCustomDuration && styles.intervalBtnActive]}
+              onPress={() => {
+                setTrialDuration(trialDurationCustom || 'custom');
+              }}
+            >
+              <Text style={[styles.intervalBtnText, isTrialCustomDuration && styles.intervalBtnTextActive]}>직접 입력</Text>
+            </TouchableOpacity>
           </View>
+          {isTrialCustomDuration && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 }}>
+              <TextInput
+                style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                placeholder="예: 45"
+                value={trialDurationCustom}
+                onChangeText={v => {
+                  const num = v.replace(/[^0-9]/g, '');
+                  setTrialDurationCustom(num);
+                  if (num && parseInt(num) >= 1) setTrialDuration(num);
+                }}
+                keyboardType="number-pad"
+                autoFocus
+              />
+              <Text style={{ fontSize: 15, color: Colors.mutedFg, fontWeight: '600' }}>분</Text>
+            </View>
+          )}
           <Text style={styles.label}>체험 레슨비 <Text style={styles.labelHint}>(선택)</Text></Text>
           <TextInput
             style={styles.input}
