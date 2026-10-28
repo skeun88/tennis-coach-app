@@ -21,7 +21,7 @@
       "autoIncrement": true
     },
     "production": {
-      "autoIncrement": false,
+      "autoIncrement": true,
       "channel": "production",
       "env": {
         "EXPO_PUBLIC_IS_BETA": "false",
