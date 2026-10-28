@@ -278,8 +278,8 @@ export default function NewMemberScreen() {
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
   useEffect(() => {
-    const show = Keyboard.addListener('keyboardDidShow', () => setIsKeyboardVisible(true));
-    const hide = Keyboard.addListener('keyboardDidHide', () => setIsKeyboardVisible(false));
+    const show = Keyboard.addListener('keyboardWillShow', () => setIsKeyboardVisible(true));
+    const hide = Keyboard.addListener('keyboardWillHide', () => setIsKeyboardVisible(false));
     return () => { show.remove(); hide.remove(); };
   }, []);
 
