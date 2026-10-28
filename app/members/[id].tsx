@@ -3921,8 +3921,8 @@ const styles = StyleSheet.create({
   confirmBtnTPText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   // 메시지 탭 배지
   unreadBadge: {
-    position: 'absolute', top: -6, right: -6,
-    minWidth: 14, height: 14, borderRadius: 7,
+    position: 'absolute', top: 0, right: 0,
+    minWidth: 12, height: 12, borderRadius: 6,
     backgroundColor: '#C0755A',
     justifyContent: 'center', alignItems: 'center',
     paddingHorizontal: 2,
