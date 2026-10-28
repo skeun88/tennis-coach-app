@@ -440,9 +440,9 @@ export default function SelectPlanScreen() {
           )}
 
           {isScheduledDowngradeToBasic ? (
-            <View style={s.statusView}>
+            <View style={[s.statusView, s.statusViewScheduled]}>
               <Ionicons name="checkmark-circle" size={16} color={TERRACOTTA} />
-              <Text style={s.statusViewText}>변경 예약 완료</Text>
+              <Text style={s.statusViewText}>베이직으로 변경 완료예정</Text>
             </View>
           ) : isProAndLoadingWillRenew ? (
             <View style={[s.paidCta, s.paidCtaDisabled]}>
@@ -693,6 +693,7 @@ const s = StyleSheet.create({
   },
   statusViewCurrent: { borderColor: TERRACOTTA + '40' },
   statusViewPro: { borderColor: DARK_BROWN + '30' },
+  statusViewScheduled: { backgroundColor: TERRACOTTA + '08' },
   statusViewText: { fontSize: 14, color: TERRACOTTA, fontWeight: '700' },
 
   freeCta: {
