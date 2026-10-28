@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Modal, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { Colors } from '../lib/theme';
@@ -61,14 +61,13 @@ export default function MemberVerbalConsentSheet({
     setSaving(true);
     try {
       await insertVerbalConsents(memberId);
-    } catch (e: any) {
-      // DB 실패해도 구두 동의는 확인된 것으로 처리 (UX 우선)
-      // 에러는 로깅해서 추적 가능하게 유지
-      console.error('[MemberVerbalConsent] handleConfirm error:', e?.message ?? e);
-    } finally {
       setSaving(false);
+      onConfirm();
+    } catch (e: any) {
+      setSaving(false);
+      console.error('[MemberVerbalConsent] handleConfirm error:', e?.message ?? e);
+      Alert.alert('동의 저장 실패', '네트워크 오류가 발생했습니다.\n잠시 후 다시 시도해주세요.');
     }
-    onConfirm();
   }
 
   return (

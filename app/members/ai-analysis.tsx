@@ -248,13 +248,7 @@ export default function AIAnalysisScreen() {
   const MEMBER_VERBAL_CONSENT_KEY = `kerri_member_verbal_consent_v1_${memberId}`;
 
   async function checkMemberConsent() {
-    // 로컬 캐시 우선 확인
-    const local = await AsyncStorage.getItem(MEMBER_VERBAL_CONSENT_KEY);
-    if (local === '1') {
-      setMemberConsentOk(true);
-      return;
-    }
-    // DB 확인 (구두 동의: member_voice_ai 또는 레거시 member, guardian)
+    // 항상 DB 기준으로 확인 (이전 버그로 AsyncStorage만 저장되고 DB는 없는 경우 처리)
     const { data: voiceConsent } = await supabase
       .from('ai_consents')
       .select('id')
@@ -264,8 +258,12 @@ export default function AIAnalysisScreen() {
       .maybeSingle();
     if (voiceConsent) {
       await AsyncStorage.setItem(MEMBER_VERBAL_CONSENT_KEY, '1');
+      setMemberConsentOk(true);
+    } else {
+      // DB에 없으면 캐시도 무효화
+      await AsyncStorage.removeItem(MEMBER_VERBAL_CONSENT_KEY);
+      setMemberConsentOk(false);
     }
-    setMemberConsentOk(!!voiceConsent);
   }
 
   useEffect(() => {
