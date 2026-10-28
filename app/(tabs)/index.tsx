@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity,
-  Alert, ActivityIndicator, Modal, AppState,
+  Alert, ActivityIndicator, Modal, AppState, Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -105,6 +105,9 @@ export default function HomeScreen() {
   const [trialCount, setTrialCount] = useState(0);
   const [trialModal, setTrialModal] = useState(false);
   const [trialMembers, setTrialMembers] = useState<TrialMember[]>([]);
+  const [trialCardShown, setTrialCardShown] = useState(false);
+  const trialCardOpacity = useRef(new Animated.Value(1)).current;
+  const prevTrialCountRef = useRef(0);
 
   // ③ 관심 회원 (member_interest)
   const [interestList, setInterestList] = useState<InterestMember[]>([]);
@@ -254,6 +257,21 @@ export default function HomeScreen() {
   }
 
   useFocusEffect(useCallback(() => { loadAll(); }, []));
+
+  // 체험 회원 카드 페이드 인/아웃
+  useEffect(() => {
+    const prev = prevTrialCountRef.current;
+    prevTrialCountRef.current = trialCount;
+    if (trialCount > 0 && prev === 0) {
+      setTrialCardShown(true);
+      trialCardOpacity.setValue(0);
+      Animated.timing(trialCardOpacity, { toValue: 1, duration: 280, useNativeDriver: true }).start();
+    } else if (trialCount === 0 && prev > 0) {
+      Animated.timing(trialCardOpacity, { toValue: 0, duration: 280, useNativeDriver: true }).start(() => {
+        setTrialCardShown(false);
+      });
+    }
+  }, [trialCount]);
 
   // 한국 자정(KST 00:00) 기준 자동 갱신 타이머
   useEffect(() => {
@@ -423,8 +441,12 @@ export default function HomeScreen() {
         }, { onConflict: 'lesson_id,member_id' });
         // 이전에 차감 안 됐을 때만 차감 (atomic RPC 사용 — stale read 방지)
         if (!wasDeducted) {
-          await supabase.rpc('adjust_remaining_credits', { p_member_id: card.memberId, p_delta: -1 });
-          if (card.remainingCredits === 0) {
+          // remainingCredits > 0 일 때만 차감 (0이면 체험 완료 케이스 — DB constraint 방어)
+          if (card.remainingCredits > 0) {
+            await supabase.rpc('adjust_remaining_credits', { p_member_id: card.memberId, p_delta: -1 });
+          }
+          // 체험 회원은 잔여 없음 알림 억제 (1회 체험 완료가 정상 케이스)
+          if (card.remainingCredits === 0 && !card.isTrial) {
             Alert.alert('잔여 레슨 횟수가 없습니다.', '이 회원의 레슨 횟수가 없습니다.\n충전이 필요합니다.');
           }
 
@@ -432,8 +454,8 @@ export default function HomeScreen() {
           const newRemaining = Math.max(0, card.remainingCredits - 1);
           notifyLessonCountUpdate(card.memberId, newRemaining).catch(() => {});
 
-          // PN-04: 잔여 1회 시 코치에게 재등록 알림
-          if (newRemaining === 1 && userId) {
+          // PN-04: 잔여 1회 시 코치에게 재등록 알림 (체험 회원 제외)
+          if (newRemaining === 1 && userId && !card.isTrial) {
             notifyReregister(userId, card.memberName, card.memberId).catch(() => {});
           }
         }
@@ -687,17 +709,19 @@ export default function HomeScreen() {
         </View>
 
         {/* ── 섹션3: 알림 카드들 ── */}
-        {trialCount > 0 && (
-          <TouchableOpacity style={styles.alertCard} onPress={() => setTrialModal(true)} activeOpacity={0.85}>
-            <View style={[styles.alertIconWrap, { backgroundColor: '#FEF3C7' }]}>
-              <Ionicons name="star-half" size={18} color="#D97706" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.alertTitle}>체험 중 {trialCount}명</Text>
-              <Text style={styles.alertSub}>정규 전환 안내 확인</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color="#8B7355" />
-          </TouchableOpacity>
+        {trialCardShown && (
+          <Animated.View style={{ opacity: trialCardOpacity }}>
+            <TouchableOpacity style={styles.alertCard} onPress={() => setTrialModal(true)} activeOpacity={0.85}>
+              <View style={[styles.alertIconWrap, { backgroundColor: '#FEF3C7' }]}>
+                <Ionicons name="star-half" size={18} color="#D97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.alertTitle}>체험 중 {trialCount}명</Text>
+                <Text style={styles.alertSub}>정규 전환 안내 확인</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color="#8B7355" />
+            </TouchableOpacity>
+          </Animated.View>
         )}
 
         {/* ── 섹션4: 다음 레슨 브리핑 ── */}
@@ -781,9 +805,11 @@ export default function HomeScreen() {
                     </View>
                     <Text style={styles.lessonPackageName} numberOfLines={1}>{card.lessonPackageName}</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Ionicons name="layers-outline" size={12} color={card.remainingCredits <= 1 ? '#D9534F' : '#8B7355'} />
-                      <Text style={[styles.creditsText, { color: card.remainingCredits <= 1 ? '#D9534F' : '#8B7355' }]}>
-                        잔여 {card.remainingCredits}회
+                      <Ionicons name="layers-outline" size={12} color={card.isTrial ? '#D97706' : (card.remainingCredits <= 1 ? '#D9534F' : '#8B7355')} />
+                      <Text style={[styles.creditsText, { color: card.isTrial ? '#D97706' : (card.remainingCredits <= 1 ? '#D9534F' : '#8B7355') }]}>
+                        {card.isTrial
+                          ? (card.remainingCredits > 0 ? `체험 ${card.remainingCredits}회` : '체험 완료')
+                          : `잔여 ${card.remainingCredits}회`}
                       </Text>
                       {card.isAbsent && card.deductionType && (
                         <View style={styles.deductionBadge}>
