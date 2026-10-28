@@ -503,7 +503,7 @@ ${transcript}`
         .limit(3),
       // 이전 레슨 플랜 (비교용): 현재 분석 중인 플랜을 제외한 가장 최근 플랜
       supabase.from('lesson_plans')
-        .select('id, next_goals, coach_next_goals, next_goals_saved')
+        .select('id, next_goals, coach_next_goals, next_goals_saved, improvement_points')
         .eq('member_id', memberId)
         .eq('coach_id', coachId)
         .eq('status', 'completed')
@@ -534,6 +534,9 @@ ${transcript}`
             ? prevPlan.coach_next_goals
             : (Array.isArray(prevPlan.next_goals) ? prevPlan.next_goals : [])
         )
+      : []
+    const prevImprovementPoints: string[] = prevPlan && Array.isArray(prevPlan.improvement_points)
+      ? prevPlan.improvement_points
       : []
 
     // lessonRatio는 참고용으로만 사용 — 비율이 낮아도 분석 진행 (있는 레슨 내용은 그대로 반영)
@@ -609,8 +612,8 @@ ${transcript}`
       `[${i + 1}회 전 - ${new Date(p.created_at).toLocaleDateString('ko-KR')}]\n요약: ${p.summary}\n다음목표: ${Array.isArray(p.next_goals) ? p.next_goals.join(', ') : p.next_goals}`
     ).join('\n\n')
 
-    const prevGoalsSection = prevGoals.length > 0
-      ? `\n\n## 이전 레슨 목표 달성도 평가\n이전 목표: ${prevGoals.join(', ')}\n위 목표 각각에 대해 이번 레슨에서의 달성 여부를 lesson_comparison 배열로 평가해주세요.\n(improved=개선됨, same=동일, regressed=퇴보)`
+    const prevGoalsSection = (prevGoals.length > 0 || prevImprovementPoints.length > 0)
+      ? `\n\n## 이전 레슨 대비 변화 평가\n이전 레슨 교정 포인트: ${prevImprovementPoints.join(', ') || '없음'}\n이전 레슨 다음 목표: ${prevGoals.join(', ') || '없음'}\n이번 레슨에서 위 교정 포인트나 목표와 공통으로 다룬 기술이 있으면 lesson_comparison을 작성하세요.\n겹치는 기술이 전혀 없으면 lesson_comparison은 반드시 빈 배열([])로 반환하세요.\n단순히 교정 지시가 반복됐다는 이유로 improved를 사용하지 말 것. 이번 레슨에서 실제 향상이 확인된 경우에만 improved 사용.\n(status: improved=향상됨, same=동일, regressed=퇴보)`
       : ''
 
     // summary 권장 분량: 녹음 길이 기반

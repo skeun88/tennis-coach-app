@@ -510,7 +510,7 @@ export default function PlanDetailScreen() {
                 const status: string = c.status ?? '';
                 const isImproved = status === 'improved';
                 const isNeedsWork = status === 'needs_work' || status === 'regressed';
-                const badgeLabel = isImproved ? '개선 확인' : isNeedsWork ? '반복 교정 필요' : '비교 기록 없음';
+                const badgeLabel = isImproved ? '좋아졌어요' : isNeedsWork ? '더 연습해요' : '비교 기록 없음';
                 return (
                   <View key={i} style={[s.compRow, i < (plan.lesson_comparison?.length ?? 0) - 1 && s.compRowBorder]}>
                     <View style={s.compTopRow}>
