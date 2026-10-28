@@ -143,6 +143,7 @@ export default function ScheduleScreen() {
   const [monthAbsenceCount, setMonthAbsenceCount] = useState(0);
   const [activeMemberIds, setActiveMemberIds] = useState<Set<string>>(new Set());
   const [monthYear, setMonthYear] = useState(() => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() }; });
+  const monthPreloadedRef = useRef(false);
   const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [today, setToday] = useState(getTodayKST);
@@ -417,18 +418,26 @@ ${rejectMsg.trim()}`
     const firstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`;
     const lastDay = new Date(year, month + 1, 0);
     const lastDayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`;
-    const { data, error } = await supabase.from('lessons').select('*')
-      .eq('coach_id', user.id).gte('date', firstDay).lte('date', lastDayStr).order('start_time');
-    if (error) { console.error('[스케줄/월] 조회 실패:', error); setLoadError(true); return false; }
-    const withNames = await attachMemberNames(data ?? []);
+
+    // 레슨 조회 + 활성 회원 조회 병렬 실행
+    const [lessonResult, activeMembersResult] = await Promise.all([
+      supabase.from('lessons').select('*')
+        .eq('coach_id', user.id).gte('date', firstDay).lte('date', lastDayStr).order('start_time'),
+      supabase.from('members').select('id').eq('coach_id', user.id).eq('is_active', true),
+    ]);
+
+    if (lessonResult.error) { console.error('[스케줄/월] 조회 실패:', lessonResult.error); setLoadError(true); return false; }
+
+    const withNames = await attachMemberNames(lessonResult.data ?? []);
     const map = new Map<string, LessonWithMembers[]>();
     for (const l of withNames) {
       if (!map.has(l.date)) map.set(l.date, []);
       map.get(l.date)!.push(l);
     }
     setMonthLessons(map);
+    setActiveMemberIds(new Set((activeMembersResult.data ?? []).map((m: any) => m.id)));
 
-    // 결석 수 계산
+    // 결석 수 계산 (회원 이름 붙인 후 lessonId 확정돼서 순차 불가피)
     const lessonIds = withNames.map(l => l.id);
     if (lessonIds.length > 0) {
       const { data: absentAtt } = await supabase.from('attendance').select('id').in('lesson_id', lessonIds).eq('status', '결석');
@@ -437,10 +446,6 @@ ${rejectMsg.trim()}`
       setMonthAbsenceCount(0);
     }
 
-    // 활성 회원 ID 목록 (비활성/삭제된 회원 제외)
-    const { data: activeMembers } = await supabase
-      .from('members').select('id').eq('coach_id', user.id).eq('is_active', true);
-    setActiveMemberIds(new Set((activeMembers ?? []).map((m: any) => m.id)));
     setLoadError(false);
     setInitialLoaded(true);
   }
@@ -520,6 +525,13 @@ ${rejectMsg.trim()}`
     }
     else if (activeTab === '주간') loadWeekLessons(newThisWeek);
     else { const d = new Date(); loadMonthLessons(d.getFullYear(), d.getMonth()); }
+
+    // 백그라운드 선로딩: 일일/주간 탭일 때 이번 달 월간 데이터 미리 fetch
+    if (activeTab !== '월간' && !monthPreloadedRef.current) {
+      monthPreloadedRef.current = true;
+      const d = new Date();
+      loadMonthLessons(d.getFullYear(), d.getMonth());
+    }
     loadPendingRequests();
     loadAvailability();
     // 회원 목록 로드
@@ -622,6 +634,7 @@ ${rejectMsg.trim()}`
       const newOffset = weekOffset - 1; setWeekOffset(newOffset); loadWeekLessons(getOffsetWeekDates(newOffset));
     } else {
       const d = monthYear.month === 0 ? { year: monthYear.year - 1, month: 11 } : { year: monthYear.year, month: monthYear.month - 1 };
+      monthPreloadedRef.current = true; // 다른 달로 이동 시 선로딩 재트리거 방지
       setMonthYear(d); loadMonthLessons(d.year, d.month);
     }
   }
@@ -632,6 +645,7 @@ ${rejectMsg.trim()}`
       const newOffset = weekOffset + 1; setWeekOffset(newOffset); loadWeekLessons(getOffsetWeekDates(newOffset));
     } else {
       const d = monthYear.month === 11 ? { year: monthYear.year + 1, month: 0 } : { year: monthYear.year, month: monthYear.month + 1 };
+      monthPreloadedRef.current = true; // 다른 달로 이동 시 선로딩 재트리거 방지
       setMonthYear(d); loadMonthLessons(d.year, d.month);
     }
   }
