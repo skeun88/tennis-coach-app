@@ -23,6 +23,7 @@ import ReportTopupModal from '../../components/ReportTopupModal';
 import CoachConsentModal, { AI_CONSENT_VERSION, COACH_CONSENT_STORAGE_KEY_PREFIX } from '../../components/CoachConsentModal';
 import MemberConsentRequestModal from '../../components/MemberConsentRequestModal';
 import MemberVerbalConsentSheet from '../../components/MemberVerbalConsentSheet';
+import SkeletonBox from '../../components/SkeletonBox';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
@@ -204,6 +205,13 @@ export default function AIAnalysisScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setCurrentCoachId(user.id);
+
+    // 회원 동의 캐시 먼저 적용 → 화면 진입 즉시 배지 표시 (UX 개선)
+    const cachedMemberConsent = await AsyncStorage.getItem(`kerri_member_verbal_consent_v1_${memberId}`);
+    if (cachedMemberConsent === '1') {
+      setMemberConsentOk(true);
+      setConsentCheckDone(true);
+    }
 
     // 1. 로컬 캐시 우선 확인 — 동의 후 DB 조회 실패해도 모달 재표시 방지
     const localConsent = await AsyncStorage.getItem(`${COACH_CONSENT_STORAGE_KEY_PREFIX}${user.id}`);
@@ -1473,20 +1481,21 @@ export default function AIAnalysisScreen() {
           </TouchableOpacity>
 
           {/* 5. 프로그레스 바 */}
-          {usageInfo && (
-            <View style={styles.usageBarTrack}>
+          <View style={styles.usageBarTrack}>
+            {usageInfo ? (
               <View
                 style={[
                   styles.usageBarFill,
                   { width: `${Math.min(usageInfo.used / Math.max(usageInfo.limit, 1) * 100, 100)}%` as any },
                 ]}
               />
-            </View>
-          )}
+            ) : null}
+          </View>
 
           {/* 6. 사용량 한 줄 */}
-          {usageInfo && (
-            <View style={styles.usageSummaryRow}>
+          <View style={styles.usageSummaryRow}>
+            {usageInfo ? (
+              <>
               <TouchableOpacity onPress={() => setTopupModalVisible(true)} activeOpacity={0.7}>
                 <Text style={styles.usageSummaryRemaining}>
                   AI 기록 {Math.max(0, usageInfo.limit - usageInfo.used)}회 남음
@@ -1497,8 +1506,11 @@ export default function AIAnalysisScreen() {
                   <Text style={styles.extraCreditText}>추가 {subscription!.extra_report_credits}회</Text>
                 </View>
               )}
-            </View>
-          )}
+              </>
+            ) : (
+              <SkeletonBox width={110} height={13} borderRadius={4} />
+            )}
+          </View>
         </View>
 
         {/* 직접 작성 - 얇은 액션 카드 */}
