@@ -167,7 +167,12 @@ export default function SelectPlanScreen() {
     }
     await refresh();
     if (isActive) {
-      router.replace('/subscription/manage');
+      const msg = isTrial
+        ? `${PLANS[planId].name} 플랜 무료 체험이 시작되었습니다.`
+        : `${PLANS[planId].name} 플랜으로 변경되었습니다.`;
+      Alert.alert('완료', msg, [
+        { text: '확인', onPress: () => router.replace('/subscription/manage') },
+      ]);
       return;
     }
 
