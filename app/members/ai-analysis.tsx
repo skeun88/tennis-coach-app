@@ -1538,13 +1538,13 @@ export default function AIAnalysisScreen() {
               <View style={styles.manualInner}>
                 {/* 헤더 */}
                 <View style={styles.manualHeader}>
+                  <TouchableOpacity onPress={handleCloseManualModal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={styles.manualHeaderBack}>
+                    <Ionicons name="chevron-back" size={24} color={Colors.foreground} />
+                  </TouchableOpacity>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.manualHeaderTitle}>레슨 기록</Text>
                     <Text style={styles.manualHeaderSub}>키워드 또는 직접 입력으로 레슨을 기록하세요.</Text>
                   </View>
-                  <TouchableOpacity onPress={handleCloseManualModal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Ionicons name="close" size={22} color={Colors.mutedFg} />
-                  </TouchableOpacity>
                 </View>
 
                 <ScrollView
@@ -2424,15 +2424,15 @@ const styles = StyleSheet.create({
   manualReportBtnTitle: { fontSize: 14, fontWeight: '700', color: Colors.foreground },
   manualReportBtnSub: { fontSize: 12, color: Colors.mutedFg, marginTop: 2 },
   // 레슨 메모 입력 모달
-  manualContainer: { flex: 1, backgroundColor: '#F8F9FA' },
+  manualContainer: { flex: 1, backgroundColor: '#F5F3F0' },
   manualInner: { flex: 1, flexDirection: 'column' },
   manualHeader: {
     flexDirection: 'row', alignItems: 'flex-start',
-    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.borderLight,
-    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16,
+    backgroundColor: '#F7F0E9',
     gap: 12,
   },
+  manualHeaderBack: { paddingTop: 1 },
   manualHeaderTitle: { fontSize: 17, fontWeight: '800', color: Colors.foreground, marginBottom: 4 },
   manualHeaderSub: { fontSize: 13, color: Colors.mutedFg, lineHeight: 19 },
   chipsScroll: { flexGrow: 0, flexShrink: 0 },
@@ -2451,9 +2451,9 @@ const styles = StyleSheet.create({
   kwChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   kwChip: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 11, paddingVertical: 5,
-    borderRadius: 18, borderWidth: 1, borderColor: '#E9E9E9',
-    backgroundColor: '#F8F8F7',
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 18, borderWidth: 1, borderColor: '#E2E2E2',
+    backgroundColor: '#FAFAF9',
   },
   kwChipSelected: { borderColor: Colors.primary, backgroundColor: Colors.primary },
   kwChipText: { fontSize: 13, fontWeight: '500', color: '#555555' },
@@ -2468,9 +2468,9 @@ const styles = StyleSheet.create({
   memoItemGoalText: { fontSize: 12, color: Colors.primary, marginTop: 2 },
   stepCard: {
     marginHorizontal: 16, marginTop: 10,
-    backgroundColor: '#FFFFFF', borderRadius: 12,
-    paddingHorizontal: 14, paddingVertical: 10,
-    borderWidth: 1, borderColor: '#E9E9E9',
+    backgroundColor: '#FFFFFF', borderRadius: 14,
+    paddingHorizontal: 14, paddingVertical: 12,
+    borderWidth: 1, borderColor: '#EBEBEB',
   },
   stepLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   stepTitle: { fontSize: 13, fontWeight: '700', color: '#282624', flex: 1 },
@@ -2573,18 +2573,18 @@ const styles = StyleSheet.create({
   manualBtnRow: {
     flexDirection: 'row', gap: 10,
     paddingHorizontal: 16, paddingVertical: 14,
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.borderLight,
-    backgroundColor: '#FFFFFF',
+    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E2E2E2',
+    backgroundColor: '#F5F3F0',
   },
   directBtn: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5, borderColor: Colors.primary, borderRadius: 12,
-    paddingVertical: 12,
+    borderWidth: 1.5, borderColor: Colors.primary, borderRadius: 14,
+    paddingVertical: 13,
   },
   directBtnText: { fontSize: 14, fontWeight: '600', color: Colors.primary },
   aiBtn: {
     flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 12,
+    backgroundColor: Colors.primary, borderRadius: 14, paddingVertical: 13,
   },
   aiBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   btnDisabled: { opacity: 0.5 },
