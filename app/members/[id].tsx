@@ -3922,7 +3922,7 @@ const styles = StyleSheet.create({
   // 메시지 탭 배지
   unreadBadge: {
     position: 'absolute', top: 2, right: 2,
-    minWidth: 15, height: 15, borderRadius: 7.5,
+    minWidth: 16, height: 16, borderRadius: 8,
     backgroundColor: '#C0755A',
     justifyContent: 'center', alignItems: 'center',
     paddingHorizontal: 3,
