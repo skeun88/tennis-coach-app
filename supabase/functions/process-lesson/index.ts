@@ -926,6 +926,7 @@ practice_plan은 정확히 2개 작성. JSON 외 텍스트 절대 포함 금지.
 
 위 코치 분석을 회원이 이해하기 쉽게 변환해주세요. JSON만 출력하세요.`
 
+  // haiku: 이미 분석된 코치 결과를 회원 언어로 단순 변환하는 작업 — sonnet 불필요
   const res = await fetchClaude({
     model: 'claude-haiku-4-5',
     max_tokens: 2000,
