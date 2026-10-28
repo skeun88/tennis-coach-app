@@ -451,6 +451,67 @@ export default function ProfileScreen() {
     setJourneyVisibilityModal(false);
   }
 
+  if (!initialLoaded) {
+    return (
+      <View style={styles.screen}>
+        <View style={[styles.headerBar, { paddingTop: insets.top }]}>
+          <Text style={styles.headerTitle}>마이</Text>
+          <TouchableOpacity style={styles.settingsBtn} onPress={() => router.push('/settings')} activeOpacity={0.7}>
+            <Ionicons name="settings-outline" size={20} color={DARK} />
+          </TouchableOpacity>
+        </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <View style={[styles.body, { paddingBottom: insets.bottom + FLOATING_TAB_BAR_SPACE + 24 }]}>
+            <View style={styles.profileCard}>
+              <View style={{ flexDirection: 'row', padding: 18, gap: 14, alignItems: 'center' }}>
+                <SkeletonBox width={PC_PHOTO_SIZE} height={PC_PHOTO_SIZE} borderRadius={PC_PHOTO_SIZE / 2} />
+                <View style={{ flex: 1, gap: 8 }}>
+                  <SkeletonBox width={120} height={16} borderRadius={6} />
+                  <SkeletonBox width={90} height={13} borderRadius={5} />
+                  <SkeletonBox width={70} height={12} borderRadius={5} />
+                </View>
+              </View>
+              <View style={{ paddingHorizontal: 18, paddingBottom: 16, gap: 10 }}>
+                <SkeletonBox width="85%" height={13} borderRadius={6} />
+                <SkeletonBox width="100%" height={44} borderRadius={12} />
+              </View>
+            </View>
+            <View style={styles.sectionCard}>
+              <SkeletonBox width={100} height={16} borderRadius={6} style={{ marginBottom: 16 }} />
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                {[0,1,2,3].map(i => (
+                  <View key={i} style={{ width: '50%', paddingVertical: 18, paddingHorizontal: 16, alignItems: 'center', gap: 6 }}>
+                    <SkeletonBox width={60} height={22} borderRadius={6} />
+                    <SkeletonBox width={50} height={12} borderRadius={4} />
+                  </View>
+                ))}
+              </View>
+            </View>
+            <View style={styles.sectionCard}>
+              <SkeletonBox width={80} height={16} borderRadius={6} style={{ marginBottom: 16 }} />
+              {[0,1,2].map(i => (
+                <View key={i} style={{ flexDirection: 'row', paddingVertical: 10, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: '#F0EAE4' }}>
+                  <SkeletonBox width={60} height={13} borderRadius={4} style={{ marginRight: 12 }} />
+                  <SkeletonBox width="55%" height={13} borderRadius={4} />
+                </View>
+              ))}
+            </View>
+            <View style={[styles.aiCard, { gap: 0 }]}>
+              <View style={styles.aiLeft}>
+                <SkeletonBox width={46} height={46} borderRadius={13} />
+                <View style={{ flex: 1, gap: 8 }}>
+                  <SkeletonBox width={90} height={15} borderRadius={6} />
+                  <SkeletonBox width={120} height={12} borderRadius={4} />
+                </View>
+              </View>
+              <SkeletonBox width={50} height={12} borderRadius={4} />
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
   return (
     <Animated.View style={[styles.screen, { opacity: contentOpacity }]}>
       {/* 헤더 */}
@@ -475,63 +536,7 @@ export default function ProfileScreen() {
         }
       >
         <View style={[styles.body, { paddingBottom: insets.bottom + FLOATING_TAB_BAR_SPACE + 24 }]}>
-
-          {/* ── 스켈레톤 (최초 로딩 전) ── */}
-          {!initialLoaded && (
-            <>
-              {/* 프로필 카드 스켈레톤 */}
-              <View style={styles.profileCard}>
-                <View style={{ flexDirection: 'row', padding: 18, gap: 14, alignItems: 'center' }}>
-                  <SkeletonBox width={PC_PHOTO_SIZE} height={PC_PHOTO_SIZE} borderRadius={PC_PHOTO_SIZE / 2} />
-                  <View style={{ flex: 1, gap: 8 }}>
-                    <SkeletonBox width={120} height={16} borderRadius={6} />
-                    <SkeletonBox width={90} height={13} borderRadius={5} />
-                    <SkeletonBox width={70} height={12} borderRadius={5} />
-                  </View>
-                </View>
-                <View style={{ paddingHorizontal: 18, paddingBottom: 16, gap: 10 }}>
-                  <SkeletonBox width="85%" height={13} borderRadius={6} />
-                  <SkeletonBox width="100%" height={44} borderRadius={12} />
-                </View>
-              </View>
-              {/* 나의 코칭 여정 카드 스켈레톤 */}
-              <View style={styles.sectionCard}>
-                <SkeletonBox width={100} height={16} borderRadius={6} style={{ marginBottom: 16 }} />
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                  {[0,1,2,3].map(i => (
-                    <View key={i} style={{ width: '50%', paddingVertical: 18, paddingHorizontal: 16, alignItems: 'center', gap: 6 }}>
-                      <SkeletonBox width={60} height={22} borderRadius={6} />
-                      <SkeletonBox width={50} height={12} borderRadius={4} />
-                    </View>
-                  ))}
-                </View>
-              </View>
-              {/* 경력·자격 카드 스켈레톤 */}
-              <View style={styles.sectionCard}>
-                <SkeletonBox width={80} height={16} borderRadius={6} style={{ marginBottom: 16 }} />
-                {[0,1,2].map(i => (
-                  <View key={i} style={{ flexDirection: 'row', paddingVertical: 10, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: '#F0EAE4' }}>
-                    <SkeletonBox width={60} height={13} borderRadius={4} style={{ marginRight: 12 }} />
-                    <SkeletonBox width="55%" height={13} borderRadius={4} />
-                  </View>
-                ))}
-              </View>
-              {/* QR 카드 스켈레톤 */}
-              <View style={[styles.aiCard, { gap: 0 }]}>
-                <View style={styles.aiLeft}>
-                  <SkeletonBox width={46} height={46} borderRadius={13} />
-                  <View style={{ flex: 1, gap: 8 }}>
-                    <SkeletonBox width={90} height={15} borderRadius={6} />
-                    <SkeletonBox width={120} height={12} borderRadius={4} />
-                  </View>
-                </View>
-                <SkeletonBox width={50} height={12} borderRadius={4} />
-              </View>
-            </>
-          )}
-
-          {/* ── 실제 콘텐츠 (최초 로딩 후) ── */}
-          {initialLoaded && <>
+          <>
 
           {/* ── 코치 프로필 카드 (흰색 카드) ── */}
           <View style={styles.profileCard}>
@@ -769,7 +774,7 @@ export default function ProfileScreen() {
           )}
 
           <View style={{ height: 24 }} />
-          </>}
+          </>
         </View>
       </ScrollView>
 
