@@ -1688,6 +1688,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   const ATTENDANCE_STATUS_COLOR: Record<string, string> = { '출석': Colors.primary, '결석': Colors.destructive, '지각': Colors.warning, '조퇴': Colors.accentWarm, '보강예정': Colors.accentWarm };
 
   return (
+    <View style={{ flex: 1, backgroundColor: '#F7F0E9' }}>
     <Animated.View style={{ flex: 1, opacity: contentOpacity }}>
       {/* 메시지 탭: 헤더 제목 변경 + 뒤로가기 → 탭 복귀 */}
       <SettingsHeader
@@ -3768,6 +3769,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         </View>
       </Modal>
     </Animated.View>
+    </View>
   );
 }
 
