@@ -10,7 +10,7 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 
 // ── 디자인 토큰 (PM 시안값) ────────────────────────────────
 const MARGIN_H = 16;              // 좌우 여백
-const BOTTOM_GAP = 10;            // Safe Area 위로 띄우는 간격 (8~12)
+const BOTTOM_GAP = 0;             // Safe Area 위로 띄우는 간격
 const BAR_HEIGHT = 70;            // 탭바 높이 (68~72)
 const RADIUS = 32;                // 캡슐 모서리 (30~36)
 const GLASS_BG = 'rgba(255,255,255,0.76)';       // 웜 화이트 글래스
