@@ -1975,7 +1975,7 @@ export default function AIAnalysisScreen() {
                 )}
 
                 {/* 하단 CTA — AI 메인, 그대로 서브 */}
-                {(() => {
+                {memoKeyboardHeight === 0 && (() => {
                   const hasContent = !!(manualContent.trim() || memoItems.length > 0);
                   return (
                     <View style={styles.manualBtnRow}>
