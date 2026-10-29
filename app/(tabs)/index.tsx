@@ -58,6 +58,34 @@ export default function HomeScreen() {
   const [loadingAttendance, setLoadingAttendance] = useState<string | null>(null);
   // realtime이 출석 처리 중 stale 캐시로 상태를 덮어쓰는 것을 방지
   const attendanceOpInProgress = useRef(false);
+  // 출석/결석 버튼 아이콘 스프링 애니메이션 (cardKey → Animated.Value)
+  const attendScaleMap = useRef<Map<string, Animated.Value>>(new Map());
+  const absentScaleMap = useRef<Map<string, Animated.Value>>(new Map());
+  // 카드 전체 opacity 페이드 (처리 중 dim → 완료 후 복귀)
+  const cardOpacityMap = useRef<Map<string, Animated.Value>>(new Map());
+  function getAttendAnim(key: string) {
+    if (!attendScaleMap.current.has(key)) attendScaleMap.current.set(key, new Animated.Value(1));
+    return attendScaleMap.current.get(key)!;
+  }
+  function getAbsentAnim(key: string) {
+    if (!absentScaleMap.current.has(key)) absentScaleMap.current.set(key, new Animated.Value(1));
+    return absentScaleMap.current.get(key)!;
+  }
+  function getCardOpacityAnim(key: string) {
+    if (!cardOpacityMap.current.has(key)) cardOpacityMap.current.set(key, new Animated.Value(1));
+    return cardOpacityMap.current.get(key)!;
+  }
+  function springBounce(anim: Animated.Value) {
+    anim.setValue(0.75);
+    Animated.spring(anim, { toValue: 1, friction: 4, tension: 180, useNativeDriver: true }).start();
+  }
+  function cardDimThenRestore(key: string) {
+    const anim = getCardOpacityAnim(key);
+    Animated.sequence([
+      Animated.timing(anim, { toValue: 0.55, duration: 80, useNativeDriver: true }),
+      Animated.timing(anim, { toValue: 1, duration: 250, useNativeDriver: true }),
+    ]).start();
+  }
   const [coachEmail, setCoachEmail] = useState('');
   const [userId, setUserId] = useState<string | null>(null);
   const [autoGenSuggestion, setAutoGenSuggestion] = useState<{memberId: string; name: string; time: string}[]>([]);
@@ -787,8 +815,8 @@ export default function HomeScreen() {
               const isLoading = loadingAttendance === cardKey;
 
               return (
+                <Animated.View key={cardKey} style={{ opacity: getCardOpacityAnim(cardKey) }}>
                 <TouchableOpacity
-                  key={cardKey}
                   style={[
                     styles.lessonCard,
                     card.attended && styles.lessonCardAttended,
@@ -833,29 +861,36 @@ export default function HomeScreen() {
                     <View style={styles.attendBtns}>
                       <TouchableOpacity
                         style={[styles.attendBtn, card.attended && styles.attendBtnActive]}
-                        onPress={(e) => { e.stopPropagation?.(); handleAttend(card); }}
+                        onPress={(e) => { e.stopPropagation?.(); springBounce(getAttendAnim(cardKey)); cardDimThenRestore(cardKey); handleAttend(card); }}
+                        activeOpacity={0.9}
                       >
-                        <Ionicons
-                          name={card.attended ? 'checkmark-circle' : 'checkmark-circle-outline'}
-                          size={28}
-                          color={card.attended ? '#fff' : '#C0755A'}
-                        />
+                        <Animated.View style={{ transform: [{ scale: getAttendAnim(cardKey) }] }}>
+                          <Ionicons
+                            name={card.attended ? 'checkmark-circle' : 'checkmark-circle-outline'}
+                            size={28}
+                            color={card.attended ? '#fff' : '#C0755A'}
+                          />
+                        </Animated.View>
                         <Text style={[styles.attendBtnLabel, card.attended && { color: '#fff' }]}>출석</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.absentBtn, card.isAbsent && styles.absentBtnActive]}
-                        onPress={(e) => { e.stopPropagation?.(); handleAbsenceBtn(card); }}
+                        onPress={(e) => { e.stopPropagation?.(); springBounce(getAbsentAnim(cardKey)); cardDimThenRestore(cardKey); handleAbsenceBtn(card); }}
+                        activeOpacity={0.9}
                       >
-                        <Ionicons
-                          name={card.isAbsent ? 'close-circle' : 'close-circle-outline'}
-                          size={28}
-                          color={card.isAbsent ? '#fff' : '#D9534F'}
-                        />
+                        <Animated.View style={{ transform: [{ scale: getAbsentAnim(cardKey) }] }}>
+                          <Ionicons
+                            name={card.isAbsent ? 'close-circle' : 'close-circle-outline'}
+                            size={28}
+                            color={card.isAbsent ? '#fff' : '#D9534F'}
+                          />
+                        </Animated.View>
                         <Text style={[styles.absentBtnLabel, card.isAbsent && { color: '#fff' }]}>결석</Text>
                       </TouchableOpacity>
                     </View>
                   )}
                 </TouchableOpacity>
+                </Animated.View>
               );
             })}
           </View>
@@ -935,8 +970,8 @@ export default function HomeScreen() {
 
         {/* 체험 회원 모달 */}
         <Modal visible={trialModal} transparent animationType="slide" onRequestClose={() => setTrialModal(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalSheet, { paddingBottom: Math.max(40, insets.bottom + 20) }]}>
+          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setTrialModal(false)}>
+            <View style={[styles.modalSheet, { paddingBottom: Math.max(40, insets.bottom + 20) }]} onStartShouldSetResponder={() => true}>
               <View style={styles.modalHeader}>
                 <View>
                   <Text style={styles.modalTitle}>체험 중 회원</Text>
@@ -975,7 +1010,7 @@ export default function HomeScreen() {
                 }}
               />
             </View>
-          </View>
+          </TouchableOpacity>
         </Modal>
 
       </ScrollView>
@@ -1084,8 +1119,8 @@ export default function HomeScreen() {
 
       {/* 결석 바텀시트 */}
       <Modal visible={absenceModal} transparent animationType="slide" onRequestClose={() => setAbsenceModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setAbsenceModal(false)}>
+          <View style={styles.modalSheet} onStartShouldSetResponder={() => true}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>결석 처리</Text>
               <TouchableOpacity onPress={() => setAbsenceModal(false)}>
@@ -1143,7 +1178,7 @@ export default function HomeScreen() {
               }
             </TouchableOpacity>
           </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
 
       {/* 레슨가능시간 툴팁 — 시계 아이콘 위치 안내 */}
