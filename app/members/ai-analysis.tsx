@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, ActivityIndicator, Platform, Animated, Modal, TextInput, KeyboardAvoidingView,
-  AppState, AppStateStatus, SafeAreaView, Keyboard,
+  AppState, AppStateStatus, SafeAreaView, Keyboard, StatusBar,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
@@ -1617,9 +1617,10 @@ export default function AIAnalysisScreen() {
 
         {/* 레슨 메모 입력 모달 */}
         <Modal visible={manualModalVisible} animationType="slide" transparent={false} onRequestClose={handleCloseManualModal} statusBarTranslucent>
-          <SafeAreaView style={styles.manualContainer}>
+          <SafeAreaView style={styles.manualSafeArea}>
+            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-              <View style={styles.manualInner}>
+              <View style={styles.manualContainer}>
                 {/* 헤더 */}
                 <View style={styles.manualHeader}>
                   <View style={styles.manualHeaderSide}>
@@ -2594,8 +2595,8 @@ const styles = StyleSheet.create({
   manualReportBtnTitle: { fontSize: 14, fontWeight: '700', color: Colors.foreground },
   manualReportBtnSub: { fontSize: 12, color: Colors.mutedFg, marginTop: 2 },
   // 레슨 메모 입력 모달
-  manualContainer: { flex: 1, backgroundColor: '#F5F3F0' },
-  manualInner: { flex: 1, flexDirection: 'column' },
+  manualSafeArea: { flex: 1, backgroundColor: '#FFFFFF' },
+  manualContainer: { flex: 1, flexDirection: 'column', backgroundColor: '#F7F0E9' },
   manualHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2778,8 +2779,8 @@ const styles = StyleSheet.create({
   manualBtnRow: {
     flexDirection: 'row', gap: 10,
     paddingHorizontal: 16, paddingVertical: 14,
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E2E2E2',
-    backgroundColor: '#F5F3F0',
+    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(62,43,34,0.07)',
+    backgroundColor: '#F7F0E9',
   },
   directBtn: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
