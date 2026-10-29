@@ -1012,7 +1012,7 @@ ${rejectMsg.trim()}`
           finally { setRefreshing(false); }
         }} />}
       >
-        <View style={{ height: gridHeight, position: 'relative' }}>
+        <View style={{ height: gridHeight + 1, position: 'relative' }}>
           {/* 현재 시간 표시선 (오늘만) */}
           {selectedDate === today && (() => {
             const now = new Date();
@@ -1057,6 +1057,11 @@ ${rejectMsg.trim()}`
           {HOURS.slice(0, -1).map(h => (
             <View key={`half-${h}`} style={[styles.halfHourLine, { top: (h - START_HOUR) * HOUR_HEIGHT + HOUR_HEIGHT / 2 }]} />
           ))}
+          {/* 24:00 종료 선 */}
+          <View style={[styles.hourRow, { top: (END_HOUR + 1 - START_HOUR) * HOUR_HEIGHT }]}>
+            <Text style={styles.hourLabel} numberOfLines={1} ellipsizeMode="clip">00:00</Text>
+            <View style={styles.hourLine} />
+          </View>
 
           {/* 10분 단위 보조 눈금 (드래그 중) */}
           {draggingId !== null && HOURS.flatMap(h =>
@@ -1234,7 +1239,7 @@ ${rejectMsg.trim()}`
             }}
           />}
         >
-          <View style={{ height: gridHeight, position: 'relative', flexDirection: 'row' }}>
+          <View style={{ height: gridHeight + 1, position: 'relative', flexDirection: 'row' }}>
             {/* 시간 라벨 컬럼 */}
             <View style={{ width: TIME_COL }}>
               {HOURS.map(h => (
@@ -1242,6 +1247,10 @@ ${rejectMsg.trim()}`
                   <Text style={styles.hourLabel} numberOfLines={1} ellipsizeMode="clip">{String(h).padStart(2, '0')}:00</Text>
                 </View>
               ))}
+              {/* 24:00 종료 라벨 */}
+              <View style={[styles.weekHourLabel, { top: (END_HOUR + 1 - START_HOUR) * HOUR_HEIGHT }]}>
+                <Text style={styles.hourLabel} numberOfLines={1} ellipsizeMode="clip">00:00</Text>
+              </View>
             </View>
 
             {/* 7개 day 컬럼 */}
@@ -1251,7 +1260,7 @@ ${rejectMsg.trim()}`
               const isDraggingInCol = weekDraggingId !== null && colLessons.some(l => l.id === weekDraggingId);
               const colMap = computeColumns(colLessons);
               return (
-                <View key={date} style={[styles.weekDayColGrid, { width: COL_W, height: gridHeight },
+                <View key={date} style={[styles.weekDayColGrid, { width: COL_W, height: gridHeight + 1 },
                   isToday && { backgroundColor: S_TERRA + '08' }]}>
                   {/* 레슨 가능 시간 쉐도우 */}
                   {availability && (() => {
@@ -1274,6 +1283,8 @@ ${rejectMsg.trim()}`
                   {HOURS.map(h => (
                     <View key={h} style={[styles.weekHourLine, { top: (h - START_HOUR) * HOUR_HEIGHT }]} />
                   ))}
+                  {/* 24:00 종료 구분선 */}
+                  <View style={[styles.weekHourLine, { top: (END_HOUR + 1 - START_HOUR) * HOUR_HEIGHT }]} />
                   {/* 10분 보조 눈금 (드래그 중인 컬럼만) */}
                   {isDraggingInCol && HOURS.flatMap(h =>
                     [10, 20, 30, 40, 50].map(m => {
