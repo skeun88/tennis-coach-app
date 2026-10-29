@@ -1625,10 +1625,7 @@ export default function AIAnalysisScreen() {
                   <TouchableOpacity onPress={handleCloseManualModal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={styles.manualHeaderBack}>
                     <Ionicons name="chevron-back" size={24} color={Colors.foreground} />
                   </TouchableOpacity>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.manualHeaderTitle}>레슨 기록</Text>
-                    <Text style={styles.manualHeaderSub}>키워드 또는 직접 입력으로 레슨을 기록하세요.</Text>
-                  </View>
+                  <Text style={styles.manualHeaderTitle}>레슨 기록</Text>
                 </View>
 
                 <ScrollView
@@ -1638,11 +1635,17 @@ export default function AIAnalysisScreen() {
                   keyboardShouldPersistTaps="handled"
                   contentContainerStyle={{ paddingBottom: 16 }}
                 >
+                  {/* 인트로 문구 */}
+                  <View style={styles.manualIntroBlock}>
+                    <Text style={styles.manualIntroTitle}>오늘 어떤 내용을 지도했나요?</Text>
+                    <Text style={styles.manualIntroSub}>키워드를 선택하거나 직접 입력해 주세요.</Text>
+                  </View>
+
                   {/* 최근 사용 조합 */}
                   {recentCombos.length > 0 && (
-                    <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+                    <View style={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 2 }}>
                       <Text style={styles.kwCategoryLabel}>최근 기록</Text>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
                         {recentCombos.map((combo, idx) => (
                           <TouchableOpacity
                             key={idx}
@@ -1656,7 +1659,14 @@ export default function AIAnalysisScreen() {
                             }}
                             activeOpacity={0.75}
                           >
-                            <Text style={styles.recentComboText} numberOfLines={1}>{memoItemLabel(combo)}</Text>
+                            <Text style={styles.recentComboTech} numberOfLines={1}>
+                              {combo.tech ?? '일반'}
+                            </Text>
+                            {(combo.points?.length || combo.status || combo.goal) ? (
+                              <Text style={styles.recentComboDetail} numberOfLines={1}>
+                                {[combo.points?.join(', '), combo.status, combo.goal ? `→ ${combo.goal}` : null].filter(Boolean).join(' · ')}
+                              </Text>
+                            ) : null}
                           </TouchableOpacity>
                         ))}
                       </ScrollView>
@@ -2578,14 +2588,17 @@ const styles = StyleSheet.create({
   manualContainer: { flex: 1, backgroundColor: '#F5F3F0' },
   manualInner: { flex: 1, flexDirection: 'column' },
   manualHeader: {
-    flexDirection: 'row', alignItems: 'flex-start',
-    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12,
     backgroundColor: '#F7F0E9',
-    gap: 12,
+    gap: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E8E0D8',
   },
-  manualHeaderBack: { paddingTop: 1 },
-  manualHeaderTitle: { fontSize: 17, fontWeight: '800', color: Colors.foreground, marginBottom: 4 },
-  manualHeaderSub: { fontSize: 13, color: Colors.mutedFg, lineHeight: 19 },
+  manualHeaderBack: { padding: 4 },
+  manualHeaderTitle: { fontSize: 17, fontWeight: '800', color: Colors.foreground },
+  manualIntroBlock: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
+  manualIntroTitle: { fontSize: 16, fontWeight: '700', color: Colors.foreground, marginBottom: 4 },
+  manualIntroSub: { fontSize: 13, color: Colors.mutedFg, lineHeight: 19 },
   chipsScroll: { flexGrow: 0, flexShrink: 0 },
   chipsContent: { paddingHorizontal: 20, paddingVertical: 10, gap: 8, flexDirection: 'row', alignItems: 'center' },
   chip: {
@@ -2651,11 +2664,12 @@ const styles = StyleSheet.create({
   memoToggleDesc: { fontSize: 12, color: Colors.mutedFg, marginTop: 4, lineHeight: 17 },
   memoDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.primary, marginLeft: 2 },
   recentComboChip: {
-    paddingHorizontal: 12, paddingVertical: 7,
-    borderRadius: 18, borderWidth: 1.5, borderColor: Colors.border,
-    backgroundColor: '#fff', maxWidth: 220,
+    paddingHorizontal: 12, paddingVertical: 9,
+    borderRadius: 12, borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: '#fff', maxWidth: 150, minWidth: 72,
   },
-  recentComboText: { fontSize: 12, fontWeight: '600', color: Colors.mutedFg },
+  recentComboTech: { fontSize: 13, fontWeight: '700', color: Colors.foreground },
+  recentComboDetail: { fontSize: 11, color: Colors.mutedFg, marginTop: 2 },
   kwChipCustom: { borderStyle: 'dashed' },
   kwAddBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 3,
@@ -2738,7 +2752,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary, borderRadius: 14, paddingVertical: 13,
   },
   aiBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  btnDisabled: { opacity: 0.5 },
+  btnDisabled: { opacity: 0.45 },
   emptyBox: { alignItems: 'center', paddingVertical: 32, gap: 8 },
   emptyText: { fontSize: 15, color: Colors.placeholder, fontWeight: '600' },
   emptySubText: { fontSize: 13, color: Colors.placeholder, textAlign: 'center' },
