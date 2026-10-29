@@ -66,8 +66,8 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (updateChecked && fontsLoaded) SplashScreen.hideAsync().catch(() => {});
-  }, [updateChecked, fontsLoaded]);
+    if (updateChecked) SplashScreen.hideAsync().catch(() => {});
+  }, [updateChecked]);
 
   const setNavReady = useCallback(() => {
     setIsNavigationReady(true);
@@ -253,30 +253,24 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        gestureEnabled: true,
-        fullScreenGestureEnabled: true,
-      }}
-    >
-      <Stack.Screen name="(auth)" options={{ animation: 'fade' }} />
-      <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
-      <Stack.Screen name="members/[id]" />
-      <Stack.Screen name="members/new" options={{ animation: 'slide_from_bottom', gestureDirection: 'vertical' }} />
-      <Stack.Screen name="lessons/[id]" />
-      <Stack.Screen name="lessons/new" options={{ animation: 'slide_from_bottom', gestureDirection: 'vertical' }} />
-      <Stack.Screen name="lesson-packages/index" />
-      <Stack.Screen name="lesson-packages/new" options={{ animation: 'slide_from_bottom', gestureDirection: 'vertical' }} />
-      <Stack.Screen name="members/ai-analysis" />
-      <Stack.Screen name="settings/index" />
-      <Stack.Screen name="settings/notifications" />
-      <Stack.Screen name="settings/availability" />
-      <Stack.Screen name="settings/faq" />
-      <Stack.Screen name="subscription" />
-      <Stack.Screen name="connect/qr" options={{ animation: 'slide_from_bottom', gestureDirection: 'vertical' }} />
-      <Stack.Screen name="connect/requests" />
-      <Stack.Screen name="thirdPartyLoginResult" options={{ animation: 'fade' }} />
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(auth)" />
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="members/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="members/new" options={{ headerShown: false }} />
+      <Stack.Screen name="lessons/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="lessons/new" options={{ headerShown: false }} />
+      <Stack.Screen name="lesson-packages/index" options={{ headerShown: false }} />
+      <Stack.Screen name="lesson-packages/new" options={{ headerShown: false }} />
+      <Stack.Screen name="members/ai-analysis" options={{ headerShown: false }} />
+      <Stack.Screen name="settings/index" options={{ headerShown: false }} />
+      <Stack.Screen name="settings/notifications" options={{ headerShown: false }} />
+      <Stack.Screen name="settings/availability" options={{ headerShown: false }} />
+      <Stack.Screen name="settings/faq" options={{ headerShown: false }} />
+      <Stack.Screen name="subscription" options={{ headerShown: false }} />
+      <Stack.Screen name="connect/qr" options={{ headerShown: false }} />
+      <Stack.Screen name="connect/requests" options={{ headerShown: false }} />
+      <Stack.Screen name="thirdPartyLoginResult" options={{ headerShown: false }} />
     </Stack>
   );
 }
