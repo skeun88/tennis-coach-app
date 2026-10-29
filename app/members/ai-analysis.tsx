@@ -2,10 +2,10 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, ActivityIndicator, Platform, Animated, Modal, TextInput, KeyboardAvoidingView,
-  AppState, AppStateStatus, SafeAreaView, Keyboard, StatusBar,
+  AppState, AppStateStatus, SafeAreaView, Keyboard, StatusBar, Dimensions,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { runOnJS } from 'react-native-reanimated';
+import ReanimatedAnimated, { runOnJS, useSharedValue, useAnimatedStyle, withTiming, withSpring } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -105,14 +105,27 @@ export default function AIAnalysisScreen() {
   const inputRef = useRef<TextInput>(null);
   const modalScrollRef = useRef<ScrollView>(null);
 
-  // 레슨 기록 모달 — 좌측 엣지 스와이프 뒤로가기 (iOS + Android)
+  // 레슨 기록 모달 — 좌측 엣지 스와이프 슬라이드 닫기 (iOS + Android)
   const closeManualModalRef = useRef<() => void>(() => {});
+  const swipeTranslateX = useSharedValue(0);
+  const swipeAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: swipeTranslateX.value }],
+  }));
+  const SCREEN_WIDTH = Dimensions.get('window').width;
+
   const swipeBackGesture = Gesture.Pan()
     .activeOffsetX([10, Infinity])
-    .failOffsetY([-25, 25])
+    .failOffsetY([-30, 30])
+    .onChange((e) => {
+      if (e.translationX >= 0) swipeTranslateX.value = e.translationX;
+    })
     .onEnd((e) => {
-      if (e.translationX > 60 && Math.abs(e.translationY) < 120) {
-        runOnJS(closeManualModalRef.current)();
+      if (e.translationX > SCREEN_WIDTH * 0.3 || e.velocityX > 600) {
+        swipeTranslateX.value = withTiming(SCREEN_WIDTH, { duration: 220 }, () => {
+          runOnJS(closeManualModalRef.current)();
+        });
+      } else {
+        swipeTranslateX.value = withSpring(0, { damping: 20, stiffness: 300 });
       }
     });
 
@@ -553,6 +566,11 @@ export default function AIAnalysisScreen() {
         }
       });
     }
+  }, [manualModalVisible]);
+
+  // 모달 닫힐 때 슬라이드 위치 초기화
+  useEffect(() => {
+    if (!manualModalVisible) swipeTranslateX.value = 0;
   }, [manualModalVisible]);
 
   // 모달 키보드 높이 추적 — contentPadding 동적 조정에 사용
@@ -1637,14 +1655,12 @@ export default function AIAnalysisScreen() {
         </TouchableOpacity>
 
         {/* 레슨 메모 입력 모달 */}
-        <Modal visible={manualModalVisible} animationType="slide" transparent={false} onRequestClose={handleCloseManualModal} statusBarTranslucent>
-          <SafeAreaView style={styles.manualSafeArea}>
-            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-            {/* left-edge 뒤로가기 스와이프 감지 영역 (RNGH: 네이티브 스레드, Android 시스템 제스처 우회) */}
-            <GestureDetector gesture={swipeBackGesture}>
-              <View style={styles.swipeBackZone} collapsable={false} />
-            </GestureDetector>
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <Modal visible={manualModalVisible} animationType="none" transparent statusBarTranslucent onRequestClose={handleCloseManualModal}>
+          <GestureDetector gesture={swipeBackGesture}>
+            <ReanimatedAnimated.View style={[{ flex: 1 }, swipeAnimatedStyle]}>
+              <SafeAreaView style={styles.manualSafeArea}>
+                <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+                <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
               <View style={styles.manualContainer}>
                 {/* 헤더 */}
                 <View style={styles.manualHeader}>
@@ -2012,8 +2028,10 @@ export default function AIAnalysisScreen() {
                   );
                 })()}
               </View>
-            </KeyboardAvoidingView>
-          </SafeAreaView>
+                </KeyboardAvoidingView>
+              </SafeAreaView>
+            </ReanimatedAnimated.View>
+          </GestureDetector>
         </Modal>
 
         {/* 최근 레슨 기록 */}
