@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Alert, ActivityIndicator, Platform, Animated, Modal, TextInput, KeyboardAvoidingView,
-  AppState, AppStateStatus, SafeAreaView, Keyboard, StatusBar,
+  AppState, AppStateStatus, SafeAreaView, Keyboard, StatusBar, PanResponder,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
@@ -102,6 +102,19 @@ export default function AIAnalysisScreen() {
   const [cursorPos, setCursorPos] = useState({ start: 0, end: 0 });
   const inputRef = useRef<TextInput>(null);
   const modalScrollRef = useRef<ScrollView>(null);
+
+  // 타이핑 레슨 기록 모달 — iOS left-edge 스와이프 뒤로가기
+  const closeManualModalRef = useRef<() => void>(() => {});
+  const swipeBackResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gs) => gs.dx > 8 && Math.abs(gs.dy) < gs.dx,
+      onMoveShouldSetPanResponderCapture: (_, gs) => gs.dx > 8 && Math.abs(gs.dy) < gs.dx,
+      onPanResponderTerminationRequest: () => true,
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dx > 60 && Math.abs(gs.dy) < 120) closeManualModalRef.current();
+      },
+    })
+  ).current;
 
   // 키워드 데이터 구조
   const TENNIS_TECHNIQUES = ['포핸드', '백핸드', '서브', '발리', '리턴', '풋워크', '스매시', '슬라이스'] as const;
@@ -551,6 +564,9 @@ export default function AIAnalysisScreen() {
     const hideSub = Keyboard.addListener(hideEvent, () => setMemoKeyboardHeight(0));
     return () => { showSub.remove(); hideSub.remove(); };
   }, [manualModalVisible]);
+
+  // closeManualModalRef 항상 최신 함수 유지 (PanResponder 클로저 stale 방지)
+  closeManualModalRef.current = handleCloseManualModal;
 
   function handleCloseManualModal() {
     const hasAny = manualContent.trim() || memoItems.length > 0 ||
@@ -1619,6 +1635,10 @@ export default function AIAnalysisScreen() {
         <Modal visible={manualModalVisible} animationType="slide" transparent={false} onRequestClose={handleCloseManualModal} statusBarTranslucent>
           <SafeAreaView style={styles.manualSafeArea}>
             <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+            {/* iOS left-edge 뒤로가기 스와이프 감지 영역 */}
+            {Platform.OS === 'ios' && (
+              <View style={styles.swipeBackZone} {...swipeBackResponder.panHandlers} />
+            )}
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
               <View style={styles.manualContainer}>
                 {/* 헤더 */}
@@ -2596,6 +2616,7 @@ const styles = StyleSheet.create({
   manualReportBtnSub: { fontSize: 12, color: Colors.mutedFg, marginTop: 2 },
   // 레슨 메모 입력 모달
   manualSafeArea: { flex: 1, backgroundColor: '#FFFFFF' },
+  swipeBackZone: { position: 'absolute', top: 0, bottom: 0, left: 0, width: 24, zIndex: 50 },
   manualContainer: { flex: 1, flexDirection: 'column', backgroundColor: '#F7F0E9' },
   manualHeader: {
     flexDirection: 'row',
