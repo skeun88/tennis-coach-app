@@ -64,7 +64,7 @@ const S_TEXT_MUTED = '#A08070';
 const S_BORDER = '#E0CFBF';
 const S_CARD_BG = '#FFFFFF';
 const S_SEG_BG = 'rgba(0,0,0,0.07)';      // 세그먼트 컨트롤 배경
-const S_GRID_BG = '#FCFAF7';              // 시간표 영역 배경
+const S_GRID_BG = '#FFFFFF';              // 시간표 영역 배경
 const S_SCH_BG = '#F1E8DC';               // 예정 카드 배경 (웜 샌드 베이지)
 const S_SCH_FG = '#3E2B22';               // 예정 카드 이름 (다크 브라운)
 const S_SCH_BORDER = '#A9654E';           // 예정 카드 포인트선 (테라코타 브라운)
@@ -1012,7 +1012,7 @@ ${rejectMsg.trim()}`
           finally { setRefreshing(false); }
         }} />}
       >
-        <View style={{ height: gridHeight + 20, position: 'relative' }}>
+        <View style={{ height: gridHeight, position: 'relative' }}>
           {/* 현재 시간 표시선 (오늘만) */}
           {selectedDate === today && (() => {
             const now = new Date();
@@ -1234,7 +1234,7 @@ ${rejectMsg.trim()}`
             }}
           />}
         >
-          <View style={{ height: gridHeight + 20, position: 'relative', flexDirection: 'row' }}>
+          <View style={{ height: gridHeight, position: 'relative', flexDirection: 'row' }}>
             {/* 시간 라벨 컬럼 */}
             <View style={{ width: TIME_COL }}>
               {HOURS.map(h => (
@@ -1252,7 +1252,7 @@ ${rejectMsg.trim()}`
               const colMap = computeColumns(colLessons);
               return (
                 <View key={date} style={[styles.weekDayColGrid, { width: COL_W, height: gridHeight },
-                  isToday && { backgroundColor: S_TERRA + '14' }]}>
+                  isToday && { backgroundColor: S_TERRA + '08' }]}>
                   {/* 레슨 가능 시간 쉐도우 */}
                   {availability && (() => {
                     const dow = new Date(date + 'T12:00:00+09:00').getDay();
