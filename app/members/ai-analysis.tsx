@@ -70,21 +70,15 @@ export default function AIAnalysisScreen() {
     ...RecordingPresets.HIGH_QUALITY,
     ios: { ...RecordingPresets.HIGH_QUALITY.ios, sampleRate: 16000, numberOfChannels: 1, bitRate: 32000 },
     android: { ...RecordingPresets.HIGH_QUALITY.android, sampleRate: 16000, numberOfChannels: 1, bitRate: 32000 },
-    isMeteringEnabled: true,
+    isMeteringEnabled: false, // metering 비활성 — 활성화 시 iOS 오디오 파이프라인에 처리 부하로 녹음 품질 저하
   };
   const audioRecorder = useAudioRecorder(VOICE_PRESET);
-  const recorderState = useAudioRecorderState(audioRecorder, 100); // 100ms 인터벌로 metering 업데이트
+  const recorderState = useAudioRecorderState(audioRecorder);
 
-  // 음파 웨이브 롤링 버퍼 (28개 바)
+  // 음파 웨이브 롤링 버퍼 (28개 바) — metering 없이 시뮬레이션 애니메이션으로 구동
   const WAVE_BARS = 28;
   const [waveformBars, setWaveformBars] = useState<number[]>(Array(WAVE_BARS).fill(0.05));
-  useEffect(() => {
-    if (!isRecording || isPaused) return;
-    const raw = recorderState.metering ?? -60;
-    // dBFS -60~0 → 0..1 정규화
-    const normalized = Math.max(0.05, Math.min(1, (raw + 60) / 60));
-    setWaveformBars(prev => [...prev.slice(1), normalized]);
-  }, [recorderState.metering]);
+  const waveSimRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -166,14 +160,28 @@ export default function AIAnalysisScreen() {
   const [usageSheetVisible, setUsageSheetVisible] = useState(false);
   const [hasSeenUsage, setHasSeenUsage] = useState(true); // true = no pulse (default until loaded)
 
-  // READY 상태: 녹음 완료 후 AI 분석 대기 (readyUri !== null이면 ready)
-  const [readyUri, setReadyUri] = useState<string | null>(null);
-  const [readyDuration, setReadyDuration] = useState(0);
+  // (READY 상태 제거 — 녹음 종료 즉시 자동 분석)
 
   // 녹음 인터럽트 (전화/이어폰) 관련 상태
   const [isPaused, setIsPaused] = useState(false);
   const [showResumeBtn, setShowResumeBtn] = useState(false);
   const [interruptToast, setInterruptToast] = useState<string | null>(null);
+
+  // 웨이브폼 시뮬레이션 — metering 없이 자연스러운 파형 애니메이션
+  useEffect(() => {
+    if (isRecording && !isPaused) {
+      waveSimRef.current = setInterval(() => {
+        if (!isMountedRef.current) return;
+        const base = 0.3 + 0.25 * Math.sin(Date.now() / 600);
+        const jitter = (Math.random() - 0.5) * 0.35;
+        const val = Math.max(0.05, Math.min(1, base + jitter));
+        setWaveformBars(prev => [...prev.slice(1), val]);
+      }, 100);
+    } else {
+      if (waveSimRef.current) { clearInterval(waveSimRef.current); waveSimRef.current = null; }
+    }
+    return () => { if (waveSimRef.current) { clearInterval(waveSimRef.current); waveSimRef.current = null; } };
+  }, [isRecording, isPaused]);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -184,6 +192,7 @@ export default function AIAnalysisScreen() {
   const isIntentionalStopRef = useRef(false); // true = 사용자가 직접 중지 중
   const recordingSegmentsRef = useRef<string[]>([]); // 여러 구간 녹음 파일 URI 목록
   const recordingDurationRef = useRef(0); // duration 누적 (timer 재시작 후에도 유지)
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
     AsyncStorage.getItem('ai_lesson_usage_seen').then(val => {
@@ -302,22 +311,29 @@ export default function AIAnalysisScreen() {
         // 전화 통화 후 포그라운드 복귀 → 일시정지 상태면 자동 재개 시도
         if (isPausedRef.current) {
           setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true, shouldPlayInBackground: true })
+            .then(() => audioRecorder.prepareToRecordAsync(VOICE_PRESET))
             .then(() => { audioRecorder.record(); })
             .then(() => {
+              if (!isMountedRef.current) return;
               setIsPaused(false);
               setShowResumeBtn(false);
               setInterruptToast(null);
-              // 타이머 재개
-              timerRef.current = setInterval(() => setRecordingDuration(d => d + 1), 1000);
+              // 타이머 재개 — 기존 interval 먼저 정리
+              if (timerRef.current) clearInterval(timerRef.current);
+              timerRef.current = setInterval(() => {
+                if (!isMountedRef.current) { clearInterval(timerRef.current!); return; }
+                setRecordingDuration(d => { recordingDurationRef.current = d + 1; return d + 1; });
+              }, 1000);
             })
             .catch(() => {
               // 자동 재개 실패 → 수동 버튼 표시
-              setShowResumeBtn(true);
+              if (isMountedRef.current) setShowResumeBtn(true);
             });
         }
       }
     });
     return () => {
+      isMountedRef.current = false;
       if (timerRef.current) clearInterval(timerRef.current);
       sub.remove();
     };
@@ -971,7 +987,10 @@ export default function AIAnalysisScreen() {
       setIsPaused(false);
       setShowResumeBtn(false);
       setInterruptToast(null);
+      // 기존 interval 먼저 정리 후 새로 시작
+      if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
+        if (!isMountedRef.current) { clearInterval(timerRef.current!); return; }
         setRecordingDuration(d => {
           recordingDurationRef.current = d + 1;
           return d + 1;
@@ -989,17 +1008,18 @@ export default function AIAnalysisScreen() {
     if (segments.length === 0) return null;
     if (segments.length === 1) return segments[0];
 
-    // 여러 구간 → base64 단순 연결 (Whisper는 손상된 경계 허용)
+    // 여러 구간 → 가장 큰 파일(주 녹음 구간)만 사용
+    // base64 in-memory 병합은 대용량 녹음 시 OOM 크래시 유발 — 안전한 단일 파일 방식 사용
     try {
-      const parts = await Promise.all(
-        segments.map(uri => FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 }))
-      );
-      const merged = parts.join('');
-      const mergedUri = (FileSystem.cacheDirectory ?? '') + `merged_lesson_${Date.now()}.m4a`;
-      await FileSystem.writeAsStringAsync(mergedUri, merged, { encoding: FileSystem.EncodingType.Base64 });
-      return mergedUri;
+      let largestUri = segments[0];
+      let largestSize = 0;
+      for (const uri of segments) {
+        const info = await FileSystem.getInfoAsync(uri);
+        const size = (info as any).size ?? 0;
+        if (size > largestSize) { largestSize = size; largestUri = uri; }
+      }
+      return largestUri;
     } catch {
-      // 병합 실패 → 마지막 구간만 사용
       return segments[segments.length - 1];
     }
   }
@@ -1129,7 +1149,7 @@ export default function AIAnalysisScreen() {
     }
   }
 
-  // 녹음 종료 → READY 상태 (AI 분석 안 함)
+  // 녹음 종료 → 즉시 AI 분석 시작
   async function stopRecording() {
     if (!isRecording && !isPaused) return;
 
@@ -1150,26 +1170,25 @@ export default function AIAnalysisScreen() {
       recordingSegmentsRef.current = [];
       if (!uri) throw new Error('녹음 파일을 찾을 수 없습니다.');
 
-      setReadyUri(uri);
-      setReadyDuration(recordingDurationRef.current);
+      const duration = recordingDurationRef.current;
       setIsRecording(false);
       setIsPaused(false);
       setShowResumeBtn(false);
       setInterruptToast(null);
+
+      // 자동 AI 분석 시작
+      await startAnalysisWithUri(uri, duration);
     } catch (e: any) {
       isIntentionalStopRef.current = false;
       Alert.alert('오류', e.message || '녹음 종료 중 오류가 발생했습니다.');
     }
   }
 
-  // READY 상태에서 AI 분석 시작
-  const isAnalyzingStartRef = useRef(false); // 중복 탭 방지
-  async function handleAnalyze() {
-    if (!readyUri || isAnalyzing || isAnalyzingStartRef.current) return;
+  // 녹음 완료 후 AI 분석 파이프라인 시작 (중복 탭 방지)
+  const isAnalyzingStartRef = useRef(false);
+  async function startAnalysisWithUri(uri: string, duration: number) {
+    if (isAnalyzing || isAnalyzingStartRef.current) return;
     isAnalyzingStartRef.current = true;
-
-    const uri = readyUri;
-    const duration = readyDuration;
 
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -1178,7 +1197,6 @@ export default function AIAnalysisScreen() {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token ?? SUPABASE_ANON_KEY;
 
-      // ── 월별 한도 체크 ──
       const limitCheck = await checkAiAnalysisLimit(user.id, subscription);
       if (!limitCheck.allowed && !limitCheck.needsExtraCredit) {
         setUsageInfo({ used: limitCheck.used, limit: limitCheck.limit });
@@ -1194,45 +1212,16 @@ export default function AIAnalysisScreen() {
         return;
       }
 
-      // 정상 진행 — 분석 시작 후 readyUri 초기화 (중복 방지)
-      setReadyUri(null);
       const usingExtraCredit = limitCheck.needsExtraCredit && limitCheck.extraCredits > 0;
       await runAnalysis(uri, user.id, duration, token, usingExtraCredit);
-
     } catch (e: any) {
-      console.log('[REC][ERR] handleAnalyze 에러:', e?.message);
+      console.log('[REC][ERR] startAnalysisWithUri 에러:', e?.message);
       setIsAnalyzing(false);
       setAnalysisStep(0);
       Alert.alert('오류', e.message || '분석 시작 중 오류가 발생했습니다.');
     } finally {
       isAnalyzingStartRef.current = false;
     }
-  }
-
-  // 다시 녹음 (READY → IDLE, 기존 녹음 폐기)
-  function handleReRecord() {
-    Alert.alert(
-      '다시 녹음',
-      '현재 녹음이 삭제됩니다. 새로 녹음을 시작할까요?',
-      [
-        { text: '취소', style: 'cancel' },
-        {
-          text: '다시 녹음',
-          style: 'destructive',
-          onPress: () => {
-            setReadyUri(null);
-            setReadyDuration(0);
-            setRecordingDuration(0);
-            recordingDurationRef.current = 0;
-          },
-        },
-      ]
-    );
-  }
-
-  // 하위 호환: stopAndAnalyze 이름으로 호출되는 곳 없음 (내부 정리 목적)
-  async function stopAndAnalyze(source: 'main' | 'pause' = 'main') {
-    await stopRecording();
   }
 
   async function handleTopupSuccess(newBalance: number) {
@@ -1494,13 +1483,12 @@ export default function AIAnalysisScreen() {
           {/* 1. 상태별 제목 */}
           <Text style={styles.recordPrompt}>
             {isAnalyzing ? 'AI가 레슨 내용을 정리하고 있어요'
-              : readyUri ? '레슨 녹음이 완료되었어요'
               : isPaused ? '녹음이 일시정지되었어요'
               : isRecording ? '레슨을 기록하고 있어요'
               : '오늘 레슨을 기록해 볼까요?'}
           </Text>
           {/* 2. 설명 (idle 상태에서만) */}
-          {!isRecording && !isPaused && !readyUri && !isAnalyzing && (
+          {!isRecording && !isPaused && !isAnalyzing && (
             <Text style={styles.recordDesc}>녹음하면 AI가 핵심 내용을 정리해요</Text>
           )}
 
@@ -1515,22 +1503,6 @@ export default function AIAnalysisScreen() {
           {/* 3. 버튼 영역 */}
           {isAnalyzing ? (
             <AnalyzingView />
-          ) : readyUri ? (
-            /* ── READY: 녹음 완료 확인 화면 ── */
-            <View style={styles.recordControls}>
-              <View style={styles.readyTimeBox}>
-                <Ionicons name="checkmark-circle" size={28} color="#22C55E" />
-                <Text style={styles.readyTimeText}>{formatDuration(readyDuration)}</Text>
-              </View>
-              <TouchableOpacity style={styles.analyzeBtn} onPress={handleAnalyze} activeOpacity={0.85}>
-                <Ionicons name="sparkles" size={20} color="#fff" />
-                <Text style={styles.analyzeBtnText}>AI 분석하기</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.reRecordBtn} onPress={handleReRecord} activeOpacity={0.7}>
-                <Ionicons name="refresh-outline" size={16} color={Colors.primary} />
-                <Text style={styles.reRecordBtnText}>다시 녹음</Text>
-              </TouchableOpacity>
-            </View>
           ) : (isRecording || isPaused) ? (
             /* ── RECORDING / PAUSED: 풀스크린 녹음 UI ── */
             <View style={styles.recordActiveContent}>
@@ -1574,7 +1546,7 @@ export default function AIAnalysisScreen() {
           )}
 
           {/* 4. 인식 향상 모드 — idle 상태에서만 표시 */}
-          {!isRecording && !isPaused && !readyUri && !isAnalyzing && (
+          {!isRecording && !isPaused && !isAnalyzing && (
           <TouchableOpacity
             style={styles.enhancedModeRow}
             onPress={() => setEnhancedMode(v => !v)}
