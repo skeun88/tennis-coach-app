@@ -8,8 +8,9 @@ const WARM_GRAY = '#9E9289';
 const HINT_DELAY_MS = 3000;
 const SPINNER_SIZE = 26;
 const SPINNER_STROKE = 2.5;
-// Matches SplashScreen.storyboard: imageView frame width/height = 240 pt
-const LOGO_SIZE = 240;
+// Matches SplashScreen.storyboard: imageView frame 348×114 pt (Avenir Next Bold, next native build)
+const LOGO_W = 348;
+const LOGO_H = 114;
 
 interface Props {
   retry?: boolean;
@@ -44,15 +45,15 @@ export default function BrandLoadingScreen({ retry, onRetry }: Props) {
   });
 
   // Logo center = screen center (matches native splash storyboard centerX/centerY constraints)
-  const logoTop = height / 2 - LOGO_SIZE / 2;
-  const spinnerTop = height / 2 + LOGO_SIZE / 2 + 32;
+  const logoTop = height / 2 - LOGO_H / 2;
+  const spinnerTop = height / 2 + LOGO_H / 2 + 32;
   const hintTop = spinnerTop + SPINNER_SIZE + 12;
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={CREAM} />
 
-      {/* Same image as SplashScreenLogo.imageset — 240 pt, scaleAspectFit, screen center */}
+      {/* Same image as SplashScreenLogo.imageset — 348×114 pt, screen center */}
       <Image
         source={require('../assets/images/kerri-logo.png')}
         style={[styles.logo, { top: logoTop }]}
@@ -87,8 +88,8 @@ const styles = StyleSheet.create({
   logo: {
     position: 'absolute',
     alignSelf: 'center',
-    width: LOGO_SIZE,
-    height: LOGO_SIZE,
+    width: LOGO_W,
+    height: LOGO_H,
   },
   spinnerContainer: {
     position: 'absolute',
