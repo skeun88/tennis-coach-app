@@ -1635,10 +1635,8 @@ export default function AIAnalysisScreen() {
         <Modal visible={manualModalVisible} animationType="slide" transparent={false} onRequestClose={handleCloseManualModal} statusBarTranslucent>
           <SafeAreaView style={styles.manualSafeArea}>
             <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-            {/* iOS left-edge 뒤로가기 스와이프 감지 영역 */}
-            {Platform.OS === 'ios' && (
-              <View style={styles.swipeBackZone} {...swipeBackResponder.panHandlers} />
-            )}
+            {/* left-edge 뒤로가기 스와이프 감지 영역 */}
+            <View style={styles.swipeBackZone} {...swipeBackResponder.panHandlers} />
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
               <View style={styles.manualContainer}>
                 {/* 헤더 */}
