@@ -1622,10 +1622,19 @@ export default function AIAnalysisScreen() {
               <View style={styles.manualInner}>
                 {/* 헤더 */}
                 <View style={styles.manualHeader}>
-                  <TouchableOpacity onPress={handleCloseManualModal} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={styles.manualHeaderBack}>
-                    <Ionicons name="chevron-back" size={24} color={Colors.foreground} />
-                  </TouchableOpacity>
+                  <View style={styles.manualHeaderSide}>
+                    <TouchableOpacity
+                      onPress={handleCloseManualModal}
+                      style={styles.manualBackCapsule}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <Ionicons name="chevron-back" size={18} color="#3E2B22" />
+                      <Text style={styles.manualBackText}>뒤로</Text>
+                    </TouchableOpacity>
+                  </View>
                   <Text style={styles.manualHeaderTitle}>레슨 기록</Text>
+                  <View style={[styles.manualHeaderSide, { alignItems: 'flex-end' }]} />
                 </View>
 
                 <ScrollView
@@ -2588,14 +2597,45 @@ const styles = StyleSheet.create({
   manualContainer: { flex: 1, backgroundColor: '#F5F3F0' },
   manualInner: { flex: 1, flexDirection: 'column' },
   manualHeader: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12,
-    backgroundColor: '#F7F0E9',
-    gap: 4,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E8E0D8',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 52,
+    paddingHorizontal: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: Platform.OS === 'android' ? 1 : StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(62,43,34,0.07)',
   },
-  manualHeaderBack: { padding: 4 },
-  manualHeaderTitle: { fontSize: 17, fontWeight: '800', color: Colors.foreground },
+  manualHeaderSide: { minWidth: 76, justifyContent: 'center' },
+  manualBackCapsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 1,
+    minHeight: 36,
+    paddingVertical: 7,
+    paddingLeft: 8,
+    paddingRight: 13,
+    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(62,43,34,0.06)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  manualBackText: { fontSize: 15, fontWeight: '600', color: '#3E2B22' },
+  manualHeaderTitle: {
+    position: 'absolute',
+    left: 76,
+    right: 76,
+    textAlign: 'center',
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#3E2B22',
+  },
   manualIntroBlock: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
   manualIntroTitle: { fontSize: 16, fontWeight: '700', color: Colors.foreground, marginBottom: 4 },
   manualIntroSub: { fontSize: 13, color: Colors.mutedFg, lineHeight: 19 },
