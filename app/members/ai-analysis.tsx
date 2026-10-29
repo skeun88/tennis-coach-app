@@ -1657,7 +1657,7 @@ export default function AIAnalysisScreen() {
         {/* 레슨 메모 입력 모달 */}
         <Modal visible={manualModalVisible} animationType="none" transparent statusBarTranslucent onRequestClose={handleCloseManualModal}>
           <GestureDetector gesture={swipeBackGesture}>
-            <ReanimatedAnimated.View style={[{ flex: 1 }, swipeAnimatedStyle]}>
+            <ReanimatedAnimated.View style={[styles.manualSlidePanel, swipeAnimatedStyle]}>
               <SafeAreaView style={styles.manualSafeArea}>
                 <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
                 <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -2638,8 +2638,8 @@ const styles = StyleSheet.create({
   manualReportBtnTitle: { fontSize: 14, fontWeight: '700', color: Colors.foreground },
   manualReportBtnSub: { fontSize: 12, color: Colors.mutedFg, marginTop: 2 },
   // 레슨 메모 입력 모달
+  manualSlidePanel: { flex: 1, borderRadius: 16, overflow: 'hidden' },
   manualSafeArea: { flex: 1, backgroundColor: '#FFFFFF' },
-  swipeBackZone: { position: 'absolute', top: 0, bottom: 0, left: 0, width: 24, zIndex: 50 },
   manualContainer: { flex: 1, flexDirection: 'column', backgroundColor: '#F7F0E9' },
   manualHeader: {
     flexDirection: 'row',
