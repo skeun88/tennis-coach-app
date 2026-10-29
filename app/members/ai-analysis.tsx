@@ -72,15 +72,16 @@ export default function AIAnalysisScreen() {
     ...RecordingPresets.HIGH_QUALITY,
     ios: { ...RecordingPresets.HIGH_QUALITY.ios, sampleRate: 16000, numberOfChannels: 1, bitRate: 32000 },
     android: { ...RecordingPresets.HIGH_QUALITY.android, sampleRate: 16000, numberOfChannels: 1, bitRate: 32000 },
-    isMeteringEnabled: false, // metering 비활성 — 활성화 시 iOS 오디오 파이프라인에 처리 부하로 녹음 품질 저하
+    isMeteringEnabled: true,
   };
   const audioRecorder = useAudioRecorder(VOICE_PRESET);
   const recorderState = useAudioRecorderState(audioRecorder);
 
-  // 음파 웨이브 롤링 버퍼 (28개 바) — metering 없이 시뮬레이션 애니메이션으로 구동
+  // 음파 웨이브 롤링 버퍼 (28개 바)
   const WAVE_BARS = 28;
   const [waveformBars, setWaveformBars] = useState<number[]>(Array(WAVE_BARS).fill(0.05));
   const waveSimRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const meteringRef = useRef<number>(-60);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -193,15 +194,22 @@ export default function AIAnalysisScreen() {
   const [showResumeBtn, setShowResumeBtn] = useState(false);
   const [interruptToast, setInterruptToast] = useState<string | null>(null);
 
-  // 웨이브폼 시뮬레이션 — metering 없이 자연스러운 파형 애니메이션
+  // recorderState.metering(dB) → meteringRef 동기화
+  useEffect(() => {
+    if (recorderState.metering != null) {
+      meteringRef.current = recorderState.metering;
+    }
+  }, [recorderState.metering]);
+
+  // 실시간 마이크 입력(dB)으로 웨이브폼 구동
   useEffect(() => {
     if (isRecording && !isPaused) {
       waveSimRef.current = setInterval(() => {
         if (!isMountedRef.current) return;
-        const base = 0.3 + 0.25 * Math.sin(Date.now() / 600);
-        const jitter = (Math.random() - 0.5) * 0.35;
-        const val = Math.max(0.05, Math.min(1, base + jitter));
-        setWaveformBars(prev => [...prev.slice(1), val]);
+        // dB 범위 -60~0 → 0.05~1 정규화
+        const db = meteringRef.current ?? -60;
+        const normalized = Math.max(0.05, Math.min(1, (db + 60) / 60));
+        setWaveformBars(prev => [...prev.slice(1), normalized]);
       }, 100);
     } else {
       if (waveSimRef.current) { clearInterval(waveSimRef.current); waveSimRef.current = null; }
