@@ -165,7 +165,6 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS,
     borderWidth: 1,
     borderColor: BORDER_HL,
-    paddingHorizontal: 6,
     overflow: 'hidden',
     // 다크 브라운 저불투명 약한 그림자
     shadowColor: '#3E2B22',
