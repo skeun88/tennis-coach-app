@@ -70,10 +70,21 @@ export default function AIAnalysisScreen() {
     ...RecordingPresets.HIGH_QUALITY,
     ios: { ...RecordingPresets.HIGH_QUALITY.ios, sampleRate: 16000, numberOfChannels: 1, bitRate: 32000 },
     android: { ...RecordingPresets.HIGH_QUALITY.android, sampleRate: 16000, numberOfChannels: 1, bitRate: 32000 },
-    isMeteringEnabled: false,
+    isMeteringEnabled: true,
   };
   const audioRecorder = useAudioRecorder(VOICE_PRESET);
-  const recorderState = useAudioRecorderState(audioRecorder);
+  const recorderState = useAudioRecorderState(audioRecorder, 100); // 100ms 인터벌로 metering 업데이트
+
+  // 음파 웨이브 롤링 버퍼 (28개 바)
+  const WAVE_BARS = 28;
+  const [waveformBars, setWaveformBars] = useState<number[]>(Array(WAVE_BARS).fill(0.05));
+  useEffect(() => {
+    if (!isRecording || isPaused) return;
+    const raw = recorderState.metering ?? -60;
+    // dBFS -60~0 → 0..1 정규화
+    const normalized = Math.max(0.05, Math.min(1, (raw + 60) / 60));
+    setWaveformBars(prev => [...prev.slice(1), normalized]);
+  }, [recorderState.metering]);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -1241,6 +1252,33 @@ export default function AIAnalysisScreen() {
     return `${m}:${s}`;
   }
 
+  function formatDurationFull(seconds: number) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
+  }
+
+  function WaveformBars({ bars, active }: { bars: number[]; active: boolean }) {
+    return (
+      <View style={styles.waveContainer}>
+        {bars.map((v, i) => (
+          <View
+            key={i}
+            style={[
+              styles.waveBar,
+              {
+                height: Math.max(4, v * 48),
+                backgroundColor: active ? Colors.primary : '#D9D0C8',
+                opacity: active ? 0.7 + v * 0.3 : 0.4,
+              },
+            ]}
+          />
+        ))}
+      </View>
+    );
+  }
+
   function formatDate(dateStr: string) {
     const d = new Date(dateStr);
     return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
@@ -1493,63 +1531,45 @@ export default function AIAnalysisScreen() {
                 <Text style={styles.reRecordBtnText}>다시 녹음</Text>
               </TouchableOpacity>
             </View>
-          ) : (
-            /* ── IDLE / RECORDING / PAUSED ── */
-            <View style={styles.recordControls}>
-              {(isRecording || isPaused) && (
-                <View style={styles.durationBox}>
-                  <View style={[styles.recordingDot, isPaused && styles.recordingDotPaused]} />
-                  <Text style={styles.durationText}>{formatDuration(recordingDuration)}</Text>
-                  {isPaused && <Text style={styles.pausedLabel}>일시정지</Text>}
-                </View>
-              )}
-
-              {/* 녹음 중: 일시정지 버튼(왼쪽) + 종료 버튼(오른쪽) */}
-              {isRecording && !isPaused ? (
-                <View style={styles.recordingBtnRow}>
-                  <TouchableOpacity style={styles.pauseBtn} onPress={pauseRecording} activeOpacity={0.75}>
-                    <Ionicons name="pause" size={22} color={Colors.primary} />
-                    <Text style={styles.pauseBtnText}>일시정지</Text>
-                  </TouchableOpacity>
-                  <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-                    <TouchableOpacity style={[styles.recordBtn, styles.recordBtnActive]} onPress={stopRecording} activeOpacity={0.7}>
-                      <Ionicons name="stop" size={32} color="#fff" />
-                      <Text style={styles.recordBtnText}>녹음 종료</Text>
-                    </TouchableOpacity>
-                  </Animated.View>
-                </View>
-              ) : isPaused ? (
-                /* 일시정지: 재개 버튼(왼쪽) + 종료 버튼(오른쪽) */
-                <View style={styles.recordingBtnRow}>
-                  <TouchableOpacity style={styles.pauseBtn} onPress={resumeRecording} activeOpacity={0.75}>
-                    <Ionicons name="play" size={22} color={Colors.primary} />
-                    <Text style={styles.pauseBtnText}>녹음 재개</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.recordBtn, styles.recordBtnPaused]} onPress={stopRecording} activeOpacity={0.7}>
-                    <Ionicons name="stop" size={32} color="#fff" />
-                    <Text style={styles.recordBtnText}>녹음 종료</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                /* IDLE: 중앙 시작 버튼 */
-                <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-                  <TouchableOpacity style={styles.recordBtn} onPress={() => startRecording()} activeOpacity={0.7}>
-                    <Ionicons name="mic" size={32} color="#fff" />
-                    <Text style={styles.recordBtnText}>녹음 시작</Text>
-                  </TouchableOpacity>
-                </Animated.View>
-              )}
-
+          ) : (isRecording || isPaused) ? (
+            /* ── RECORDING / PAUSED: 풀스크린 녹음 UI ── */
+            <View style={styles.recordActiveContent}>
+              <Text style={styles.recordMemberName}>{memberName}</Text>
+              <Text style={styles.recordStatusLabel}>
+                {isPaused ? '일시정지됨' : '레슨 기록 중'}
+              </Text>
+              <Text style={styles.recordTimerLarge}>{formatDurationFull(recordingDuration)}</Text>
+              <WaveformBars bars={waveformBars} active={isRecording && !isPaused} />
+              <View style={styles.recordBottomBtns}>
+                <TouchableOpacity style={styles.stopBtnPrimary} onPress={stopRecording} activeOpacity={0.85}>
+                  <Ionicons name="stop-circle" size={22} color="#fff" />
+                  <Text style={styles.stopBtnPrimaryText}>녹음 종료</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.pauseResumeBtn}
+                  onPress={isPaused ? resumeRecording : pauseRecording}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name={isPaused ? 'play' : 'pause'} size={18} color={Colors.foreground} />
+                  <Text style={styles.pauseResumeBtnText}>{isPaused ? '이어서 녹음' : '일시정지'}</Text>
+                </TouchableOpacity>
+              </View>
               {showResumeBtn && (
                 <TouchableOpacity style={styles.resumeBtn} onPress={resumeRecording}>
                   <Ionicons name="play-circle-outline" size={18} color="#fff" />
                   <Text style={styles.resumeBtnText}>이어서 녹음</Text>
                 </TouchableOpacity>
               )}
-
-              {isRecording && !isPaused && (
-                <Text style={styles.recordHint}>녹음을 종료하면 AI 분석 화면으로 이동해요</Text>
-              )}
+            </View>
+          ) : (
+            /* ── IDLE: 녹음 시작 버튼 ── */
+            <View style={styles.recordControls}>
+              <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                <TouchableOpacity style={styles.recordBtn} onPress={() => startRecording()} activeOpacity={0.7}>
+                  <Ionicons name="mic" size={32} color="#fff" />
+                  <Text style={styles.recordBtnText}>녹음 시작</Text>
+                </TouchableOpacity>
+              </Animated.View>
             </View>
           )}
 
@@ -2486,7 +2506,7 @@ const styles = StyleSheet.create({
   recordBtnPaused: { backgroundColor: Colors.mutedFg, shadowColor: Colors.mutedFg },
   recordBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   recordHint: { fontSize: 12, color: Colors.mutedFg, textAlign: 'center', maxWidth: 240 },
-  // 녹음 중 일시정지+종료 가로 배치
+  // 녹음 중 일시정지+종료 가로 배치 (구 스타일 — 미사용이나 혹시 참조 시 보존)
   recordingBtnRow: { flexDirection: 'row', alignItems: 'center', gap: 20 },
   pauseBtn: {
     width: 76, height: 76, borderRadius: 38,
@@ -2495,6 +2515,48 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(192,117,90,0.06)',
   },
   pauseBtnText: { fontSize: 11, fontWeight: '700', color: Colors.primary },
+
+  // 풀 녹음 활성 UI (RECORDING/PAUSED)
+  recordActiveContent: {
+    alignItems: 'center', gap: 8, paddingVertical: 4,
+  },
+  recordMemberName: {
+    fontSize: 18, fontWeight: '700', color: Colors.foreground, marginBottom: 2,
+  },
+  recordStatusLabel: {
+    fontSize: 13, color: Colors.mutedFg, fontWeight: '500', marginBottom: 4,
+  },
+  recordTimerLarge: {
+    fontSize: 52, fontWeight: '800', color: Colors.foreground,
+    letterSpacing: 2, fontVariant: ['tabular-nums'] as any,
+    marginBottom: 12,
+  },
+  // 음파 웨이브
+  waveContainer: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    height: 52, marginBottom: 24,
+  },
+  waveBar: {
+    width: 4, borderRadius: 3,
+  },
+  // 하단 버튼 세로 배치
+  recordBottomBtns: { alignItems: 'center', gap: 12, width: '100%' },
+  stopBtnPrimary: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Colors.destructive,
+    borderRadius: 16, paddingVertical: 16, paddingHorizontal: 40,
+    width: '100%', justifyContent: 'center',
+    shadowColor: Colors.destructive, shadowOpacity: 0.25, shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 }, elevation: 4,
+  },
+  stopBtnPrimaryText: { color: '#fff', fontSize: 17, fontWeight: '800' },
+  pauseResumeBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius: 14, paddingVertical: 13, paddingHorizontal: 32,
+    width: '100%', justifyContent: 'center',
+  },
+  pauseResumeBtnText: { color: Colors.foreground, fontSize: 15, fontWeight: '600' },
   // READY 상태
   readyTimeBox: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 20 },
   readyTimeText: { fontSize: 28, fontWeight: '800', color: Colors.foreground, letterSpacing: 2 },
