@@ -29,12 +29,12 @@ const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
 const ANALYSIS_STEPS = [
-  { step: 0, icon: '⬆️', label: '오디오 업로드 중...' },
-  { step: 1, icon: '🎙', label: '음성 변환 중...' },
-  { step: 2, icon: '📝', label: '레슨 내용 요약 중...' },
-  { step: 3, icon: '🔍', label: '관련 교육 자료 검색 중...' },
-  { step: 4, icon: '🧠', label: 'AI 레슨 기록 중...' },
-  { step: 5, icon: '💾', label: '분석 결과 저장 중...' },
+  { step: 0, label: '오디오 업로드 중...' },
+  { step: 1, label: '음성 변환 중...' },
+  { step: 2, label: '레슨 내용 요약 중...' },
+  { step: 3, label: '관련 교육 자료 검색 중...' },
+  { step: 4, label: 'AI 레슨 기록 중...' },
+  { step: 5, label: '분석 결과 저장 중...' },
 ];
 
 export default function AIAnalysisScreen() {
@@ -1382,7 +1382,7 @@ export default function AIAnalysisScreen() {
       <View style={styles.analyzingBox}>
         <ActivityIndicator size="large" color={Colors.primary} />
         <Text style={styles.analyzingText}>
-          {current ? `${current.icon} ${current.label}` : 'AI 분석 중...'}
+          {current ? current.label : 'AI 분석 중...'}
           {analysisStep === 0 && uploadPct > 0 ? ` (${uploadPct}%)` : ''}
         </Text>
         {/* 단계 도트 */}
@@ -2447,7 +2447,7 @@ const styles = StyleSheet.create({
 
   // 분석 진행 상태
   analyzingBox: { alignItems: 'center', paddingVertical: 20, gap: 10 },
-  analyzingText: { fontSize: 16, fontWeight: '700', color: Colors.navy },
+  analyzingText: { fontSize: 16, fontWeight: '700', color: Colors.primary },
   analyzingSubText: { fontSize: 12, color: Colors.placeholder },
   stepDots: { flexDirection: 'row', gap: 8, marginTop: 4 },
   stepDot: {
