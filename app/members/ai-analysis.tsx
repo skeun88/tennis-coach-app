@@ -576,9 +576,9 @@ export default function AIAnalysisScreen() {
     }
   }, [manualModalVisible]);
 
-  // 모달 닫힐 때 슬라이드 위치 초기화
+  // 모달 열릴 때 슬라이드 위치 초기화 (닫힐 때 하면 translateX=0 깜빡임 발생)
   useEffect(() => {
-    if (!manualModalVisible) swipeTranslateX.value = 0;
+    if (manualModalVisible) swipeTranslateX.value = 0;
   }, [manualModalVisible]);
 
   // 모달 키보드 높이 추적 — contentPadding 동적 조정에 사용
@@ -1218,6 +1218,8 @@ export default function AIAnalysisScreen() {
       if (!uri) throw new Error('녹음 파일을 찾을 수 없습니다.');
 
       const duration = recordingDurationRef.current;
+      // isAnalyzing을 먼저 true로 → isRecording/isPaused false 전환 시 IDLE 플래시 방지
+      setIsAnalyzing(true);
       setIsRecording(false);
       setIsPaused(false);
       setShowResumeBtn(false);
@@ -1248,6 +1250,7 @@ export default function AIAnalysisScreen() {
       if (!limitCheck.allowed && !limitCheck.needsExtraCredit) {
         setUsageInfo({ used: limitCheck.used, limit: limitCheck.limit });
         setUpsellContext(limitCheck.planId === 'basic' ? 'ai_analysis_limit' : 'ai_analysis_free');
+        setIsAnalyzing(false);
         return;
       }
 
@@ -1256,6 +1259,7 @@ export default function AIAnalysisScreen() {
         setPendingAnalysis({ uri, userId: user.id, duration });
         setAuthToken(token);
         setTopupModalVisible(true);
+        setIsAnalyzing(false);
         return;
       }
 
@@ -2646,7 +2650,7 @@ const styles = StyleSheet.create({
   manualReportBtnTitle: { fontSize: 14, fontWeight: '700', color: Colors.foreground },
   manualReportBtnSub: { fontSize: 12, color: Colors.mutedFg, marginTop: 2 },
   // 레슨 메모 입력 모달
-  manualSlidePanel: { flex: 1, borderRadius: 16, overflow: 'hidden' },
+  manualSlidePanel: { flex: 1, borderTopLeftRadius: 12, borderTopRightRadius: 12, overflow: 'hidden' },
   manualSafeArea: { flex: 1, backgroundColor: '#FFFFFF' },
   manualContainer: { flex: 1, flexDirection: 'column', backgroundColor: '#F7F0E9' },
   manualHeader: {
