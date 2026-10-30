@@ -120,7 +120,7 @@ export default function TabsLayout() {
   function handleGoSchedule() {
     if (!toastRequest) return;
     // 스케줄탭으로 이동 + 날짜/시간 파라미터 전달
-    router.push({
+    router.navigate({
       pathname: '/(tabs)/schedule',
       params: {
         highlightDate: toastRequest.requested_date,

@@ -700,7 +700,7 @@ export default function HomeScreen() {
         {/* ── 섹션1: 오늘 레슨 배너 ── */}
         <TouchableOpacity
           style={styles.todayBannerCard}
-          onPress={() => router.push('/(tabs)/schedule')}
+          onPress={() => router.navigate('/(tabs)/schedule' as any)}
           activeOpacity={0.85}
         >
           <View style={styles.todayBannerLeft}>

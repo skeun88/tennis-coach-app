@@ -120,6 +120,7 @@ function getWeekDatesForDate(dateStr: string): string[] {
 }
 
 function timeToMinutes(t: string): number {
+  if (!t) return 0;
   const [h, m] = t.slice(0, 5).split(':').map(Number);
   return h * 60 + m;
 }

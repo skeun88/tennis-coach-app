@@ -1521,6 +1521,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                       await supabase.from('payments').delete().eq('member_id', id);
                       await supabase.from('lesson_members').delete().eq('member_id', id);
                       await supabase.from('messages').delete().eq('member_id', id);
+                      await supabase.from('lesson_requests').delete().eq('member_id', id);
 
                       // 멤버 제거 후 비어버린 레슨 슬롯 삭제 (다른 회원 없는 경우만)
                       if (lessonIds.length > 0) {
