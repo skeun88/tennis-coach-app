@@ -345,7 +345,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
 
   // ── 레슨 일정 변경 모달 ──────────────────────────────────────────
   const [scheduleEditModal, setScheduleEditModal] = useState(false);
-  const [seType, setSeType] = useState<'regular' | 'by_date'>('regular');
+  const [seType, setSeType] = useState<ScheduleType>('regular');
   const [seDays, setSeDays] = useState<number[]>([]);
   const [seDayTimes, setSeDayTimes] = useState<DayTimes>({});
   const [seDuration, setSeDuration] = useState(60);
@@ -458,8 +458,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
 
   function openScheduleEditModal() {
     const currentType = member ? detectScheduleType(member as any, futureLessons.length > 0) : 'later';
-    const initialType: 'regular' | 'by_date' = currentType === 'by_date' ? 'by_date' : 'regular';
-    setSeType(initialType);
+    setSeType(currentType);
     setSeDays([...scheduleDays]);
     setSeDayTimes({ ...dayTimes });
     setSeDuration(parseInt(lessonDuration) || 60);
@@ -467,7 +466,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     setSeApplyFrom(todayStr);
 
     setSeByDateChanges({});
-    if (initialType === 'by_date') {
+    if (currentType === 'by_date') {
       const nowH = new Date().getHours();
       const nowM = new Date().getMinutes();
       const nowMin = nowH * 60 + nowM;
@@ -498,7 +497,14 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setSeSaving(false); return; }
 
-      if (seType === 'regular') {
+      if (seType === 'later') {
+        // 나중에 설정: 고정 스케줄 클리어, 레슨 생성 없음
+        await supabase.from('members').update({
+          fixed_schedule_days: [],
+          fixed_schedule_times: null,
+          fixed_schedule_time: null,
+        }).eq('id', id!);
+      } else if (seType === 'regular') {
         const allDaysHaveTimes = seDays.length > 0 && seDays.every(d => seDayTimes[d]?.length > 0);
         if (!allDaysHaveTimes && seDays.length > 0) {
           Alert.alert('입력 오류', '모든 요일에 시간을 설정해주세요.'); setSeSaving(false); return;
@@ -515,8 +521,10 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         }).eq('id', id!);
 
         if (allDaysHaveTimes) {
+          // 기존 자동 레슨 삭제 (출결 완료된 것은 보호)
           const { data: lmRows } = await supabase.from('lesson_members').select('lesson_id').eq('member_id', id!);
           const lessonIds = (lmRows ?? []).map((r: any) => r.lesson_id as string);
+          let deletedCount = 0;
           if (lessonIds.length > 0) {
             const { data: futureLsns } = await supabase.from('lessons')
               .select('id, date, source').in('id', lessonIds).gte('date', seApplyFrom).eq('source', 'auto');
@@ -526,7 +534,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                 .in('lesson_id', futureIds).eq('member_id', id!).in('status', ['출석', '결석']);
               const protectedSet = new Set((doneAtt ?? []).map((r: any) => r.lesson_id as string));
               const deletableIds = futureIds.filter(lid => !protectedSet.has(lid));
-              const affectedCount = deletableIds.length;
+              deletedCount = deletableIds.length;
               if (deletableIds.length > 0) {
                 const { data: otherRows } = await supabase.from('lesson_members').select('lesson_id')
                   .in('lesson_id', deletableIds).neq('member_id', id!);
@@ -542,12 +550,12 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                   await supabase.from('lesson_members').delete().in('lesson_id', soloIds);
                   await supabase.from('lessons').delete().in('id', soloIds);
                 }
-                if (affectedCount > 0) {
-                  await generateScheduleLessons(supabase, user.id, id!, member!.name, seDays, seDayTimes, seDuration, affectedCount, seApplyFrom);
-                }
               }
             }
           }
+          // 새 스케줄 생성: 삭제된 레슨 수 기준, 없으면 잔여 크레딧 기준
+          const creditsForGen = deletedCount > 0 ? deletedCount : (parseInt(remainingCredits) || 12);
+          await generateScheduleLessons(supabase, user.id, id!, member!.name, seDays, seDayTimes, seDuration, creditsForGen, seApplyFrom);
         }
       } else {
         // by_date: update changed lessons, clear regular schedule
@@ -570,6 +578,8 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       setScheduleEditModal(false);
       await loadMember();
       await loadFutureLessons();
+      // 스케줄 탭으로 이동해서 useFocusEffect가 최신 데이터를 로드하도록 함
+      router.navigate('/(tabs)/schedule' as any);
     } catch (e) {
       Alert.alert('오류', '저장에 실패했어요.');
     } finally {
@@ -2733,8 +2743,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                   lessonDuration={seDuration}
                   scheduleType={seType}
                   onScheduleTypeChange={(t) => {
-                    if (t === 'later') return;
-                    setSeType(t as 'regular' | 'by_date');
+                    setSeType(t);
                     if (t === 'by_date') {
                       const todayStr2 = toKSTDateStr(new Date());
                       const nowH2 = new Date().getHours();
@@ -2759,7 +2768,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                   startDate={seApplyFrom}
                   onStartDateChange={setSeApplyFrom}
                   startDateLabel="적용 시작일"
-                  hideNeverOption={true}
+                  hideNeverOption={false}
                   byDateContent={
                     <View>
                       <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 }}>예정 일정 수정</Text>
