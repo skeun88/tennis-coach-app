@@ -1098,24 +1098,36 @@ export default function AIAnalysisScreen() {
         const fileSize = (fileInfo as any).size as number ?? 0;
         const uploadStart = Date.now();
         setUploadPct(0);
-        const uploadTask = FileSystem.createUploadTask(
-          uploadUrl, uri,
-          {
-            httpMethod: 'POST',
-            uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'audio/m4a',
-              'x-upsert': 'false',
-            },
-          },
-          (p) => {
-            if (p.totalBytesExpectedToSend > 0) {
-              setUploadPct(Math.round(p.totalBytesSent / p.totalBytesExpectedToSend * 100));
-            }
-          },
-        );
-        const uploadResult = await uploadTask.uploadAsync();
+        // 전화/알림 중단 시 재시도 (최대 3회)
+        let uploadResult: FileSystem.FileSystemUploadResult | null = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const uploadTask = FileSystem.createUploadTask(
+              uploadUrl, uri,
+              {
+                httpMethod: 'POST',
+                uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'audio/m4a',
+                  'x-upsert': attempt > 0 ? 'true' : 'false',
+                },
+              },
+              (p) => {
+                if (p.totalBytesExpectedToSend > 0) {
+                  setUploadPct(Math.round(p.totalBytesSent / p.totalBytesExpectedToSend * 100));
+                }
+              },
+            );
+            uploadResult = (await uploadTask.uploadAsync()) ?? null;
+            if (uploadResult && uploadResult.status < 400) break;
+            if (attempt < 2) await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+          } catch (uploadErr: any) {
+            console.log(`[UPLOAD] attempt ${attempt + 1} failed:`, uploadErr?.message);
+            if (attempt === 2) throw uploadErr;
+            await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+          }
+        }
         const uploadMs = Date.now() - uploadStart;
         const throughput = uploadMs > 0 ? Math.round(fileSize / uploadMs) : 0;
         console.log(`[UPLOAD] size=${fileSize}B duration=${uploadMs}ms throughput=${throughput}KB/s`);
@@ -1213,6 +1225,8 @@ export default function AIAnalysisScreen() {
     try {
       await audioRecorder.stop();
       isIntentionalStopRef.current = false;
+      // 오디오 세션 해제 — 업로드 중 전화/알림 수신 시 충돌 방지
+      try { await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }); } catch {}
       const uri = await mergeAndGetUri();
       recordingSegmentsRef.current = [];
       if (!uri) throw new Error('녹음 파일을 찾을 수 없습니다.');
