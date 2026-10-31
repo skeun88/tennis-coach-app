@@ -133,6 +133,7 @@ export default function SettingsScreen() {
           <SettingRow icon="person-circle-outline" label="계정 정보" onPress={notReady} value={email || undefined} />
           <SettingRow icon="notifications-outline" label="알림 설정" onPress={() => router.push('/settings/notifications')} />
           <SettingRow icon="time-outline" label="시간블럭 설정" onPress={() => router.push('/settings/availability')} />
+          <SettingRow icon="globe-outline" label="공개 프로필 설정" onPress={() => router.push('/settings/public-profile')} />
         </Group>
 
         {/* ── 구독 ── */}
