@@ -23,10 +23,26 @@ export default function NewLessonPackageScreen() {
   const [price, setPrice] = useState('');
   const [totalCredits, setTotalCredits] = useState('10');
   const [durationMinutes, setDurationMinutes] = useState('60');
+  const [creditsPreset, setCreditsPreset] = useState<string>('10');
+  const [durationPreset, setDurationPreset] = useState<string>('60');
   const [color, setColor] = useState(Colors.primary);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingEdit, setLoadingEdit] = useState(isEdit);
+
+  const CREDITS_PRESETS = [
+    { key: '1', label: '원타임\n체험레슨' },
+    { key: '10', label: '10회' },
+    { key: '20', label: '20회' },
+    { key: 'custom', label: '기타' },
+  ];
+  const DURATION_PRESETS = [
+    { key: '20', label: '20분' },
+    { key: '30', label: '30분' },
+    { key: '40', label: '40분' },
+    { key: '60', label: '60분' },
+    { key: 'custom', label: '기타' },
+  ];
 
   useEffect(() => {
     if (!isEdit) return;
@@ -35,8 +51,14 @@ export default function NewLessonPackageScreen() {
       if (data) {
         setTitle(data.title);
         setPrice(String(data.price));
-        setTotalCredits(String(data.total_credits));
-        setDurationMinutes(String(data.duration_minutes));
+        const cr = String(data.total_credits);
+        setTotalCredits(cr);
+        const cpKey = ['1', '10', '20'].includes(cr) ? cr : 'custom';
+        setCreditsPreset(cpKey);
+        const dr = String(data.duration_minutes);
+        setDurationMinutes(dr);
+        const dpKey = ['20', '30', '40', '60'].includes(dr) ? dr : 'custom';
+        setDurationPreset(dpKey);
         setColor(data.color);
         setNotes(data.notes ?? '');
       }
@@ -47,6 +69,12 @@ export default function NewLessonPackageScreen() {
   async function handleSave() {
     if (!title.trim()) { Alert.alert('입력 오류', '레슨권 제목을 입력해주세요.'); return; }
     if (!price.trim() || isNaN(Number(price))) { Alert.alert('입력 오류', '가격을 숫자로 입력해주세요.'); return; }
+    if (creditsPreset === 'custom' && (!totalCredits.trim() || isNaN(Number(totalCredits)) || parseInt(totalCredits) < 1)) {
+      Alert.alert('입력 오류', '횟수를 올바르게 입력해주세요.'); return;
+    }
+    if (durationPreset === 'custom' && (!durationMinutes.trim() || isNaN(Number(durationMinutes)) || parseInt(durationMinutes) < 1)) {
+      Alert.alert('입력 오류', '레슨 시간을 올바르게 입력해주세요.'); return;
+    }
 
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -109,7 +137,7 @@ export default function NewLessonPackageScreen() {
           </View>
           <View style={styles.previewMeta}>
             <Text style={styles.previewMetaText}>⏱ {durationMinutes}분</Text>
-            <Text style={styles.previewMetaText}>🎾 {totalCredits}회</Text>
+            <Text style={styles.previewMetaText}>🎾 {creditsPreset === '1' ? '원타임' : `${totalCredits}회`}</Text>
             <Text style={styles.previewMetaText}>💳 {priceNum.toLocaleString()}원</Text>
           </View>
         </View>
@@ -137,22 +165,54 @@ export default function NewLessonPackageScreen() {
 
 
           <Text style={styles.label}>기본 횟수</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="10"
-            value={totalCredits}
-            onChangeText={setTotalCredits}
-            keyboardType="number-pad"
-          />
+          <View style={styles.optionRow}>
+            {CREDITS_PRESETS.map(p => (
+              <TouchableOpacity
+                key={p.key}
+                style={[styles.optionBtn, creditsPreset === p.key && styles.optionBtnActive]}
+                onPress={() => {
+                  setCreditsPreset(p.key);
+                  if (p.key !== 'custom') setTotalCredits(p.key);
+                }}
+              >
+                <Text style={[styles.optionBtnText, creditsPreset === p.key && styles.optionBtnTextActive]}>{p.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {creditsPreset === 'custom' && (
+            <TextInput
+              style={[styles.input, { marginTop: 8 }]}
+              placeholder="횟수 입력"
+              value={totalCredits}
+              onChangeText={setTotalCredits}
+              keyboardType="number-pad"
+            />
+          )}
 
-          <Text style={styles.label}>레슨 시간 (분)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="60"
-            value={durationMinutes}
-            onChangeText={setDurationMinutes}
-            keyboardType="number-pad"
-          />
+          <Text style={[styles.label, { marginTop: 12 }]}>레슨 시간</Text>
+          <View style={styles.optionRow}>
+            {DURATION_PRESETS.map(p => (
+              <TouchableOpacity
+                key={p.key}
+                style={[styles.optionBtn, durationPreset === p.key && styles.optionBtnActive]}
+                onPress={() => {
+                  setDurationPreset(p.key);
+                  if (p.key !== 'custom') setDurationMinutes(p.key);
+                }}
+              >
+                <Text style={[styles.optionBtnText, durationPreset === p.key && styles.optionBtnTextActive]}>{p.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {durationPreset === 'custom' && (
+            <TextInput
+              style={[styles.input, { marginTop: 8 }]}
+              placeholder="분 입력"
+              value={durationMinutes}
+              onChangeText={setDurationMinutes}
+              keyboardType="number-pad"
+            />
+          )}
         </View>
 
         {/* 카드 색상 */}
@@ -214,6 +274,15 @@ const styles = StyleSheet.create({
   },
   textArea: { minHeight: 80, paddingTop: 10 },
   colorRow: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
+  optionRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 4 },
+  optionBtn: {
+    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10,
+    backgroundColor: Colors.mutedBg, borderWidth: 1.5, borderColor: Colors.border,
+    alignItems: 'center', justifyContent: 'center', minWidth: 60,
+  },
+  optionBtnActive: { backgroundColor: Colors.primaryLight, borderColor: Colors.primary },
+  optionBtnText: { fontSize: 13, fontWeight: '600', color: Colors.mutedFg, textAlign: 'center' },
+  optionBtnTextActive: { color: Colors.primary },
   colorSwatch: { width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center' },
   colorSwatchSelected: { borderWidth: 3, borderColor: '#fff', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4 },
   saveBtn: { margin: 16, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
