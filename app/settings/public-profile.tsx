@@ -86,6 +86,10 @@ export default function PublicProfileScreen() {
       } else {
         const suggested = suggestSlug(data.display_name ?? '', data.region_district ?? '', data.sport ?? '테니스');
         setSlug(suggested);
+        if (isValidSlug(suggested)) {
+          setSlugStatus('checking');
+          checkSlugAvailability(suggested);
+        }
       }
     }
     setLoading(false);
