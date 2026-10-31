@@ -281,7 +281,7 @@ export default function ScheduleScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const { data } = await supabase.from('lesson_requests')
-      .select('*, member:members(name)')
+      .select('*, member:members(name), package:lesson_packages(title)')
       .eq('coach_id', user.id)
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
@@ -318,7 +318,16 @@ export default function ScheduleScreen() {
 
     if (!memberId) { Alert.alert('오류', '회원 정보가 없습니다.'); return; }
 
-    // 레슨 생성
+    // 웹 문의 요청 (날짜/시간 없음) — 회원만 등록하고 직접 연락
+    if (req.source === 'web' || !req.requested_date) {
+      await supabase.from('lesson_requests').update({ status: 'accepted', responded_at: new Date().toISOString(), member_id: memberId }).eq('id', req.id);
+      setRequestModal(false);
+      loadPendingRequests();
+      Alert.alert('수락 완료', `${memberName}님이 회원으로 등록됐어요.\n직접 연락해 레슨 일정을 잡아주세요.`);
+      return;
+    }
+
+    // 레슨 생성 (앱 내 예약 요청)
     const { data: lesson, error: le } = await supabase.from('lessons').insert({
       coach_id: user.id, title: memberName,
       date: req.requested_date, start_time: req.start_time, end_time: req.end_time,
@@ -1012,7 +1021,7 @@ export default function ScheduleScreen() {
         <View style={styles.requestBannerLeft}>
           <Ionicons name="calendar-outline" size={18} color={Colors.foreground} />
           <Text style={styles.requestBannerText}>
-            레슨 예약 요청 {pendingRequests.length}건 대기 중
+            {pendingRequests.some(r => r.source === 'web') ? '레슨 문의·요청' : '레슨 예약 요청'} {pendingRequests.length}건 대기 중
           </Text>
         </View>
         <View style={styles.requestBannerBadge}>
@@ -1759,31 +1768,48 @@ export default function ScheduleScreen() {
       <Modal visible={requestModal} transparent animationType="slide" onRequestClose={() => setRequestModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalSheet, { paddingBottom: Math.max(40, insets.bottom + 20) }]}>
-            <Text style={styles.modalTitle}>레슨 예약 요청</Text>
+            <Text style={styles.modalTitle}>{selectedRequest?.source === 'web' ? '웹 레슨 문의' : '레슨 예약 요청'}</Text>
             {selectedRequest && (
               <>
                 {/* 회원 정보 카드 */}
                 <View style={styles.requestInfoCard}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Text style={styles.requestMemberName}>
-                      {selectedRequest.member?.name ?? selectedRequest.guest_name ?? '회원'}
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.requestMemberName}>
+                        {selectedRequest.member?.name ?? selectedRequest.guest_name ?? '회원'}
+                      </Text>
                       {!selectedRequest.member_id && selectedRequest.guest_phone ? (
-                        <Text style={{ fontSize: 13, fontWeight: '500', color: Colors.mutedFg }}>{' · '}{selectedRequest.guest_phone}{' (비앱 회원)'}</Text>
+                        <Text style={{ fontSize: 13, color: Colors.mutedFg, marginTop: 2 }}>{selectedRequest.guest_phone}</Text>
                       ) : null}
-                    </Text>
-                    {pendingRequests.length > 1 && (
-                      <View style={{ backgroundColor: Colors.warning + '22', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
-                        <Text style={{ fontSize: 13, color: Colors.warning, fontWeight: '700' }}>외 {pendingRequests.length - 1}건 대기중</Text>
-                      </View>
-                    )}
+                    </View>
+                    <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                      {selectedRequest.source === 'web' && (
+                        <View style={{ backgroundColor: '#e0f2fe', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
+                          <Text style={{ fontSize: 11, color: '#0369a1', fontWeight: '700' }}>🌐 웹 문의</Text>
+                        </View>
+                      )}
+                      {pendingRequests.length > 1 && (
+                        <View style={{ backgroundColor: Colors.warning + '22', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                          <Text style={{ fontSize: 13, color: Colors.warning, fontWeight: '700' }}>외 {pendingRequests.length - 1}건 대기중</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
-                  <Text style={styles.requestDateTime}>
-                    {selectedRequest.requested_date}{'  '}
-                    {selectedRequest.start_time?.slice(0,5)} ~ {selectedRequest.end_time?.slice(0,5)}
-                  </Text>
+                  {selectedRequest.source !== 'web' && selectedRequest.requested_date ? (
+                    <Text style={styles.requestDateTime}>
+                      {selectedRequest.requested_date}{'  '}
+                      {selectedRequest.start_time?.slice(0,5)} ~ {selectedRequest.end_time?.slice(0,5)}
+                    </Text>
+                  ) : null}
+                  {selectedRequest.package?.title ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                      <Ionicons name="card-outline" size={14} color={Colors.mutedFg} />
+                      <Text style={{ fontSize: 13, color: Colors.mutedFg }}>관심 패키지: {selectedRequest.package.title}</Text>
+                    </View>
+                  ) : null}
                   {selectedRequest.message ? (
                     <View style={styles.requestMsgBox}>
-                      <Text style={styles.requestMsgLabel}>회원 메시지</Text>
+                      <Text style={styles.requestMsgLabel}>메시지</Text>
                       <Text style={styles.requestMsgText}>{selectedRequest.message}</Text>
                     </View>
                   ) : null}
