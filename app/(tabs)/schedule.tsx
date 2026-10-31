@@ -291,21 +291,49 @@ export default function ScheduleScreen() {
   async function handleAcceptRequest(req: any) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+
+    let memberId = req.member_id as string | null;
+    let memberName = req.member?.name ?? req.guest_name ?? '회원';
+
+    // 게스트 요청: 회원 자동 생성 (phone 중복 시 기존 회원 재사용)
+    if (!memberId && req.guest_phone) {
+      const { data: existing } = await supabase.from('members')
+        .select('id, name').eq('coach_id', user.id).eq('phone', req.guest_phone).maybeSingle();
+      if (existing) {
+        memberId = existing.id;
+        memberName = existing.name;
+      } else {
+        const { data: newMember, error: me } = await supabase.from('members').insert({
+          coach_id: user.id,
+          name: req.guest_name ?? '신규회원',
+          phone: req.guest_phone,
+          is_trial: true,
+        }).select('id').single();
+        if (me || !newMember) { Alert.alert('오류', '회원 생성 실패'); return; }
+        memberId = newMember.id;
+      }
+      // 요청에 member_id 연결
+      await supabase.from('lesson_requests').update({ member_id: memberId }).eq('id', req.id);
+    }
+
+    if (!memberId) { Alert.alert('오류', '회원 정보가 없습니다.'); return; }
+
     // 레슨 생성
-    const memberName = req.member?.name ?? '회원';
     const { data: lesson, error: le } = await supabase.from('lessons').insert({
       coach_id: user.id, title: memberName,
       date: req.requested_date, start_time: req.start_time, end_time: req.end_time,
     }).select('id').single();
     if (le || !lesson) { Alert.alert('오류', '레슨 생성 실패'); return; }
-    await supabase.from('lesson_members').insert({ lesson_id: lesson.id, member_id: req.member_id });
+    await supabase.from('lesson_members').insert({ lesson_id: lesson.id, member_id: memberId });
     // 요청 상태 업데이트
     await supabase.from('lesson_requests').update({ status: 'accepted', responded_at: new Date().toISOString() }).eq('id', req.id);
-    // 회원에게 메시지 알림
-    await supabase.from('messages').insert({
-      coach_id: user.id, member_id: req.member_id, sender_type: 'coach',
-      content: `✅ ${req.requested_date} ${req.start_time.slice(0,5)} 레슨 예약이 수락됐습니다! 🎾`,
-    });
+    // 앱 회원에게만 메시지 알림
+    if (req.member_id) {
+      await supabase.from('messages').insert({
+        coach_id: user.id, member_id: memberId, sender_type: 'coach',
+        content: `✅ ${req.requested_date} ${req.start_time.slice(0,5)} 레슨 예약이 수락됐습니다! 🎾`,
+      });
+    }
     setRequestModal(false);
     loadPendingRequests();
     loadDayLessons(selectedDate);
@@ -316,19 +344,20 @@ export default function ScheduleScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     await supabase.from('lesson_requests').update({ status: 'rejected', responded_at: new Date().toISOString(), reject_message: rejectMsg.trim() || null }).eq('id', req.id);
-    // 회원에게 거절 알림 (메시지)
-    const rejMsg = rejectMsg.trim()
-      ? `❌ 레슨 예약 요청이 거절됐습니다.
-${rejectMsg.trim()}`
-      : `❌ ${req.requested_date} ${req.start_time.slice(0,5)} 레슨 예약 요청이 거절됐습니다. 다른 시간을 선택해주세요.`;
-    await supabase.from('messages').insert({
-      coach_id: user.id, member_id: req.member_id, sender_type: 'coach',
-      content: rejMsg,
-    });
+    // 앱 회원에게만 메시지 전송 (게스트는 스킵)
+    if (req.member_id) {
+      const rejMsg = rejectMsg.trim()
+        ? `❌ 레슨 예약 요청이 거절됐습니다.\n${rejectMsg.trim()}`
+        : `❌ ${req.requested_date} ${req.start_time.slice(0,5)} 레슨 예약 요청이 거절됐습니다. 다른 시간을 선택해주세요.`;
+      await supabase.from('messages').insert({
+        coach_id: user.id, member_id: req.member_id, sender_type: 'coach',
+        content: rejMsg,
+      });
+    }
     setRejectMsg('');
     setRequestModal(false);
     loadPendingRequests();
-    Alert.alert('거절 완료', '회원에게 메시지가 전송됐습니다.');
+    Alert.alert('거절 완료', req.member_id ? '회원에게 메시지가 전송됐습니다.' : '요청이 거절됐습니다.');
   }
 
   function scrollToCurrentTime() {
@@ -1170,7 +1199,7 @@ ${rejectMsg.trim()}`
                     {req.start_time?.slice(0,5)} ~ {req.end_time?.slice(0,5)}
                   </Text>
                   <Text style={{ fontSize: 13, color: Colors.warning }}>
-                    {req.member?.name ?? '회원'} · 탭하여 수락/거절
+                    {req.member?.name ?? req.guest_name ?? '회원'}{!req.member_id ? ' (비앱)' : ''} · 탭하여 수락/거절
                   </Text>
                 </TouchableOpacity>
               );
@@ -1736,7 +1765,12 @@ ${rejectMsg.trim()}`
                 {/* 회원 정보 카드 */}
                 <View style={styles.requestInfoCard}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Text style={styles.requestMemberName}>{selectedRequest.member?.name ?? '회원'}</Text>
+                    <Text style={styles.requestMemberName}>
+                      {selectedRequest.member?.name ?? selectedRequest.guest_name ?? '회원'}
+                      {!selectedRequest.member_id && selectedRequest.guest_phone ? (
+                        <Text style={{ fontSize: 13, fontWeight: '500', color: Colors.mutedFg }}>{' · '}{selectedRequest.guest_phone}{' (비앱 회원)'}</Text>
+                      ) : null}
+                    </Text>
                     {pendingRequests.length > 1 && (
                       <View style={{ backgroundColor: Colors.warning + '22', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
                         <Text style={{ fontSize: 13, color: Colors.warning, fontWeight: '700' }}>외 {pendingRequests.length - 1}건 대기중</Text>
