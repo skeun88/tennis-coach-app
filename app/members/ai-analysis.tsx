@@ -227,6 +227,8 @@ export default function AIAnalysisScreen() {
   const recordingSegmentsRef = useRef<string[]>([]); // 여러 구간 녹음 파일 URI 목록
   const recordingDurationRef = useRef(0); // duration 누적 (timer 재시작 후에도 유지)
   const isMountedRef = useRef(true);
+  const isAnalyzingRef = useRef(false);
+  const pendingAnalysisRef = useRef<{ uri: string; userId: string; duration: number; storagePath?: string; planId?: string } | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem('ai_lesson_usage_seen').then(val => {
@@ -342,8 +344,28 @@ export default function AIAnalysisScreen() {
         backgroundTimeRef.current = Date.now();
       } else if (nextState === 'active' && prevState !== 'active') {
         backgroundTimeRef.current = null;
-        // 전화 통화 후 포그라운드 복귀 → 일시정지 상태면 자동 재개 시도
-        if (isPausedRef.current) {
+        // 업로드 중단 후 포그라운드 복귀 → pendingAnalysis 자동 재시도
+        if (pendingAnalysisRef.current && !isAnalyzingRef.current) {
+          const pa = pendingAnalysisRef.current;
+          setTimeout(async () => {
+            if (!isMountedRef.current || !pendingAnalysisRef.current) return;
+            setPendingAnalysis(null);
+            if (isMountedRef.current) {
+              setInterruptToast('이전 업로드를 이어서 진행합니다...');
+              setTimeout(() => { if (isMountedRef.current) setInterruptToast(null); }, 3000);
+            }
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              const token = session?.access_token ?? SUPABASE_ANON_KEY;
+              setIsAnalyzing(true);
+              await runAnalysis(pa.uri, pa.userId, pa.duration, token, true, pa.storagePath, pa.planId);
+            } catch (e: any) {
+              if (isMountedRef.current) Alert.alert('재시도 실패', e.message || '오류가 발생했습니다.');
+              setIsAnalyzing(false);
+            }
+          }, 1500);
+        } else if (isPausedRef.current) {
+          // 전화 통화 후 포그라운드 복귀 → 일시정지 상태면 자동 재개 시도
           setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true, allowsBackgroundRecording: true, shouldPlayInBackground: true })
             .then(() => audioRecorder.prepareToRecordAsync(VOICE_PRESET))
             .then(() => { audioRecorder.record(); })
@@ -376,6 +398,8 @@ export default function AIAnalysisScreen() {
   // isPaused를 ref로 추적해서 클로저 stale 방지
   const isPausedRef = useRef(false);
   useEffect(() => { isPausedRef.current = isPaused; }, [isPaused]);
+  useEffect(() => { isAnalyzingRef.current = isAnalyzing; }, [isAnalyzing]);
+  useEffect(() => { pendingAnalysisRef.current = pendingAnalysis; }, [pendingAnalysis]);
 
   // recorderState.isRecording 변화 감지 → 시스템 인터럽트 (전화 수신) 처리
   useEffect(() => {
@@ -506,6 +530,19 @@ export default function AIAnalysisScreen() {
     const inProgress = (data ?? []).find((p: any) => p.status === 'pending' || p.status === 'processing');
     if (inProgress && !isAnalyzing) {
       console.log('[ANA][3] loadPlans 자동재개: planId=', inProgress.id, 'status=', inProgress.status, 'created=', inProgress.created_at);
+
+      // 15분 이상 된 stuck plan → 즉시 failed 처리 (화면잠금 후 무한 로딩 방지)
+      const planAgeMs = Date.now() - new Date(inProgress.created_at).getTime();
+      if (planAgeMs > 15 * 60 * 1000) {
+        console.log('[ANA][3] plan이 15분 이상 경과 → 즉시 failed 처리');
+        await supabase.from('lesson_plans')
+          .update({ status: 'failed', error_message: '분석이 완료되지 않았습니다. 다시 시도해 주세요.' })
+          .eq('id', inProgress.id)
+          .in('status', ['pending', 'processing']);
+        await loadPlans();
+        return false;
+      }
+
       setIsAnalyzing(true);
       setAnalysisStep(2);
       const resumedPlanId = inProgress.id;
@@ -517,7 +554,7 @@ export default function AIAnalysisScreen() {
             await supabase.from('lesson_plans')
               .update({ status: 'failed', error_message: '분석 시간이 초과됐습니다. 다시 시도해 주세요.' })
               .eq('id', resumedPlanId)
-              .eq('status', 'processing');
+              .in('status', ['pending', 'processing']);
             Alert.alert('분석 시간 초과', '분석에 오류가 발생했습니다. 다시 시도해 주세요.');
           }
           loadPlans();
@@ -1098,9 +1135,10 @@ export default function AIAnalysisScreen() {
         const fileSize = (fileInfo as any).size as number ?? 0;
         const uploadStart = Date.now();
         setUploadPct(0);
-        // 전화/알림 중단 시 재시도 (최대 3회)
+        // 전화/알림 중단 시 재시도 (최대 5회)
         let uploadResult: FileSystem.FileSystemUploadResult | null = null;
-        for (let attempt = 0; attempt < 3; attempt++) {
+        let uploadInterrupted = false;
+        for (let attempt = 0; attempt < 5; attempt++) {
           try {
             const uploadTask = FileSystem.createUploadTask(
               uploadUrl, uri,
@@ -1121,17 +1159,32 @@ export default function AIAnalysisScreen() {
             );
             uploadResult = (await uploadTask.uploadAsync()) ?? null;
             if (uploadResult && uploadResult.status < 400) break;
-            if (attempt < 2) await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+            if (attempt < 4) await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
           } catch (uploadErr: any) {
             console.log(`[UPLOAD] attempt ${attempt + 1} failed:`, uploadErr?.message);
-            if (attempt === 2) throw uploadErr;
+            if (attempt === 4) {
+              // 5회 모두 실패 → pendingAnalysis 저장 후 포그라운드 복귀 시 자동 재시도
+              uploadInterrupted = true;
+              break;
+            }
             await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
           }
         }
         const uploadMs = Date.now() - uploadStart;
         const throughput = uploadMs > 0 ? Math.round(fileSize / uploadMs) : 0;
         console.log(`[UPLOAD] size=${fileSize}B duration=${uploadMs}ms throughput=${throughput}KB/s`);
-        if (!uploadResult || uploadResult.status >= 400) {
+        if (uploadInterrupted || !uploadResult || uploadResult.status >= 400) {
+          if (uploadInterrupted || (uploadResult?.status ?? 0) >= 500) {
+            // 네트워크 중단 → 포그라운드 복귀 시 자동 재시도를 위해 pending 저장
+            if (isMountedRef.current) {
+              setPendingAnalysis({ uri, userId, duration });
+              setIsAnalyzing(false);
+              setAnalysisStep(0);
+              setInterruptToast('업로드가 중단되었어요. 앱으로 돌아오면 자동으로 이어서 진행합니다.');
+              setTimeout(() => { if (isMountedRef.current) setInterruptToast(null); }, 5000);
+            }
+            return;
+          }
           throw new Error(`오디오 업로드 실패: ${uploadResult?.body ?? '응답 없음'}`);
         }
       }
