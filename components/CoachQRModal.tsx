@@ -11,10 +11,12 @@ import {
   Modal,
   View,
   Text,
+  Image,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Animated,
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import ViewShot from 'react-native-view-shot';
@@ -41,8 +43,30 @@ export default function CoachQRModal({
   const qrValue = publicSlug
     ? `https://kerri.co.kr/coach/${publicSlug}`
     : `kerri-member://qr-onboarding?coach_id=${coachId}`;
+  const profileUrl = publicSlug ? `https://kerri.co.kr/coach/${publicSlug}` : null;
   const viewShotRef = useRef<any>(null);
   const [saving, setSaving] = useState(false);
+  const [toastVisible, setToastVisible] = useState(false);
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+
+  function showToast() {
+    setToastVisible(true);
+    Animated.sequence([
+      Animated.timing(toastOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.delay(1600),
+      Animated.timing(toastOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
+    ]).start(() => setToastVisible(false));
+  }
+
+  async function handleCopyProfileUrl() {
+    if (!profileUrl) return;
+    try {
+      await Clipboard.setStringAsync(profileUrl);
+      showToast();
+    } catch {
+      Alert.alert('복사 실패', '클립보드 복사 중 오류가 발생했어요.');
+    }
+  }
 
   async function captureQR(): Promise<string | null> {
     try {
@@ -73,9 +97,14 @@ export default function CoachQRModal({
   }
 
   async function handleCopy() {
+    const copyTarget = profileUrl ?? qrValue;
     try {
-      await Clipboard.setStringAsync(qrValue);
-      Alert.alert('복사 완료', 'QR 링크가 클립보드에 복사되었어요 📋');
+      await Clipboard.setStringAsync(copyTarget);
+      if (profileUrl) {
+        showToast();
+      } else {
+        Alert.alert('복사 완료', 'QR 링크가 클립보드에 복사되었어요 📋');
+      }
     } catch {
       Alert.alert('복사 실패', '클립보드 복사 중 오류가 발생했어요.');
     }
@@ -133,10 +162,13 @@ export default function CoachQRModal({
           {/* QR 캡처 영역 */}
           <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 1.0 }}>
             <View style={styles.qrCard}>
-              {/* 상단 브랜드 */}
+              {/* 상단 브랜드 — 공식 로고 에셋 */}
               <View style={styles.qrBrand}>
-                <Ionicons name="tennisball" size={16} color={Colors.primary} />
-                <Text style={styles.qrBrandText}>KERRI</Text>
+                <Image
+                  source={require('../assets/images/kerri-logo.png')}
+                  style={styles.qrLogoImg}
+                  resizeMode="contain"
+                />
               </View>
 
               <QRCode
@@ -151,17 +183,40 @@ export default function CoachQRModal({
               {coachName ? (
                 <Text style={styles.qrCoachName}>{coachName} 코치</Text>
               ) : null}
-              <Text style={styles.qrHint}>{publicSlug ? '공개 프로필 · 레슨 문의' : 'KERRI Member'}</Text>
+              {/* 카드 내부 안내 문구 — 위치 교환: 기존 URL row 대신 앱 설치 안내 */}
+              {publicSlug ? (
+                <Text style={styles.qrNoticeInCard}>앱 설치 없이 웹에서 레슨 문의 가능</Text>
+              ) : (
+                <Text style={styles.qrHint}>KERRI Member</Text>
+              )}
             </View>
           </ViewShot>
 
-          {/* 하단 안내 */}
-          {publicSlug ? (
-            <Text style={styles.qrNotice}>앱 설치 없이 웹에서 레슨 문의 가능</Text>
-          ) : (
+          {/* 카드 외부 — 프로필 URL + 복사 (publicSlug 있을 때) */}
+          {publicSlug && profileUrl ? (
+            <View style={styles.qrUrlRow}>
+              <Text style={styles.qrUrlText} numberOfLines={1} ellipsizeMode="tail">
+                {profileUrl}
+              </Text>
+              <TouchableOpacity
+                onPress={handleCopyProfileUrl}
+                hitSlop={{ top: 10, bottom: 10, left: 12, right: 12 }}
+                style={styles.qrCopyIconBtn}
+              >
+                <Ionicons name="copy-outline" size={16} color={Colors.primary} />
+              </TouchableOpacity>
+            </View>
+          ) : !publicSlug ? (
             <Text style={styles.qrValue} numberOfLines={1} ellipsizeMode="middle">
               {qrValue}
             </Text>
+          ) : null}
+
+          {/* 복사 토스트 */}
+          {toastVisible && (
+            <Animated.View style={[styles.toast, { opacity: toastOpacity }]}>
+              <Text style={styles.toastText}>프로필 링크를 복사했어요</Text>
+            </Animated.View>
           )}
 
           {/* 액션 버튼들 */}
@@ -241,14 +296,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     paddingHorizontal: 4,
   },
-  qrNotice: {
-    fontSize: 11,
-    color: Colors.primary,
-    textAlign: 'center',
-    marginTop: 10,
-    fontWeight: '600',
-    letterSpacing: 0.2,
-  },
   qrCard: {
     backgroundColor: Colors.white,
     borderRadius: Radius.lg,
@@ -258,16 +305,12 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   qrBrand: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
     marginBottom: 14,
   },
-  qrBrandText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: Colors.primary,
-    letterSpacing: 1.5,
+  qrLogoImg: {
+    width: 108,
+    height: 36,
   },
   qrCoachName: {
     fontSize: 15,
@@ -280,6 +323,43 @@ const styles = StyleSheet.create({
     color: Colors.mutedFg,
     marginTop: 4,
     letterSpacing: 0.3,
+  },
+  qrNoticeInCard: {
+    fontSize: 11,
+    color: Colors.primary,
+    marginTop: 5,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+    textAlign: 'center',
+  },
+  qrUrlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    maxWidth: 280,
+    gap: 6,
+    paddingHorizontal: 4,
+  },
+  qrUrlText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.mutedFg,
+    letterSpacing: 0.2,
+  },
+  qrCopyIconBtn: {
+    padding: 4,
+  },
+  toast: {
+    backgroundColor: Colors.navy,
+    borderRadius: Radius.md,
+    paddingVertical: 9,
+    paddingHorizontal: 18,
+    marginTop: 12,
+  },
+  toastText: {
+    fontSize: 13,
+    color: Colors.white,
+    fontWeight: '600',
   },
   qrValue: {
     fontSize: 11,
