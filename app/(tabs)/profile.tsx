@@ -126,6 +126,7 @@ export default function ProfileScreen() {
 
   const [profile, setProfile] = useState<ProfileInfo>(EMPTY_PROFILE);
   const [career, setCareer] = useState<CareerInfo>(EMPTY_CAREER);
+  const [publicSlug, setPublicSlug] = useState<string | null>(null);
 
   // 통합 편집 모달 state
   const [editModal, setEditModal] = useState(false);
@@ -244,6 +245,7 @@ export default function ProfileScreen() {
       setJoinedMonths(Math.max(0, months));
     }
     setJourneyPublic(p?.show_coaching_journey ?? false);
+    setPublicSlug(p?.public_slug ?? null);
     setProfile({
       name: p?.display_name ?? user.email?.split('@')[0] ?? '코치',
       avatar_url: p?.avatar_url ?? '',
@@ -765,11 +767,11 @@ export default function ProfileScreen() {
                   <Ionicons name="qr-code-outline" size={22} color={TERRA} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.aiTitle}>내 초대 QR</Text>
-                  <Text style={styles.aiSub}>회원을 초대해보세요</Text>
+                  <Text style={styles.aiTitle}>나의 코치 프로필</Text>
+                  <Text style={styles.aiSub}>공유하고 새로운 레슨 문의를 받아보세요</Text>
                 </View>
               </View>
-              <Text style={styles.aiArrow}>QR 보기 →</Text>
+              <Text style={styles.aiArrow}>공유하기 →</Text>
             </TouchableOpacity>
           ) : (
             <View style={[styles.aiCard, { opacity: 0.4 }]}>
@@ -778,8 +780,8 @@ export default function ProfileScreen() {
                   <Ionicons name="qr-code-outline" size={22} color={TERRA} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.aiTitle}>내 초대 QR</Text>
-                  <Text style={styles.aiSub}>회원을 초대해보세요</Text>
+                  <Text style={styles.aiTitle}>나의 코치 프로필</Text>
+                  <Text style={styles.aiSub}>공유하고 새로운 레슨 문의를 받아보세요</Text>
                 </View>
               </View>
             </View>
@@ -1152,6 +1154,7 @@ export default function ProfileScreen() {
           onClose={() => setQrModalVisible(false)}
           coachId={coachId}
           coachName={profile.name}
+          publicSlug={publicSlug}
         />
       ) : null}
     </Animated.View>

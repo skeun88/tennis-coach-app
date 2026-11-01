@@ -123,12 +123,17 @@ export default function CoachQRModal({
           </TouchableOpacity>
 
           {/* 타이틀 */}
-          <Text style={styles.title}>{publicSlug ? '내 공개 프로필 QR' : '내 초대 QR'}</Text>
+          <Text style={styles.title}>나의 코치 프로필 공유</Text>
           <Text style={styles.subtitle}>
             {publicSlug
-              ? 'QR 코드를 스캔하면 내 공개 프로필 페이지로 이동해요'
+              ? '레슨 중에도 새로운 문의를 놓치지 마세요'
               : 'QR 코드를 스캔하면 회원이 바로 등록돼요'}
           </Text>
+          {publicSlug ? (
+            <Text style={styles.subDesc}>
+              인스타그램이나 레슨장에 프로필을 공유해 보세요. 레슨에 관심 있는 누구나 내 프로필을 확인하고 간편하게 문의할 수 있어요.
+            </Text>
+          ) : null}
 
           {/* QR 캡처 영역 */}
           <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 1.0 }}>
@@ -151,14 +156,18 @@ export default function CoachQRModal({
               {coachName ? (
                 <Text style={styles.qrCoachName}>{coachName} 코치</Text>
               ) : null}
-              <Text style={styles.qrHint}>KERRI Member</Text>
+              <Text style={styles.qrHint}>{publicSlug ? '공개 프로필 · 레슨 문의' : 'KERRI Member'}</Text>
             </View>
           </ViewShot>
 
-          {/* 딥링크 값 (참고용 소형 텍스트) */}
-          <Text style={styles.qrValue} numberOfLines={1} ellipsizeMode="middle">
-            {qrValue}
-          </Text>
+          {/* 하단 안내 */}
+          {publicSlug ? (
+            <Text style={styles.qrNotice}>앱 설치 없이 웹에서 레슨 문의 가능</Text>
+          ) : (
+            <Text style={styles.qrValue} numberOfLines={1} ellipsizeMode="middle">
+              {qrValue}
+            </Text>
+          )}
 
           {/* 액션 버튼들 */}
           {saving ? (
@@ -167,18 +176,18 @@ export default function CoachQRModal({
             <View style={styles.actions}>
               <TouchableOpacity style={styles.actionBtn} onPress={handleSave}>
                 <Ionicons name="download-outline" size={16} color={Colors.primary} />
-                <Text style={styles.actionBtnText}>저장</Text>
+                <Text style={styles.actionBtnText}>QR 저장</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.actionBtn} onPress={handleCopy}>
                 <Ionicons name="copy-outline" size={16} color={Colors.primary} />
-                <Text style={styles.actionBtnText}>복사</Text>
+                <Text style={styles.actionBtnText}>링크 복사</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.actionBtn, styles.actionBtnPrimary]}
                 onPress={handleShare}
               >
                 <Ionicons name="share-outline" size={16} color={Colors.white} />
-                <Text style={[styles.actionBtnText, { color: Colors.white }]}>공유</Text>
+                <Text style={[styles.actionBtnText, { color: Colors.white }]}>공유하기</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -225,8 +234,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.mutedFg,
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 8,
     lineHeight: 19,
+    fontWeight: '600',
+  },
+  subDesc: {
+    fontSize: 12,
+    color: Colors.mutedFg,
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 18,
+    paddingHorizontal: 4,
+  },
+  qrNotice: {
+    fontSize: 11,
+    color: Colors.primary,
+    textAlign: 'center',
+    marginTop: 10,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
   qrCard: {
     backgroundColor: Colors.white,
