@@ -92,11 +92,10 @@ export default function CoachInviteQRScreen() {
     setBusy(true);
     const uri = await captureQR();
     if (!uri) { Alert.alert('저장 실패', 'QR 코드 이미지를 생성하지 못했어요.'); setBusy(false); return; }
-    try {
-      const dest = `${FileSystem.documentDirectory}kerri_invite_qr.png`;
-      await FileSystem.copyAsync({ from: uri, to: dest });
-      Alert.alert('저장 완료', '갤러리에 저장되었어요 📷');
-    } catch { Alert.alert('저장 실패', '이미지 저장 중 오류가 발생했어요.'); }
+    const isAvailable = await Sharing.isAvailableAsync();
+    if (!isAvailable) { Alert.alert('저장 불가', '이 기기에서는 저장 기능을 사용할 수 없어요.'); setBusy(false); return; }
+    // 공유 시트에서 "이미지 저장" 선택하면 갤러리에 저장됩니다
+    await Sharing.shareAsync(uri, { mimeType: 'image/png', UTI: 'public.png' });
     setBusy(false);
   }
 

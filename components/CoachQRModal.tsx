@@ -19,7 +19,6 @@ import {
 import QRCode from 'react-native-qrcode-svg';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system/legacy';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radius } from '../lib/theme';
@@ -29,6 +28,7 @@ interface CoachQRModalProps {
   onClose: () => void;
   coachId: string;
   coachName?: string;
+  publicSlug?: string | null;
 }
 
 export default function CoachQRModal({
@@ -36,8 +36,11 @@ export default function CoachQRModal({
   onClose,
   coachId,
   coachName,
+  publicSlug,
 }: CoachQRModalProps) {
-  const qrValue = `kerri-member://qr-onboarding?coach_id=${coachId}`;
+  const qrValue = publicSlug
+    ? `https://kerri.co.kr/coach/${publicSlug}`
+    : `kerri-member://qr-onboarding?coach_id=${coachId}`;
   const viewShotRef = useRef<any>(null);
   const [saving, setSaving] = useState(false);
 
@@ -58,35 +61,24 @@ export default function CoachQRModal({
       setSaving(false);
       return;
     }
-    const destPath = `${FileSystem.documentDirectory}kerri_qr_${coachId}.png`;
-    try {
-      await FileSystem.copyAsync({ from: uri, to: destPath });
-      Alert.alert('저장 완료', '갤러리에 저장되었어요 📷');
-    } catch {
-      Alert.alert('저장 실패', '이미지 저장 중 오류가 발생했어요.');
+    const isAvailable = await Sharing.isAvailableAsync();
+    if (!isAvailable) {
+      Alert.alert('저장 불가', '이 기기에서는 저장 기능을 사용할 수 없어요.');
+      setSaving(false);
+      return;
     }
+    // 공유 시트에서 "이미지 저장" 선택하면 갤러리에 저장됩니다
+    await Sharing.shareAsync(uri, { mimeType: 'image/png', UTI: 'public.png' });
     setSaving(false);
   }
 
   async function handleCopy() {
-    setSaving(true);
-    const uri = await captureQR();
-    if (!uri) {
-      Alert.alert('복사 실패', 'QR 코드 이미지를 생성하지 못했어요.');
-      setSaving(false);
-      return;
-    }
     try {
-      // base64로 읽어서 클립보드에 복사
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      await Clipboard.setStringAsync(`data:image/png;base64,${base64}`);
-      Alert.alert('복사 완료', 'QR 코드 이미지가 클립보드에 복사되었어요 📋');
+      await Clipboard.setStringAsync(qrValue);
+      Alert.alert('복사 완료', 'QR 링크가 클립보드에 복사되었어요 📋');
     } catch {
       Alert.alert('복사 실패', '클립보드 복사 중 오류가 발생했어요.');
     }
-    setSaving(false);
   }
 
   async function handleShare() {
@@ -126,9 +118,11 @@ export default function CoachQRModal({
           </TouchableOpacity>
 
           {/* 타이틀 */}
-          <Text style={styles.title}>내 초대 QR</Text>
+          <Text style={styles.title}>{publicSlug ? '내 공개 프로필 QR' : '내 초대 QR'}</Text>
           <Text style={styles.subtitle}>
-            QR 코드를 스캔하면 회원이 바로 등록돼요
+            {publicSlug
+              ? 'QR 코드를 스캔하면 내 공개 프로필 페이지로 이동해요'
+              : 'QR 코드를 스캔하면 회원이 바로 등록돼요'}
           </Text>
 
           {/* QR 캡처 영역 */}
