@@ -15,7 +15,6 @@ import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
-import * as MediaLibrary from 'expo-media-library';
 import * as Clipboard from 'expo-clipboard';
 import { Colors, Radius } from '../../lib/theme';
 import SettingsHeader from '../../components/SettingsHeader';
@@ -92,16 +91,9 @@ export default function CoachInviteQRScreen() {
     setBusy(true);
     const uri = await captureQR();
     if (!uri) { Alert.alert('저장 실패', 'QR 코드 이미지를 생성하지 못했어요.'); setBusy(false); return; }
-    try {
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('권한 필요', '갤러리 저장을 위해 사진 접근 권한이 필요해요.');
-        setBusy(false);
-        return;
-      }
-      await MediaLibrary.saveToLibraryAsync(uri);
-      Alert.alert('저장 완료', '갤러리에 저장되었어요 📷');
-    } catch { Alert.alert('저장 실패', '이미지 저장 중 오류가 발생했어요.'); }
+    const isAvailable = await Sharing.isAvailableAsync();
+    if (!isAvailable) { Alert.alert('저장 불가', '이 기기에서는 저장 기능을 사용할 수 없어요.'); setBusy(false); return; }
+    await Sharing.shareAsync(uri, { mimeType: 'image/png', UTI: 'public.png' });
     setBusy(false);
   }
 
