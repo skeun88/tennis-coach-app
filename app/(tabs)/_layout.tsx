@@ -9,13 +9,18 @@ import { supabase } from '../../lib/supabase';
 import GlassTabBar from '../../components/GlassTabBar';
 
 // ── 전역 예약 요청 토스트 ─────────────────────────────────────
+function formatToastTime(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 function RequestToast({
   request,
-  onGoSchedule,
+  onConfirm,
   onDismiss,
 }: {
   request: any;
-  onGoSchedule: () => void;
+  onConfirm: () => void;
   onDismiss: () => void;
 }) {
   const translateY = useRef(new Animated.Value(-120)).current;
@@ -34,21 +39,28 @@ function RequestToast({
 
   if (!request) return null;
 
+  const isWeb = request.source === 'web';
+  const title = isWeb ? '신규 상담 문의 요청' : '새 레슨 예약 요청';
+  const guestOrMember = isWeb
+    ? (request.guest_name ?? '문의자')
+    : (request.member?.name ?? '회원');
+  const subText = isWeb
+    ? `${guestOrMember} · ${formatToastTime(request.created_at)} 접수`
+    : `${guestOrMember} · ${request.requested_date} ${request.start_time?.slice(0, 5)}`;
+
   return (
     <Animated.View style={[styles.toast, { transform: [{ translateY }] }]}>
       <View style={styles.toastLeft}>
         <View style={styles.toastIcon}>
-          <Ionicons name="calendar" size={20} color="#fff" />
+          <Ionicons name={isWeb ? 'chatbubble-ellipses' : 'calendar'} size={20} color="#fff" />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.toastTitle}>새 레슨 예약 요청</Text>
-          <Text style={styles.toastBody} numberOfLines={1}>
-            {request.member?.name ?? '회원'} · {request.requested_date} {request.start_time?.slice(0, 5)}
-          </Text>
+          <Text style={styles.toastTitle}>{title}</Text>
+          <Text style={styles.toastBody} numberOfLines={1}>{subText}</Text>
         </View>
       </View>
       <View style={styles.toastActions}>
-        <TouchableOpacity style={styles.toastActionBtn} onPress={onGoSchedule}>
+        <TouchableOpacity style={styles.toastActionBtn} onPress={onConfirm}>
           <Text style={styles.toastActionText}>확인하기</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={onDismiss} style={{ padding: 4 }}>
@@ -75,6 +87,8 @@ export default function TabsLayout() {
         .select('*, member:members(name)')
         .eq('coach_id', uid)
         .eq('status', 'pending')
+        // 웹 문의는 미확인(viewed_at IS NULL)인 것만, 앱 예약은 모두 표시
+        .or('source.neq.web,viewed_at.is.null')
         .order('created_at', { ascending: false })
         .limit(1);
       if (data && data.length > 0) {
@@ -83,6 +97,9 @@ export default function TabsLayout() {
           if (prev?.id === data[0].id) return prev;
           return data[0];
         });
+      } else {
+        // pending 항목이 없으면 토스트 닫기
+        setToastRequest((prev: any) => (prev ? null : prev));
       }
     }
 
@@ -105,8 +122,13 @@ export default function TabsLayout() {
         }, async (payload) => {
           const req = payload.new as any;
           if (req.coach_id !== myCoachId) return;
-          const { data: mem } = await supabase.from('members').select('name').eq('id', req.member_id).maybeSingle();
-          setToastRequest({ ...req, member: { name: mem?.name ?? '회원' } });
+          if (req.source === 'web') {
+            // 웹 문의: guest_name 사용, member 조회 불필요
+            setToastRequest({ ...req, member: null });
+          } else {
+            const { data: mem } = await supabase.from('members').select('name').eq('id', req.member_id).maybeSingle();
+            setToastRequest({ ...req, member: { name: mem?.name ?? '회원' } });
+          }
         })
         .subscribe();
     });
@@ -117,20 +139,30 @@ export default function TabsLayout() {
     };
   }, []);
 
-  function handleGoSchedule() {
+  function handleConfirmRequest() {
     if (!toastRequest) return;
-    // 스케줄탭으로 이동 + 날짜/시간 파라미터 전달
-    router.navigate({
-      pathname: '/(tabs)/schedule',
-      params: {
-        highlightDate: toastRequest.requested_date,
-        highlightTime: toastRequest.start_time,
-        highlightMember: toastRequest.member?.name ?? '',
-        highlightEnd: toastRequest.end_time,
-        requestId: toastRequest.id,
-      },
-    } as any);
     setToastRequest(null);
+
+    if (toastRequest.source === 'web') {
+      // 웹 문의: viewed_at 기록 후 상담 상세로 이동
+      supabase.from('lesson_requests')
+        .update({ viewed_at: new Date().toISOString() })
+        .eq('id', toastRequest.id)
+        .then(() => {});
+      router.navigate({ pathname: '/consultations/[id]', params: { id: toastRequest.id } } as any);
+    } else {
+      // 앱 예약: 스케줄탭으로 이동
+      router.navigate({
+        pathname: '/(tabs)/schedule',
+        params: {
+          highlightDate: toastRequest.requested_date,
+          highlightTime: toastRequest.start_time,
+          highlightMember: toastRequest.member?.name ?? '',
+          highlightEnd: toastRequest.end_time,
+          requestId: toastRequest.id,
+        },
+      } as any);
+    }
   }
 
   return (
@@ -202,7 +234,7 @@ export default function TabsLayout() {
       {toastRequest && (
         <RequestToast
           request={toastRequest}
-          onGoSchedule={handleGoSchedule}
+          onConfirm={handleConfirmRequest}
           onDismiss={() => setToastRequest(null)}
         />
       )}
