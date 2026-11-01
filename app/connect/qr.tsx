@@ -21,6 +21,9 @@ import { Colors, Radius } from '../../lib/theme';
 import SettingsHeader from '../../components/SettingsHeader';
 import { buildInviteUrl } from '../../lib/featureFlags';
 import { ensureInviteLink, fetchConnectionRequests } from '../../lib/sharedInvite';
+import { supabase } from '../../lib/supabase';
+
+const PUBLIC_BASE = 'https://kerri.co.kr/coach/';
 
 export default function CoachInviteQRScreen() {
   const router = useRouter();
@@ -30,12 +33,28 @@ export default function CoachInviteQRScreen() {
   const [token, setToken] = useState<string | null>(null);
   const [connectCode, setConnectCode] = useState<string | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
+  const [publicSlug, setPublicSlug] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const link = await ensureInviteLink();
-      setToken(link.token);
-      setConnectCode(link.connect_code);
+      const [linkResult, { data: { user } }] = await Promise.all([
+        ensureInviteLink(),
+        supabase.auth.getUser(),
+      ]);
+      setToken(linkResult.token);
+      setConnectCode(linkResult.connect_code);
+      if (user) {
+        const { data: profile } = await supabase
+          .from('coach_profiles')
+          .select('public_slug, is_public')
+          .eq('coach_id', user.id)
+          .maybeSingle();
+        if (profile?.is_public && profile.public_slug) {
+          setPublicSlug(profile.public_slug);
+        } else {
+          setPublicSlug(null);
+        }
+      }
     } catch (e: any) {
       Alert.alert('오류', '초대 링크를 불러오지 못했어요.');
     } finally {
@@ -59,14 +78,17 @@ export default function CoachInviteQRScreen() {
     }, [load, refreshPending]),
   );
 
+  // 공개 프로필 있으면 slug URL 우선, 없으면 invite URL 폴백
+  const profileUrl = publicSlug ? `${PUBLIC_BASE}${publicSlug}` : null;
   const inviteUrl = token ? buildInviteUrl(token) : '';
+  const qrUrl = profileUrl ?? inviteUrl;
 
   async function captureQR(): Promise<string | null> {
     try { return (await viewShotRef.current?.capture?.()) ?? null; } catch { return null; }
   }
 
   async function handleSaveQR() {
-    if (!inviteUrl) return;
+    if (!qrUrl) return;
     setBusy(true);
     const uri = await captureQR();
     if (!uri) { Alert.alert('저장 실패', 'QR 코드 이미지를 생성하지 못했어요.'); setBusy(false); return; }
@@ -87,12 +109,15 @@ export default function CoachInviteQRScreen() {
   async function handleShare() {
     setBusy(true);
     try {
-      if (inviteUrl) {
+      if (profileUrl) {
+        await Share.share({
+          message: `${profileUrl}\n\nQR 스캔 또는 링크로 레슨 문의를 보내주세요.`,
+        });
+      } else if (inviteUrl) {
         await Share.share({
           message: `KERRI 연결 초대\n아래 링크로 접속하거나 연결 코드를 입력해 주세요.\n\n${inviteUrl}\n\n연결 코드: ${connectCode ?? ''}`,
         });
       } else {
-        // 초대주소 미설정 시 QR 이미지 공유로 폴백
         const uri = await captureQR();
         if (uri && (await Sharing.isAvailableAsync())) {
           await Sharing.shareAsync(uri, { mimeType: 'image/png', UTI: 'public.png' });
@@ -108,12 +133,29 @@ export default function CoachInviteQRScreen() {
     <View style={styles.container}>
       <SettingsHeader title="내 초대 QR" />
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.desc}>회원에게 QR을 보여주거나 연결 코드를 알려주세요.</Text>
+        <Text style={styles.desc}>
+          {profileUrl
+            ? 'QR 스캔 → 코치 프로필 웹페이지 → 레슨 문의 접수'
+            : '회원에게 QR을 보여주거나 연결 코드를 알려주세요.'}
+        </Text>
 
         {loading ? (
           <ActivityIndicator color={Colors.primary} style={{ marginTop: 48 }} />
         ) : (
           <>
+            {/* 공개 프로필 미설정 안내 */}
+            {!publicSlug && (
+              <TouchableOpacity
+                style={styles.profilePrompt}
+                onPress={() => router.push('/settings/public-profile')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="globe-outline" size={16} color={Colors.primary} />
+                <Text style={styles.profilePromptTxt}>공개 프로필을 설정하면 QR이 내 웹페이지로 연결돼요</Text>
+                <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
+              </TouchableOpacity>
+            )}
+
             {/* QR 카드 */}
             <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 1.0 }}>
               <View style={styles.qrCard}>
@@ -121,15 +163,19 @@ export default function CoachInviteQRScreen() {
                   <Ionicons name="tennisball" size={16} color={Colors.primary} />
                   <Text style={styles.qrBrandText}>KERRI</Text>
                 </View>
-                {inviteUrl ? (
-                  <QRCode value={inviteUrl} size={200} color={Colors.navy} backgroundColor={Colors.white} />
+                {qrUrl ? (
+                  <QRCode value={qrUrl} size={200} color={Colors.navy} backgroundColor={Colors.white} />
                 ) : (
                   <View style={styles.qrPlaceholder}>
                     <Ionicons name="qr-code-outline" size={64} color={Colors.placeholder} />
                     <Text style={styles.qrPlaceholderTxt}>QR은 초대 페이지 준비 후{'\n'}활성화됩니다</Text>
                   </View>
                 )}
-                <Text style={styles.qrHint}>KERRI Member</Text>
+                {profileUrl ? (
+                  <Text style={styles.qrHint} numberOfLines={1}>kerri.co.kr/coach/{publicSlug}</Text>
+                ) : (
+                  <Text style={styles.qrHint}>KERRI Member</Text>
+                )}
               </View>
             </ViewShot>
 
@@ -145,9 +191,9 @@ export default function CoachInviteQRScreen() {
               <ActivityIndicator color={Colors.primary} style={{ marginTop: 18 }} />
             ) : (
               <View style={styles.actions}>
-                <TouchableOpacity style={styles.actionBtn} onPress={handleSaveQR} disabled={!inviteUrl}>
-                  <Ionicons name="download-outline" size={16} color={inviteUrl ? Colors.primary : Colors.placeholder} />
-                  <Text style={[styles.actionTxt, !inviteUrl && { color: Colors.placeholder }]}>QR 저장</Text>
+                <TouchableOpacity style={styles.actionBtn} onPress={handleSaveQR} disabled={!qrUrl}>
+                  <Ionicons name="download-outline" size={16} color={qrUrl ? Colors.primary : Colors.placeholder} />
+                  <Text style={[styles.actionTxt, !qrUrl && { color: Colors.placeholder }]}>QR 저장</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.actionBtn} onPress={handleCopyCode}>
                   <Ionicons name="copy-outline" size={16} color={Colors.primary} />
@@ -189,6 +235,12 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   scroll: { padding: 20, alignItems: 'center' },
   desc: { fontSize: 14, color: Colors.mutedFg, textAlign: 'center', marginBottom: 20, lineHeight: 20 },
+  profilePrompt: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Colors.primaryLight, borderRadius: Radius.md,
+    paddingHorizontal: 14, paddingVertical: 11, marginBottom: 16, width: '100%',
+  },
+  profilePromptTxt: { flex: 1, fontSize: 13, color: Colors.primary, fontWeight: '600', lineHeight: 18 },
   qrCard: {
     backgroundColor: Colors.white, borderRadius: Radius.lg, padding: 20,
     alignItems: 'center', borderWidth: 1.5, borderColor: Colors.border,
