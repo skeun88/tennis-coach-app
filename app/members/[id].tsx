@@ -1602,6 +1602,16 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       await supabase.from('messages').insert({
         coach_id: user.id, member_id: id, sender_type: 'coach', content: text,
       });
+      // 인앱 알림 저장 (회원이 앱에서 알림함으로 확인 가능)
+      supabase.from('member_notifications').insert({
+        coach_id: user.id,
+        member_id: id as string,
+        title: '코치에게 새 메시지가 도착했어요',
+        body: text.length > 80 ? text.slice(0, 80) + '…' : text,
+        type: 'message',
+      }).then(({ error }) => {
+        if (error) console.error('[member_notifications] 저장 실패:', error.message);
+      });
       loadMessages();
       notifyMemberMessage(id as string, member?.name ?? '코치').catch(() => {});
     }
