@@ -973,7 +973,7 @@ export default function ScheduleScreen() {
   /** 겹치는 레슨들을 컬럼으로 분배해 좌우 나란히 배치 */
   function computeColumns(lessonList: LessonWithMembers[]): Map<string, { col: number; totalCols: number }> {
     const result = new Map<string, { col: number; totalCols: number }>();
-    const sorted = [...lessonList].sort((a, b) => a.start_time.localeCompare(b.start_time));
+    const sorted = [...lessonList].sort((a, b) => (a.start_time ?? '').localeCompare(b.start_time ?? ''));
 
     // 그룹 단위로 겹치는 레슨 묶기
     const groups: LessonWithMembers[][] = [];
@@ -1976,9 +1976,9 @@ function DraggableLesson({
     onShouldBlockNativeResponder: () => dragging.current,
   })).current;
 
-  const duration = timeToMinutes(lesson.end_time) - timeToMinutes(lesson.start_time);
+  const duration = timeToMinutes(lesson.end_time ?? '') - timeToMinutes(lesson.start_time ?? '');
   const nameStr = lesson.memberNames.length > 0 ? lesson.memberNames.join(', ') : lesson.title.replace(/ 레슨$/, '');
-  const startTimeStr = lesson.start_time.slice(0, 5);
+  const startTimeStr = lesson.start_time?.slice(0, 5) ?? '';
   const isShort = duration <= 20 || height <= 44;
 
   return (
@@ -2121,7 +2121,7 @@ function WeekDraggableBlock({
   })).current;
 
   const nameStr = lesson.memberNames.length > 0 ? lesson.memberNames.join(', ') : lesson.title.replace(/ 레슨$/, '');
-  const startTimeStr = lesson.start_time.slice(0, 5);
+  const startTimeStr = lesson.start_time?.slice(0, 5) ?? '';
 
   const cardBg = attStatus === 'absent' ? S_ABS_BG
     : attStatus === 'completed' ? S_DONE_BG

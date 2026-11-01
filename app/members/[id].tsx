@@ -1024,8 +1024,8 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         .select('id, start_time, end_time, lesson_members(member_id, member:members(name))')
         .eq('coach_id', coachId).eq('date', entry.date);
       for (const lesson of (existing ?? []) as any[]) {
-        const [lh, lm] = lesson.start_time.slice(0, 5).split(':').map(Number);
-        const [eh, em] = lesson.end_time.slice(0, 5).split(':').map(Number);
+        const [lh, lm] = (lesson.start_time ?? '00:00').slice(0, 5).split(':').map(Number);
+        const [eh, em] = (lesson.end_time ?? '00:00').slice(0, 5).split(':').map(Number);
         const lStart = lh * 60 + lm; const lEnd = eh * 60 + em;
         if (newStart < lEnd && newEnd > lStart) {
           for (const lmRow of lesson.lesson_members ?? []) {
@@ -1062,11 +1062,10 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     closeByDateAddSheet();
     await loadFutureLessons();
     await loadMember();
-    if (failedEntries.length > 0) {
-      Alert.alert('일부 저장 실패', `일부 일정을 저장하지 못했어요. (${failedEntries.length}건)`);
-    } else {
-      Alert.alert('완료', `${addedCount}개 일정이 추가됐어요.`);
-    }
+    const alertMsg = failedEntries.length > 0
+      ? () => Alert.alert('일부 저장 실패', `일부 일정을 저장하지 못했어요. (${failedEntries.length}건)`)
+      : () => Alert.alert('완료', `${addedCount}개 일정이 추가됐어요.`);
+    setTimeout(alertMsg, 400);
   }
 
   async function handleAddByDateLessons() {
