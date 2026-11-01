@@ -830,7 +830,27 @@ ${knowledgeContext || '(없음)'}
           console.error('member_report_status_skip: no plan id')
         }
 
-        // PN-07: 코치가 명시적으로 "전송" 버튼 눌러야 발송 (plan-detail.tsx sendReportToMember)
+        // AI 분석 완료 → 코치 push notification (PN-07: ai_report)
+        try {
+          await fetch(`${SUPABASE_URL}/functions/v1/send-push`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+            },
+            body: JSON.stringify({
+              recipient_type: 'coach',
+              recipient_id: coachId,
+              title: 'AI 레슨 기록 완성됐어요 🎾',
+              body: `${member?.name ?? '회원'} 레슨 AI 분석이 완료됐어요. 지금 확인해보세요!`,
+              notif_id: 'PN-07',
+              lesson_id: plan?.id,
+              data: { lesson_plan_id: plan?.id, member_id: memberId },
+            }),
+          })
+        } catch (pnErr: any) {
+          console.error('push_notification_send_error:', pnErr.message)
+        }
       } catch (e: any) {
         console.error('member_report_error:', e)
         // 실패: failed + 에러 메시지 기록
