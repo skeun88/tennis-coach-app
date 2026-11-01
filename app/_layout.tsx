@@ -270,6 +270,8 @@ export default function RootLayout() {
       <Stack.Screen name="subscription" options={{ headerShown: false }} />
       <Stack.Screen name="connect/qr" options={{ headerShown: false }} />
       <Stack.Screen name="connect/requests" options={{ headerShown: false }} />
+      <Stack.Screen name="consultations/index" options={{ headerShown: false }} />
+      <Stack.Screen name="consultations/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="thirdPartyLoginResult" options={{ headerShown: false }} />
     </Stack>
   );

@@ -39,6 +39,7 @@ import {
   type AutoGenSuggestion,
   type InterestMember,
   type TrialMember,
+  type WebInquiryCounts,
 } from '../../lib/homeDataLoader';
 
 const ABSENCE_REASONS = ['개인사정', '부상', '일정충돌', '무단결석', '기타'] as const;
@@ -88,6 +89,7 @@ export default function HomeScreen() {
   }
   const [coachEmail, setCoachEmail] = useState('');
   const [userId, setUserId] = useState<string | null>(null);
+  const [publicSlug, setPublicSlug] = useState<string | null>(null);
   const [autoGenSuggestion, setAutoGenSuggestion] = useState<{memberId: string; name: string; time: string}[]>([]);
 
   // 결석 모달
@@ -136,6 +138,11 @@ export default function HomeScreen() {
   const [trialCardShown, setTrialCardShown] = useState(false);
   const trialCardOpacity = useRef(new Animated.Value(1)).current;
   const prevTrialCountRef = useRef(0);
+
+  // ⑥ 웹 상담 문의
+  const [webInquiryCounts, setWebInquiryCounts] = useState<WebInquiryCounts>({
+    newInquiry: 0, consulting: 0, trialScheduled: 0, hasUnread: false,
+  });
   const contentOpacity = useRef(new Animated.Value(0)).current;
 
   // ③ 관심 회원 (member_interest)
@@ -152,6 +159,7 @@ export default function HomeScreen() {
     setInterestList(data.interestList);
     setKnowledgeCount(data.knowledgeCount);
     setAutoGenSuggestion(data.autoGenSuggestion);
+    if (data.webInquiryCounts) setWebInquiryCounts(data.webInquiryCounts);
   }
 
   async function loadAll(targetDate?: string, force = false) {
@@ -286,6 +294,12 @@ export default function HomeScreen() {
   }
 
   useFocusEffect(useCallback(() => { loadAll(); }, []));
+
+  useEffect(() => {
+    if (!userId) return;
+    supabase.from('coach_profiles').select('public_slug').eq('coach_id', userId).maybeSingle()
+      .then(({ data }) => setPublicSlug(data?.public_slug ?? null));
+  }, [userId]);
 
   // 스켈레톤 → 실제 콘텐츠 fade-in
   useEffect(() => {
@@ -745,6 +759,34 @@ export default function HomeScreen() {
         </View>
 
         {/* ── 섹션3: 알림 카드들 ── */}
+        {(webInquiryCounts.newInquiry > 0 || webInquiryCounts.consulting > 0 || webInquiryCounts.trialScheduled > 0) && (
+          <TouchableOpacity
+            style={[styles.alertCard, webInquiryCounts.hasUnread && styles.alertCardHighlight]}
+            onPress={() => router.push('/consultations/' as any)}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.alertIconWrap, { backgroundColor: '#FCE8E0' }]}>
+              <Ionicons name="chatbubble-ellipses-outline" size={18} color="#C0755A" />
+              {webInquiryCounts.hasUnread && <View style={styles.unreadDot} />}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.alertTitle}>신규 상담 및 체험</Text>
+              <View style={styles.inquiryRow}>
+                {webInquiryCounts.newInquiry > 0 && (
+                  <Text style={[styles.inquiryChip, styles.inquiryChipNew]}>신규 {webInquiryCounts.newInquiry}건</Text>
+                )}
+                {webInquiryCounts.consulting > 0 && (
+                  <Text style={[styles.inquiryChip, styles.inquiryChipConsulting]}>상담 중 {webInquiryCounts.consulting}건</Text>
+                )}
+                {webInquiryCounts.trialScheduled > 0 && (
+                  <Text style={[styles.inquiryChip, styles.inquiryChipTrial]}>체험 예정 {webInquiryCounts.trialScheduled}건</Text>
+                )}
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#8B7355" />
+          </TouchableOpacity>
+        )}
+
         {trialCardShown && (
           <Animated.View style={{ opacity: trialCardOpacity }}>
             <TouchableOpacity style={styles.alertCard} onPress={() => setTrialModal(true)} activeOpacity={0.85}>
@@ -922,6 +964,7 @@ export default function HomeScreen() {
             onClose={() => setQrModalVisible(false)}
             coachId={userId}
             coachName={coachEmail.split('@')[0]}
+            publicSlug={publicSlug}
           />
         ) : null}
 
@@ -1260,6 +1303,16 @@ const styles = StyleSheet.create({
   alertIconWrap: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   alertTitle: { fontSize: 14, fontWeight: '700', color: '#3E2B22' },
   alertSub: { fontSize: 12, color: '#8B7355', marginTop: 2 },
+  alertCardHighlight: { borderColor: '#C0755A', borderWidth: 1.5 },
+  unreadDot: {
+    position: 'absolute', top: -2, right: -2,
+    width: 8, height: 8, borderRadius: 4, backgroundColor: '#C0755A',
+  },
+  inquiryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 },
+  inquiryChip: { fontSize: 11, fontWeight: '600', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
+  inquiryChipNew: { backgroundColor: '#FCE8E0', color: '#C0755A' },
+  inquiryChipConsulting: { backgroundColor: '#E8F0FE', color: '#4A6FA5' },
+  inquiryChipTrial: { backgroundColor: '#E8F5E8', color: '#3A7D44' },
 
   aiCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

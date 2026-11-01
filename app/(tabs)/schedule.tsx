@@ -202,7 +202,13 @@ export default function ScheduleScreen() {
       if (params.requestId) {
         const { data } = await supabase.from('lesson_requests')
           .select('*, member:members(name)').eq('id', params.requestId).maybeSingle();
-        if (data) { setSelectedRequest(data); setRequestModal(true); }
+        if (data) {
+          if (data.source === 'web') {
+            router.push({ pathname: '/consultations/[id]', params: { id: data.id } } as any);
+          } else {
+            setSelectedRequest(data); setRequestModal(true);
+          }
+        }
       }
     }, 700);
   }, [params.requestId]);
@@ -284,6 +290,7 @@ export default function ScheduleScreen() {
       .select('*, member:members(name), package:lesson_packages(title)')
       .eq('coach_id', user.id)
       .eq('status', 'pending')
+      .neq('source', 'web')
       .order('created_at', { ascending: false });
     setPendingRequests(data ?? []);
   }

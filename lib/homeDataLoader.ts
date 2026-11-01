@@ -21,6 +21,7 @@ export interface TodayCard {
   memberName: string;
   memberLevel: string;
   remainingCredits: number;
+  isTrial?: boolean;
   attended: boolean;
   isAbsent: boolean;
   deductCredit: boolean;
@@ -58,6 +59,13 @@ export interface AutoGenSuggestion {
   time: string;
 }
 
+export interface WebInquiryCounts {
+  newInquiry: number;
+  consulting: number;
+  trialScheduled: number;
+  hasUnread: boolean;
+}
+
 export interface HomeData {
   stats: HomeStats;
   todayCards: TodayCard[];
@@ -67,6 +75,7 @@ export interface HomeData {
   interestList: InterestMember[];
   knowledgeCount: number;
   autoGenSuggestion: AutoGenSuggestion[];
+  webInquiryCounts: WebInquiryCounts;
   coachEmail: string;
   userId: string;
   today: string;
@@ -151,7 +160,7 @@ export async function fetchTodayCards(uid: string, date: string): Promise<TodayC
   const [{ data: lessonMembers }, { data: attendances }] = await Promise.all([
     supabase
       .from('lesson_members')
-      .select('lesson_id, member_id, member:members(id, name, level, remaining_credits, lesson_package_id, lesson_packages(title))')
+      .select('lesson_id, member_id, member:members(id, name, level, remaining_credits, lesson_package_id, is_trial, lesson_packages(title))')
       .in('lesson_id', lessonIds),
     supabase
       .from('attendance')
@@ -177,14 +186,16 @@ export async function fetchTodayCards(uid: string, date: string): Promise<TodayC
     if (!lesson || !member) continue;
     const att = attendanceMap.get(`${lm.lesson_id}:${lm.member_id}`);
     const pkgName = member.lesson_packages?.title ?? null;
+    const isTrial = member.is_trial === true;
     cards.push({
       lessonId: lm.lesson_id,
-      lessonPackageName: pkgName ?? lesson.title,
+      lessonPackageName: isTrial ? '체험 레슨권' : (pkgName ?? lesson.title),
       startTime: lesson.start_time,
       memberId: lm.member_id,
       memberName: member.name,
       memberLevel: member.level,
       remainingCredits: member.remaining_credits ?? 0,
+      isTrial,
       attended: att?.status === '출석',
       isAbsent: att?.status === '결석',
       deductCredit: att?.deduct_credit ?? false,
@@ -279,7 +290,7 @@ export async function fetchHomeData(userId: string, email: string, date?: string
 
   const trials = activeMembers.filter((m: any) => m.is_trial);
 
-  const [churnRiskList, interestRes, todayCards, autoGenSuggestion, knowledgeRes] = await Promise.all([
+  const [churnRiskList, interestRes, todayCards, autoGenSuggestion, knowledgeRes, webInquiryRes] = await Promise.all([
     fetchChurnRisk(activeMembers as any[]),
     supabase
       .from('member_interest')
@@ -290,6 +301,12 @@ export async function fetchHomeData(userId: string, email: string, date?: string
     fetchTodayCards(userId, today),
     fetchAutoGenSuggestion(userId),
     supabase.from('tennis_knowledge').select('id', { count: 'exact', head: true }).eq('coach_id', userId),
+    supabase
+      .from('lesson_requests')
+      .select('consultation_status, viewed_at')
+      .eq('coach_id', userId)
+      .eq('source', 'web')
+      .in('consultation_status', ['new_inquiry', 'consulting', 'trial_scheduled']),
   ]);
 
   const interestList: InterestMember[] = (interestRes.data ?? []).map((i: any) => ({
@@ -298,6 +315,14 @@ export async function fetchHomeData(userId: string, email: string, date?: string
     packageId: i.package_id ?? null,
     created_at: i.created_at,
   }));
+
+  const webRows = webInquiryRes.data ?? [];
+  const webInquiryCounts: WebInquiryCounts = {
+    newInquiry: webRows.filter((r: any) => r.consultation_status === 'new_inquiry').length,
+    consulting: webRows.filter((r: any) => r.consultation_status === 'consulting').length,
+    trialScheduled: webRows.filter((r: any) => r.consultation_status === 'trial_scheduled').length,
+    hasUnread: webRows.some((r: any) => r.consultation_status === 'new_inquiry' && !r.viewed_at),
+  };
 
   return {
     stats,
@@ -312,6 +337,7 @@ export async function fetchHomeData(userId: string, email: string, date?: string
     interestList,
     knowledgeCount: knowledgeRes.count ?? 0,
     autoGenSuggestion,
+    webInquiryCounts,
     coachEmail: email,
     userId,
     today,
