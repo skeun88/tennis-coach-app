@@ -118,6 +118,22 @@ export default function PublicProfileScreen() {
 
   const canGoPublic = !!slug && slugStatus === 'available' && regionDistrict.trim().length >= 2 && bio.trim().length >= BIO_MIN;
 
+  async function autoSaveToggle(newIsPublic: boolean) {
+    setSaving(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setSaving(false); return; }
+    const { error } = await supabase.from('coach_profiles').upsert({
+      coach_id: user.id,
+      public_slug: slug.trim(),
+      region_district: regionDistrict.trim(),
+      bio: bio.trim(),
+      is_public: newIsPublic,
+    }, { onConflict: 'coach_id' });
+    setSaving(false);
+    if (error) { Alert.alert('오류', error.message); return; }
+    setOriginalSlug(slug.trim());
+  }
+
   async function handleSave() {
     if (!slug.trim()) { Alert.alert('입력 오류', 'URL 슬러그를 입력해주세요.'); return; }
     if (!isValidSlug(slug)) { Alert.alert('입력 오류', '슬러그는 영문 소문자·숫자·하이픈만 사용 가능하고 최소 3자이어야 합니다.'); return; }
@@ -195,12 +211,15 @@ export default function PublicProfileScreen() {
             </View>
             <Switch
               value={isPublic}
-              onValueChange={v => {
+              onValueChange={async v => {
                 if (v && !canGoPublic) {
                   Alert.alert('항목 미완성', '슬러그, 활동 지역, 한 줄 소개를 모두 채워주세요.');
                   return;
                 }
                 setIsPublic(v);
+                if (v && canGoPublic) {
+                  await autoSaveToggle(true);
+                }
               }}
               trackColor={{ false: Colors.border, true: TERRA }}
               thumbColor="#fff"

@@ -580,6 +580,18 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             )}
 
+            {/* 공개 프로필 배너 */}
+            <TouchableOpacity style={styles.webPageBanner} onPress={() => router.push('/settings/public-profile')} activeOpacity={0.8}>
+              <View style={styles.webPageBannerIcon}>
+                <Ionicons name="globe-outline" size={20} color={TERRA} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.webPageBannerTitle}>나만의 신규 회원 유입 웹페이지</Text>
+                <Text style={styles.webPageBannerSub}>코치 프로필 공개 설정 · kerri.co.kr/coach/…</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={TERRA} />
+            </TouchableOpacity>
+
             {/* 하단 버튼 행 */}
             <View style={styles.pcBtnRow}>
               <TouchableOpacity style={styles.pcEditBtn} onPress={() => openEditModal('profile')} activeOpacity={0.8}>
@@ -1246,6 +1258,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 9,
   },
   pcViewBtnText: { fontSize: 13, fontWeight: '600', color: TERRA },
+
+  // 공개 프로필 배너
+  webPageBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: TERRA_LIGHT,
+    borderRadius: 14, padding: 14, marginBottom: 10,
+    borderWidth: 1.5, borderColor: `${TERRA}25`,
+  },
+  webPageBannerIcon: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: '#fff',
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06, shadowRadius: 3, elevation: 1,
+  },
+  webPageBannerTitle: { fontSize: 14, fontWeight: '800', color: DARK, marginBottom: 2 },
+  webPageBannerSub: { fontSize: 12, color: TERRA, fontWeight: '500' },
 
   // Section cards
   sectionCard: {
