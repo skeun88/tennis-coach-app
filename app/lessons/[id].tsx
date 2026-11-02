@@ -460,7 +460,7 @@ export default function LessonDetailScreen() {
                 )}
               </View>
               {a.absence_reporter === 'member' && !a.deduction_type && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: 3 }}>
                   <View style={{ backgroundColor: '#FFF3E0', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#FFB74D' }}>
                     <Text style={{ fontSize: 10, fontWeight: '700', color: '#F57C00' }}>결석 요청</Text>
                   </View>
@@ -468,6 +468,9 @@ export default function LessonDetailScreen() {
                     <Text style={{ fontSize: 10, color: '#F57C00' }}>
                       {new Date(a.absence_reported_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </Text>
+                  )}
+                  {a.absence_reason && (
+                    <Text style={{ fontSize: 10, color: '#8D6E63' }}>· {a.absence_reason}</Text>
                   )}
                 </View>
               )}
