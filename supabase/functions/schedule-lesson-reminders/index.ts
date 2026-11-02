@@ -49,6 +49,24 @@ async function sendPush(supabase: any, {
     if (s && s[settingKey] === false) return
   }
 
+  // 코치 인앱 알림함 저장 (push token 유무 무관)
+  if (recipient_type === 'coach') {
+    const COACH_TYPE_MAP: Record<string, string> = {
+      'PN-01': 'lesson_reminder',
+      'PN-02': 'lesson_reminder',
+    }
+    const notifType = COACH_TYPE_MAP[notif_id] ?? 'general'
+    await supabase.from('coach_notifications').insert({
+      coach_id: recipient_id,
+      title,
+      body,
+      type: notifType,
+      is_read: false,
+      reference_id: lesson_id ?? null,
+      reference_type: lesson_id ? 'lesson' : null,
+    })
+  }
+
   // 푸시 토큰 조회
   let pushToken: string | null = null
   if (recipient_type === 'coach') {
