@@ -4,6 +4,7 @@ import { Session } from '@supabase/supabase-js';
 import * as Linking from 'expo-linking';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Updates from 'expo-updates';
+import * as Notifications from 'expo-notifications';
 import { supabase } from '../lib/supabase';
 import { Text } from 'react-native';
 import * as Font from 'expo-font';
@@ -39,6 +40,12 @@ export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
 
+  // ── lesson_absence 딥링크 핸들링 ──────────────────────────────────
+  const pendingLessonDeeplinkRef = useRef<string | null>(null);
+  const lastNavLessonRef = useRef<{ id: string; ts: number } | null>(null);
+  const sessionRef = useRef<Session | null>(null);
+  const navReadyRef = useRef(false);
+
   useEffect(() => {
     Font.loadAsync({ Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold })
       .catch(() => {})
@@ -71,6 +78,7 @@ export default function RootLayout() {
 
   const setNavReady = useCallback(() => {
     setIsNavigationReady(true);
+    navReadyRef.current = true;
   }, []);
 
   const handleRetry = useCallback(() => {
@@ -119,10 +127,12 @@ export default function RootLayout() {
       if (event === 'INITIAL_SESSION') {
         clearTimeout(fallback);
         setSession(session);
+        sessionRef.current = session;
         setLoading(false);
         return;
       }
       setSession(session);
+      sessionRef.current = session;
       if (event === 'PASSWORD_RECOVERY') {
         router.replace('/reset-password');
       }
@@ -134,6 +144,42 @@ export default function RootLayout() {
       linkSub.remove();
     };
   }, []);
+
+  // ── lesson_absence 푸시 탭 → 레슨 상세 딥링크 ──────────────────────
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response.notification.request.content.data as any;
+      if (data?.type !== 'lesson_absence') return;
+      const lessonId = data.lesson_id as string | undefined;
+      if (!lessonId) return;
+
+      const doNav = () => {
+        const last = lastNavLessonRef.current;
+        if (last && last.id === lessonId && Date.now() - last.ts < 5000) return;
+        lastNavLessonRef.current = { id: lessonId, ts: Date.now() };
+        router.push(`/lessons/${lessonId}`);
+      };
+
+      if (sessionRef.current && navReadyRef.current) {
+        doNav();
+      } else {
+        pendingLessonDeeplinkRef.current = lessonId;
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  // 앱 시작 후 nav ready + session이 확보되면 대기 중인 deeplink 처리
+  useEffect(() => {
+    if (!isNavigationReady || !session) return;
+    const lessonId = pendingLessonDeeplinkRef.current;
+    if (!lessonId) return;
+    pendingLessonDeeplinkRef.current = null;
+    const last = lastNavLessonRef.current;
+    if (last && last.id === lessonId && Date.now() - last.ts < 5000) return;
+    lastNavLessonRef.current = { id: lessonId, ts: Date.now() };
+    setTimeout(() => router.push(`/lessons/${lessonId}`), 200);
+  }, [isNavigationReady, session]);
 
   useEffect(() => {
     if (loading) return;

@@ -29,6 +29,8 @@ interface AttendanceRow {
   deduct_credit: boolean;
   absence_reason?: string | null;
   deduction_type?: string | null;
+  absence_reporter?: string | null;
+  absence_reported_at?: string | null;
   member: {
     id: string;
     name: string;
@@ -87,7 +89,7 @@ export default function LessonDetailScreen() {
     // 기존 출석 기록 가져오기 (회원 정보 포함)
     const { data: attData } = await supabase
       .from('attendance')
-      .select('id, member_id, status, deduct_credit, absence_reason, deduction_type, member:members(id, name, level, remaining_credits)')
+      .select('id, member_id, status, deduct_credit, absence_reason, deduction_type, absence_reporter, absence_reported_at, member:members(id, name, level, remaining_credits)')
       .eq('lesson_id', id);
 
     const attMap = new Map((attData ?? []).map(a => [a.member_id, a]));
@@ -106,6 +108,8 @@ export default function LessonDetailScreen() {
           deduct_credit: att?.deduct_credit ?? false,
           absence_reason: (att as any)?.absence_reason ?? null,
           deduction_type: (att as any)?.deduction_type ?? null,
+          absence_reporter: (att as any)?.absence_reporter ?? null,
+          absence_reported_at: (att as any)?.absence_reported_at ?? null,
           member,
         };
       });
@@ -118,6 +122,8 @@ export default function LessonDetailScreen() {
         deduct_credit: a.deduct_credit,
         absence_reason: (a as any).absence_reason ?? null,
         deduction_type: (a as any).deduction_type ?? null,
+        absence_reporter: (a as any).absence_reporter ?? null,
+        absence_reported_at: (a as any).absence_reported_at ?? null,
         member: (a as any).member,
       }));
     }
@@ -324,7 +330,14 @@ export default function LessonDetailScreen() {
   }
 
   if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color={Colors.primary} /></View>;
-  if (!lesson) return <View style={styles.loader}><Text>레슨을 찾을 수 없습니다</Text></View>;
+  if (!lesson) return (
+    <View style={styles.loader}>
+      <Text style={{ color: Colors.mutedFg, fontSize: 15, marginBottom: 16 }}>해당 레슨을 찾을 수 없어요</Text>
+      <TouchableOpacity onPress={() => router.replace('/(tabs)/schedule')} style={{ paddingHorizontal: 20, paddingVertical: 10, backgroundColor: Colors.primary, borderRadius: 10 }}>
+        <Text style={{ color: '#fff', fontWeight: '700' }}>스케줄로 이동</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   const presentCount = attendance.filter(a => a.status === '출석').length;
   const absentCount = attendance.filter(a => a.status === '결석').length;
@@ -343,6 +356,13 @@ export default function LessonDetailScreen() {
       {/* Lesson Info */}
       <View style={styles.infoCard}>
         <Text style={styles.lessonTitle}>{lesson.title}</Text>
+        {attendance.some(a => a.absence_reporter === 'member' && !a.deduction_type) && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+            <View style={{ backgroundColor: '#FFF3E0', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: '#FFB74D' }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#F57C00' }}>회원 결석 예정</Text>
+            </View>
+          </View>
+        )}
         <View style={styles.infoRow}>
           <Ionicons name="calendar-outline" size={15} color={Colors.mutedFg} />
           <Text style={styles.infoText}>{lesson.date}</Text>
@@ -439,6 +459,18 @@ export default function LessonDetailScreen() {
                   </View>
                 )}
               </View>
+              {a.absence_reporter === 'member' && !a.deduction_type && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                  <View style={{ backgroundColor: '#FFF3E0', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#FFB74D' }}>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#F57C00' }}>결석 요청</Text>
+                  </View>
+                  {a.absence_reported_at && (
+                    <Text style={{ fontSize: 10, color: '#F57C00' }}>
+                      {new Date(a.absence_reported_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  )}
+                </View>
+              )}
             </View>
 
             {/* 출석 / 결석 버튼 */}
