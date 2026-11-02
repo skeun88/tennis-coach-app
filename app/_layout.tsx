@@ -263,6 +263,7 @@ export default function RootLayout() {
       <Stack.Screen name="lesson-packages/index" options={{ headerShown: false }} />
       <Stack.Screen name="lesson-packages/new" options={{ headerShown: false }} />
       <Stack.Screen name="members/ai-analysis" options={{ headerShown: false }} />
+      <Stack.Screen name="notifications/inbox" options={{ headerShown: false }} />
       <Stack.Screen name="settings/index" options={{ headerShown: false }} />
       <Stack.Screen name="settings/notifications" options={{ headerShown: false }} />
       <Stack.Screen name="settings/availability" options={{ headerShown: false }} />

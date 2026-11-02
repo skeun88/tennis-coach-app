@@ -18,6 +18,7 @@ import { buildMemberUpsertPayload, MEMBER_LEVELS } from './member-form';
 import { getCurrentSubscription, canAddMember } from '../../lib/subscription';
 import { syncRevenueCatToDb } from '../../lib/purchases';
 import { IS_BETA } from '../../lib/beta';
+import { clearHomeCache } from '../../lib/homeDataLoader';
 
 const LEVELS: MemberLevel[] = MEMBER_LEVELS;
 const DAYS_KR = ['일', '월', '화', '수', '목', '금', '토'];
@@ -586,8 +587,8 @@ export default function NewMemberScreen() {
       fixed_schedule_time: firstDayTime,
       fixed_schedule_times: scheduleType === 'regular' && Object.keys(scheduleTimesJson).length > 0 ? scheduleTimesJson : null,
       fixed_lesson_duration: duration,
-      total_credits: isTrial ? 0 : credits,
-      remaining_credits: isTrial ? 0 : remainingCreditsInt,
+      total_credits: isTrial ? 1 : credits,
+      remaining_credits: isTrial ? 1 : remainingCreditsInt,
       lesson_package_id: isTrial ? null : (selectedPackageId || null),
       is_trial: isTrial,
       trial_started_at: isTrial ? (byDateEntries[0]?.date ?? toKSTDateStr(new Date())) : null,
@@ -631,6 +632,9 @@ export default function NewMemberScreen() {
       genResult = { successCount, errors };
     }
     setLoading(false);
+
+    // 홈 화면 캐시 초기화 — 등록 직후 탭 이동 시 최신 데이터로 로드
+    clearHomeCache(userId);
 
     const genCount = genResult?.successCount ?? 0;
     const genErrors = genResult?.errors ?? [];

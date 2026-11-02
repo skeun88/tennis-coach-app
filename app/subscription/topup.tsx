@@ -23,7 +23,7 @@ const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 export default function TopupScreen() {
   const router = useRouter();
 
-  const { subscription, refresh } = useSubscription();
+  const { subscription, loading: subLoading, refresh } = useSubscription();
   const [aiUsed, setAiUsed] = useState(0);
   const [loading, setLoading] = useState(false);
 
@@ -84,6 +84,21 @@ export default function TopupScreen() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (subLoading) {
+    return (
+      <SafeAreaView style={s.container}>
+        <View style={s.header}>
+          <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+            <Ionicons name="arrow-back" size={22} color={DARK_BROWN} />
+          </TouchableOpacity>
+          <Text style={s.headerTitle}>AI 레슨 기록 충전</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <ActivityIndicator size="large" color={TERRACOTTA} style={{ marginTop: 60 }} />
+      </SafeAreaView>
+    );
   }
 
   return (

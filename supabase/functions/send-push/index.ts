@@ -33,6 +33,13 @@ const MEMBER_NOTIF_TYPE_MAP: Record<string, string> = {
   'PN-11': 'lesson_update',
 }
 
+// notif_id → coach_notifications.type 매핑 (코치용 인앱 알림함)
+const COACH_NOTIF_TYPE_MAP: Record<string, string> = {
+  'PN-01': 'lesson_reminder',
+  'PN-02': 'lesson_reminder',
+  'PN-03': 'member_message',
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -115,7 +122,7 @@ serve(async (req) => {
 
     console.log('[send-push] 토큰 조회:', { recipient_type, recipient_id, found: !!pushToken, token: pushToken })
 
-    // ── 회원 인앱 알림함 저장 (push token 유무 무관) ──
+    // ── 인앱 알림함 저장 (push token 유무 무관) ──
     if (recipient_type === 'member') {
       const { data: memberRow } = await supabase
         .from('members').select('coach_id').eq('id', recipient_id).maybeSingle()
@@ -135,6 +142,21 @@ serve(async (req) => {
         if (notifErr) console.error('[send-push] member_notifications 저장 오류:', notifErr.message)
         else console.log('[send-push] member_notifications 저장 완료:', { recipient_id, notifType })
       }
+    }
+
+    if (recipient_type === 'coach') {
+      const notifType = COACH_NOTIF_TYPE_MAP[notif_id ?? ''] ?? 'general'
+      const { error: notifErr } = await supabase.from('coach_notifications').insert({
+        coach_id: recipient_id,
+        title,
+        body,
+        type: notifType,
+        is_read: false,
+        reference_id: lesson_id ?? null,
+        reference_type: lesson_id ? 'lesson' : null,
+      })
+      if (notifErr) console.error('[send-push] coach_notifications 저장 오류:', notifErr.message)
+      else console.log('[send-push] coach_notifications 저장 완료:', { recipient_id, notifType })
     }
 
     if (!pushToken) {

@@ -143,6 +143,9 @@ export default function HomeScreen() {
   const [webInquiryCounts, setWebInquiryCounts] = useState<WebInquiryCounts>({
     newInquiry: 0, consulting: 0, trialScheduled: 0, hasUnread: false,
   });
+
+  // ⑦ 코치 알림함 unread count
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const contentOpacity = useRef(new Animated.Value(0)).current;
 
   // ③ 관심 회원 (member_interest)
@@ -293,7 +296,18 @@ export default function HomeScreen() {
     setExpiringMemberList(data ?? []);
   }
 
-  useFocusEffect(useCallback(() => { loadAll(); }, []));
+  async function loadUnreadNotifCount() {
+    const { count } = await supabase
+      .from('coach_notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('is_read', false);
+    setUnreadNotifCount(count ?? 0);
+  }
+
+  useFocusEffect(useCallback(() => {
+    loadAll();
+    loadUnreadNotifCount();
+  }, []));
 
   useEffect(() => {
     if (!userId) return;
@@ -705,8 +719,15 @@ export default function HomeScreen() {
             <TouchableOpacity onPress={() => router.push('/settings/availability')} style={styles.iconBtn}>
               <Ionicons name="time-outline" size={22} color="#3E2B22" />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push('/settings/notifications')} style={styles.iconBtn}>
+            <TouchableOpacity onPress={() => router.push('/notifications/inbox')} style={styles.iconBtn}>
               <Ionicons name="notifications-outline" size={22} color="#3E2B22" />
+              {unreadNotifCount > 0 && (
+                <View style={styles.notifBadge}>
+                  <Text style={styles.notifBadgeText}>
+                    {unreadNotifCount > 99 ? '99+' : String(unreadNotifCount)}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -1308,6 +1329,14 @@ const styles = StyleSheet.create({
     position: 'absolute', top: -2, right: -2,
     width: 8, height: 8, borderRadius: 4, backgroundColor: '#C0755A',
   },
+  notifBadge: {
+    position: 'absolute', top: -4, right: -4,
+    minWidth: 16, height: 16, borderRadius: 8,
+    backgroundColor: '#C0755A',
+    alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  notifBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
   inquiryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 },
   inquiryChip: { fontSize: 11, fontWeight: '600', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
   inquiryChipNew: { backgroundColor: '#FCE8E0', color: '#C0755A' },
