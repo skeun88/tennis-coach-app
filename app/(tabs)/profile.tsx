@@ -602,7 +602,7 @@ export default function ProfileScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.pcViewBtn}
-                onPress={() => Alert.alert('내 프로필 미리보기', '회원에게 공개되는 코치 프로필입니다.\n(준비 중입니다)')}
+                onPress={() => router.push('/profile/public-preview')}
                 activeOpacity={0.8}
               >
                 <Text style={styles.pcViewBtnText}>회원에게 보이는 프로필</Text>
