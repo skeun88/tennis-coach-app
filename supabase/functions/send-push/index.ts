@@ -31,6 +31,8 @@ const MEMBER_NOTIF_TYPE_MAP: Record<string, string> = {
   'PN-09': 'lesson_update',
   'PN-10': 'lesson_update',
   'PN-11': 'lesson_update',
+  'PN-15': 'lesson_update',
+  'PN-16': 'lesson_update',
 }
 
 // notif_id → coach_notifications.type 매핑 (코치용 인앱 알림함)
@@ -39,7 +41,11 @@ const COACH_NOTIF_TYPE_MAP: Record<string, string> = {
   'PN-02': 'lesson_reminder',
   'PN-03': 'member_message',
   'PN-12': 'absence_reported',
+  'PN-14': 'bogan_request',
 }
+
+// notif_id → member_notifications.type 추가 항목
+// PN-15: 보강 수락, PN-16: 보강 거절
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })

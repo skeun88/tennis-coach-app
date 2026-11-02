@@ -9,6 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
+import { notifyMemberBoganAccepted, notifyMemberBoganRejected } from '../../lib/notifications';
 import * as Notifications from 'expo-notifications';
 import { Lesson } from '../../types';
 import { Colors, Radius } from '../../lib/theme';
@@ -174,6 +175,8 @@ export default function ScheduleScreen() {
   const [requestModal, setRequestModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
   const [rejectMsg, setRejectMsg] = useState('');
+  const [showRejectInput, setShowRejectInput] = useState(false);
+  const [savingRequest, setSavingRequest] = useState(false);
 
   // 토스트에서 "확인하기" 눌러서 왔을 때 파라미터 처리
   const params = useLocalSearchParams<{
@@ -296,8 +299,19 @@ export default function ScheduleScreen() {
   }
 
   async function handleAcceptRequest(req: any) {
+    if (savingRequest) return;
+    setSavingRequest(true);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) { setSavingRequest(false); return; }
+
+    // 중복 처리 방지: 이미 수락됐는지 확인
+    const { data: currentReq } = await supabase.from('lesson_requests').select('status').eq('id', req.id).maybeSingle();
+    if (currentReq?.status !== 'pending') {
+      setSavingRequest(false);
+      setRequestModal(false);
+      loadPendingRequests();
+      return;
+    }
 
     let memberId = req.member_id as string | null;
     let memberName = req.member?.name ?? req.guest_name ?? '회원';
@@ -316,19 +330,20 @@ export default function ScheduleScreen() {
           phone: req.guest_phone,
           is_trial: true,
         }).select('id').single();
-        if (me || !newMember) { Alert.alert('오류', '회원 생성 실패'); return; }
+        if (me || !newMember) { setSavingRequest(false); Alert.alert('오류', '회원 생성 실패'); return; }
         memberId = newMember.id;
       }
-      // 요청에 member_id 연결
       await supabase.from('lesson_requests').update({ member_id: memberId }).eq('id', req.id);
     }
 
-    if (!memberId) { Alert.alert('오류', '회원 정보가 없습니다.'); return; }
+    if (!memberId) { setSavingRequest(false); Alert.alert('오류', '회원 정보가 없습니다.'); return; }
 
     // 웹 문의 요청 (날짜/시간 없음) — 회원만 등록하고 직접 연락
     if (req.source === 'web' || !req.requested_date) {
       await supabase.from('lesson_requests').update({ status: 'accepted', responded_at: new Date().toISOString(), member_id: memberId }).eq('id', req.id);
+      setSavingRequest(false);
       setRequestModal(false);
+      setShowRejectInput(false);
       loadPendingRequests();
       Alert.alert('수락 완료', `${memberName}님이 회원으로 등록됐어요.\n직접 연락해 레슨 일정을 잡아주세요.`);
       return;
@@ -339,41 +354,55 @@ export default function ScheduleScreen() {
       coach_id: user.id, title: memberName,
       date: req.requested_date, start_time: req.start_time, end_time: req.end_time,
     }).select('id').single();
-    if (le || !lesson) { Alert.alert('오류', '레슨 생성 실패'); return; }
+    if (le || !lesson) { setSavingRequest(false); Alert.alert('오류', '레슨 생성 실패'); return; }
     await supabase.from('lesson_members').insert({ lesson_id: lesson.id, member_id: memberId });
-    // 요청 상태 업데이트
     await supabase.from('lesson_requests').update({ status: 'accepted', responded_at: new Date().toISOString() }).eq('id', req.id);
-    // 앱 회원에게만 메시지 알림
+
+    // 앱 회원에게 수락 알림 (메시지 + 푸시)
     if (req.member_id) {
       await supabase.from('messages').insert({
         coach_id: user.id, member_id: memberId, sender_type: 'coach',
-        content: `✅ ${req.requested_date} ${req.start_time.slice(0,5)} 레슨 예약이 수락됐습니다! 🎾`,
+        content: `✅ ${req.requested_date} ${req.start_time.slice(0,5)} 보강 레슨이 확정됐습니다! 🎾`,
       });
+      notifyMemberBoganAccepted(memberId, req.requested_date, req.start_time, req.id).catch(() => {});
     }
+    setSavingRequest(false);
     setRequestModal(false);
+    setShowRejectInput(false);
     loadPendingRequests();
     loadDayLessons(selectedDate);
-    Alert.alert('수락 완료', `${memberName}님 레슨이 스케줄에 등록됐어요.`);
+    Alert.alert('수락 완료', `${memberName}님 보강 레슨이 스케줄에 등록됐어요.`);
   }
 
   async function handleRejectRequest(req: any) {
+    if (savingRequest) return;
+    setSavingRequest(true);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    await supabase.from('lesson_requests').update({ status: 'rejected', responded_at: new Date().toISOString(), reject_message: rejectMsg.trim() || null }).eq('id', req.id);
-    // 앱 회원에게만 메시지 전송 (게스트는 스킵)
+    if (!user) { setSavingRequest(false); return; }
+
+    await supabase.from('lesson_requests').update({
+      status: 'rejected',
+      responded_at: new Date().toISOString(),
+      reject_message: rejectMsg.trim() || null,
+    }).eq('id', req.id);
+
+    // 앱 회원에게만 메시지 전송 + 푸시 (게스트는 스킵)
     if (req.member_id) {
       const rejMsg = rejectMsg.trim()
-        ? `❌ 레슨 예약 요청이 거절됐습니다.\n${rejectMsg.trim()}`
-        : `❌ ${req.requested_date} ${req.start_time.slice(0,5)} 레슨 예약 요청이 거절됐습니다. 다른 시간을 선택해주세요.`;
+        ? `❌ 보강 레슨 요청이 거절됐습니다.\n${rejectMsg.trim()}`
+        : `❌ ${req.requested_date} ${req.start_time.slice(0,5)} 보강 레슨 요청이 거절됐습니다. 다른 시간을 선택해주세요.`;
       await supabase.from('messages').insert({
         coach_id: user.id, member_id: req.member_id, sender_type: 'coach',
         content: rejMsg,
       });
+      notifyMemberBoganRejected(req.member_id, req.id).catch(() => {});
     }
+    setSavingRequest(false);
     setRejectMsg('');
+    setShowRejectInput(false);
     setRequestModal(false);
     loadPendingRequests();
-    Alert.alert('거절 완료', req.member_id ? '회원에게 메시지가 전송됐습니다.' : '요청이 거절됐습니다.');
+    Alert.alert('거절 완료', req.member_id ? '회원에게 알림이 전송됐습니다.' : '요청이 거절됐습니다.');
   }
 
   function scrollToCurrentTime() {
@@ -643,6 +672,7 @@ export default function ScheduleScreen() {
           const newReq = { ...req, member: { name: mem?.name ?? '회원' } };
           setPendingRequests(prev => [newReq, ...prev]);
           setSelectedRequest(newReq);
+          setShowRejectInput(false);
           setRequestModal(true);
         })
         .subscribe((status: string) => {
@@ -1019,17 +1049,28 @@ export default function ScheduleScreen() {
   // ── 예약 요청 배너 렌더 ──────────────────────────
   function renderRequestBanner() {
     if (pendingRequests.length === 0) return null;
+    const first = pendingRequests[0];
+    const bannerLabel = first.source === 'web'
+      ? '레슨 문의·요청'
+      : '보강 레슨 요청';
+    const memberName = first.member?.name ?? first.guest_name ?? '';
+    const dateStr = first.requested_date ? ` · ${first.requested_date.slice(5).replace('-', '/')}` : '';
+    const timeStr = first.start_time ? ` · ${first.start_time.slice(0, 5)}` : '';
+    const subLabel = memberName ? `${memberName}${dateStr}${timeStr}` : '';
     return (
       <TouchableOpacity
         style={styles.requestBanner}
-        onPress={() => { setSelectedRequest(pendingRequests[0]); setRequestModal(true); }}
+        onPress={() => { setSelectedRequest(first); setShowRejectInput(false); setRequestModal(true); }}
         activeOpacity={0.85}
       >
         <View style={styles.requestBannerLeft}>
-          <Ionicons name="calendar-outline" size={18} color={Colors.foreground} />
-          <Text style={styles.requestBannerText}>
-            {pendingRequests.some(r => r.source === 'web') ? '레슨 문의·요청' : '레슨 예약 요청'} {pendingRequests.length}건 대기 중
-          </Text>
+          <Ionicons name="notifications" size={18} color={S_TERRA} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.requestBannerText}>
+              {bannerLabel} {pendingRequests.length > 1 ? `${pendingRequests.length}건 대기 중` : '대기 중'}
+            </Text>
+            {subLabel ? <Text style={styles.requestBannerSub} numberOfLines={1}>{subLabel}</Text> : null}
+          </View>
         </View>
         <View style={styles.requestBannerBadge}>
           <Text style={styles.requestBannerBadgeText}>{pendingRequests.length}</Text>
@@ -1207,7 +1248,7 @@ export default function ScheduleScreen() {
                     borderStyle: 'dashed',
                     justifyContent: 'center', alignItems: 'center', gap: 3,
                   }}
-                  onPress={() => { setSelectedRequest(req); setRequestModal(true); }}
+                  onPress={() => { setSelectedRequest(req); setShowRejectInput(false); setRequestModal(true); }}
                 >
                   <Ionicons name="time-outline" size={15} color={Colors.mutedFg} />
                   <Text style={{ fontSize: 14, fontWeight: '800', color: Colors.foreground }}>예약 요청 대기중</Text>
@@ -1603,7 +1644,7 @@ export default function ScheduleScreen() {
           {pendingRequests.length > 0 && (
             <TouchableOpacity
               style={styles.requestBell}
-              onPress={() => { setSelectedRequest(pendingRequests[0]); setRequestModal(true); }}
+              onPress={() => { setSelectedRequest(pendingRequests[0]); setShowRejectInput(false); setRequestModal(true); }}
             >
               <Ionicons name="notifications" size={22} color={S_TERRA} />
               <View style={styles.requestBellBadge}>
@@ -1771,103 +1812,171 @@ export default function ScheduleScreen() {
       </Modal>
 
 
-      {/* 예약 요청 모달 */}
-      <Modal visible={requestModal} transparent animationType="slide" onRequestClose={() => setRequestModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { paddingBottom: Math.max(40, insets.bottom + 20) }]}>
-            <Text style={styles.modalTitle}>{selectedRequest?.source === 'web' ? '웹 레슨 문의' : '레슨 예약 요청'}</Text>
-            {selectedRequest && (
-              <>
-                {/* 회원 정보 카드 */}
-                <View style={styles.requestInfoCard}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      {/* 보강 요청 팝오버 */}
+      <Modal
+        visible={requestModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setRequestModal(false); setRejectMsg(''); setShowRejectInput(false); }}
+      >
+        <TouchableOpacity
+          style={styles.popoverOverlay}
+          activeOpacity={1}
+          onPress={() => { setRequestModal(false); setRejectMsg(''); setShowRejectInput(false); }}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={e => e.stopPropagation()}>
+            <View style={[styles.popoverCard, { marginBottom: Math.max(32, insets.bottom + 16) }]}>
+              {/* 팝오버 꼬리 */}
+              <View style={styles.popoverTail} />
+
+              {/* 헤더 */}
+              <View style={styles.popoverHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="notifications" size={16} color={S_TERRA} />
+                  <Text style={styles.popoverTitle}>
+                    {selectedRequest?.source === 'web' ? '웹 레슨 문의' : '보강 레슨 요청'}
+                  </Text>
+                  {pendingRequests.length > 1 && (
+                    <View style={{ backgroundColor: S_TERRA + '22', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 11, color: S_TERRA, fontWeight: '700' }}>+{pendingRequests.length - 1}건</Text>
+                    </View>
+                  )}
+                </View>
+                <TouchableOpacity
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  onPress={() => { setRequestModal(false); setRejectMsg(''); setShowRejectInput(false); }}
+                >
+                  <Ionicons name="close" size={20} color={S_TEXT_MUTED} />
+                </TouchableOpacity>
+              </View>
+
+              {selectedRequest && (
+                <ScrollView
+                  style={{ maxHeight: 420 }}
+                  contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 4 }}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                >
+                  {/* 회원 정보 */}
+                  <View style={styles.popoverInfoRow}>
+                    <View style={styles.popoverAvatar}>
+                      <Text style={styles.popoverAvatarText}>
+                        {(selectedRequest.member?.name ?? selectedRequest.guest_name ?? '회')[0]}
+                      </Text>
+                    </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.requestMemberName}>
+                      <Text style={styles.popoverMemberName}>
                         {selectedRequest.member?.name ?? selectedRequest.guest_name ?? '회원'}
                       </Text>
                       {!selectedRequest.member_id && selectedRequest.guest_phone ? (
-                        <Text style={{ fontSize: 13, color: Colors.mutedFg, marginTop: 2 }}>{selectedRequest.guest_phone}</Text>
+                        <Text style={{ fontSize: 12, color: S_TEXT_MUTED }}>{selectedRequest.guest_phone}</Text>
                       ) : null}
                     </View>
-                    <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                      {selectedRequest.source === 'web' && (
-                        <View style={{ backgroundColor: '#e0f2fe', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
-                          <Text style={{ fontSize: 11, color: '#0369a1', fontWeight: '700' }}>🌐 웹 문의</Text>
-                        </View>
-                      )}
-                      {pendingRequests.length > 1 && (
-                        <View style={{ backgroundColor: Colors.warning + '22', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
-                          <Text style={{ fontSize: 13, color: Colors.warning, fontWeight: '700' }}>외 {pendingRequests.length - 1}건 대기중</Text>
-                        </View>
-                      )}
-                    </View>
+                    {selectedRequest.source === 'web' && (
+                      <View style={{ backgroundColor: '#e0f2fe', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
+                        <Text style={{ fontSize: 11, color: '#0369a1', fontWeight: '700' }}>🌐 웹 문의</Text>
+                      </View>
+                    )}
                   </View>
+
+                  {/* 요청 날짜·시간 */}
                   {selectedRequest.source !== 'web' && selectedRequest.requested_date ? (
-                    <Text style={styles.requestDateTime}>
-                      {selectedRequest.requested_date}{'  '}
-                      {selectedRequest.start_time?.slice(0,5)} ~ {selectedRequest.end_time?.slice(0,5)}
-                    </Text>
-                  ) : null}
-                  {selectedRequest.package?.title ? (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
-                      <Ionicons name="card-outline" size={14} color={Colors.mutedFg} />
-                      <Text style={{ fontSize: 13, color: Colors.mutedFg }}>관심 패키지: {selectedRequest.package.title}</Text>
+                    <View style={styles.popoverDateRow}>
+                      <Ionicons name="calendar-outline" size={14} color={S_TERRA} />
+                      <Text style={styles.popoverDateText}>
+                        {new Date(selectedRequest.requested_date + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}
+                        {'  '}
+                        {selectedRequest.start_time?.slice(0, 5)} ~ {selectedRequest.end_time?.slice(0, 5)}
+                      </Text>
                     </View>
                   ) : null}
+
+                  {/* 요청 메시지 */}
                   {selectedRequest.message ? (
-                    <View style={styles.requestMsgBox}>
-                      <Text style={styles.requestMsgLabel}>메시지</Text>
-                      <Text style={styles.requestMsgText}>{selectedRequest.message}</Text>
+                    <View style={styles.popoverMsgBox}>
+                      <Text style={styles.popoverMsgLabel}>요청 메시지</Text>
+                      <Text style={styles.popoverMsgText}>{selectedRequest.message}</Text>
                     </View>
                   ) : null}
-                </View>
 
-                {/* 거절 시 메시지 입력 */}
-                <View style={{ marginBottom: 16 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6 }}>
-                    거절 메시지 (선택)
-                  </Text>
-                  <TextInput
-                    style={{
-                      backgroundColor: Colors.mutedBg, borderRadius: 10,
-                      padding: 12, fontSize: 14, color: Colors.foreground,
-                      minHeight: 60, textAlignVertical: 'top',
-                      borderWidth: 1, borderColor: Colors.border,
-                    }}
-                    placeholder="회원에게 전달할 메시지를 입력하세요"
-                    placeholderTextColor={Colors.placeholder}
-                    value={rejectMsg}
-                    onChangeText={setRejectMsg}
-                    multiline
-                    maxLength={200}
-                  />
-                </View>
+                  {/* 패키지 */}
+                  {selectedRequest.package?.title ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                      <Ionicons name="card-outline" size={13} color={S_TEXT_MUTED} />
+                      <Text style={{ fontSize: 13, color: S_TEXT_MUTED }}>관심 패키지: {selectedRequest.package.title}</Text>
+                    </View>
+                  ) : null}
 
-                {/* 수락 / 거절 버튼 */}
-                <View style={styles.requestBtnRow}>
-                  <TouchableOpacity style={[styles.requestBtn, styles.requestBtnReject]}
-                    onPress={() => handleRejectRequest(selectedRequest)}>
-                    <Ionicons name="close-circle-outline" size={18} color={Colors.foreground} />
-                    <Text style={[styles.requestBtnText, { color: Colors.destructive }]}>거절</Text>
+                  {/* 거절 메시지 입력 (거절 버튼 눌렀을 때만 노출) */}
+                  {showRejectInput && (
+                    <View style={{ marginBottom: 12 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: S_TEXT_MUTED, marginBottom: 6 }}>
+                        거절 메시지 (선택)
+                      </Text>
+                      <TextInput
+                        style={styles.popoverRejectInput}
+                        placeholder="회원에게 전달할 메시지를 입력하세요"
+                        placeholderTextColor={S_TEXT_MUTED}
+                        value={rejectMsg}
+                        onChangeText={setRejectMsg}
+                        multiline
+                        maxLength={200}
+                        autoFocus
+                      />
+                      <TouchableOpacity
+                        style={[styles.popoverActionBtn, { backgroundColor: '#E57373', marginTop: 8 }]}
+                        onPress={() => handleRejectRequest(selectedRequest)}
+                        disabled={savingRequest}
+                      >
+                        {savingRequest
+                          ? <ActivityIndicator size="small" color="#fff" />
+                          : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>거절 확인</Text>
+                        }
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={{ alignItems: 'center', paddingVertical: 10 }}
+                        onPress={() => { setShowRejectInput(false); setRejectMsg(''); }}
+                      >
+                        <Text style={{ color: S_TEXT_MUTED, fontSize: 13 }}>취소</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </ScrollView>
+              )}
+
+              {/* 액션 버튼 (거절 입력 표시 중엔 숨김) */}
+              {!showRejectInput && (
+                <View style={styles.popoverBtnArea}>
+                  <View style={styles.popoverBtnRow}>
+                    <TouchableOpacity
+                      style={[styles.popoverBtn, styles.popoverBtnReject]}
+                      onPress={() => setShowRejectInput(true)}
+                      disabled={savingRequest}
+                    >
+                      <Text style={[styles.popoverBtnText, { color: '#C62828' }]}>거절</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.popoverBtn, styles.popoverBtnAccept]}
+                      onPress={() => handleAcceptRequest(selectedRequest)}
+                      disabled={savingRequest}
+                    >
+                      {savingRequest
+                        ? <ActivityIndicator size="small" color="#fff" />
+                        : <Text style={[styles.popoverBtnText, { color: '#fff' }]}>수락</Text>
+                      }
+                    </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity
+                    style={{ alignItems: 'center', paddingVertical: 12 }}
+                    onPress={() => { setRequestModal(false); setRejectMsg(''); setShowRejectInput(false); }}
+                  >
+                    <Text style={{ color: S_TEXT_MUTED, fontSize: 14 }}>나중에 처리</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.requestBtn, styles.requestBtnAccept]}
-                    onPress={() => handleAcceptRequest(selectedRequest)}>
-                    <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
-                    <Text style={[styles.requestBtnText, { color: '#fff' }]}>수락</Text>
-                  </TouchableOpacity>
                 </View>
-
-                {/* 나중에 — 하단 중앙 */}
-                <TouchableOpacity
-                  style={{ alignItems: 'center', paddingVertical: 14 }}
-                  onPress={() => { setRequestModal(false); setRejectMsg(''); }}
-                >
-                  <Text style={{ color: Colors.mutedFg, fontSize: 14, fontWeight: '500' }}>나중에 처리하기</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        </View>
+              )}
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </Animated.View>
   );
@@ -2388,4 +2497,71 @@ const styles = StyleSheet.create({
   monthInlineItemBar: { width: 4, height: 36, borderRadius: 2, backgroundColor: S_TERRA },
   monthInlineItemName: { fontSize: 14, fontWeight: '700', color: S_TEXT },
   monthInlineItemTime: { fontSize: 13, color: S_TEXT_MUTED, marginTop: 2 },
+  // 배너 서브 텍스트
+  requestBannerSub: { fontSize: 12, color: S_TEXT_MUTED, marginTop: 2, fontWeight: '500' },
+  // 팝오버
+  popoverOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.38)',
+    justifyContent: 'flex-end', paddingHorizontal: 16,
+  },
+  popoverCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20, overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18, shadowRadius: 20, elevation: 12,
+    borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)',
+  },
+  popoverTail: {
+    alignSelf: 'center',
+    width: 36, height: 4,
+    borderRadius: 2, backgroundColor: '#D0C4B8',
+    marginVertical: 10,
+  },
+  popoverHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingBottom: 12,
+    borderBottomWidth: 1, borderBottomColor: '#F0E8E0',
+  },
+  popoverTitle: { fontSize: 16, fontWeight: '800', color: S_TEXT },
+  popoverInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 16 },
+  popoverAvatar: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: S_TERRA + '22',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  popoverAvatarText: { fontSize: 18, fontWeight: '800', color: S_TERRA },
+  popoverMemberName: { fontSize: 17, fontWeight: '800', color: S_TEXT },
+  popoverDateRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: S_TERRA + '12', borderRadius: 8,
+    paddingHorizontal: 12, paddingVertical: 8, marginBottom: 12,
+  },
+  popoverDateText: { fontSize: 14, fontWeight: '700', color: S_TERRA },
+  popoverMsgBox: {
+    backgroundColor: S_BG, borderRadius: 10, padding: 12,
+    borderWidth: 1, borderColor: S_BORDER, marginBottom: 12,
+  },
+  popoverMsgLabel: { fontSize: 12, fontWeight: '700', color: S_TEXT_MUTED, marginBottom: 6 },
+  popoverMsgText: { fontSize: 14, color: S_TEXT, lineHeight: 20 },
+  popoverRejectInput: {
+    backgroundColor: '#F8F4F0', borderRadius: 10,
+    padding: 12, fontSize: 14, color: S_TEXT,
+    minHeight: 72, textAlignVertical: 'top',
+    borderWidth: 1, borderColor: S_BORDER,
+  },
+  popoverBtnArea: { paddingHorizontal: 20, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F0E8E0' },
+  popoverBtnRow: { flexDirection: 'row', gap: 10, marginBottom: 0 },
+  popoverBtn: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    borderRadius: 12, paddingVertical: 14,
+  },
+  popoverBtnReject: {
+    backgroundColor: '#FFEBEE',
+    borderWidth: 1, borderColor: '#FFCDD2',
+  },
+  popoverBtnAccept: { backgroundColor: S_TERRA },
+  popoverBtnText: { fontSize: 15, fontWeight: '700' },
+  popoverActionBtn: {
+    borderRadius: 12, paddingVertical: 14, alignItems: 'center', justifyContent: 'center',
+  },
 });

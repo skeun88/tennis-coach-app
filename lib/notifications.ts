@@ -172,3 +172,29 @@ export async function notifyMemberReport(memberId: string) {
     notif_id: 'PN-07',
   });
 }
+
+// PN-15: 보강 수락 → 회원 푸시
+export async function notifyMemberBoganAccepted(memberId: string, date: string, startTime: string, requestId: string) {
+  const dateObj = new Date(`${date}T00:00:00+09:00`);
+  const dateFormatted = dateObj.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
+  await callSendPush({
+    recipient_type: 'member',
+    recipient_id: memberId,
+    title: '보강 레슨이 확정되었어요',
+    body: `${dateFormatted} ${startTime.slice(0, 5)} 보강 레슨이 확정됐어요.`,
+    data: { screen: 'schedule', type: 'bogan_accepted', request_id: requestId, lesson_date: date, start_time: startTime },
+    notif_id: 'PN-15',
+  });
+}
+
+// PN-16: 보강 거절 → 회원 푸시
+export async function notifyMemberBoganRejected(memberId: string, requestId: string) {
+  await callSendPush({
+    recipient_type: 'member',
+    recipient_id: memberId,
+    title: '보강 요청을 확인해주세요',
+    body: '보강 요청이 거절됐습니다. 다른 시간을 선택하거나 코치님께 문의해보세요.',
+    data: { screen: 'schedule', type: 'bogan_rejected', request_id: requestId },
+    notif_id: 'PN-16',
+  });
+}
