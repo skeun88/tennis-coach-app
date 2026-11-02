@@ -508,15 +508,30 @@ export default function PlanDetailScreen() {
               </View>
               {plan.lesson_comparison.slice(0, 3).map((c: any, i: number) => {
                 const status: string = c.status ?? '';
-                const isImproved = status === 'improved';
-                const isNeedsWork = status === 'needs_work' || status === 'regressed';
-                const badgeLabel = isImproved ? '좋아졌어요' : isNeedsWork ? '더 연습해요' : '비교 기록 없음';
+                const badgeLabel =
+                  status === 'improved'                        ? '좋아졌어요' :
+                  status === 'maintained' || status === 'same' ? '잘 유지하고 있어요' :
+                  status === 'needs_work'                      ? '연습이 필요해요' :
+                  status === 'regressed'                       ? '다시 점검해요' :
+                  '비교 기록 없음';
+                const badgeBgStyle =
+                  status === 'improved'                        ? s.compBadgeImproved :
+                  status === 'maintained' || status === 'same' ? s.compBadgeMaintained :
+                  status === 'needs_work'                      ? s.compBadgeNeedsWork :
+                  status === 'regressed'                       ? s.compBadgeRegressed :
+                  s.compBadgeNeutral;
+                const badgeTextStyle =
+                  status === 'improved'                        ? s.compBadgeTextImproved :
+                  status === 'maintained' || status === 'same' ? s.compBadgeTextMaintained :
+                  status === 'needs_work'                      ? s.compBadgeTextNeedsWork :
+                  status === 'regressed'                       ? s.compBadgeTextRegressed :
+                  s.compBadgeTextNeutral;
                 return (
                   <View key={i} style={[s.compRow, i < (plan.lesson_comparison?.length ?? 0) - 1 && s.compRowBorder]}>
                     <View style={s.compTopRow}>
                       <Text style={s.compPoint}>{c.point}</Text>
-                      <View style={[s.compBadge, isImproved ? s.compBadgeImproved : isNeedsWork ? s.compBadgeNeeds : s.compBadgeNeutral]}>
-                        <Text style={[s.compBadgeText, isImproved ? s.compBadgeTextImproved : isNeedsWork ? s.compBadgeTextNeeds : s.compBadgeTextNeutral]}>{badgeLabel}</Text>
+                      <View style={[s.compBadge, badgeBgStyle]}>
+                        <Text style={[s.compBadgeText, badgeTextStyle]}>{badgeLabel}</Text>
                       </View>
                     </View>
                     {!!c.reason && <Text style={s.compReason}>{c.reason}</Text>}
@@ -1001,13 +1016,17 @@ const s = StyleSheet.create({
   compTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 },
   compPoint: { fontSize: 14, fontWeight: '700', color: DARK_BROWN, flex: 1 },
   compBadge: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 },
-  compBadgeImproved: { backgroundColor: '#F2F9F2', borderWidth: 1, borderColor: '#C3E0C3' },
-  compBadgeNeeds: { backgroundColor: '#FDF4F0', borderWidth: 1, borderColor: '#EDD5C8' },
-  compBadgeNeutral: { backgroundColor: '#F5F2EF', borderWidth: 1, borderColor: '#DDD5CC' },
+  compBadgeImproved:   { backgroundColor: '#F2F9F2', borderWidth: 1, borderColor: '#C3E0C3' },
+  compBadgeMaintained: { backgroundColor: '#F0F4FA', borderWidth: 1, borderColor: '#C0CDE0' },
+  compBadgeNeedsWork:  { backgroundColor: '#FDF4F0', borderWidth: 1, borderColor: '#EDD5C8' },
+  compBadgeRegressed:  { backgroundColor: '#FDF0F0', borderWidth: 1, borderColor: '#E8C0C0' },
+  compBadgeNeutral:    { backgroundColor: '#F5F2EF', borderWidth: 1, borderColor: '#DDD5CC' },
   compBadgeText: { fontSize: 11, fontWeight: '700' },
-  compBadgeTextImproved: { color: '#3A7A3A' },
-  compBadgeTextNeeds: { color: TERRACOTTA },
-  compBadgeTextNeutral: { color: WARM_GRAY },
+  compBadgeTextImproved:   { color: '#3A7A3A' },
+  compBadgeTextMaintained: { color: '#3A5A80' },
+  compBadgeTextNeedsWork:  { color: TERRACOTTA },
+  compBadgeTextRegressed:  { color: '#C03030' },
+  compBadgeTextNeutral:    { color: WARM_GRAY },
   compReason: { fontSize: 13, color: WARM_GRAY, lineHeight: 18 },
   goalsBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 12 },
   goalsBadgeTextDraft: { fontSize: 11, color: WARM_GRAY, fontWeight: '600' },

@@ -144,7 +144,11 @@ const SYSTEM_PROMPT = `당신은 USTA/ITF 자격증을 보유한 전문 테니�
 • drill_suggestions: 정확히 2개 — name·purpose·reps는 간결하게, method·court_adaptation은 1~2문장
 • lesson_comparison: 이전 목표가 있을 때만 작성. 없으면 빈 배열([])
   - point: 기술명 또는 짧은 변화 요약 (10자 이내, 설명문 금지)
-  - status: 실제 비교 근거가 있을 때만 "improved" 사용. 근거 불충분 시 "same" 또는 status 생략
+  - status: 아래 4가지 중 하나. 실제 비교 근거가 있을 때만 사용. 근거 불충분 시 생략
+    · "improved"   — 이번 레슨에서 이전 대비 실제 향상이 확인된 경우
+    · "maintained" — 이전과 동일 수준을 꾸준히 유지하고 있는 경우
+    · "needs_work" — 아직 교정 중이며 더 연습이 필요한 경우
+    · "regressed"  — 이전보다 퇴보하거나 문제가 다시 나타난 경우
   - reason: 비교 근거가 있는 경우만 1문장. 없으면 빈 문자열
 
 {
@@ -173,7 +177,7 @@ const SYSTEM_PROMPT = `당신은 USTA/ITF 자격증을 보유한 전문 테니�
     }
   ],
   "lesson_comparison": [
-    { "point": "기술명 또는 짧은 변화 요약", "status": "improved", "reason": "비교 근거 (없으면 빈 문자열)" }
+    { "point": "기술명 또는 짧은 변화 요약", "status": "improved|maintained|needs_work|regressed", "reason": "비교 근거 (없으면 빈 문자열)" }
   ]
 }
 drill_suggestions는 정확히 2개만 포함할 것.`
@@ -613,7 +617,7 @@ ${transcript}`
     ).join('\n\n')
 
     const prevGoalsSection = (prevGoals.length > 0 || prevImprovementPoints.length > 0)
-      ? `\n\n## 이전 레슨 대비 변화 평가\n이전 레슨 교정 포인트: ${prevImprovementPoints.join(', ') || '없음'}\n이전 레슨 다음 목표: ${prevGoals.join(', ') || '없음'}\n이번 레슨에서 위 교정 포인트나 목표와 공통으로 다룬 기술이 있으면 lesson_comparison을 작성하세요.\n겹치는 기술이 전혀 없으면 lesson_comparison은 반드시 빈 배열([])로 반환하세요.\n단순히 교정 지시가 반복됐다는 이유로 improved를 사용하지 말 것. 이번 레슨에서 실제 향상이 확인된 경우에만 improved 사용.\n(status: improved=향상됨, same=동일, regressed=퇴보)`
+      ? `\n\n## 이전 레슨 대비 변화 평가\n이전 레슨 교정 포인트: ${prevImprovementPoints.join(', ') || '없음'}\n이전 레슨 다음 목표: ${prevGoals.join(', ') || '없음'}\n이번 레슨에서 위 교정 포인트나 목표와 공통으로 다룬 기술이 있으면 lesson_comparison을 작성하세요.\n겹치는 기술이 전혀 없으면 lesson_comparison은 반드시 빈 배열([])로 반환하세요.\n(status 기준: improved=실제 향상 확인됨, maintained=동일 수준 유지, needs_work=아직 교정 중·더 연습 필요, regressed=이전보다 퇴보·문제 재발)\n단순히 교정 지시가 반복됐다는 이유만으로 improved를 사용하지 말 것. 실제 향상 근거가 없으면 maintained 또는 needs_work를 사용할 것.`
       : ''
 
     // summary 권장 분량: 녹음 길이 기반
