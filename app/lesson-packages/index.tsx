@@ -121,6 +121,11 @@ export default function LessonPackagesScreen() {
   return (
     <View style={styles.container}>
       <SettingsHeader title="레슨권 관리" />
+      <View style={styles.descriptionContainer}>
+        <Text style={styles.descriptionText}>
+          체험·정규 레슨 프로그램을 등록해 보세요. 공개 프로필에서 누구나 확인하고 문의할 수 있어요.
+        </Text>
+      </View>
       <FlatList
         data={packages}
         keyExtractor={item => item.id}
@@ -151,6 +156,8 @@ export default function LessonPackagesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  descriptionContainer: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, backgroundColor: Colors.background },
+  descriptionText: { fontSize: 13, color: Colors.mutedFg, lineHeight: 20 },
   card: {
     backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12,
     

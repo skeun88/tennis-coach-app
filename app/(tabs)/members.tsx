@@ -219,6 +219,7 @@ export default function MembersScreen() {
           </View>
           <View>
             <Text style={styles.packageTitle}>레슨권 관리</Text>
+            <Text style={styles.packageDesc}>운영 중인 레슨을 등록하고 새로운 문의를 받아보세요</Text>
             <Text style={styles.packageSub}>
               {packageCount > 0 ? `${packageCount}종 등록` : '등록된 레슨권 없음'}
             </Text>
@@ -372,6 +373,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   packageTitle: { fontSize: 14, fontWeight: '700', color: '#3E2B22' },
+  packageDesc: { fontSize: 11, color: '#8B7355', marginTop: 2, marginBottom: 1 },
   packageSub: { fontSize: 12, color: '#8B7355', marginTop: 1 },
   packageRight: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   packageAction: { fontSize: 13, fontWeight: '600', color: '#C0755A' },
