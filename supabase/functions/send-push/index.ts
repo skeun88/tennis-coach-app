@@ -38,6 +38,7 @@ const COACH_NOTIF_TYPE_MAP: Record<string, string> = {
   'PN-01': 'lesson_reminder',
   'PN-02': 'lesson_reminder',
   'PN-03': 'member_message',
+  'PN-12': 'absence_reported',
 }
 
 serve(async (req) => {
