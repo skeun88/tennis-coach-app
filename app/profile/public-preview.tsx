@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Image, ActivityIndicator, Share, Linking, Dimensions,
+  Image, ActivityIndicator, Share, Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -15,7 +15,8 @@ const TERRA_LIGHT = '#FBF2EF';
 const DARK = '#3E2B22';
 const PUBLIC_BASE = 'https://kerri.co.kr/coach/';
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const HERO_HEIGHT = Math.round(SCREEN_WIDTH * 0.62);
+// 상반신 노출을 위해 비율을 늘림 (기존 0.62 → 1.0으로 세로 충분히 확보)
+const HERO_HEIGHT = Math.round(SCREEN_WIDTH * 1.0);
 
 interface ProfileData {
   display_name: string;
@@ -35,34 +36,17 @@ interface ProfileData {
   is_public: boolean;
 }
 
-interface LessonPackage {
-  id: string;
-  title: string;
-  price: number;
-  total_credits: number;
-  duration_minutes: number;
-  color: string;
-}
-
 export default function PublicPreviewScreen() {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<ProfileData | null>(null);
-  const [packages, setPackages] = useState<LessonPackage[]>([]);
   const [stats, setStats] = useState({ members: 0, lessons: 0, reports: 0 });
 
   async function loadData() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const [profileRes, packagesRes] = await Promise.all([
-      supabase.from('coach_profiles').select('*').eq('coach_id', user.id).maybeSingle(),
-      supabase.from('lesson_packages')
-        .select('id, title, price, total_credits, duration_minutes, color')
-        .eq('coach_id', user.id)
-        .eq('is_active', true)
-        .order('created_at', { ascending: false }),
-    ]);
+    const profileRes = await supabase.from('coach_profiles').select('*').eq('coach_id', user.id).maybeSingle();
 
     if (profileRes.data) {
       setProfile(profileRes.data);
@@ -91,7 +75,6 @@ export default function PublicPreviewScreen() {
       });
     }
 
-    setPackages(packagesRes.data ?? []);
     setLoading(false);
   }
 
@@ -126,13 +109,13 @@ export default function PublicPreviewScreen() {
   const publicUrl = profile.is_public && profile.public_slug ? `${PUBLIC_BASE}${profile.public_slug}` : null;
   const initial = (profile.display_name || '코').slice(0, 1).toUpperCase();
 
-  const careerRows = [
-    { label: '코칭 경력', value: profile.coaching_years ? `${profile.coaching_years}년` : null },
-    { label: '선수 경력', value: profile.has_player_career ? '있음' : null },
-    { label: '주요 경력', value: profile.career_details || null },
-    { label: '자격증', value: profile.certifications || null },
-    { label: '수상·대회', value: profile.awards || null },
-  ].filter(r => r.value !== null) as { label: string; value: string }[];
+  const careerSections = [
+    { icon: 'time-outline' as const, title: '코칭 경력', value: profile.coaching_years ? `${profile.coaching_years}년` : null },
+    { icon: 'medal-outline' as const, title: '선수 경력', value: profile.has_player_career ? '있음' : null },
+    { icon: 'briefcase-outline' as const, title: '주요 경력', value: profile.career_details || null },
+    { icon: 'document-text-outline' as const, title: '자격증', value: profile.certifications || null },
+    { icon: 'trophy-outline' as const, title: '수상·대회', value: profile.awards || null },
+  ].filter(s => s.value !== null) as { icon: string; title: string; value: string }[];
 
   const journeyStats = [
     { label: '함께한 회원', value: stats.members, display: `${stats.members}명` },
@@ -149,21 +132,13 @@ export default function PublicPreviewScreen() {
     } catch {}
   }
 
-  async function handleInquiry() {
-    if (publicUrl) {
-      await Linking.openURL(publicUrl);
-    }
-  }
-
-  const showCTA = publicUrl !== null;
-
   return (
     <View style={{ flex: 1, backgroundColor: Colors.background }}>
       <SettingsHeader title="회원에게 보이는 프로필" />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + (showCTA ? 90 : 24) }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 90 }}
       >
         {/* ① 히어로 영역 */}
         <View style={[styles.hero, { height: HERO_HEIGHT }]}>
@@ -216,19 +191,24 @@ export default function PublicPreviewScreen() {
           )}
 
           {/* ③ 경력·자격 */}
-          {careerRows.length > 0 && (
+          {careerSections.length > 0 && (
             <View style={styles.card}>
               <View style={styles.cardTitleRow}>
                 <Ionicons name="ribbon-outline" size={14} color={TERRA} />
                 <Text style={styles.cardTitle}>경력·자격</Text>
               </View>
-              {careerRows.map((row, i) => (
+              {careerSections.map((section, i) => (
                 <View
-                  key={row.label}
-                  style={[styles.careerRow, i < careerRows.length - 1 && styles.careerRowBorder]}
+                  key={section.title}
+                  style={[styles.careerSection, i < careerSections.length - 1 && styles.careerSectionBorder]}
                 >
-                  <Text style={styles.careerLabel}>{row.label}</Text>
-                  <Text style={styles.careerValue}>{row.value}</Text>
+                  <View style={styles.careerSectionHeader}>
+                    <View style={styles.careerIconBox}>
+                      <Ionicons name={section.icon as any} size={13} color={TERRA} />
+                    </View>
+                    <Text style={styles.careerSectionTitle}>{section.title}</Text>
+                  </View>
+                  <Text style={styles.careerSectionValue}>{section.value}</Text>
                 </View>
               ))}
             </View>
@@ -252,53 +232,17 @@ export default function PublicPreviewScreen() {
             </View>
           )}
 
-          {/* ⑤ 레슨권 */}
-          {packages.length > 0 && (
-            <View style={styles.card}>
-              <View style={styles.cardTitleRow}>
-                <Ionicons name="ticket-outline" size={14} color={TERRA} />
-                <Text style={styles.cardTitle}>레슨권</Text>
-              </View>
-              {packages.map((pkg, i) => (
-                <View
-                  key={pkg.id}
-                  style={[styles.packageRow, i < packages.length - 1 && styles.packageRowBorder]}
-                >
-                  <View style={[styles.packageDot, { backgroundColor: pkg.color || TERRA }]} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.packageTitle}>{pkg.title}</Text>
-                    <Text style={styles.packageMeta}>
-                      {pkg.total_credits}회 · {pkg.duration_minutes}분 · {pkg.price.toLocaleString()}원
-                    </Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
+          {/* 레슨권 섹션은 회원앱 시점에서 숨김 — SEO 웹에서만 노출 */}
         </View>
       </ScrollView>
 
-      {/* ⑥ 하단 CTA */}
-      {showCTA && (
-        <View style={[styles.cta, { paddingBottom: insets.bottom + 12 }]}>
-          <TouchableOpacity style={styles.inquiryBtn} onPress={handleInquiry} activeOpacity={0.85}>
-            <Ionicons name="chatbubble-outline" size={16} color="#fff" />
-            <Text style={styles.inquiryBtnText}>레슨 문의하기</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.shareBtn} onPress={handleShare} activeOpacity={0.85}>
-            <Ionicons name="share-outline" size={16} color={TERRA} />
-            <Text style={styles.shareBtnText}>공유</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-      {!showCTA && (
-        <View style={[styles.cta, { paddingBottom: insets.bottom + 12 }]}>
-          <TouchableOpacity style={[styles.shareBtn, { flex: 1 }]} onPress={handleShare} activeOpacity={0.85}>
-            <Ionicons name="share-outline" size={16} color={TERRA} />
-            <Text style={styles.shareBtnText}>프로필 공유</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      {/* ⑥ 하단 CTA — 회원앱: 공유 버튼만 */}
+      <View style={[styles.cta, { paddingBottom: insets.bottom + 12 }]}>
+        <TouchableOpacity style={[styles.shareBtn, { flex: 1 }]} onPress={handleShare} activeOpacity={0.85}>
+          <Ionicons name="share-outline" size={16} color={TERRA} />
+          <Text style={styles.shareBtnText}>코치 프로필 공유</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -415,27 +359,39 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginTop: 8,
   },
-  careerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 10,
+  careerSection: {
+    paddingVertical: 12,
   },
-  careerRowBorder: {
+  careerSectionBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: '#EEF1F6',
+    borderBottomColor: '#E8EBEF',
   },
-  careerLabel: {
-    width: 72,
-    fontSize: 13,
-    color: Colors.mutedFg,
-    fontWeight: '500',
+  careerSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
   },
-  careerValue: {
-    flex: 1,
+  careerIconBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    backgroundColor: TERRA_LIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  careerSectionTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: TERRA,
+    letterSpacing: 0.2,
+  },
+  careerSectionValue: {
     fontSize: 14,
     color: DARK,
     fontWeight: '500',
-    lineHeight: 20,
+    lineHeight: 21,
+    paddingLeft: 28,
   },
   journeyRow: {
     flexDirection: 'row',
@@ -460,32 +416,6 @@ const styles = StyleSheet.create({
     color: Colors.mutedFg,
     textAlign: 'center',
   },
-  packageRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 10,
-  },
-  packageRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEF1F6',
-  },
-  packageDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    flexShrink: 0,
-  },
-  packageTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: DARK,
-    marginBottom: 2,
-  },
-  packageMeta: {
-    fontSize: 12,
-    color: Colors.mutedFg,
-  },
   cta: {
     position: 'absolute',
     bottom: 0,
@@ -498,21 +428,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#EEF1F6',
-  },
-  inquiryBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    backgroundColor: TERRA,
-    borderRadius: 12,
-    paddingVertical: 14,
-  },
-  inquiryBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#fff',
   },
   shareBtn: {
     flexDirection: 'row',
