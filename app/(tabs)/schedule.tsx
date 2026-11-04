@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Pressable, ScrollView, FlatList,
   Alert, Modal, TextInput, ActivityIndicator,
-  PanResponder, Animated, Dimensions, Vibration, Platform,
+  PanResponder, Animated, Dimensions, Vibration, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -1819,6 +1819,7 @@ export default function ScheduleScreen() {
         animationType="fade"
         onRequestClose={() => { setRequestModal(false); setRejectMsg(''); setShowRejectInput(false); }}
       >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <TouchableOpacity
           style={styles.popoverOverlay}
           activeOpacity={1}
@@ -1977,6 +1978,7 @@ export default function ScheduleScreen() {
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
     </Animated.View>
   );

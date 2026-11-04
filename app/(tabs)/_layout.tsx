@@ -40,7 +40,7 @@ function RequestToast({
   if (!request) return null;
 
   const isWeb = request.source === 'web';
-  const title = isWeb ? '신규 상담 문의 요청' : '새 레슨 예약 요청';
+  const title = isWeb ? '신규 상담 문의 요청' : '보강 레슨 요청';
   const guestOrMember = isWeb
     ? (request.guest_name ?? '문의자')
     : (request.member?.name ?? '회원');
