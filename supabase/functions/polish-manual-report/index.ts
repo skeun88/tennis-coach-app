@@ -53,9 +53,10 @@ const PLAN_TOOL = {
         items: {
           type: 'object',
           properties: {
-            point: { type: 'string', description: '이전 목표 내용' },
-            status: { type: 'string', enum: ['improved', 'same', 'regressed'] },
-            reason: { type: 'string', description: '근거 1-2문장' },
+            skill: { type: 'string', enum: ['forehand', 'backhand', 'serve', 'volley', 'footwork', 'rally'], description: '명확히 분류 가능한 기술만. 복합·애매한 경우 omit' },
+            point: { type: 'string', description: '기술명 또는 짧은 변화 요약 (10자 이내)' },
+            status: { type: 'string', enum: ['improved', 'maintained', 'needs_work', 'regressed'] },
+            reason: { type: 'string', description: '근거 1문장. 없으면 빈 문자열' },
           },
           required: ['point', 'status', 'reason'],
         },

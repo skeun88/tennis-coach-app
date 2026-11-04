@@ -143,6 +143,9 @@ const SYSTEM_PROMPT = `당신은 USTA/ITF 자격증을 보유한 전문 테니�
 • next_goals: 핵심 1~3항목, 각 1문장 이내 (구체적 행동 동사 중심, 설명형 문장 금지)
 • drill_suggestions: 정확히 2개 — name·purpose·reps는 간결하게, method·court_adaptation은 1~2문장
 • lesson_comparison: 이전 목표가 있을 때만 작성. 없으면 빈 배열([])
+  - skill: 아래 6가지 중 하나. 해당 없으면 null
+    · "forehand" / "backhand" / "serve" / "volley" / "footwork" / "rally"
+    · 명확히 분류 가능할 때만 지정. 복합 기술이거나 애매하면 null
   - point: 기술명 또는 짧은 변화 요약 (10자 이내, 설명문 금지)
   - status: 아래 4가지 중 하나. 실제 비교 근거가 있을 때만 사용. 근거 불충분 시 생략
     · "improved"   — 이번 레슨에서 이전 대비 실제 향상이 확인된 경우
@@ -177,7 +180,7 @@ const SYSTEM_PROMPT = `당신은 USTA/ITF 자격증을 보유한 전문 테니�
     }
   ],
   "lesson_comparison": [
-    { "point": "기술명 또는 짧은 변화 요약", "status": "improved|maintained|needs_work|regressed", "reason": "비교 근거 (없으면 빈 문자열)" }
+    { "skill": "forehand|backhand|serve|volley|footwork|rally|null", "point": "기술명 또는 짧은 변화 요약", "status": "improved|maintained|needs_work|regressed", "reason": "비교 근거 (없으면 빈 문자열)" }
   ]
 }
 drill_suggestions는 정확히 2개만 포함할 것.`
