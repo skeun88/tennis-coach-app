@@ -145,25 +145,37 @@ export default function RootLayout() {
     };
   }, []);
 
-  // ── lesson_absence 푸시 탭 → 레슨 상세 딥링크 ──────────────────────
+  // ── 푸시 탭 → 화면 딥링크 ──────────────────────────────────────────
+  const pendingReviewDeeplinkRef = useRef(false);
+
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data as any;
-      if (data?.type !== 'lesson_absence') return;
-      const lessonId = data.lesson_id as string | undefined;
-      if (!lessonId) return;
 
-      const doNav = () => {
-        const last = lastNavLessonRef.current;
-        if (last && last.id === lessonId && Date.now() - last.ts < 5000) return;
-        lastNavLessonRef.current = { id: lessonId, ts: Date.now() };
-        router.push(`/lessons/${lessonId}`);
-      };
+      if (data?.type === 'lesson_absence') {
+        const lessonId = data.lesson_id as string | undefined;
+        if (!lessonId) return;
+        const doNavLesson = () => {
+          const last = lastNavLessonRef.current;
+          if (last && last.id === lessonId && Date.now() - last.ts < 5000) return;
+          lastNavLessonRef.current = { id: lessonId, ts: Date.now() };
+          router.push(`/lessons/${lessonId}`);
+        };
+        if (sessionRef.current && navReadyRef.current) {
+          doNavLesson();
+        } else {
+          pendingLessonDeeplinkRef.current = lessonId;
+        }
+        return;
+      }
 
-      if (sessionRef.current && navReadyRef.current) {
-        doNav();
-      } else {
-        pendingLessonDeeplinkRef.current = lessonId;
+      if (data?.type === 'review') {
+        if (sessionRef.current && navReadyRef.current) {
+          router.push('/coach-reviews');
+        } else {
+          pendingReviewDeeplinkRef.current = true;
+        }
+        return;
       }
     });
     return () => sub.remove();
@@ -173,12 +185,18 @@ export default function RootLayout() {
   useEffect(() => {
     if (!isNavigationReady || !session) return;
     const lessonId = pendingLessonDeeplinkRef.current;
-    if (!lessonId) return;
-    pendingLessonDeeplinkRef.current = null;
-    const last = lastNavLessonRef.current;
-    if (last && last.id === lessonId && Date.now() - last.ts < 5000) return;
-    lastNavLessonRef.current = { id: lessonId, ts: Date.now() };
-    setTimeout(() => router.push(`/lessons/${lessonId}`), 200);
+    if (lessonId) {
+      pendingLessonDeeplinkRef.current = null;
+      const last = lastNavLessonRef.current;
+      if (!last || last.id !== lessonId || Date.now() - last.ts >= 5000) {
+        lastNavLessonRef.current = { id: lessonId, ts: Date.now() };
+        setTimeout(() => router.push(`/lessons/${lessonId}`), 200);
+      }
+    }
+    if (pendingReviewDeeplinkRef.current) {
+      pendingReviewDeeplinkRef.current = false;
+      setTimeout(() => router.push('/coach-reviews'), 200);
+    }
   }, [isNavigationReady, session]);
 
   useEffect(() => {
@@ -320,6 +338,7 @@ export default function RootLayout() {
       <Stack.Screen name="consultations/index" options={{ headerShown: false }} />
       <Stack.Screen name="consultations/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="thirdPartyLoginResult" options={{ headerShown: false }} />
+      <Stack.Screen name="coach-reviews" options={{ headerShown: false }} />
     </Stack>
   );
 }
