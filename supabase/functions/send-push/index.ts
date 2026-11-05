@@ -43,6 +43,7 @@ const COACH_NOTIF_TYPE_MAP: Record<string, string> = {
   'PN-12': 'absence_reported',
   'PN-14': 'bogan_request',
   'PN-17': 'bogan_cancel',
+  'PN-18': 'review',
 }
 
 // notif_id → member_notifications.type 추가 항목
