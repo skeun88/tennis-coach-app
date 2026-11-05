@@ -17,6 +17,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  Linking,
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import ViewShot from 'react-native-view-shot';
@@ -228,9 +229,12 @@ export default function CoachQRModal({
                 <Ionicons name="download-outline" size={16} color={Colors.primary} />
                 <Text style={styles.actionBtnText}>QR 저장</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtn} onPress={handleCopy}>
-                <Ionicons name="copy-outline" size={16} color={Colors.primary} />
-                <Text style={styles.actionBtnText}>링크 복사</Text>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => { if (profileUrl) Linking.openURL(profileUrl); }}
+              >
+                <Ionicons name="open-outline" size={16} color={Colors.primary} />
+                <Text style={styles.actionBtnText}>홈페이지 보기</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.actionBtn, styles.actionBtnPrimary]}
