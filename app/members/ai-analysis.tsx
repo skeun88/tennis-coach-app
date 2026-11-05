@@ -981,7 +981,7 @@ export default function AIAnalysisScreen() {
             // 이미 member_lesson_reports에 저장된 상태이므로 회원이 앱에서 바로 볼 수 있음
             // is_read 초기화해서 NEW 표시
             await supabase.from('member_lesson_reports')
-              .update({ is_read: false })
+              .update({ sent_to_member: true, is_read: false })
               .eq('id', report.id);
             try { await notifyMemberReport(plan.member_id); } catch (e) { console.error('[PUSH] 리포트 알림 실패:', e); }
             Alert.alert('전송 완료', '회원이 앱을 열면 리포트를 확인할 수 있어요.');
