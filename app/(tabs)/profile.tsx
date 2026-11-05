@@ -172,13 +172,12 @@ export default function ProfileScreen() {
     if (!user) return;
     setCoachId(user.id);
 
-    const [allLessonsRes, plansRes, profileRes, membersRes] = await Promise.all([
+    const [allLessonsRes, plansRes, profileRes] = await Promise.all([
       supabase.from('lessons').select('id, date').eq('coach_id', user.id),
       supabase.from('lesson_plans').select('*', { count: 'exact', head: true }).eq('coach_id', user.id),
       supabase.from('coach_profiles').select('*').eq('coach_id', user.id).maybeSingle(),
-      supabase.from('members').select('id', { count: 'exact', head: true }).eq('coach_id', user.id),
     ]);
-    setMembersCount(membersRes.count ?? 0);
+    setMembersCount(profileRes.data?.total_members_ever ?? 0);
     const reviewsRes = await supabase
       .from('coach_reviews')
       .select('id, rating')
