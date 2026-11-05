@@ -585,18 +585,6 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             )}
 
-            {/* 공개 프로필 배너 */}
-            <TouchableOpacity style={styles.webPageBanner} onPress={() => router.push('/settings/public-profile')} activeOpacity={0.8}>
-              <View style={styles.webPageBannerIcon}>
-                <Ionicons name="globe-outline" size={20} color={TERRA} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.webPageBannerTitle}>나만의 신규 회원 유입 웹페이지</Text>
-                <Text style={styles.webPageBannerSub}>코치 프로필 공개 설정 · kerri.co.kr/coach/…</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={TERRA} />
-            </TouchableOpacity>
-
             {/* 하단 버튼 행 */}
             <View style={styles.pcBtnRow}>
               <TouchableOpacity style={styles.pcEditBtn} onPress={() => openEditModal('profile')} activeOpacity={0.8}>
