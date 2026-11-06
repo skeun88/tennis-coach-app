@@ -225,19 +225,21 @@ export default function CoachQRModal({
             <ActivityIndicator color={Colors.primary} style={{ marginTop: 20 }} />
           ) : (
             <View style={styles.actions}>
-              <TouchableOpacity style={styles.actionBtn} onPress={handleSave}>
-                <Ionicons name="download-outline" size={16} color={Colors.primary} />
-                <Text style={styles.actionBtnText}>QR 저장</Text>
-              </TouchableOpacity>
+              <View style={styles.actionsRow}>
+                <TouchableOpacity style={styles.actionBtn} onPress={handleSave}>
+                  <Ionicons name="download-outline" size={16} color={Colors.primary} />
+                  <Text style={styles.actionBtnText}>QR 저장</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionBtn}
+                  onPress={() => { if (profileUrl) Linking.openURL(profileUrl); }}
+                >
+                  <Ionicons name="open-outline" size={16} color={Colors.primary} />
+                  <Text style={styles.actionBtnText}>홈페이지 보기</Text>
+                </TouchableOpacity>
+              </View>
               <TouchableOpacity
-                style={styles.actionBtn}
-                onPress={() => { if (profileUrl) Linking.openURL(profileUrl); }}
-              >
-                <Ionicons name="open-outline" size={16} color={Colors.primary} />
-                <Text style={styles.actionBtnText}>홈페이지 보기</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionBtn, styles.actionBtnPrimary]}
+                style={[styles.actionBtn, styles.actionBtnPrimary, styles.actionBtnFull]}
                 onPress={handleShare}
               >
                 <Ionicons name="share-outline" size={16} color={Colors.white} />
@@ -373,9 +375,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   actions: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: 10,
     marginTop: 20,
+    width: '100%',
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  actionBtnFull: {
+    flex: undefined,
     width: '100%',
   },
   actionBtn: {
