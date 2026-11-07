@@ -101,7 +101,8 @@ export default function MemberVerbalConsentSheet({
               <>
                 <Text style={styles.title}>회원에게 확인했나요?</Text>
                 <Text style={styles.desc}>
-                  레슨 음성이 AI 기록 생성에 사용되고, 통증·부상 등 레슨 정보가 포함될 수 있으며 원본은 최대 7일 이내 삭제된다고 안내해주세요.
+                  레슨 음성이 AI 기록 생성에 사용되고, 통증·부상 등 레슨 정보가 포함될 수 있으며 원본은 최대 7일 이내 삭제된다고 안내해주세요.{'\n\n'}
+                  동의하지 않을 경우 해당 녹음 데이터는 1개월 이내에 폐기된다는 사실도 함께 안내해주세요.
                 </Text>
 
                 <TouchableOpacity
