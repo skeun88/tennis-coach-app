@@ -161,21 +161,21 @@ export async function getSubscription(coachId: string): Promise<Subscription | n
   return data as Subscription;
 }
 
-/** 기능 접근 권한 체크 */
+/** 기능 접근 권한 체크 — null 구독은 free 플랜으로 취급 */
 export function canUseFeature(
   subscription: Subscription | null,
   feature: keyof PlanFeatures
 ): boolean {
-  if (!subscription) return false;
+  if (!subscription) return PLANS.free.features[feature] === true;
   if (subscription.status === 'blocked' || subscription.status === 'cancelled') return false;
   const plan = PLANS[subscription.plan_id];
   if (!plan) return false;
   return plan.features[feature] === true;
 }
 
-/** 구독이 활성 상태인지 (trial 또는 active 또는 free) */
+/** 구독이 활성 상태인지 (trial 또는 active 또는 free) — null 구독은 free로 취급 */
 export function isSubscriptionActive(subscription: Subscription | null): boolean {
-  if (!subscription) return false;
+  if (!subscription) return true;
   return (
     subscription.status === 'trial' ||
     subscription.status === 'active' ||
@@ -404,22 +404,24 @@ export async function checkAiAnalysisLimit(
   extraCredits: number;
   needsExtraCredit: boolean;
 }> {
-  if (!subscription || subscription.status === 'blocked' || subscription.status === 'cancelled') {
+  if (subscription && (subscription.status === 'blocked' || subscription.status === 'cancelled')) {
     return { allowed: false, used: 0, limit: 0, planId: null, extraCredits: 0, needsExtraCredit: false };
   }
 
-  const plan = PLANS[subscription.plan_id];
+  const plan = subscription ? PLANS[subscription.plan_id] : PLANS.free;
   const limit = plan.reportMonthlyLimit;
-  const extraCredits = subscription.extra_report_credits ?? 0;
+  const extraCredits = subscription?.extra_report_credits ?? 0;
+
+  const planId = subscription?.plan_id ?? 'free';
 
   if (limit === 0) {
-    return { allowed: extraCredits > 0, used: 0, limit: 0, planId: subscription.plan_id, extraCredits, needsExtraCredit: extraCredits > 0 };
+    return { allowed: extraCredits > 0, used: 0, limit: 0, planId, extraCredits, needsExtraCredit: extraCredits > 0 };
   }
 
-  const used = await getAiAnalysisUsageThisMonth(coachId, subscription.current_period_end);
+  const used = await getAiAnalysisUsageThisMonth(coachId, subscription?.current_period_end ?? null);
 
   if (used < limit) {
-    return { allowed: true, used, limit, planId: subscription.plan_id, extraCredits, needsExtraCredit: false };
+    return { allowed: true, used, limit, planId, extraCredits, needsExtraCredit: false };
   }
 
   // 월 한도 초과 → 추가 크레딧 확인
@@ -427,7 +429,7 @@ export async function checkAiAnalysisLimit(
     allowed: extraCredits > 0,
     used,
     limit,
-    planId: subscription.plan_id,
+    planId,
     extraCredits,
     needsExtraCredit: true,
   };
