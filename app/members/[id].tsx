@@ -1525,6 +1525,22 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                         .from('lesson_members').select('lesson_id').eq('member_id', id);
                       const lessonIds = (memberLessonRows ?? []).map((r: any) => r.lesson_id);
 
+                      // AI 분석 / 레슨 계획 (FK 의존 순서: transcripts → reports → plans)
+                      await supabase.from('lesson_transcripts').delete().eq('member_id', id);
+                      await supabase.from('member_lesson_reports').delete().eq('member_id', id);
+                      await supabase.from('lesson_plans').delete().eq('member_id', id);
+                      // 알림 / 푸시 토큰
+                      await supabase.from('member_notifications').delete().eq('member_id', id);
+                      await supabase.from('member_push_tokens').delete().eq('member_id', id);
+                      // 리뷰 / 리포트 크레딧 (txns → credits 순서)
+                      await supabase.from('coach_reviews').delete().eq('member_id', id);
+                      await supabase.from('member_report_credit_txns').delete().eq('member_id', id);
+                      await supabase.from('member_report_credits').delete().eq('member_id', id);
+                      // 설정 / 연결 / 동의
+                      await supabase.from('notification_settings').delete().eq('member_id', id);
+                      await supabase.from('member_connection_requests').delete().eq('matched_member_id', id);
+                      await supabase.from('ai_consents').delete().eq('member_id', id);
+                      // 기본 회원 데이터
                       await supabase.from('member_notes').delete().eq('member_id', id);
                       await supabase.from('attendance').delete().eq('member_id', id);
                       await supabase.from('payments').delete().eq('member_id', id);
