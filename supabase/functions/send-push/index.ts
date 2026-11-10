@@ -19,6 +19,8 @@ const SETTING_KEY_MAP: Record<string, string> = {
   'PN-09': 'schedule_change',
   'PN-10': 'lesson_cancel',
   'PN-11': 'lesson_count_update',
+  'PN-15': 'bogan_result',
+  'PN-16': 'bogan_result',
 }
 
 // notif_id → member_notifications.type 매핑 (회원용 인앱 알림함)
