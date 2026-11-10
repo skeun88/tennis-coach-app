@@ -19,6 +19,7 @@ import { getCurrentSubscription, canAddMember } from '../../lib/subscription';
 import { syncRevenueCatToDb } from '../../lib/purchases';
 import { IS_BETA } from '../../lib/beta';
 import { clearHomeCache } from '../../lib/homeDataLoader';
+import PlanUpsellModal, { UpsellContext } from '../../components/PlanUpsellModal';
 
 const LEVELS: MemberLevel[] = MEMBER_LEVELS;
 const DAYS_KR = ['일', '월', '화', '수', '목', '금', '토'];
@@ -347,6 +348,7 @@ export default function NewMemberScreen() {
   const [lessonPackages, setLessonPackages] = useState<any[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [upsellContext, setUpsellContext] = useState<UpsellContext | null>(null);
 
   // 체험 레슨 설정 (레슨권 섹션)
   const [trialDuration, setTrialDuration] = useState('60');
@@ -721,7 +723,7 @@ export default function NewMemberScreen() {
       const ok = await canAddMember(user.id, subscription);
       if (!ok) {
         setLoading(false);
-        router.push({ pathname: '/subscription/select-plan', params: { reason: 'member_limit' } } as any);
+        setUpsellContext('member_limit');
         return;
       }
     }
@@ -1255,6 +1257,14 @@ export default function NewMemberScreen() {
         </View>
       </Modal>
 
+      {upsellContext && (
+        <PlanUpsellModal
+          visible={true}
+          onClose={() => setUpsellContext(null)}
+          context={upsellContext}
+          currentPlanId={'free'}
+        />
+      )}
     </KeyboardAvoidingView>
   );
 }
