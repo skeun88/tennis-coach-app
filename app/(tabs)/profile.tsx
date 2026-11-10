@@ -743,10 +743,8 @@ export default function ProfileScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.aiTitle}>나의 AI 코칭 모델</Text>
-                <Text style={styles.aiSub}>코칭 스타일 {knowledgeCount}개 학습 중</Text>
-                <Text style={[styles.aiVoice, voiceExceeded && { color: Colors.destructive }]}>
-                  {voiceExceeded ? '음성 한도 초과' : `음성 학습 ${voiceRemainMin}분 남음`}
-                </Text>
+                <Text style={styles.aiSub}>내 코칭 방식에 맞춰 레슨 리포트를 작성해요</Text>
+                <Text style={styles.aiVoice}>등록된 코칭 스타일 {knowledgeCount}개</Text>
               </View>
             </View>
             <Text style={styles.aiArrow}>관리하기 →</Text>
