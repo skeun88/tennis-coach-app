@@ -280,14 +280,6 @@ export default function PaymentsScreen() {
         });
         if (error) { Alert.alert('오류', '결제 저장에 실패했어요.\n' + error.message); setSaving(false); return; }
       }
-      if (selectedPackage) {
-        const { data: currentMember } = await supabase.from('members').select('remaining_credits, total_credits').eq('id', memberId).single();
-        await supabase.from('members').update({
-          remaining_credits: (currentMember?.remaining_credits ?? 0) + selectedPackage.total_credits,
-          total_credits: (currentMember?.total_credits ?? 0) + selectedPackage.total_credits,
-          lesson_package_id: selectedPackage.id,
-        }).eq('id', memberId);
-      }
     } else if (payTarget.type === 'low_credit' && selectedPackage) {
       const { error } = await supabase.from('payments').insert({
         coach_id: user.id, member_id: memberId,
@@ -297,12 +289,6 @@ export default function PaymentsScreen() {
         payment_method: selectedMethod, payment_channel: 'offline',
       });
       if (error) { Alert.alert('오류', '결제 저장에 실패했어요.\n' + error.message); setSaving(false); return; }
-      const { data: freshMember } = await supabase.from('members').select('remaining_credits, total_credits').eq('id', memberId).single();
-      await supabase.from('members').update({
-        remaining_credits: (freshMember?.remaining_credits ?? 0) + selectedPackage.total_credits,
-        total_credits: (freshMember?.total_credits ?? 0) + selectedPackage.total_credits,
-        lesson_package_id: selectedPackage.id,
-      }).eq('id', memberId);
     }
 
     setSaving(false);
@@ -310,22 +296,7 @@ export default function PaymentsScreen() {
     setPayTarget(null);
     loadData();
 
-    const prevCredits = payTarget.remainingCredits ?? 0;
-    const addedCredits = selectedPackage?.total_credits ?? 0;
-    if (selectedPackage) {
-      router.push({
-        pathname: `/members/${memberId}`,
-        params: {
-          paymentDone: '1',
-          prevCredits: String(prevCredits),
-          addedCredits: String(addedCredits),
-          newCredits: String(prevCredits + addedCredits),
-          packageTitle: selectedPackage.title,
-        },
-      });
-    } else {
-      router.push(`/members/${memberId}`);
-    }
+    router.push(`/members/${memberId}`);
   }
 
   function openEditModal(payment: Payment) {
