@@ -8,7 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { Colors } from '../../lib/theme';
 import SettingsHeader from '../../components/SettingsHeader';
-import { AI_CONSENT_VERSION, CONSENT_FULL_TEXT } from '../../components/CoachConsentModal';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AI_CONSENT_VERSION, CONSENT_FULL_TEXT, COACH_CONSENT_STORAGE_KEY_PREFIX } from '../../components/CoachConsentModal';
 
 const TERRA = '#C0755A';
 const DARK = '#3E2B22';
@@ -84,6 +85,8 @@ export default function AiConsentScreen() {
     if (error) {
       Alert.alert('오류', '동의 철회 중 오류가 발생했습니다.');
     } else {
+      // 로컬 캐시 삭제 — 철회 후 녹음 화면에서 동의 모달이 다시 뜨도록
+      await AsyncStorage.removeItem(`${COACH_CONSENT_STORAGE_KEY_PREFIX}${user.id}`);
       await load();
       Alert.alert('철회 완료', 'AI 레슨 기록 동의가 철회되었습니다.');
     }

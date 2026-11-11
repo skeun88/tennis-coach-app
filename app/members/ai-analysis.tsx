@@ -273,25 +273,23 @@ export default function AIAnalysisScreen() {
       setConsentCheckDone(true);
     }
 
-    // 1. 로컬 캐시 우선 확인 — 동의 후 DB 조회 실패해도 모달 재표시 방지
-    const localConsent = await AsyncStorage.getItem(`${COACH_CONSENT_STORAGE_KEY_PREFIX}${user.id}`);
-    if (localConsent !== '1') {
-      // 로컬에 없으면 DB 확인 (coach_voice_ai 또는 레거시 'coach' 타입)
-      const { data: coachConsent } = await supabase
-        .from('ai_consents')
-        .select('id')
-        .eq('coach_id', user.id)
-        .in('consent_type', ['coach_voice_ai', 'coach'])
-        .eq('consent_status', 'agreed')
-        .maybeSingle();
+    // 1. DB 확인 (coach_voice_ai 또는 레거시 'coach' 타입) — 철회 여부를 항상 반영
+    const { data: coachConsent } = await supabase
+      .from('ai_consents')
+      .select('id')
+      .eq('coach_id', user.id)
+      .in('consent_type', ['coach_voice_ai', 'coach'])
+      .eq('consent_status', 'agreed')
+      .maybeSingle();
 
-      if (!coachConsent) {
-        setCoachConsentVisible(true);
-        return;
-      }
-      // DB에는 있지만 로컬에 없는 경우 — 동기화
-      await AsyncStorage.setItem(`${COACH_CONSENT_STORAGE_KEY_PREFIX}${user.id}`, '1');
+    if (!coachConsent) {
+      // 동의 없거나 철회됨 — 로컬 캐시도 정리 후 모달 표시
+      await AsyncStorage.removeItem(`${COACH_CONSENT_STORAGE_KEY_PREFIX}${user.id}`);
+      setCoachConsentVisible(true);
+      return;
     }
+    // DB 동의 확인됨 — 로컬 캐시 동기화
+    await AsyncStorage.setItem(`${COACH_CONSENT_STORAGE_KEY_PREFIX}${user.id}`, '1');
 
     // 2. 회원 미성년 여부 확인
     await checkMinorStatus();
