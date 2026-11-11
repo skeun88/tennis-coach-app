@@ -19,6 +19,7 @@ const SETTING_KEY_MAP: Record<string, string> = {
   'PN-09': 'schedule_change',
   'PN-10': 'lesson_cancel',
   'PN-11': 'lesson_count_update',
+  'PN-14': 'bogan_request',
   'PN-15': 'bogan_result',
   'PN-16': 'bogan_result',
 }

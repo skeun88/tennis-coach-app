@@ -11,6 +11,7 @@ interface NotificationSettings {
   lesson_day_before: boolean;
   lesson_hour_before: boolean;
   member_message: boolean;
+  bogan_request: boolean;
   reregister_alert: boolean;
 }
 
@@ -18,6 +19,7 @@ const DEFAULT_SETTINGS: NotificationSettings = {
   lesson_day_before: true,
   lesson_hour_before: true,
   member_message: true,
+  bogan_request: true,
   reregister_alert: true,
 };
 
@@ -29,34 +31,65 @@ interface NotificationItem {
   iconColor: string;
 }
 
-const NOTIFICATION_ITEMS: NotificationItem[] = [
+interface NotificationGroup {
+  label: string;
+  icon: string;
+  items: NotificationItem[];
+}
+
+const NOTIFICATION_GROUPS: NotificationGroup[] = [
   {
-    key: 'lesson_day_before',
-    title: '레슨 D-1 알림',
-    subtitle: '레슨 전날 오전 10:00에 알림을 받습니다',
+    label: '레슨 일정',
     icon: 'calendar-outline',
-    iconColor: Colors.info,
+    items: [
+      {
+        key: 'lesson_day_before',
+        title: '레슨 전날 알림',
+        subtitle: '레슨 하루 전 오전 10시에 알림을 받아요',
+        icon: 'calendar-outline',
+        iconColor: Colors.info,
+      },
+      {
+        key: 'lesson_hour_before',
+        title: '레슨 1시간 전 알림',
+        subtitle: '레슨 시작 1시간 전에 알림을 받아요',
+        icon: 'time-outline',
+        iconColor: Colors.primary,
+      },
+    ],
   },
   {
-    key: 'lesson_hour_before',
-    title: '레슨 1시간 전 알림',
-    subtitle: '레슨 시작 1시간 전에 알림을 받습니다',
-    icon: 'time-outline',
-    iconColor: Colors.primary,
+    label: '회원 소통',
+    icon: 'chatbubbles-outline',
+    items: [
+      {
+        key: 'member_message',
+        title: '회원 메시지',
+        subtitle: '회원이 채팅을 보내면 알림을 받아요',
+        icon: 'chatbubble-outline',
+        iconColor: Colors.accentWarm,
+      },
+      {
+        key: 'bogan_request',
+        title: '보강 신청',
+        subtitle: '회원이 보강 레슨을 신청하면 알림을 받아요',
+        icon: 'repeat-outline',
+        iconColor: '#3B82F6',
+      },
+    ],
   },
   {
-    key: 'member_message',
-    title: '회원 메시지',
-    subtitle: '회원이 메시지를 보내면 알림을 받습니다',
-    icon: 'chatbubble-outline',
-    iconColor: Colors.accentWarm,
-  },
-  {
-    key: 'reregister_alert',
-    title: '재등록 알림',
-    subtitle: '회원 잔여 횟수가 1회일 때 알림을 받습니다',
-    icon: 'layers-outline',
-    iconColor: Colors.destructive,
+    label: '운영 관리',
+    icon: 'settings-outline',
+    items: [
+      {
+        key: 'reregister_alert',
+        title: '재등록 알림',
+        subtitle: '회원 레슨이 1회 남았을 때 알림을 받아요',
+        icon: 'layers-outline',
+        iconColor: Colors.destructive,
+      },
+    ],
   },
 ];
 
@@ -75,7 +108,7 @@ export default function NotificationsScreen() {
 
     const { data } = await supabase
       .from('notification_settings')
-      .select('lesson_day_before,lesson_hour_before,member_message,reregister_alert')
+      .select('lesson_day_before,lesson_hour_before,member_message,bogan_request,reregister_alert')
       .eq('coach_id', user.id)
       .maybeSingle();
 
@@ -84,6 +117,7 @@ export default function NotificationsScreen() {
         lesson_day_before: data.lesson_day_before ?? true,
         lesson_hour_before: data.lesson_hour_before ?? true,
         member_message: data.member_message ?? true,
+        bogan_request: data.bogan_request ?? true,
         reregister_alert: data.reregister_alert ?? true,
       });
     }
@@ -133,37 +167,41 @@ export default function NotificationsScreen() {
       />
 
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.infoBanner}>
-          <Ionicons name="information-circle-outline" size={18} color={Colors.primary} />
-          <Text style={styles.infoText}>
-            알림 설정은 서버에 저장되며 모든 기기에 동일하게 적용됩니다.
-          </Text>
-        </View>
+        <Text style={styles.infoText}>
+          알림 설정은 모든 기기에 동일하게 적용돼요
+        </Text>
 
-        <Text style={styles.sectionLabel}>알림 종류</Text>
-        <View style={styles.card}>
-          {NOTIFICATION_ITEMS.map((item, index) => (
-            <View key={item.key}>
-              <View style={styles.settingRow}>
-                <View style={[styles.iconBox, { backgroundColor: item.iconColor + '18' }]}>
-                  <Ionicons name={item.icon as any} size={20} color={item.iconColor} />
-                </View>
-                <View style={styles.settingTexts}>
-                  <Text style={styles.settingTitle}>{item.title}</Text>
-                  <Text style={styles.settingSubtitle}>{item.subtitle}</Text>
-                </View>
-                <Switch
-                  value={settings[item.key]}
-                  onValueChange={(val) => updateSetting(item.key, val)}
-                  trackColor={{ false: Colors.border, true: Colors.successBorder }}
-                  thumbColor={settings[item.key] ? Colors.primary : '#f4f3f4'}
-                  ios_backgroundColor={Colors.border}
-                />
-              </View>
-              {index < NOTIFICATION_ITEMS.length - 1 && <View style={styles.divider} />}
+        {NOTIFICATION_GROUPS.map((group) => (
+          <View key={group.label} style={styles.groupSection}>
+            <View style={styles.groupHeader}>
+              <Ionicons name={group.icon as any} size={15} color={Colors.mutedFg} />
+              <Text style={styles.groupLabel}>{group.label}</Text>
             </View>
-          ))}
-        </View>
+            <View style={styles.card}>
+              {group.items.map((item, index) => (
+                <View key={item.key}>
+                  <View style={styles.settingRow}>
+                    <View style={[styles.iconBox, { backgroundColor: item.iconColor + '18' }]}>
+                      <Ionicons name={item.icon as any} size={20} color={item.iconColor} />
+                    </View>
+                    <View style={styles.settingTexts}>
+                      <Text style={styles.settingTitle}>{item.title}</Text>
+                      <Text style={styles.settingSubtitle}>{item.subtitle}</Text>
+                    </View>
+                    <Switch
+                      value={settings[item.key]}
+                      onValueChange={(val) => updateSetting(item.key, val)}
+                      trackColor={{ false: Colors.border, true: Colors.successBorder }}
+                      thumbColor={settings[item.key] ? Colors.primary : '#f4f3f4'}
+                      ios_backgroundColor={Colors.border}
+                    />
+                  </View>
+                  {index < group.items.length - 1 && <View style={styles.divider} />}
+                </View>
+              ))}
+            </View>
+          </View>
+        ))}
       </ScrollView>
     </View>
   );
@@ -177,19 +215,20 @@ const styles = StyleSheet.create({
   },
   savedText: { fontSize: 12, color: Colors.primary, fontWeight: '600' },
   content: { padding: 16, paddingBottom: 48 },
-  infoBanner: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    backgroundColor: Colors.primaryLight, borderRadius: 12, padding: 12, marginBottom: 20,
-    borderWidth: 1, borderColor: Colors.primary + '33',
+  infoText: {
+    fontSize: 13, color: Colors.mutedFg, marginBottom: 20, lineHeight: 18,
   },
-  infoText: { flex: 1, fontSize: 13, color: Colors.foreground, lineHeight: 18 },
-  sectionLabel: {
+  groupSection: { marginBottom: 20 },
+  groupHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    marginBottom: 8, paddingHorizontal: 2,
+  },
+  groupLabel: {
     fontSize: 13, fontWeight: '700', color: Colors.mutedFg,
     textTransform: 'uppercase', letterSpacing: 0.5,
-    marginBottom: 8, marginTop: 4,
   },
   card: {
-    backgroundColor: '#fff', borderRadius: 14, marginBottom: 20,
+    backgroundColor: '#fff', borderRadius: 14,
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
     overflow: 'hidden',
   },
