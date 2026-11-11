@@ -11,6 +11,7 @@ interface NotificationSettings {
   lesson_day_before: boolean;
   lesson_hour_before: boolean;
   member_message: boolean;
+  new_consultation: boolean;
   bogan_request: boolean;
   reregister_alert: boolean;
 }
@@ -19,6 +20,7 @@ const DEFAULT_SETTINGS: NotificationSettings = {
   lesson_day_before: true,
   lesson_hour_before: true,
   member_message: true,
+  new_consultation: true,
   bogan_request: true,
   reregister_alert: true,
 };
@@ -70,6 +72,13 @@ const NOTIFICATION_GROUPS: NotificationGroup[] = [
         iconColor: Colors.accentWarm,
       },
       {
+        key: 'new_consultation',
+        title: '신규 상담 문의',
+        subtitle: '웹에서 새 레슨 상담 문의가 오면 알림을 받아요',
+        icon: 'person-add-outline',
+        iconColor: '#7C3AED',
+      },
+      {
         key: 'bogan_request',
         title: '보강 신청',
         subtitle: '회원이 보강 레슨을 신청하면 알림을 받아요',
@@ -108,7 +117,7 @@ export default function NotificationsScreen() {
 
     const { data } = await supabase
       .from('notification_settings')
-      .select('lesson_day_before,lesson_hour_before,member_message,bogan_request,reregister_alert')
+      .select('lesson_day_before,lesson_hour_before,member_message,new_consultation,bogan_request,reregister_alert')
       .eq('coach_id', user.id)
       .maybeSingle();
 
@@ -117,6 +126,7 @@ export default function NotificationsScreen() {
         lesson_day_before: data.lesson_day_before ?? true,
         lesson_hour_before: data.lesson_hour_before ?? true,
         member_message: data.member_message ?? true,
+        new_consultation: data.new_consultation ?? true,
         bogan_request: data.bogan_request ?? true,
         reregister_alert: data.reregister_alert ?? true,
       });

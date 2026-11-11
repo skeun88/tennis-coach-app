@@ -22,6 +22,7 @@ const SETTING_KEY_MAP: Record<string, string> = {
   'PN-14': 'bogan_request',
   'PN-15': 'bogan_result',
   'PN-16': 'bogan_result',
+  'PN-19': 'new_consultation',
 }
 
 // notif_id → member_notifications.type 매핑 (회원용 인앱 알림함)
@@ -47,6 +48,7 @@ const COACH_NOTIF_TYPE_MAP: Record<string, string> = {
   'PN-14': 'bogan_request',
   'PN-17': 'bogan_cancel',
   'PN-18': 'review',
+  'PN-19': 'new_inquiry',
 }
 
 // notif_id → member_notifications.type 추가 항목
