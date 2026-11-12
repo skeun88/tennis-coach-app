@@ -1,17 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-  Alert, ActivityIndicator, Switch, KeyboardAvoidingView, Platform,
+  Alert, ActivityIndicator, Switch, KeyboardAvoidingView, Platform, Linking,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { Colors } from '../../lib/theme';
 import SettingsHeader from '../../components/SettingsHeader';
+import CoachQRModal from '../../components/CoachQRModal';
 
 const TERRA = '#C0755A';
 const BASE_URL = 'kerri.co.kr/coach/';
-const BIO_MIN = 20;
+const FULL_BASE_URL = 'https://kerri.co.kr/coach/';
 
 // 한글 → 로마자 변환 (Revised Romanization 간이 구현)
 const INITIALS = ['g','kk','n','d','tt','r','m','b','pp','s','ss','','j','jj','ch','k','t','p','h'];
@@ -52,131 +54,178 @@ function isValidSlug(slug: string): boolean {
 }
 
 export default function PublicProfileScreen() {
+  const router = useRouter();
+
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [togglingPublic, setTogglingPublic] = useState(false);
+  const [savingSlug, setSavingSlug] = useState(false);
 
+  const [coachId, setCoachId] = useState<string>('');
+  const [coachName, setCoachName] = useState<string>('');
   const [isPublic, setIsPublic] = useState(false);
-  const [slug, setSlug] = useState('');
-  const [regionDistrict, setRegionDistrict] = useState('');
-  const [bio, setBio] = useState('');
-
-  const [originalSlug, setOriginalSlug] = useState<string | null>(null);
-  const [displayName, setDisplayName] = useState('');
-  const [sport, setSport] = useState('테니스');
+  const [savedSlug, setSavedSlug] = useState<string | null>(null);
+  const [draftSlug, setDraftSlug] = useState('');
 
   const [slugStatus, setSlugStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle');
   const slugCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [addressOpen, setAddressOpen] = useState(false);
+  const [qrVisible, setQrVisible] = useState(false);
 
   useEffect(() => { loadProfile(); }, []);
 
   async function loadProfile() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
-    const { data } = await supabase.from('coach_profiles').select('*').eq('coach_id', user.id).maybeSingle();
+    setCoachId(user.id);
+
+    const { data } = await supabase
+      .from('coach_profiles')
+      .select('is_public, public_slug, display_name, region_district, sport')
+      .eq('coach_id', user.id)
+      .maybeSingle();
+
     if (data) {
       setIsPublic(data.is_public ?? false);
-      setRegionDistrict(data.region_district ?? '');
-      setBio(data.bio ?? '');
-      setDisplayName(data.display_name ?? '');
-      setSport(data.sport ?? '테니스');
+      setCoachName(data.display_name ?? '');
       if (data.public_slug) {
-        setSlug(data.public_slug);
-        setOriginalSlug(data.public_slug);
+        setSavedSlug(data.public_slug);
+        setDraftSlug(data.public_slug);
         setSlugStatus('available');
       } else {
         const suggested = suggestSlug(data.display_name ?? '', data.region_district ?? '', data.sport ?? '테니스');
-        setSlug(suggested);
+        setDraftSlug(suggested);
         if (isValidSlug(suggested)) {
           setSlugStatus('checking');
-          checkSlugAvailability(suggested);
+          checkSlugAvailability(suggested, user.id);
         }
       }
     }
     setLoading(false);
   }
 
-  function handleSlugChange(val: string) {
+  function handleDraftSlugChange(val: string) {
     const cleaned = val.toLowerCase().replace(/[^a-z0-9-]/g, '');
-    setSlug(cleaned);
+    setDraftSlug(cleaned);
     if (slugCheckTimer.current) clearTimeout(slugCheckTimer.current);
     if (!cleaned) { setSlugStatus('idle'); return; }
     if (!isValidSlug(cleaned)) { setSlugStatus('invalid'); return; }
-    if (cleaned === originalSlug) { setSlugStatus('available'); return; }
+    if (cleaned === savedSlug) { setSlugStatus('available'); return; }
     setSlugStatus('checking');
-    slugCheckTimer.current = setTimeout(() => checkSlugAvailability(cleaned), 600);
+    slugCheckTimer.current = setTimeout(() => checkSlugAvailability(cleaned, coachId), 600);
   }
 
-  async function checkSlugAvailability(val: string) {
-    const { data } = await supabase.from('coach_profiles').select('coach_id').eq('public_slug', val).maybeSingle();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (data && data.coach_id !== user?.id) {
+  async function checkSlugAvailability(val: string, uid: string) {
+    const { data } = await supabase
+      .from('coach_profiles')
+      .select('coach_id')
+      .eq('public_slug', val)
+      .maybeSingle();
+    if (data && data.coach_id !== uid) {
       setSlugStatus('taken');
     } else {
       setSlugStatus('available');
     }
   }
 
-  const canGoPublic = !!slug && slugStatus === 'available' && regionDistrict.trim().length >= 2 && bio.trim().length >= BIO_MIN;
-
-  async function autoSaveToggle(newIsPublic: boolean) {
-    setSaving(true);
+  async function handleTogglePublic(newVal: boolean) {
+    if (newVal && !savedSlug) {
+      Alert.alert('주소 필요', '공개하려면 먼저 프로필 주소를 저장해주세요.');
+      setAddressOpen(true);
+      return;
+    }
+    setTogglingPublic(true);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setSaving(false); return; }
-    const { error } = await supabase.from('coach_profiles').upsert({
-      coach_id: user.id,
-      public_slug: slug.trim(),
-      region_district: regionDistrict.trim(),
-      bio: bio.trim(),
-      is_public: newIsPublic,
-    }, { onConflict: 'coach_id' });
-    setSaving(false);
-    if (error) { Alert.alert('오류', error.message); return; }
-    setOriginalSlug(slug.trim());
+    if (!user) { setTogglingPublic(false); return; }
+    const { error } = await supabase
+      .from('coach_profiles')
+      .update({ is_public: newVal })
+      .eq('coach_id', user.id);
+    setTogglingPublic(false);
+    if (error) {
+      Alert.alert('오류', error.message);
+    } else {
+      setIsPublic(newVal);
+    }
   }
 
-  async function handleSave() {
-    if (!slug.trim()) { Alert.alert('입력 오류', 'URL 슬러그를 입력해주세요.'); return; }
-    if (!isValidSlug(slug)) { Alert.alert('입력 오류', '슬러그는 영문 소문자·숫자·하이픈만 사용 가능하고 최소 3자이어야 합니다.'); return; }
-    if (slugStatus === 'taken') { Alert.alert('입력 오류', '이미 사용 중인 슬러그예요.'); return; }
-    if (!regionDistrict.trim()) { Alert.alert('입력 오류', '활동 지역(구/동)을 입력해주세요.'); return; }
-    if (bio.trim().length < BIO_MIN) { Alert.alert('입력 오류', `한 줄 소개는 최소 ${BIO_MIN}자 이상 입력해주세요.`); return; }
-    if (isPublic && !canGoPublic) { Alert.alert('입력 오류', '공개하려면 모든 항목을 채워주세요.'); return; }
+  async function handleSaveSlug() {
+    if (!draftSlug.trim()) return;
+    if (!isValidSlug(draftSlug)) {
+      Alert.alert('입력 오류', '슬러그는 영문 소문자·숫자·하이픈만 사용 가능하고 최소 3자이어야 합니다.');
+      return;
+    }
+    if (slugStatus === 'taken') {
+      Alert.alert('중복', '이미 사용 중인 주소예요.');
+      return;
+    }
+    if (slugStatus === 'checking') {
+      Alert.alert('잠시 후', '중복 확인 중입니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
 
-    if (originalSlug && slug !== originalSlug && isPublic) {
+    if (savedSlug && draftSlug !== savedSlug) {
       const go = await new Promise<boolean>(resolve =>
         Alert.alert(
-          '슬러그 변경 주의',
-          `기존 링크(${BASE_URL}${originalSlug})가 깨집니다.\n계속할까요?`,
-          [{ text: '취소', onPress: () => resolve(false), style: 'cancel' }, { text: '변경', onPress: () => resolve(true) }]
+          '주소 변경',
+          `기존 링크(${BASE_URL}${savedSlug})는 새 주소로 자동 연결됩니다.\n계속할까요?`,
+          [
+            { text: '취소', onPress: () => resolve(false), style: 'cancel' },
+            { text: '변경', onPress: () => resolve(true) },
+          ]
         )
       );
       if (!go) return;
     }
 
-    setSaving(true);
+    setSavingSlug(true);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setSaving(false); return; }
+    if (!user) { setSavingSlug(false); return; }
 
-    const { error } = await supabase.from('coach_profiles').upsert({
-      coach_id: user.id,
-      public_slug: slug.trim(),
-      region_district: regionDistrict.trim(),
-      bio: bio.trim(),
-      is_public: isPublic,
-    }, { onConflict: 'coach_id' });
+    if (savedSlug && draftSlug !== savedSlug) {
+      await supabase.from('coach_slug_redirects').insert({
+        old_slug: savedSlug,
+        new_slug: draftSlug,
+        coach_id: user.id,
+      });
+    }
 
-    setSaving(false);
-    if (error) { Alert.alert('오류', error.message); return; }
-    setOriginalSlug(slug.trim());
-    Alert.alert('저장됨', isPublic ? `공개 URL: ${BASE_URL}${slug}` : '저장됐어요.');
+    const { error } = await supabase
+      .from('coach_profiles')
+      .update({ public_slug: draftSlug })
+      .eq('coach_id', user.id);
+
+    setSavingSlug(false);
+    if (error) {
+      Alert.alert('오류', error.message);
+    } else {
+      setSavedSlug(draftSlug);
+      setSlugStatus('available');
+      Alert.alert('저장됨', `프로필 주소가 저장됐어요.\n${BASE_URL}${draftSlug}`);
+    }
   }
 
   async function handleCopyUrl() {
-    await Clipboard.setStringAsync(`https://${BASE_URL}${slug}`);
+    const slug = savedSlug || draftSlug;
+    await Clipboard.setStringAsync(`${FULL_BASE_URL}${slug}`);
     Alert.alert('복사됨', '링크가 복사됐어요.');
   }
 
-  if (loading) return <View style={styles.center}><ActivityIndicator color={TERRA} /></View>;
+  async function handlePreview() {
+    const slug = savedSlug || draftSlug;
+    await Linking.openURL(`${FULL_BASE_URL}${slug}`);
+  }
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1 }}>
+        <SettingsHeader title="공개 프로필 설정" />
+        <View style={styles.center}><ActivityIndicator color={TERRA} /></View>
+      </View>
+    );
+  }
+
+  const currentUrl = `${BASE_URL}${savedSlug || draftSlug || '...'}`;
 
   const slugIndicator = {
     idle: null,
@@ -189,167 +238,249 @@ export default function PublicProfileScreen() {
   const slugStatusText = {
     idle: '',
     checking: '중복 확인 중...',
-    available: slug === originalSlug ? '현재 슬러그' : '사용 가능해요',
+    available: draftSlug === savedSlug ? '현재 주소' : '사용 가능해요',
     taken: '이미 사용 중이에요',
     invalid: '영문 소문자·숫자·하이픈만, 최소 3자',
   }[slugStatus];
+
+  const slugChanged = draftSlug !== savedSlug && isValidSlug(draftSlug) && slugStatus === 'available';
 
   return (
     <View style={{ flex: 1 }}>
       <SettingsHeader title="공개 프로필 설정" />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+        <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
 
-        {/* 공개 ON/OFF */}
-        <View style={styles.section}>
-          <View style={styles.toggleRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.toggleLabel}>프로필 공개</Text>
-              <Text style={styles.toggleDesc}>
-                {isPublic ? '현재 공개 중이에요' : canGoPublic ? '모든 항목이 채워졌어요. 공개할 수 있어요.' : '아래 항목을 모두 채워야 공개할 수 있어요.'}
-              </Text>
+          {/* ── 공개 설정 카드 ── */}
+          <View style={styles.card}>
+            {/* 토글 행 */}
+            <View style={styles.toggleRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.toggleLabel}>프로필 공개</Text>
+                <Text style={styles.toggleDesc}>
+                  {isPublic ? '지금 공개 중이에요' : '비공개 상태예요'}
+                </Text>
+              </View>
+              {togglingPublic
+                ? <ActivityIndicator color={TERRA} style={{ marginRight: 4 }} />
+                : (
+                  <Switch
+                    value={isPublic}
+                    onValueChange={handleTogglePublic}
+                    trackColor={{ false: Colors.border, true: TERRA }}
+                    thumbColor="#fff"
+                  />
+                )
+              }
             </View>
-            <Switch
-              value={isPublic}
-              onValueChange={async v => {
-                if (v && !canGoPublic) {
-                  Alert.alert('항목 미완성', '슬러그, 활동 지역, 한 줄 소개를 모두 채워주세요.');
-                  return;
-                }
-                setIsPublic(v);
-                if (v && canGoPublic) {
-                  await autoSaveToggle(true);
-                }
-              }}
-              trackColor={{ false: Colors.border, true: TERRA }}
-              thumbColor="#fff"
-            />
+
+            {/* URL 표시 (항상 보임) */}
+            <View style={styles.urlBox}>
+              <Ionicons name="link-outline" size={15} color={TERRA} />
+              <Text style={styles.urlText} numberOfLines={1}>{currentUrl}</Text>
+            </View>
+
+            {/* 액션 버튼 행 */}
+            <View style={styles.actionRow}>
+              <TouchableOpacity style={styles.actionBtn} onPress={handlePreview} activeOpacity={0.7}>
+                <Ionicons name="eye-outline" size={16} color={TERRA} />
+                <Text style={styles.actionBtnText}>미리보기</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionBtn} onPress={handleCopyUrl} activeOpacity={0.7}>
+                <Ionicons name="copy-outline" size={16} color={TERRA} />
+                <Text style={styles.actionBtnText}>복사</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => setQrVisible(true)}
+                activeOpacity={0.7}
+                disabled={!coachId}
+              >
+                <Ionicons name="qr-code-outline" size={16} color={TERRA} />
+                <Text style={styles.actionBtnText}>QR</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
-          {isPublic && slug && (
-            <TouchableOpacity style={styles.urlBox} onPress={handleCopyUrl} activeOpacity={0.7}>
-              <Ionicons name="link-outline" size={16} color={TERRA} />
-              <Text style={styles.urlText} numberOfLines={1}>{BASE_URL}{slug}</Text>
-              <Ionicons name="copy-outline" size={16} color={TERRA} />
+          {/* ── 프로필 주소 변경 (접힘) ── */}
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={styles.collapseHeader}
+              onPress={() => setAddressOpen(v => !v)}
+              activeOpacity={0.7}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.collapseTitle}>프로필 주소 변경</Text>
+                {!addressOpen && savedSlug && (
+                  <Text style={styles.collapseSubtitle}>{BASE_URL}{savedSlug}</Text>
+                )}
+              </View>
+              <Ionicons
+                name={addressOpen ? 'chevron-up' : 'chevron-down'}
+                size={18}
+                color={Colors.mutedFg}
+              />
             </TouchableOpacity>
-          )}
-        </View>
 
-        {/* 슬러그 */}
-        <View style={styles.section}>
-          <Text style={styles.label}>프로필 URL 슬러그 *</Text>
-          <Text style={styles.hint}>영문 소문자·숫자·하이픈만. 저장 후 변경 시 기존 링크가 깨져요.</Text>
-          {originalSlug && slug !== originalSlug && (
-            <View style={styles.warnBox}>
-              <Ionicons name="warning-outline" size={14} color={Colors.warning} />
-              <Text style={styles.warnText}>변경하면 기존 링크({BASE_URL}{originalSlug})가 깨져요.</Text>
-            </View>
-          )}
-          <View style={styles.slugRow}>
-            <Text style={styles.slugPrefix}>kerri.co.kr/coach/</Text>
-            <TextInput
-              style={styles.slugInput}
-              value={slug}
-              onChangeText={handleSlugChange}
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder="my-slug"
-              placeholderTextColor={Colors.placeholder}
-            />
-            <View style={{ width: 24, alignItems: 'center' }}>{slugIndicator}</View>
+            {addressOpen && (
+              <View style={styles.collapseBody}>
+                <Text style={styles.hint}>영문 소문자·숫자·하이픈만. 변경 시 기존 링크는 자동으로 새 주소로 연결돼요.</Text>
+
+                <View style={styles.slugRow}>
+                  <Text style={styles.slugPrefix}>kerri.co.kr/coach/</Text>
+                  <TextInput
+                    style={styles.slugInput}
+                    value={draftSlug}
+                    onChangeText={handleDraftSlugChange}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    placeholder="my-slug"
+                    placeholderTextColor={Colors.placeholder}
+                  />
+                  <View style={{ width: 24, alignItems: 'center' }}>{slugIndicator}</View>
+                </View>
+
+                {slugStatusText ? (
+                  <Text style={[
+                    styles.slugStatusText,
+                    slugStatus === 'available' && { color: Colors.success },
+                    slugStatus === 'taken' && { color: Colors.destructive },
+                    slugStatus === 'invalid' && { color: Colors.warning },
+                  ]}>{slugStatusText}</Text>
+                ) : null}
+
+                <TouchableOpacity
+                  style={[styles.saveSlugBtn, !slugChanged && styles.saveSlugBtnDisabled]}
+                  onPress={handleSaveSlug}
+                  disabled={!slugChanged || savingSlug}
+                  activeOpacity={0.8}
+                >
+                  {savingSlug
+                    ? <ActivityIndicator color="#fff" size="small" />
+                    : <Text style={styles.saveSlugBtnText}>주소 저장</Text>
+                  }
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
-          {slugStatusText ? (
-            <Text style={[styles.slugStatus,
-              slugStatus === 'available' && { color: Colors.success },
-              slugStatus === 'taken' && { color: Colors.destructive },
-              slugStatus === 'invalid' && { color: Colors.warning },
-            ]}>{slugStatusText}</Text>
-          ) : null}
-        </View>
 
-        {/* 활동 지역 */}
-        <View style={styles.section}>
-          <Text style={styles.label}>활동 지역 (구/동) *</Text>
-          <TextInput
-            style={styles.input}
-            value={regionDistrict}
-            onChangeText={setRegionDistrict}
-            placeholder="예: 강남구, 마포구, 분당구"
-            placeholderTextColor={Colors.placeholder}
-          />
-        </View>
-
-        {/* 한 줄 소개 */}
-        <View style={styles.section}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-            <Text style={styles.label}>한 줄 소개 *</Text>
-            <Text style={[styles.hint, bio.trim().length >= BIO_MIN ? { color: Colors.success } : {}]}>
-              {bio.trim().length}/{BIO_MIN}자 이상
-            </Text>
-          </View>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            value={bio}
-            onChangeText={setBio}
-            placeholder="코치 소개를 입력하세요. 검색 엔진에 노출되는 설명이에요."
-            placeholderTextColor={Colors.placeholder}
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-            maxLength={300}
-          />
-        </View>
-
-        <TouchableOpacity style={[styles.saveBtn, { backgroundColor: TERRA }]} onPress={handleSave} disabled={saving}>
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>저장</Text>}
-        </TouchableOpacity>
-
-        <View style={{ height: 40 }} />
-      </ScrollView>
+          <View style={{ height: 40 }} />
+        </ScrollView>
       </KeyboardAvoidingView>
+
+      <CoachQRModal
+        visible={qrVisible}
+        onClose={() => setQrVisible(false)}
+        coachId={coachId}
+        coachName={coachName}
+        publicSlug={savedSlug}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
-  content: { paddingBottom: 40 },
+  content: { paddingTop: 12, paddingBottom: 40 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  section: {
-    backgroundColor: '#fff', borderRadius: 12,
-    margin: 16, marginBottom: 0, padding: 16,
+
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  label: { fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 6 },
-  hint: { fontSize: 12, color: Colors.placeholder, marginBottom: 8 },
-  input: {
-    backgroundColor: Colors.mutedBg, borderRadius: 10,
-    paddingHorizontal: 14, paddingVertical: 10,
-    fontSize: 15, color: Colors.foreground,
-    borderWidth: 1, borderColor: Colors.border,
+
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 14,
   },
-  textArea: { minHeight: 90, paddingTop: 10 },
-  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   toggleLabel: { fontSize: 16, fontWeight: '700', color: Colors.foreground },
   toggleDesc: { fontSize: 12, color: Colors.mutedFg, marginTop: 2 },
+
   urlBox: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: '#FBF2EF', borderRadius: 10, padding: 10, marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FBF2EF',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
   },
   urlText: { flex: 1, fontSize: 13, color: TERRA, fontWeight: '600' },
-  slugRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+
+  actionRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    borderWidth: 1.5,
+    borderColor: TERRA,
+    borderRadius: 10,
+    paddingVertical: 9,
+  },
+  actionBtnText: { fontSize: 13, fontWeight: '700', color: TERRA },
+
+  collapseHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  collapseTitle: { fontSize: 15, fontWeight: '700', color: Colors.foreground },
+  collapseSubtitle: { fontSize: 12, color: Colors.mutedFg, marginTop: 2 },
+
+  collapseBody: {
+    marginTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    paddingTop: 14,
+    gap: 8,
+  },
+  hint: { fontSize: 12, color: Colors.placeholder, lineHeight: 18 },
+
+  slugRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
   slugPrefix: { fontSize: 13, color: Colors.mutedFg, fontWeight: '500' },
   slugInput: {
-    flex: 1, backgroundColor: Colors.mutedBg, borderRadius: 10,
-    paddingHorizontal: 10, paddingVertical: 8,
-    fontSize: 14, color: Colors.foreground,
-    borderWidth: 1, borderColor: Colors.border,
+    flex: 1,
+    backgroundColor: Colors.mutedBg,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: Colors.foreground,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  slugStatus: { fontSize: 12, marginTop: 4, color: Colors.mutedFg },
-  warnBox: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#FFF9EB', borderRadius: 8, padding: 8, marginBottom: 8,
+  slugStatusText: { fontSize: 12, color: Colors.mutedFg },
+
+  saveSlugBtn: {
+    marginTop: 6,
+    backgroundColor: TERRA,
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
   },
-  warnText: { fontSize: 12, color: Colors.warning, flex: 1 },
-  saveBtn: { margin: 16, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-  saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  saveSlugBtnDisabled: {
+    backgroundColor: Colors.border,
+  },
+  saveSlugBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });
