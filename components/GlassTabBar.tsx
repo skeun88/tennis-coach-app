@@ -39,6 +39,15 @@ export default function GlassTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
+  const isSmall = width <= 390;
+  const barHeight = isSmall ? 58 : 70;
+  const iconSize = isSmall ? 20 : 24;
+  const labelSize = isSmall ? 10 : 11.5;
+  // 안드로이드: insets.bottom이 0으로 오는 경우 최소 패딩 보장
+  const bottomPad = Platform.OS === 'android'
+    ? Math.max(insets.bottom, 8)
+    : insets.bottom;
+
   const [reduceMotion, setReduceMotion] = useState(false);
   const [reduceTransparency, setReduceTransparency] = useState(false);
   const [keyboardUp, setKeyboardUp] = useState(false);
@@ -126,8 +135,8 @@ export default function GlassTabBar({ state, navigation }: BottomTabBarProps) {
             accessibilityState={focused ? { selected: true } : {}}
             accessibilityLabel={tab.label}
           >
-            <Ionicons name={focused ? tab.icon : tab.iconOutline} size={24} color={color} />
-            <Text style={[styles.label, { color }]} numberOfLines={1}>{tab.label}</Text>
+            <Ionicons name={focused ? tab.icon : tab.iconOutline} size={iconSize} color={color} />
+            <Text style={[styles.label, { color, fontSize: labelSize }]} numberOfLines={1}>{tab.label}</Text>
           </Pressable>
         );
       })}
@@ -136,15 +145,15 @@ export default function GlassTabBar({ state, navigation }: BottomTabBarProps) {
 
   return (
     <View
-      style={[styles.wrap, { paddingBottom: insets.bottom + BOTTOM_GAP }]}
+      style={[styles.wrap, { paddingBottom: bottomPad + BOTTOM_GAP }]}
       pointerEvents="box-none"
     >
       {Platform.OS === 'ios' && !reduceTransparency ? (
-        <BlurView intensity={60} tint="light" style={[styles.bar, { height: BAR_HEIGHT }]}>
+        <BlurView intensity={60} tint="light" style={[styles.bar, { height: barHeight }]}>
           {barContent}
         </BlurView>
       ) : (
-        <View style={[styles.bar, { height: BAR_HEIGHT, backgroundColor: reduceTransparency ? GLASS_BG_OPAQUE : GLASS_BG }]}>
+        <View style={[styles.bar, { height: barHeight, backgroundColor: reduceTransparency ? GLASS_BG_OPAQUE : GLASS_BG }]}>
           {barContent}
         </View>
       )}
