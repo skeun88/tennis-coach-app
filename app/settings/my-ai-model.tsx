@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-  Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Animated,
+  Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Animated, Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from 'expo-audio';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { Colors } from '../../lib/theme';
@@ -29,6 +30,7 @@ type KnowledgeItem = {
 
 export default function MyAiModelScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [loading, setLoading] = useState(true);
   const [principles, setPrinciples] = useState<KnowledgeItem[]>([]);
@@ -39,6 +41,13 @@ export default function MyAiModelScreen() {
   const [inputText, setInputText] = useState('');
   const [uploading, setUploading] = useState(false);
   const [fileUploading, setFileUploading] = useState(false);
+
+  // 수정 모달
+  const [editItem, setEditItem] = useState<KnowledgeItem | null>(null);
+  const [editCategory, setEditCategory] = useState('기타');
+  const [editTitle, setEditTitle] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
 
   // 음성 녹음
   const [isRecording, setIsRecording] = useState(false);
@@ -85,6 +94,38 @@ export default function MyAiModelScreen() {
         showToast('삭제됐어요');
       }},
     ]);
+  }
+
+  function openEditModal(item: KnowledgeItem) {
+    setEditItem(item);
+    setEditCategory(item.category);
+    setEditTitle(item.title);
+    setEditContent(item.content ?? '');
+  }
+
+  function closeEditModal() {
+    setEditItem(null);
+    setEditTitle('');
+    setEditContent('');
+  }
+
+  async function handleEditSave() {
+    if (!editItem || !editTitle.trim()) return;
+    setEditSaving(true);
+    const { error } = await supabase.from('tennis_knowledge').update({
+      category: editCategory,
+      title: editTitle.trim(),
+      content: editContent.trim() || null,
+    }).eq('id', editItem.id);
+    setEditSaving(false);
+    if (error) { Alert.alert('오류', '저장에 실패했어요.'); return; }
+    setPrinciples(prev => prev.map(x =>
+      x.id === editItem.id
+        ? { ...x, category: editCategory, title: editTitle.trim(), content: editContent.trim() || undefined }
+        : x
+    ));
+    closeEditModal();
+    showToast('수정됐어요');
   }
 
   async function handleVoiceToggle() {
@@ -223,21 +264,38 @@ export default function MyAiModelScreen() {
           ) : (
             <View style={styles.card}>
               {principles.map((item, idx) => (
-                <View key={item.id} style={[styles.principleRow, idx > 0 && styles.principleRowBorder]}>
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.principleRow, idx > 0 && styles.principleRowBorder]}
+                  onPress={() => openEditModal(item)}
+                  activeOpacity={0.7}
+                >
                   <View style={{ flex: 1 }}>
                     <View style={styles.principleTopRow}>
                       <Text style={styles.categoryTag}>{item.category}</Text>
                     </View>
                     <Text style={styles.principleTitle} numberOfLines={2}>{item.title}</Text>
+                    {item.content ? (
+                      <Text style={styles.principleContent} numberOfLines={2}>{item.content}</Text>
+                    ) : null}
                   </View>
-                  <TouchableOpacity
-                    style={styles.deleteBtn}
-                    onPress={() => handleDelete(item)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Ionicons name="trash-outline" size={16} color={Colors.mutedFg} />
-                  </TouchableOpacity>
-                </View>
+                  <View style={styles.principleActions}>
+                    <TouchableOpacity
+                      style={styles.editBtn}
+                      onPress={() => openEditModal(item)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="pencil-outline" size={15} color={TERRA} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.deleteBtn}
+                      onPress={() => handleDelete(item)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="trash-outline" size={15} color={Colors.mutedFg} />
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
               ))}
             </View>
           )}
@@ -338,6 +396,70 @@ export default function MyAiModelScreen() {
           <Text style={styles.toastText}>{toastMsg}</Text>
         </Animated.View>
       ) : null}
+
+      {/* ── 수정 모달 ── */}
+      <Modal
+        visible={editItem !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={closeEditModal}
+      >
+        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={closeEditModal}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
+            <TouchableOpacity
+              style={[styles.editSheet, { paddingBottom: insets.bottom + 16 }]}
+              activeOpacity={1}
+              onPress={() => {}}
+            >
+              <View style={styles.editSheetHandle} />
+              <Text style={styles.editSheetTitle}>코칭 원칙 수정</Text>
+
+              <Text style={styles.editSheetLabel}>카테고리</Text>
+              <View style={styles.categoryRow}>
+                {CATEGORIES.map(cat => (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[styles.catBtn, editCategory === cat && styles.catBtnActive]}
+                    onPress={() => setEditCategory(cat)}
+                  >
+                    <Text style={[styles.catBtnText, editCategory === cat && styles.catBtnTextActive]}>{cat}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.editSheetLabel}>제목</Text>
+              <TextInput
+                style={styles.editSheetInput}
+                value={editTitle}
+                onChangeText={setEditTitle}
+                placeholder="원칙 제목"
+                placeholderTextColor={Colors.placeholder}
+              />
+
+              <Text style={styles.editSheetLabel}>내용 (선택)</Text>
+              <TextInput
+                style={[styles.editSheetInput, { minHeight: 80, textAlignVertical: 'top' }]}
+                value={editContent}
+                onChangeText={setEditContent}
+                placeholder="구체적인 내용을 입력하세요"
+                placeholderTextColor={Colors.placeholder}
+                multiline
+              />
+
+              <TouchableOpacity
+                style={[styles.editSheetSaveBtn, (editSaving || !editTitle.trim()) && { opacity: 0.5 }]}
+                disabled={editSaving || !editTitle.trim()}
+                onPress={handleEditSave}
+                activeOpacity={0.8}
+              >
+                {editSaving ? <ActivityIndicator color="#fff" /> : (
+                  <Text style={styles.editSheetSaveBtnText}>저장</Text>
+                )}
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -400,7 +522,7 @@ const styles = StyleSheet.create({
 
   principleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 12,
@@ -418,6 +540,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   principleTitle: { fontSize: 13, color: Colors.foreground, lineHeight: 18 },
+  principleContent: { fontSize: 12, color: Colors.mutedFg, lineHeight: 17, marginTop: 2 },
+  principleActions: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingTop: 2 },
+  editBtn: { padding: 4 },
   deleteBtn: { padding: 4 },
 
   addToggleBtn: {
@@ -500,4 +625,38 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   toastText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+
+  // 수정 모달
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  editSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    gap: 4,
+  },
+  editSheetHandle: {
+    width: 40, height: 4, backgroundColor: Colors.border,
+    borderRadius: 2, alignSelf: 'center', marginBottom: 16,
+  },
+  editSheetTitle: { fontSize: 17, fontWeight: '800', color: DARK, marginBottom: 12 },
+  editSheetLabel: { fontSize: 12, fontWeight: '700', color: Colors.mutedFg, marginTop: 10, marginBottom: 6 },
+  editSheetInput: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 14,
+    color: Colors.foreground,
+    backgroundColor: '#FAFAFA',
+  },
+  editSheetSaveBtn: {
+    backgroundColor: TERRA,
+    borderRadius: 14,
+    padding: 15,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  editSheetSaveBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });
