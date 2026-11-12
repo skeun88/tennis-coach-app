@@ -16,7 +16,6 @@ import { supabase } from '../../lib/supabase';
 import { useSubscription } from '../../hooks/useSubscription';
 import { Colors, Radius, Shadow } from '../../lib/theme';
 import CoachQRModal from '../../components/CoachQRModal';
-import CoachingStyleModal from '../../components/CoachingStyleModal';
 import { FEATURE_SHARED_QR } from '../../lib/featureFlags';
 import TerracottaRefreshControl from '../../components/TerracottaRefreshControl';
 import { FLOATING_TAB_BAR_SPACE } from '../../components/GlassTabBar';
@@ -99,7 +98,6 @@ export default function ProfileScreen() {
 
   const [knowledgeList, setKnowledgeList] = useState<any[]>([]);
   const [knowledgeCount, setKnowledgeCount] = useState(0);
-  const [knowledgeModal, setKnowledgeModal] = useState(false);
   const [upsellVisible, setUpsellVisible] = useState(false);
   const [voiceUsedSeconds, setVoiceUsedSeconds] = useState(0);
   const VOICE_MONTHLY_LIMIT = 1800;
@@ -733,7 +731,7 @@ export default function ProfileScreen() {
             style={styles.aiCard}
             onPress={() => {
               if (!canUse('ai_analysis')) { setUpsellVisible(true); return; }
-              setKnowledgeModal(true);
+              router.push('/settings/my-ai-model');
             }}
             activeOpacity={0.8}
           >
@@ -997,16 +995,6 @@ export default function ProfileScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
-
-      {/* ── AI 코칭 모델 관리 모달 ── */}
-      <CoachingStyleModal
-        visible={knowledgeModal}
-        onClose={() => setKnowledgeModal(false)}
-        onSaved={(count) => setKnowledgeCount(prev => prev + count)}
-        onDeleted={() => setKnowledgeCount(prev => prev - 1)}
-        knowledgeList={knowledgeList}
-        onKnowledgeListChange={setKnowledgeList}
-      />
 
       {/* ── 코칭 여정 항목 설명 팝업 ── */}
       <Modal
