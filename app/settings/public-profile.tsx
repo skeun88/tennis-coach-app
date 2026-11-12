@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-  Alert, ActivityIndicator, Switch, KeyboardAvoidingView, Platform, Linking,
+  Alert, ActivityIndicator, Switch, KeyboardAvoidingView, Platform, Linking, Animated,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
@@ -71,6 +71,17 @@ export default function PublicProfileScreen() {
 
   const [addressOpen, setAddressOpen] = useState(false);
   const [qrVisible, setQrVisible] = useState(false);
+  const [toastVisible, setToastVisible] = useState(false);
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+
+  function showCopyToast() {
+    setToastVisible(true);
+    Animated.sequence([
+      Animated.timing(toastOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.delay(1600),
+      Animated.timing(toastOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
+    ]).start(() => setToastVisible(false));
+  }
 
   useEffect(() => { loadProfile(); }, []);
 
@@ -152,7 +163,7 @@ export default function PublicProfileScreen() {
   async function handleSaveSlug() {
     if (!draftSlug.trim()) return;
     if (!isValidSlug(draftSlug)) {
-      Alert.alert('입력 오류', '슬러그는 영문 소문자·숫자·하이픈만 사용 가능하고 최소 3자이어야 합니다.');
+      Alert.alert('입력 오류', '프로필 주소는 영문 소문자·숫자·하이픈만 사용 가능하고 최소 3자이어야 합니다.');
       return;
     }
     if (slugStatus === 'taken') {
@@ -208,7 +219,7 @@ export default function PublicProfileScreen() {
   async function handleCopyUrl() {
     const slug = savedSlug || draftSlug;
     await Clipboard.setStringAsync(`${FULL_BASE_URL}${slug}`);
-    Alert.alert('복사됨', '링크가 복사됐어요.');
+    showCopyToast();
   }
 
   async function handlePreview() {
@@ -334,7 +345,7 @@ export default function PublicProfileScreen() {
                     onChangeText={handleDraftSlugChange}
                     autoCapitalize="none"
                     autoCorrect={false}
-                    placeholder="my-slug"
+                    placeholder="hyunsu-tennis"
                     placeholderTextColor={Colors.placeholder}
                   />
                   <View style={{ width: 24, alignItems: 'center' }}>{slugIndicator}</View>
@@ -375,6 +386,13 @@ export default function PublicProfileScreen() {
         coachName={coachName}
         publicSlug={savedSlug}
       />
+
+      {toastVisible && (
+        <Animated.View style={[styles.toast, { opacity: toastOpacity }]}>
+          <Ionicons name="checkmark-circle" size={16} color="#fff" />
+          <Text style={styles.toastText}>링크가 복사됐어요</Text>
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -483,4 +501,18 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
   },
   saveSlugBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+
+  toast: {
+    position: 'absolute',
+    bottom: 48,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(50,50,50,0.88)',
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  toastText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });
