@@ -333,8 +333,8 @@ export default function LessonDetailScreen() {
   if (!lesson) return (
     <View style={styles.loader}>
       <Text style={{ color: Colors.mutedFg, fontSize: 15, marginBottom: 16 }}>해당 레슨을 찾을 수 없어요</Text>
-      <TouchableOpacity onPress={() => router.replace('/(tabs)/schedule')} style={{ paddingHorizontal: 20, paddingVertical: 10, backgroundColor: Colors.primary, borderRadius: 10 }}>
-        <Text style={{ color: '#fff', fontWeight: '700' }}>스케줄로 이동</Text>
+      <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/schedule')} style={{ paddingHorizontal: 20, paddingVertical: 10, backgroundColor: Colors.primary, borderRadius: 10 }}>
+        <Text style={{ color: '#fff', fontWeight: '700' }}>뒤로 가기</Text>
       </TouchableOpacity>
     </View>
   );

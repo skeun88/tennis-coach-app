@@ -44,6 +44,7 @@ const COACH_NOTIF_TYPE_MAP: Record<string, string> = {
   'PN-01': 'lesson_reminder',
   'PN-02': 'lesson_reminder',
   'PN-03': 'member_message',
+  'PN-07': 'ai_report',
   'PN-12': 'absence_reported',
   'PN-14': 'bogan_request',
   'PN-17': 'bogan_cancel',

@@ -17,7 +17,7 @@ interface CoachNotification {
   id: string;
   title: string;
   body: string;
-  type: 'lesson_reminder' | 'member_message' | 'general';
+  type: 'lesson_reminder' | 'member_message' | 'general' | 'ai_report';
   is_read: boolean;
   reference_id: string | null;
   reference_type: 'lesson' | 'member' | null;
@@ -27,6 +27,7 @@ interface CoachNotification {
 const TYPE_CONFIG = {
   lesson_reminder: { icon: 'calendar-outline' as const, label: '레슨 알림', color: Colors.primary },
   member_message:  { icon: 'chatbubble-outline' as const, label: '회원 메시지', color: '#3B82F6' },
+  ai_report:       { icon: 'document-text-outline' as const, label: 'AI 레슨 기록', color: Colors.primary },
   general:         { icon: 'notifications-outline' as const, label: '알림', color: Colors.mutedFg },
 };
 
@@ -47,6 +48,7 @@ export default function NotificationInboxScreen() {
   const router = useRouter();
   const [notifications, setNotifications] = useState<CoachNotification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [navigating, setNavigating] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -83,8 +85,38 @@ export default function NotificationInboxScreen() {
       .eq('is_read', false);
   };
 
-  const handlePress = (item: CoachNotification) => {
-    if (item.reference_type === 'lesson' && item.reference_id) {
+  const handlePress = async (item: CoachNotification) => {
+    if (!item.reference_id) return;
+
+    // AI 레슨 기록 완성 알림: lesson_plan_id → plan-detail 화면으로 이동
+    if (item.type === 'ai_report' || (item.type === 'general' && item.reference_type === 'lesson')) {
+      setNavigating(true);
+      try {
+        const { data } = await supabase
+          .from('lesson_plans')
+          .select('member_id, member:members(name, level)')
+          .eq('id', item.reference_id)
+          .maybeSingle();
+        if (data?.member_id) {
+          router.push({
+            pathname: '/members/plan-detail',
+            params: {
+              planId: item.reference_id,
+              memberId: data.member_id,
+              memberName: (data.member as any)?.name ?? '',
+              memberLevel: (data.member as any)?.level ?? '',
+            },
+          } as any);
+        }
+      } catch (e: any) {
+        console.warn('[알림함] plan-detail 이동 오류:', e.message);
+      } finally {
+        setNavigating(false);
+      }
+      return;
+    }
+
+    if (item.reference_type === 'lesson') {
       router.push(`/lessons/${item.reference_id}` as any);
     }
   };
@@ -94,8 +126,9 @@ export default function NotificationInboxScreen() {
     return (
       <TouchableOpacity
         style={[styles.item, !item.is_read && styles.itemUnread]}
-        activeOpacity={item.reference_type ? 0.7 : 1}
-        onPress={() => handlePress(item)}
+        activeOpacity={item.reference_type || item.type === 'ai_report' ? 0.7 : 1}
+        onPress={() => !navigating && handlePress(item)}
+        disabled={navigating}
       >
         <View style={[styles.iconWrap, { backgroundColor: cfg.color + '18' }]}>
           <Ionicons name={cfg.icon} size={20} color={cfg.color} />
@@ -108,8 +141,10 @@ export default function NotificationInboxScreen() {
           <Text style={styles.body} numberOfLines={2}>{item.body}</Text>
           <Text style={styles.time}>{formatTime(item.created_at)}</Text>
         </View>
-        {item.reference_type ? (
-          <Ionicons name="chevron-forward" size={16} color={Colors.mutedFg} />
+        {(item.reference_type || item.type === 'ai_report') ? (
+          navigating
+            ? <ActivityIndicator size="small" color={Colors.mutedFg} />
+            : <Ionicons name="chevron-forward" size={16} color={Colors.mutedFg} />
         ) : null}
       </TouchableOpacity>
     );
