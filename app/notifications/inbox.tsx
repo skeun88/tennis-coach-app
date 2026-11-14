@@ -17,7 +17,7 @@ interface CoachNotification {
   id: string;
   title: string;
   body: string;
-  type: 'lesson_reminder' | 'member_message' | 'general' | 'ai_report';
+  type: 'lesson_reminder' | 'member_message' | 'general' | 'ai_report' | 'absence_reported';
   is_read: boolean;
   reference_id: string | null;
   reference_type: 'lesson' | 'member' | null;
@@ -25,10 +25,11 @@ interface CoachNotification {
 }
 
 const TYPE_CONFIG = {
-  lesson_reminder: { icon: 'calendar-outline' as const, label: '레슨 알림', color: Colors.primary },
-  member_message:  { icon: 'chatbubble-outline' as const, label: '회원 메시지', color: '#3B82F6' },
-  ai_report:       { icon: 'document-text-outline' as const, label: 'AI 레슨 기록', color: Colors.primary },
-  general:         { icon: 'notifications-outline' as const, label: '알림', color: Colors.mutedFg },
+  lesson_reminder:  { icon: 'calendar-outline' as const, label: '레슨 알림', color: Colors.primary },
+  member_message:   { icon: 'chatbubble-outline' as const, label: '회원 메시지', color: '#3B82F6' },
+  ai_report:        { icon: 'document-text-outline' as const, label: 'AI 레슨 기록', color: Colors.primary },
+  absence_reported: { icon: 'person-remove-outline' as const, label: '결석 알림', color: '#F97316' },
+  general:          { icon: 'notifications-outline' as const, label: '알림', color: Colors.mutedFg },
 };
 
 function formatTime(iso: string): string {
@@ -88,7 +89,14 @@ export default function NotificationInboxScreen() {
   const handlePress = async (item: CoachNotification) => {
     if (!item.reference_id) return;
 
+    // 결석 알림: lesson_id → 레슨 상세로 이동
+    if (item.type === 'absence_reported') {
+      router.push(`/lessons/${item.reference_id}` as any);
+      return;
+    }
+
     // AI 레슨 기록 완성 알림: lesson_plan_id → plan-detail 화면으로 이동
+    // general+lesson은 edge function 미배포 시절 AI 리포트가 general로 저장된 케이스 대응
     if (item.type === 'ai_report' || (item.type === 'general' && item.reference_type === 'lesson')) {
       setNavigating(true);
       try {
@@ -107,6 +115,9 @@ export default function NotificationInboxScreen() {
               memberLevel: (data.member as any)?.level ?? '',
             },
           } as any);
+        } else {
+          // lesson_plans에 없음 → lesson reference (결석 등 과거 general 저장 케이스)
+          router.push(`/lessons/${item.reference_id}` as any);
         }
       } catch (e: any) {
         console.warn('[알림함] plan-detail 이동 오류:', e.message);
