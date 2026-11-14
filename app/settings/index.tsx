@@ -20,22 +20,29 @@ const KAKAO_CHANNEL_URL = 'http://pf.kakao.com/_CrxgwX/chat';
 interface SettingRowProps {
   icon: string;
   label: string;
-  onPress: () => void;
+  onPress?: () => void;
   value?: string;
   destructive?: boolean;
+  readOnly?: boolean;
 }
 
-function SettingRow({ icon, label, onPress, value, destructive }: SettingRowProps) {
-  return (
-    <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.7}>
+function SettingRow({ icon, label, onPress, value, destructive, readOnly }: SettingRowProps) {
+  const inner = (
+    <>
       <View style={styles.rowLeft}>
         <Ionicons name={icon as any} size={20} color={destructive ? Colors.destructive : TERRA} style={styles.rowIcon} />
         <Text style={[styles.rowLabel, destructive && styles.rowLabelDestructive]}>{label}</Text>
       </View>
       <View style={styles.rowRight}>
         {value ? <Text style={styles.rowValue}>{value}</Text> : null}
-        <Ionicons name="chevron-forward" size={15} color={Colors.placeholder} />
+        {!readOnly && <Ionicons name="chevron-forward" size={15} color={Colors.placeholder} />}
       </View>
+    </>
+  );
+  if (readOnly) return <View style={styles.row}>{inner}</View>;
+  return (
+    <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.7}>
+      {inner}
     </TouchableOpacity>
   );
 }
@@ -51,12 +58,19 @@ function Group({ children }: { children: React.ReactNode }) {
 export default function SettingsScreen() {
   const router = useRouter();
   const { subscription } = useSubscription();
-  const [email, setEmail] = useState('');
+  const [providerLabel, setProviderLabel] = useState('');
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setEmail(user.email ?? '');
+      if (!user) return;
+      const metaProvider = (user.user_metadata?.provider as string) ?? '';
+      const appProvider = (user.app_metadata?.provider as string) ?? '';
+      if (metaProvider === 'kakao' || appProvider === 'kakao') setProviderLabel('카카오');
+      else if (metaProvider === 'naver' || appProvider === 'naver') setProviderLabel('네이버');
+      else if (appProvider === 'google') setProviderLabel('구글');
+      else if (appProvider === 'apple') setProviderLabel('애플');
+      else setProviderLabel('케리');
     });
   }, []);
 
@@ -130,7 +144,7 @@ export default function SettingsScreen() {
         {/* ── 계정 ── */}
         <SectionHeader title="계정" />
         <Group>
-          <SettingRow icon="person-circle-outline" label="계정 정보" onPress={notReady} value={email || undefined} />
+          <SettingRow icon="person-circle-outline" label="계정 정보" value={providerLabel || undefined} readOnly />
           <SettingRow icon="notifications-outline" label="알림 설정" onPress={() => router.push('/settings/notifications')} />
           <SettingRow icon="time-outline" label="시간블럭 설정" onPress={() => router.push('/settings/availability')} />
           <SettingRow icon="globe-outline" label="공개 프로필 설정" onPress={() => router.push('/settings/public-profile')} />
@@ -172,7 +186,6 @@ export default function SettingsScreen() {
             <Ionicons name="log-out-outline" size={20} color={Colors.destructive} />
             <Text style={styles.logoutText}>로그아웃</Text>
           </TouchableOpacity>
-          {!!email && <Text style={styles.emailHint}>{email}</Text>}
         </View>
 
         {/* ── 앱 버전 ── */}
