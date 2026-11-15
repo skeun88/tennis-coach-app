@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -9,8 +9,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import ReanimatedSwipeable, { SwipeableMethods, SwipeDirection } from 'react-native-gesture-handler/ReanimatedSwipeable';
+import Reanimated, { SharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { supabase } from '../../lib/supabase';
-import { Colors, Radius, Shadow } from '../../lib/theme';
+import { Colors, Radius } from '../../lib/theme';
 import SettingsHeader from '../../components/SettingsHeader';
 
 interface CoachNotification {
@@ -32,6 +34,8 @@ const TYPE_CONFIG = {
   general:          { icon: 'notifications-outline' as const, label: '알림', color: Colors.mutedFg },
 };
 
+const DELETE_BTN_WIDTH = 80;
+
 function formatTime(iso: string): string {
   const now = new Date();
   const d = new Date(iso);
@@ -45,11 +49,34 @@ function formatTime(iso: string): string {
   return d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
 }
 
+function DeleteAction({
+  progress,
+  onDelete,
+}: {
+  progress: SharedValue<number>;
+  onDelete: () => void;
+}) {
+  const style = useAnimatedStyle(() => ({
+    width: DELETE_BTN_WIDTH * progress.value,
+    overflow: 'hidden',
+  }));
+  return (
+    <Reanimated.View style={[styles.deleteContainer, style]}>
+      <TouchableOpacity style={styles.deleteBtn} onPress={onDelete} activeOpacity={0.8}>
+        <Ionicons name="trash-outline" size={20} color="#fff" />
+        <Text style={styles.deleteText}>삭제</Text>
+      </TouchableOpacity>
+    </Reanimated.View>
+  );
+}
+
 export default function NotificationInboxScreen() {
   const router = useRouter();
   const [notifications, setNotifications] = useState<CoachNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [navigating, setNavigating] = useState(false);
+  const swipeableRefs = useRef<Map<string, React.RefObject<SwipeableMethods | null>>>(new Map());
+  const openIdRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -59,7 +86,6 @@ export default function NotificationInboxScreen() {
         .order('created_at', { ascending: false })
         .limit(100);
       if (err) {
-        // 테이블 미생성 등 DB 오류 시 빈 상태로 fallback
         console.warn('[알림함] 조회 오류 (빈 상태 표시):', err.message);
         setNotifications([]);
       } else {
@@ -73,7 +99,6 @@ export default function NotificationInboxScreen() {
     }
   }, []);
 
-  // 알림함 진입 시 일괄 읽음 처리
   useEffect(() => {
     load();
     markAllRead();
@@ -86,17 +111,21 @@ export default function NotificationInboxScreen() {
       .eq('is_read', false);
   };
 
+  const handleDelete = useCallback(async (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    openIdRef.current = null;
+    swipeableRefs.current.delete(id);
+    await supabase.from('coach_notifications').delete().eq('id', id);
+  }, []);
+
   const handlePress = async (item: CoachNotification) => {
     if (!item.reference_id) return;
 
-    // 결석 알림: lesson_id → 레슨 상세로 이동
     if (item.type === 'absence_reported') {
       router.push(`/lessons/${item.reference_id}` as any);
       return;
     }
 
-    // AI 레슨 기록 완성 알림: lesson_plan_id → plan-detail 화면으로 이동
-    // general+lesson은 edge function 미배포 시절 AI 리포트가 general로 저장된 케이스 대응
     if (item.type === 'ai_report' || (item.type === 'general' && item.reference_type === 'lesson')) {
       setNavigating(true);
       try {
@@ -116,7 +145,6 @@ export default function NotificationInboxScreen() {
             },
           } as any);
         } else {
-          // lesson_plans에 없음 → lesson reference (결석 등 과거 general 저장 케이스)
           router.push(`/lessons/${item.reference_id}` as any);
         }
       } catch (e: any) {
@@ -134,30 +162,60 @@ export default function NotificationInboxScreen() {
 
   const renderItem = ({ item }: { item: CoachNotification }) => {
     const cfg = TYPE_CONFIG[item.type] ?? TYPE_CONFIG.general;
+
+    if (!swipeableRefs.current.has(item.id)) {
+      swipeableRefs.current.set(item.id, React.createRef<SwipeableMethods | null>());
+    }
+    const itemRef = swipeableRefs.current.get(item.id)!;
+
+    const renderRightActions = (progress: SharedValue<number>) => (
+      <DeleteAction progress={progress} onDelete={() => handleDelete(item.id)} />
+    );
+
     return (
-      <TouchableOpacity
-        style={[styles.item, !item.is_read && styles.itemUnread]}
-        activeOpacity={item.reference_type || item.type === 'ai_report' ? 0.7 : 1}
-        onPress={() => !navigating && handlePress(item)}
-        disabled={navigating}
+      <ReanimatedSwipeable
+        ref={itemRef}
+        renderRightActions={renderRightActions}
+        rightThreshold={40}
+        overshootRight={false}
+        friction={2}
+        onSwipeableWillOpen={(direction: SwipeDirection) => {
+          if (direction !== SwipeDirection.RIGHT) return;
+          // 다른 열린 항목 닫기
+          if (openIdRef.current && openIdRef.current !== item.id) {
+            swipeableRefs.current.get(openIdRef.current)?.current?.close();
+          }
+          openIdRef.current = item.id;
+        }}
+        onSwipeableClose={(direction: SwipeDirection) => {
+          if (direction !== SwipeDirection.RIGHT) return;
+          if (openIdRef.current === item.id) openIdRef.current = null;
+        }}
       >
-        <View style={[styles.iconWrap, { backgroundColor: cfg.color + '18' }]}>
-          <Ionicons name={cfg.icon} size={20} color={cfg.color} />
-        </View>
-        <View style={styles.content}>
-          <View style={styles.titleRow}>
-            <Text style={styles.title} numberOfLines={1}>{item.title}</Text>
-            {!item.is_read && <View style={styles.dot} />}
+        <TouchableOpacity
+          style={[styles.item, !item.is_read && styles.itemUnread]}
+          activeOpacity={item.reference_type || item.type === 'ai_report' ? 0.7 : 1}
+          onPress={() => !navigating && handlePress(item)}
+          disabled={navigating}
+        >
+          <View style={[styles.iconWrap, { backgroundColor: cfg.color + '18' }]}>
+            <Ionicons name={cfg.icon} size={20} color={cfg.color} />
           </View>
-          <Text style={styles.body} numberOfLines={2}>{item.body}</Text>
-          <Text style={styles.time}>{formatTime(item.created_at)}</Text>
-        </View>
-        {(item.reference_type || item.type === 'ai_report') ? (
-          navigating
-            ? <ActivityIndicator size="small" color={Colors.mutedFg} />
-            : <Ionicons name="chevron-forward" size={16} color={Colors.mutedFg} />
-        ) : null}
-      </TouchableOpacity>
+          <View style={styles.content}>
+            <View style={styles.titleRow}>
+              <Text style={styles.title} numberOfLines={1}>{item.title}</Text>
+              {!item.is_read && <View style={styles.dot} />}
+            </View>
+            <Text style={styles.body} numberOfLines={2}>{item.body}</Text>
+            <Text style={styles.time}>{formatTime(item.created_at)}</Text>
+          </View>
+          {(item.reference_type || item.type === 'ai_report') ? (
+            navigating
+              ? <ActivityIndicator size="small" color={Colors.mutedFg} />
+              : <Ionicons name="chevron-forward" size={16} color={Colors.mutedFg} />
+          ) : null}
+        </TouchableOpacity>
+      </ReanimatedSwipeable>
     );
   };
 
@@ -220,4 +278,21 @@ const styles = StyleSheet.create({
   time: { fontSize: 11, color: Colors.placeholder, marginTop: 2 },
   sep: { height: 1, backgroundColor: Colors.borderLight, marginLeft: 68 },
   emptyText: { fontSize: 14, color: Colors.mutedFg, textAlign: 'center' },
+  deleteContainer: {
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    backgroundColor: '#EF4444',
+  },
+  deleteBtn: {
+    width: DELETE_BTN_WIDTH,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+  },
+  deleteText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
 });
