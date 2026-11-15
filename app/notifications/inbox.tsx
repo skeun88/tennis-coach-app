@@ -57,16 +57,17 @@ function DeleteAction({
   onDelete: () => void;
 }) {
   const style = useAnimatedStyle(() => ({
-    width: DELETE_BTN_WIDTH * progress.value,
-    overflow: 'hidden',
+    opacity: progress.value,
   }));
   return (
-    <Reanimated.View style={[styles.deleteContainer, style]}>
-      <TouchableOpacity style={styles.deleteBtn} onPress={onDelete} activeOpacity={0.8}>
-        <Ionicons name="trash-outline" size={20} color="#fff" />
-        <Text style={styles.deleteText}>삭제</Text>
-      </TouchableOpacity>
-    </Reanimated.View>
+    <View style={styles.deleteContainer}>
+      <Reanimated.View style={[{ flex: 1, width: '100%' }, style]}>
+        <TouchableOpacity style={styles.deleteBtn} onPress={onDelete} activeOpacity={0.8}>
+          <Ionicons name="trash-outline" size={20} color="#fff" />
+          <Text style={styles.deleteText}>삭제</Text>
+        </TouchableOpacity>
+      </Reanimated.View>
+    </View>
   );
 }
 
@@ -279,13 +280,14 @@ const styles = StyleSheet.create({
   sep: { height: 1, backgroundColor: Colors.borderLight, marginLeft: 68 },
   emptyText: { fontSize: 14, color: Colors.mutedFg, textAlign: 'center' },
   deleteContainer: {
+    width: DELETE_BTN_WIDTH,
     justifyContent: 'center',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     backgroundColor: '#EF4444',
   },
   deleteBtn: {
-    width: DELETE_BTN_WIDTH,
-    height: '100%',
+    flex: 1,
+    width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 4,
