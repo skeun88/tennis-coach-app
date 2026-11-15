@@ -271,7 +271,7 @@ export default function MemberDetailScreen() {
   }, [paymentDone]);
 
   // 메시지 탭
-  const [messages, setMessages] = useState<{id:string;sender_type:'coach'|'member';content:string;created_at:string}[]>([]);
+  const [messages, setMessages] = useState<{id:string;sender_type:'coach'|'member'|'system';content:string;created_at:string}[]>([]);
   const [msgInput, setMsgInput] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -2308,13 +2308,63 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                 const dateStr = d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
                 const prevDateStr = prev ? new Date(prev.created_at).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }) : null;
                 const showDate = dateStr !== prevDateStr;
+                const dateDivider = showDate ? (
+                  <View style={{ alignItems: 'center', marginVertical: 10 }}>
+                    <Text style={{ fontSize: 14, color: Colors.mutedFg, backgroundColor: Colors.border, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 }}>{dateStr}</Text>
+                  </View>
+                ) : null;
+
+                // 보강 신청 시스템 카드
+                let bogan: any = null;
+                try { const p = JSON.parse(item.content); if (p?._kerri === 'bogan') bogan = p; } catch {}
+                if (!bogan) {
+                  const am = item.content.match(/^✅ (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}) 보강 레슨이 확정됐습니다/);
+                  if (am) bogan = { status: 'accepted', date: am[1], time: am[2] };
+                  else if (/^❌.*보강 레슨 요청이 거절됐습니다/.test(item.content)) {
+                    bogan = { status: 'rejected', date: '', time: '', reason: item.content.split('\n').slice(1).join('\n') || null };
+                  }
+                }
+                if (item.sender_type === 'system' || (item.sender_type === 'coach' && bogan)) {
+                  if (!bogan) return null;
+                  const COACH_BOGAN_CFG: Record<string, { color: string; badge: string; title: string; cta: string }> = {
+                    pending:  { color: '#C0755A', badge: '신청 대기',  title: '보강 신청 도착',   cta: '스케줄에서 확인' },
+                    accepted: { color: '#32865C', badge: '보강 확정',  title: '보강 레슨 확정!',  cta: '스케줄에서 확인' },
+                    rejected: { color: '#B65C52', badge: '신청 거절',  title: '보강 신청 거절됨', cta: '스케줄에서 확인' },
+                  };
+                  const cfg = COACH_BOGAN_CFG[bogan.status] ?? COACH_BOGAN_CFG.pending;
+                  const dl = bogan.date ? new Date(bogan.date).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }) : '';
+                  return (
+                    <>
+                      {dateDivider}
+                      <View style={{ alignItems: 'center', marginBottom: 12, gap: 4 }}>
+                        <View style={{ width: '80%', backgroundColor: '#fff', borderRadius: 16, borderTopWidth: 3, borderTopColor: cfg.color, padding: 16, shadowColor: '#000', shadowOpacity: 0.07, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3, gap: 8 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Text style={{ fontSize: 14, fontWeight: '700', color: cfg.color }}>{cfg.title}</Text>
+                            <View style={{ borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3, backgroundColor: cfg.color + '18' }}>
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: cfg.color }}>{cfg.badge}</Text>
+                            </View>
+                          </View>
+                          {(bogan.date || bogan.time) ? (
+                            <Text style={{ fontSize: 13, color: Colors.foreground, fontWeight: '500' }}>{dl}{dl && bogan.time ? '  ' : ''}{bogan.time}</Text>
+                          ) : null}
+                          {bogan.reason ? <Text style={{ fontSize: 13, color: Colors.mutedFg, lineHeight: 18 }}>{bogan.reason}</Text> : null}
+                          <TouchableOpacity
+                            style={{ borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginTop: 4, backgroundColor: cfg.color }}
+                            onPress={() => router.navigate('/(tabs)/schedule' as any)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{cfg.cta}</Text>
+                          </TouchableOpacity>
+                        </View>
+                        <Text style={{ fontSize: 11, color: Colors.placeholder }}>{d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</Text>
+                      </View>
+                    </>
+                  );
+                }
+
                 return (
                   <>
-                    {showDate && (
-                      <View style={{ alignItems: 'center', marginVertical: 10 }}>
-                        <Text style={{ fontSize: 14, color: Colors.mutedFg, backgroundColor: Colors.border, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 }}>{dateStr}</Text>
-                      </View>
-                    )}
+                    {dateDivider}
                     <View style={{ flexDirection: isMe ? 'row-reverse' : 'row', alignItems: 'flex-end', marginBottom: 8, gap: 8 }}>
                       {!isMe && (
                         <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.primary + '30', justifyContent: 'center', alignItems: 'center' }}>

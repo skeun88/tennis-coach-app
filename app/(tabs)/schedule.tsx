@@ -361,8 +361,8 @@ export default function ScheduleScreen() {
     // 앱 회원에게 수락 알림 (메시지 + 푸시)
     if (req.member_id) {
       await supabase.from('messages').insert({
-        coach_id: user.id, member_id: memberId, sender_type: 'coach',
-        content: `✅ ${req.requested_date} ${req.start_time.slice(0,5)} 보강 레슨이 확정됐습니다! 🎾`,
+        coach_id: user.id, member_id: memberId, sender_type: 'system',
+        content: JSON.stringify({ _kerri: 'bogan', status: 'accepted', date: req.requested_date, time: req.start_time.slice(0, 5), rid: req.id }),
       });
       notifyMemberBoganAccepted(memberId, req.requested_date, req.start_time, req.id).catch(() => {});
     }
@@ -388,12 +388,9 @@ export default function ScheduleScreen() {
 
     // 앱 회원에게만 메시지 전송 + 푸시 (게스트는 스킵)
     if (req.member_id) {
-      const rejMsg = rejectMsg.trim()
-        ? `❌ 보강 레슨 요청이 거절됐습니다.\n${rejectMsg.trim()}`
-        : `❌ ${req.requested_date} ${req.start_time.slice(0,5)} 보강 레슨 요청이 거절됐습니다. 다른 시간을 선택해주세요.`;
       await supabase.from('messages').insert({
-        coach_id: user.id, member_id: req.member_id, sender_type: 'coach',
-        content: rejMsg,
+        coach_id: user.id, member_id: req.member_id, sender_type: 'system',
+        content: JSON.stringify({ _kerri: 'bogan', status: 'rejected', date: req.requested_date, time: req.start_time.slice(0, 5), rid: req.id, reason: rejectMsg.trim() || null }),
       });
       notifyMemberBoganRejected(req.member_id, req.id).catch(() => {});
     }
