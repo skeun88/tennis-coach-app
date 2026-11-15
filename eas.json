@@ -25,7 +25,9 @@
       "channel": "production",
       "env": {
         "EXPO_PUBLIC_IS_BETA": "false",
-        "EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY": "goog_tRGWSdVQsvEpDFNYzREOISBzduF"
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY": "goog_tRGWSdVQsvEpDFNYzREOISBzduF",
+        "EXPO_PUBLIC_NAVER_CLIENT_ID": "4H8pu4JV5E16xAyltzTH",
+        "EXPO_PUBLIC_NAVER_CLIENT_SECRET": "naQruofOxX"
       }
     }
   },
