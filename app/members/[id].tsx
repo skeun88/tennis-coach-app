@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
   TextInput, ActivityIndicator, KeyboardAvoidingView, Platform,
-  Modal, FlatList, Linking, Switch, Animated,
+  Modal, FlatList, Linking, Switch, Animated, Keyboard,
 } from 'react-native';
 import SkeletonBox from '../../components/SkeletonBox';
 import { useLocalSearchParams, useRouter, Link, useFocusEffect } from 'expo-router';
@@ -274,6 +274,7 @@ export default function MemberDetailScreen() {
   const [messages, setMessages] = useState<{id:string;sender_type:'coach'|'member';content:string;created_at:string}[]>([]);
   const [msgInput, setMsgInput] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const msgListRef = React.useRef<any>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [editing, setEditing] = useState(false);
@@ -1593,6 +1594,12 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     loadNotes();
   }
 
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+
   async function loadMessages() {
     const { data } = await supabase.from('messages').select('*')
       .eq('member_id', id).order('created_at', { ascending: true });
@@ -2327,7 +2334,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
             />
           )}
           {/* 입력창 — 키보드 바로 위에 고정 (KAV가 올려주므로 insets.bottom만 적용) */}
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', backgroundColor: '#fff', padding: 10, paddingBottom: Math.max(10, insets.bottom), borderTopWidth: 1, borderTopColor: Colors.border, gap: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', backgroundColor: '#fff', padding: 10, paddingBottom: keyboardVisible ? 10 : Math.max(10, insets.bottom), borderTopWidth: 1, borderTopColor: Colors.border, gap: 8 }}>
             <TextInput
               style={{ flex: 1, fontSize: 14, color: Colors.foreground, backgroundColor: Colors.mutedBg, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10, maxHeight: 80 }}
               value={msgInput}
