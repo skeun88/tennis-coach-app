@@ -4,7 +4,7 @@ const path = require('path');
 
 const SETTINGS_GRADLE_SNIPPET = `
 include ':react-native-purchases'
-project(':react-native-purchases').projectDir = new File(rootProject.projectDir, '../node_modules/react-native-purchases/android')`;
+findProject(':react-native-purchases')?.projectDir = new File(rootProject.projectDir, '../node_modules/react-native-purchases/android')`;
 
 const withRevenueCatSettingsGradle = (config) => {
   return withSettingsGradle(config, (config) => {
