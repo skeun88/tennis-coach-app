@@ -2350,7 +2350,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                           {bogan.reason ? <Text style={{ fontSize: 13, color: Colors.mutedFg, lineHeight: 18 }}>{bogan.reason}</Text> : null}
                           <TouchableOpacity
                             style={{ borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginTop: 4, backgroundColor: cfg.color }}
-                            onPress={() => router.navigate('/(tabs)/schedule' as any)}
+                            onPress={() => router.replace({ pathname: '/(tabs)/schedule', params: { highlightDate: bogan.date, highlightTime: bogan.time } } as any)}
                             activeOpacity={0.8}
                           >
                             <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700' }}>{cfg.cta}</Text>
