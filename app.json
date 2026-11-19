@@ -48,9 +48,7 @@
         "android.permission.FOREGROUND_SERVICE_MICROPHONE",
         "android.permission.POST_NOTIFICATIONS"
       ],
-      "versionCode": 14,
-      "compileSdkVersion": 37,
-      "targetSdkVersion": 36
+      "versionCode": 14
     },
     "web": {
       "favicon": "./assets/favicon.png",
