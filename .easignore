@@ -7,3 +7,8 @@ android/app/build
 *.log
 .env
 .env.*
+*.app
+rag-docs
+dist
+*.tar.gz
+build-*.tar.gz
