@@ -1,0 +1,31 @@
+diff --git a/node_modules/expo-media-library/expo-module.config.json b/node_modules/expo-media-library/expo-module.config.json
+index 7b6bcb4..591582c 100644
+--- a/node_modules/expo-media-library/expo-module.config.json
++++ b/node_modules/expo-media-library/expo-module.config.json
+@@ -1,7 +1,13 @@
+ {
+-  "platforms": ["apple", "android"],
++  "platforms": [
++    "apple",
++    "android"
++  ],
+   "apple": {
+-    "modules": ["MediaLibraryModule", "MediaLibraryNextModule"]
++    "modules": [
++      "MediaLibraryModule",
++      "MediaLibraryNextModule"
++    ]
+   },
+   "android": {
+     "modules": [
+@@ -11,7 +17,8 @@
+     "publication": {
+       "groupId": "host.exp.exponent",
+       "artifactId": "expo.modules.medialibrary",
+-      "repository": "local-maven-repo"
++      "repository": "local-maven-repo",
++      "version": "58.0.13"
+     }
+   }
+ }
+\ No newline at end of file
