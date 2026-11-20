@@ -583,11 +583,11 @@ export default function SelectPlanScreen() {
             월간 {PLANS.basic.price.toLocaleString()}원(Basic) / {PLANS.pro.price.toLocaleString()}원(Pro){ANNUAL_PRICES.basic ? ` · 연간 ${ANNUAL_PRICES.basic.toLocaleString()}원(Basic) / ${ANNUAL_PRICES.pro?.toLocaleString()}원(Pro)` : ''}
           </Text>
           <View style={s.subscriptionDisclosureLinks}>
-            <TouchableOpacity onPress={() => Linking.openURL('https://kerri.co.kr/terms').catch(() => {})}>
+            <TouchableOpacity onPress={() => Linking.openURL('https://kerri.co.kr/terms?service=coach').catch(() => {})}>
               <Text style={s.subscriptionDisclosureLink}>이용약관</Text>
             </TouchableOpacity>
             <Text style={s.subscriptionDisclosureSeparator}> · </Text>
-            <TouchableOpacity onPress={() => router.push('/(auth)/privacy-policy')}>
+            <TouchableOpacity onPress={() => Linking.openURL('https://kerri.co.kr/privacy?service=coach').catch(() => {})}>
               <Text style={s.subscriptionDisclosureLink}>개인정보처리방침</Text>
             </TouchableOpacity>
           </View>
