@@ -76,12 +76,12 @@ const withRevenueCatRootBuildGradle = (config) => {
   return withProjectBuildGradle(config, (config) => {
     const EXT_BLOCK = `
 ext {
-    buildToolsVersion = findProperty('android.buildToolsVersion') ?: "35.0.0"
-    minSdkVersion = (findProperty('android.minSdkVersion') ?: "24").toInteger()
-    compileSdkVersion = (findProperty('android.compileSdkVersion') ?: "35").toInteger()
-    targetSdkVersion = (findProperty('android.targetSdkVersion') ?: "36").toInteger()
-    ndkVersion = findProperty('android.ndkVersion') ?: "27.1.12297006"
-    kotlinVersion = findProperty('android.kotlinVersion') ?: "2.1.20"
+    buildToolsVersion = "35.0.0"
+    minSdkVersion = 24
+    compileSdkVersion = 35
+    targetSdkVersion = 36
+    ndkVersion = "27.1.12297006"
+    kotlinVersion = "2.1.20"
 }`;
     if (!config.modResults.contents.includes('ext {')) {
       config.modResults.contents = config.modResults.contents.replace(
