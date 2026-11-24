@@ -80,7 +80,7 @@ ext {
     minSdkVersion = (findProperty('android.minSdkVersion') ?: "24").toInteger()
     compileSdkVersion = (findProperty('android.compileSdkVersion') ?: "35").toInteger()
     targetSdkVersion = (findProperty('android.targetSdkVersion') ?: "35").toInteger()
-    ndkVersion = findProperty('android.ndkVersion') ?: "26.1.10909125"
+    ndkVersion = findProperty('android.ndkVersion') ?: "27.1.12297006"
     kotlinVersion = findProperty('android.kotlinVersion') ?: "2.1.20"
 }`;
     if (!config.modResults.contents.includes('ext {')) {
