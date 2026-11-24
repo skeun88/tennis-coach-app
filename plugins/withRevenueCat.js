@@ -79,7 +79,7 @@ ext {
     buildToolsVersion = findProperty('android.buildToolsVersion') ?: "35.0.0"
     minSdkVersion = (findProperty('android.minSdkVersion') ?: "24").toInteger()
     compileSdkVersion = (findProperty('android.compileSdkVersion') ?: "35").toInteger()
-    targetSdkVersion = (findProperty('android.targetSdkVersion') ?: "35").toInteger()
+    targetSdkVersion = (findProperty('android.targetSdkVersion') ?: "36").toInteger()
     ndkVersion = findProperty('android.ndkVersion') ?: "27.1.12297006"
     kotlinVersion = findProperty('android.kotlinVersion') ?: "2.1.20"
 }`;

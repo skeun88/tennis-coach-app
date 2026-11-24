@@ -48,7 +48,7 @@
         "android.permission.FOREGROUND_SERVICE_MICROPHONE",
         "android.permission.POST_NOTIFICATIONS"
       ],
-      "versionCode": 24
+      "versionCode": 25
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -61,7 +61,7 @@
         {
           "android": {
             "compileSdkVersion": 35,
-            "targetSdkVersion": 35,
+            "targetSdkVersion": 36,
             "buildToolsVersion": "35.0.0",
             "kotlinVersion": "2.1.20",
             "ndkVersion": "27.1.12297006"
