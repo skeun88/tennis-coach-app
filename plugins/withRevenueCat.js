@@ -1,4 +1,4 @@
-const { withDangerousMod, withAppBuildGradle, withSettingsGradle } = require('@expo/config-plugins');
+const { withDangerousMod, withAppBuildGradle, withSettingsGradle, withProjectBuildGradle } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
@@ -70,7 +70,31 @@ const withRevenueCatMainApplication = (config) => {
   ]);
 };
 
+// Inject ext block into root build.gradle so react-native-purchases
+// getExtOrIntegerDefault() can resolve compileSdkVersion etc.
+const withRevenueCatRootBuildGradle = (config) => {
+  return withProjectBuildGradle(config, (config) => {
+    const EXT_BLOCK = `
+ext {
+    buildToolsVersion = findProperty('android.buildToolsVersion') ?: "35.0.0"
+    minSdkVersion = (findProperty('android.minSdkVersion') ?: "24").toInteger()
+    compileSdkVersion = (findProperty('android.compileSdkVersion') ?: "35").toInteger()
+    targetSdkVersion = (findProperty('android.targetSdkVersion') ?: "35").toInteger()
+    ndkVersion = findProperty('android.ndkVersion') ?: "26.1.10909125"
+    kotlinVersion = findProperty('android.kotlinVersion') ?: "2.1.20"
+}`;
+    if (!config.modResults.contents.includes('ext {')) {
+      config.modResults.contents = config.modResults.contents.replace(
+        'apply plugin: "expo-root-project"',
+        EXT_BLOCK + '\n\napply plugin: "expo-root-project"'
+      );
+    }
+    return config;
+  });
+};
+
 const withRevenueCat = (config) => {
+  config = withRevenueCatRootBuildGradle(config);
   config = withRevenueCatSettingsGradle(config);
   config = withRevenueCatAppBuildGradle(config);
   config = withRevenueCatMainApplication(config);

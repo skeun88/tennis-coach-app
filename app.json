@@ -48,10 +48,7 @@
         "android.permission.FOREGROUND_SERVICE_MICROPHONE",
         "android.permission.POST_NOTIFICATIONS"
       ],
-      "versionCode": 20,
-      "compileSdkVersion": 35,
-      "targetSdkVersion": 35,
-      "buildToolsVersion": "35.0.0"
+      "versionCode": 22
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -59,6 +56,17 @@
     },
     "scheme": "tenniscoach",
     "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0",
+            "kotlinVersion": "2.1.20"
+          }
+        }
+      ],
       [
         "@react-native-seoul/kakao-login",
         {
