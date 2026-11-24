@@ -1,4 +1,4 @@
-const { withDangerousMod, withAppBuildGradle, withSettingsGradle, withProjectBuildGradle } = require('@expo/config-plugins');
+const { withDangerousMod, withAppBuildGradle, withSettingsGradle, withProjectBuildGradle, withAndroidManifest } = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
@@ -93,7 +93,31 @@ ext {
   });
 };
 
+// Add android.hardware.screen.portrait as required=false
+// to prevent Google Play from blocking installs on tablets/Desktop/XR
+const withPortraitFeatureOptional = (config) => {
+  return withAndroidManifest(config, (config) => {
+    const manifest = config.modResults.manifest;
+    if (!manifest['uses-feature']) {
+      manifest['uses-feature'] = [];
+    }
+    const alreadyAdded = manifest['uses-feature'].some(
+      (f) => f.$?.['android:name'] === 'android.hardware.screen.portrait'
+    );
+    if (!alreadyAdded) {
+      manifest['uses-feature'].push({
+        $: {
+          'android:name': 'android.hardware.screen.portrait',
+          'android:required': 'false',
+        },
+      });
+    }
+    return config;
+  });
+};
+
 const withRevenueCat = (config) => {
+  config = withPortraitFeatureOptional(config);
   config = withRevenueCatRootBuildGradle(config);
   config = withRevenueCatSettingsGradle(config);
   config = withRevenueCatAppBuildGradle(config);
