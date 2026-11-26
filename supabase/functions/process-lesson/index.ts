@@ -424,7 +424,7 @@ serve(async (req) => {
     const whisperData = await whisperRes.json()
     T.stt = Date.now()
     const rawTranscript = (whisperData.text || '').trim()
-    if (!rawTranscript) throw new Error(`음성 변환 실패: ${JSON.stringify(whisperData)}`)
+    if (!rawTranscript) throw new Error('음성이 인식되지 않았습니다. 조용한 환경에서 마이크에 가깝게 다시 시도해 주세요.')
     const transcript = applySTTCorrections(rawTranscript)
 
     // 무음/무의미 transcript 차단
