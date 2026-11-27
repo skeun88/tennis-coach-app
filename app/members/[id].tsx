@@ -304,6 +304,7 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
   const [lessonPackages, setLessonPackages] = useState<any[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
+  const [creditAdjustments, setCreditAdjustments] = useState<any[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [memberNotes, setMemberNotes] = useState<MemberNote[]>([]);
   const [newNote, setNewNote] = useState('');
@@ -814,6 +815,18 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
       .order('created_at', { ascending: false })
       .limit(50);
     setAttendance(data ?? []);
+    // 횟수 조정 이력도 함께 로드
+    await loadCreditAdjustments();
+  }
+
+  async function loadCreditAdjustments() {
+    const { data } = await supabase
+      .from('credit_adjustments')
+      .select('*')
+      .eq('member_id', id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    setCreditAdjustments(data ?? []);
   }
 
   async function loadPayments() {
@@ -2126,129 +2139,143 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
         {tab === 'attendance' && tabLoading !== 'attendance' && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>출석 기록 ({attendance.length}건)</Text>
-            {attendance.length === 0 && <Text style={styles.emptyText}>출석 기록이 없습니다</Text>}
-            {attendance.map(a => {
-              const lesson = (a as any).lesson;
-              const isAbsent = a.status === '결석';
-              const deductType = (a as any).deduction_type as string | null;
-              const absReason = (a as any).absence_reason as string | null;
-              const isMakeup = deductType === '보강예정';
-              const displayStatus: '출석' | '결석' | '보강예정' = isAbsent
-                ? (isMakeup ? '보강예정' : '결석')
-                : '출석';
-              const statusColor = displayStatus === '출석' ? Colors.primary
-                : displayStatus === '보강예정' ? Colors.accentWarm
-                : Colors.destructive;
-              const dateLabel = formatAttendanceDate(lesson?.date, lesson?.start_time, lesson?.end_time);
-              const isEditing = editingAttId === a.id;
-              const sessionNum = sessionNumMap.get(a.id) ?? 0;
-
-              // 수정 중일 때 크레딧 미리보기
-              const creditPreviewAfter = isEditing && editDeductCredit !== a.deduct_credit
-                ? editDeductCredit
-                  ? (member?.remaining_credits ?? 0) - 1
-                  : (member?.remaining_credits ?? 0) + 1
-                : null;
-
-              return (
-                <View key={a.id} style={styles.attendanceRow}>
-                  <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-                  <View style={{ flex: 1 }}>
-                    {/* 날짜/시간 + 회차 */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 1 }}>
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.foreground, flex: 1 }}>
-                        {dateLabel}
-                      </Text>
-                      {!isEditing && pkgTotalCredits > 0 && sessionNum > 0 && (
-                        <Text style={{ fontSize: 12, color: Colors.mutedFg, marginLeft: 6 }}>
-                          {sessionNum}회차 / 총 {pkgTotalCredits}회
+            {attendance.length === 0 && creditAdjustments.length === 0 && (
+              <Text style={styles.emptyText}>출석 기록이 없습니다</Text>
+            )}
+            {(() => {
+              const GOLD = '#B8860B';
+              const GOLD_BG = '#FFF8E1';
+              const adjItems = creditAdjustments.map((adj: any) => ({
+                _type: 'adjustment' as const,
+                _sortKey: adj.created_at ?? '',
+                ...adj,
+              }));
+              const attItems = attendance.map((a: any) => ({
+                _type: 'attendance' as const,
+                _sortKey: (a.lesson?.date ?? '') + 'T' + (a.lesson?.start_time ?? '00:00'),
+                ...a,
+              }));
+              const timeline = [...attItems, ...adjItems].sort((x: any, y: any) =>
+                x._sortKey > y._sortKey ? -1 : x._sortKey < y._sortKey ? 1 : 0
+              );
+              return timeline.map((item: any, idx: number) => {
+                const isFirst = idx === 0;
+                if (item._type === 'adjustment') {
+                  const adj = item;
+                  const isAdd = adj.delta > 0;
+                  const absAmt = Math.abs(adj.delta);
+                  const dt = new Date(adj.created_at);
+                  const dLabel = dt.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric', weekday: 'short' })
+                    + ' ' + dt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+                  return (
+                    <View key={'adj_' + adj.id} style={[styles.attendanceRow, { borderTopWidth: isFirst ? 0 : 1, borderTopColor: '#F0EAE4' }]}>
+                      <View style={[styles.statusDot, { backgroundColor: isAdd ? GOLD : '#9E9E9E' }]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.foreground }}>{dLabel}</Text>
+                        <Text style={{ fontSize: 13, color: Colors.foreground, marginTop: 2 }}>
+                          레슨 횟수 {absAmt}회{' '}
+                          <Text style={{ color: isAdd ? GOLD : '#9E9E9E', fontWeight: '700' }}>{isAdd ? '추가' : '차감'}</Text>
                         </Text>
+                        <Text style={{ fontSize: 12, color: Colors.mutedFg, marginTop: 1 }}>
+                          잔여 {adj.before_credits}회 → {adj.after_credits}회{adj.reason ? ' · ' + adj.reason : ''}
+                        </Text>
+                        {adj.note ? <Text style={{ fontSize: 12, color: Colors.mutedFg }}>{adj.note}</Text> : null}
+                      </View>
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: GOLD_BG, alignSelf: 'flex-start' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: GOLD }}>횟수 조정</Text>
+                      </View>
+                    </View>
+                  );
+                }
+                // 출석 행
+                const a = item;
+                const lesson = a.lesson;
+                const isAbsent = a.status === '결석';
+                const deductType = a.deduction_type as string | null;
+                const absReason = a.absence_reason as string | null;
+                const isMakeup = deductType === '보강예정';
+                const displayStatus: '출석' | '결석' | '보강예정' = isAbsent
+                  ? (isMakeup ? '보강예정' : '결석')
+                  : '출석';
+                const statusColor = displayStatus === '출석' ? Colors.primary
+                  : displayStatus === '보강예정' ? Colors.accentWarm
+                  : Colors.destructive;
+                const dateLabel = formatAttendanceDate(lesson?.date, lesson?.start_time, lesson?.end_time);
+                const isEditing = editingAttId === a.id;
+                const sessionNum = sessionNumMap.get(a.id) ?? 0;
+                const creditPreviewAfter = isEditing && editDeductCredit !== a.deduct_credit
+                  ? editDeductCredit ? (member?.remaining_credits ?? 0) - 1 : (member?.remaining_credits ?? 0) + 1
+                  : null;
+                return (
+                  <View key={a.id} style={[styles.attendanceRow, { borderTopWidth: isFirst ? 0 : 1, borderTopColor: '#F0EAE4' }]}>
+                    <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 1 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.foreground, flex: 1 }}>{dateLabel}</Text>
+                        {!isEditing && pkgTotalCredits > 0 && sessionNum > 0 && (
+                          <Text style={{ fontSize: 12, color: Colors.mutedFg, marginLeft: 6 }}>{sessionNum}회차 / 총 {pkgTotalCredits}회</Text>
+                        )}
+                      </View>
+                      {isAbsent && absReason && !isEditing && (
+                        <Text style={{ fontSize: 12, color: Colors.mutedFg }}>사유: {absReason}</Text>
+                      )}
+                      {isEditing && (
+                        <View style={{ gap: 8, marginTop: 8 }}>
+                          <View style={{ flexDirection: 'row', gap: 6 }}>
+                            {(['출석', '결석', '보강예정'] as const).map(opt => {
+                              const col = opt === '출석' ? Colors.primary : opt === '보강예정' ? Colors.accentWarm : Colors.destructive;
+                              const isActive = editStatus2 === opt;
+                              return (
+                                <TouchableOpacity key={opt}
+                                  style={{ flex: 1, paddingVertical: 7, borderRadius: 8, alignItems: 'center',
+                                    backgroundColor: isActive ? col : Colors.mutedBg, borderWidth: 1.5, borderColor: isActive ? col : Colors.border }}
+                                  onPress={() => setEditStatus2(opt)}>
+                                  <Text style={{ fontSize: 13, fontWeight: '700', color: isActive ? '#fff' : Colors.mutedFg }}>{opt}</Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                            backgroundColor: Colors.mutedBg, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 }}>
+                            <Text style={{ fontSize: 13, color: Colors.foreground, fontWeight: '600' }}>레슨권 횟수 차감</Text>
+                            <Switch value={editDeductCredit} onValueChange={setEditDeductCredit}
+                              trackColor={{ false: Colors.border, true: Colors.primary }} thumbColor={'#fff'} />
+                          </View>
+                          {creditPreviewAfter !== null && (
+                            <Text style={{ fontSize: 12, color: Colors.mutedFg, textAlign: 'center' }}>
+                              잔여 {member?.remaining_credits ?? 0}회 → {creditPreviewAfter}회
+                            </Text>
+                          )}
+                          <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <TouchableOpacity style={{ flex: 1, backgroundColor: Colors.primary, borderRadius: 8, paddingVertical: 8, alignItems: 'center', opacity: savingAtt ? 0.5 : 1 }}
+                              onPress={() => saveAttStatus(a.id, a.member_id, a.deduct_credit, member?.remaining_credits ?? 0)} disabled={savingAtt}>
+                              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{savingAtt ? '저장중...' : '저장'}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={{ flex: 1, backgroundColor: Colors.mutedBg, borderRadius: 8, paddingVertical: 8, alignItems: 'center' }}
+                              onPress={() => setEditingAttId(null)}>
+                              <Text style={{ color: Colors.mutedFg, fontWeight: '700', fontSize: 13 }}>취소</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
                       )}
                     </View>
-                    {isAbsent && absReason && !isEditing && (
-                      <Text style={{ fontSize: 12, color: Colors.mutedFg }}>사유: {absReason}</Text>
-                    )}
-                    {/* 수정 UI */}
-                    {isEditing && (
-                      <View style={{ gap: 8, marginTop: 8 }}>
-                        {/* 출석 상태 버튼 */}
-                        <View style={{ flexDirection: 'row', gap: 6 }}>
-                          {(['출석', '결석', '보강예정'] as const).map(opt => {
-                            const col = opt === '출석' ? Colors.primary : opt === '보강예정' ? Colors.accentWarm : Colors.destructive;
-                            const isActive = editStatus2 === opt;
-                            return (
-                              <TouchableOpacity
-                                key={opt}
-                                style={{ flex: 1, paddingVertical: 7, borderRadius: 8, alignItems: 'center',
-                                  backgroundColor: isActive ? col : Colors.mutedBg,
-                                  borderWidth: 1.5, borderColor: isActive ? col : Colors.border }}
-                                onPress={() => setEditStatus2(opt)}
-                              >
-                                <Text style={{ fontSize: 13, fontWeight: '700', color: isActive ? '#fff' : Colors.mutedFg }}>{opt}</Text>
-                              </TouchableOpacity>
-                            );
-                          })}
+                    {!isEditing && (
+                      <View style={{ alignItems: 'flex-end', gap: 5 }}>
+                        <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: statusColor + '20' }}>
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: statusColor }}>{displayStatus}</Text>
                         </View>
-                        {/* 레슨권 횟수 차감 스위치 */}
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                          backgroundColor: Colors.mutedBg, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 }}>
-                          <Text style={{ fontSize: 13, color: Colors.foreground, fontWeight: '600' }}>레슨권 횟수 차감</Text>
-                          <Switch
-                            value={editDeductCredit}
-                            onValueChange={setEditDeductCredit}
-                            trackColor={{ false: Colors.border, true: Colors.primary }}
-                            thumbColor={'#fff'}
-                          />
-                        </View>
-                        {/* 크레딧 변경 미리보기 */}
-                        {creditPreviewAfter !== null && (
-                          <Text style={{ fontSize: 12, color: Colors.mutedFg, textAlign: 'center' }}>
-                            잔여 {member?.remaining_credits ?? 0}회 → {creditPreviewAfter}회
-                          </Text>
-                        )}
-                        {/* 저장/취소 버튼 */}
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                          <TouchableOpacity
-                            style={{ flex: 1, backgroundColor: Colors.primary, borderRadius: 8, paddingVertical: 8, alignItems: 'center', opacity: savingAtt ? 0.5 : 1 }}
-                            onPress={() => saveAttStatus(a.id, a.member_id, a.deduct_credit, member?.remaining_credits ?? 0)}
-                            disabled={savingAtt}
-                          >
-                            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{savingAtt ? '저장중...' : '저장'}</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={{ flex: 1, backgroundColor: Colors.mutedBg, borderRadius: 8, paddingVertical: 8, alignItems: 'center' }}
-                            onPress={() => setEditingAttId(null)}
-                          >
-                            <Text style={{ color: Colors.mutedFg, fontWeight: '700', fontSize: 13 }}>취소</Text>
-                          </TouchableOpacity>
-                        </View>
+                        <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', gap: 3,
+                          backgroundColor: Colors.primaryLight, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}
+                          onPress={() => { setEditingAttId(a.id); setEditStatus2(displayStatus); setEditDeductCredit(a.deduct_credit); }}>
+                          <Ionicons name="create-outline" size={12} color={Colors.primary} />
+                          <Text style={{ fontSize: 13, color: Colors.primary, fontWeight: '700' }}>수정</Text>
+                        </TouchableOpacity>
                       </View>
                     )}
                   </View>
-                  {/* 상태 배지 + 수정 버튼 (수정 중 아닐 때) */}
-                  {!isEditing && (
-                    <View style={{ alignItems: 'flex-end', gap: 5 }}>
-                      <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: statusColor + '20' }}>
-                        <Text style={{ fontSize: 13, fontWeight: '700', color: statusColor }}>{displayStatus}</Text>
-                      </View>
-                      <TouchableOpacity
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: 3,
-                          backgroundColor: Colors.primaryLight, borderRadius: 6,
-                          paddingHorizontal: 8, paddingVertical: 4 }}
-                        onPress={() => {
-                          setEditingAttId(a.id);
-                          setEditStatus2(displayStatus);
-                          setEditDeductCredit(a.deduct_credit);
-                        }}
-                      >
-                        <Ionicons name="create-outline" size={12} color={Colors.primary} />
-                        <Text style={{ fontSize: 13, color: Colors.primary, fontWeight: '700' }}>수정</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
-              );
-            })}
+                );
+              });
+            })()}
           </View>
         )}
 
