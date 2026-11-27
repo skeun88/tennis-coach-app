@@ -4,6 +4,7 @@ import {
   TouchableOpacity, KeyboardAvoidingView, Platform,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../lib/theme';
@@ -29,6 +30,7 @@ const QUICK_QUESTIONS = [
 
 export default function ChatScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '0',
@@ -121,8 +123,13 @@ export default function ChatScreen() {
     );
   }
 
+  // 입력바 하단 safe area 패딩
+  const inputBarBottomPad = Platform.OS === 'ios'
+    ? insets.bottom
+    : Math.max(insets.bottom, 8);
+
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <SettingsHeader title="KERRI 도우미" onBack={() => router.back()} />
       <KeyboardAvoidingView
         style={styles.flex}
@@ -134,7 +141,7 @@ export default function ChatScreen() {
           data={messages}
           keyExtractor={item => item.id}
           renderItem={renderMessage}
-          contentContainerStyle={styles.messageList}
+          contentContainerStyle={[styles.messageList, { paddingBottom: 16 }]}
           keyboardShouldPersistTaps="handled"
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
           ListFooterComponent={
@@ -172,33 +179,36 @@ export default function ChatScreen() {
           }
         />
 
-        <View style={styles.inputBar}>
+        <View style={[styles.inputBar, { paddingBottom: inputBarBottomPad + 8 }]}>
           <TextInput
             style={styles.input}
             value={input}
             onChangeText={setInput}
-            placeholder="궁금한 점을 입력하세요..."
+            placeholder="궁금한 점을 입력해 주세요"
             placeholderTextColor={Colors.placeholder}
             multiline
             maxLength={500}
             returnKeyType="send"
             onSubmitEditing={() => sendMessage(input)}
+            blurOnSubmit={false}
           />
           <TouchableOpacity
             style={[styles.sendBtn, (!input.trim() || loading) && styles.sendBtnDisabled]}
             onPress={() => sendMessage(input)}
             disabled={!input.trim() || loading}
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            activeOpacity={0.8}
           >
             <Ionicons name="send" size={20} color="#fff" />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: Colors.background, },  // SafeAreaView로 교체됨
   flex: { flex: 1 },
   messageList: { padding: 16, paddingBottom: 8 },
 
@@ -250,19 +260,24 @@ const styles = StyleSheet.create({
   // Input bar
   inputBar: {
     flexDirection: 'row', alignItems: 'flex-end',
-    backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 10,
+    backgroundColor: '#fff', paddingHorizontal: 12, paddingTop: 10,
     borderTopWidth: 1, borderTopColor: Colors.border, gap: 8,
+    // 입력창이 채팅 콘텐츠 위에 항상 표시
+    zIndex: 10,
+    elevation: 10,
   },
   input: {
     flex: 1, fontSize: 15, color: Colors.foreground,
-    backgroundColor: Colors.background, borderRadius: 20,
-    paddingHorizontal: 16, paddingVertical: 10,
-    maxHeight: 100, lineHeight: 20,
+    backgroundColor: Colors.background, borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
+    maxHeight: 120, minHeight: 44, lineHeight: 22,
   },
   sendBtn: {
     width: 44, height: 44, borderRadius: 22,
     backgroundColor: Colors.primary,
     justifyContent: 'center', alignItems: 'center',
+    flexShrink: 0,
   },
   sendBtnDisabled: { backgroundColor: Colors.iconMuted },
 });

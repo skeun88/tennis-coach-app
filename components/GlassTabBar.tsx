@@ -94,6 +94,9 @@ export default function GlassTabBar({ state, navigation }: BottomTabBarProps) {
     }).start();
   }, [activeIndex, tabWidth, reduceMotion]);
 
+  // chat 화면(KERRI 도우미)에서는 탭바 완전 숨김
+  if (activeRouteName === 'chat') return null;
+
   if (keyboardUp) return null;
 
   const barContent = (
