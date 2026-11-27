@@ -401,6 +401,67 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
     setShowChangePkgModal(true);
   }
 
+  // ── 횟수 조정 바텀시트 ────────────────────────────────────────
+  const ADJUST_REASONS = ['코치 추가 제공', '레슨 취소 복구', '재등록 보너스', '오류 수정', '기타'];
+  const [showAdjustSheet, setShowAdjustSheet] = useState(false);
+  const [adjustMode, setAdjustMode] = useState<'add' | 'subtract'>('add');
+  const [adjustAmount, setAdjustAmount] = useState('1');
+  const [adjustReason, setAdjustReason] = useState('');
+  const [adjustNote, setAdjustNote] = useState('');
+  const [adjustSaving, setAdjustSaving] = useState(false);
+
+  const adjustAmountNum = Math.max(0, parseInt(adjustAmount) || 0);
+  const currentRemaining = parseInt(remainingCredits) || 0;
+  const adjustPreview = adjustMode === 'add'
+    ? currentRemaining + adjustAmountNum
+    : Math.max(0, currentRemaining - adjustAmountNum);
+
+  function openAdjustSheet() {
+    setAdjustMode('add');
+    setAdjustAmount('1');
+    setAdjustReason('');
+    setAdjustNote('');
+    setShowAdjustSheet(true);
+  }
+
+  async function handleSaveAdjust() {
+    if (!id || adjustAmountNum <= 0 || !adjustReason) return;
+    if (adjustMode === 'subtract' && adjustAmountNum > currentRemaining) {
+      Alert.alert('오류', '잔여 횟수보다 많이 차감할 수 없어요.');
+      return;
+    }
+    setAdjustSaving(true);
+    try {
+      const delta = adjustMode === 'add' ? adjustAmountNum : -adjustAmountNum;
+      const afterCredits = currentRemaining + delta;
+      // 1. members 테이블 업데이트
+      const { error: upErr } = await supabase
+        .from('members')
+        .update({ remaining_credits: afterCredits })
+        .eq('id', id);
+      if (upErr) throw upErr;
+      // 2. 이력 저장 (테이블 없으면 무시)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('credit_adjustments').insert({
+          member_id: id,
+          coach_id: user.id,
+          before_credits: currentRemaining,
+          delta,
+          after_credits: afterCredits,
+          reason: adjustReason,
+          note: adjustNote || null,
+        }).then(() => {}); // 이력 실패해도 계속
+      }
+      setRemainingCredits(String(afterCredits));
+      setShowAdjustSheet(false);
+    } catch (e: any) {
+      Alert.alert('오류', e?.message || '저장에 실패했습니다.');
+    } finally {
+      setAdjustSaving(false);
+    }
+  }
+
   async function handleSaveLessonPackage() {
     if (!id) return;
     setChangePkgSaving(true);
@@ -1902,14 +1963,36 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                   <View style={{ flex: 1 }}>
                     <Text style={styles.lessonMgmtLabel}>이용 중인 레슨권</Text>
                     {lessonPackage
-                      ? <Text style={styles.lessonMgmtMain} numberOfLines={1}>{lessonPackage.title} · 잔여 {memberRemaining}회</Text>
-                      : <Text style={[styles.lessonMgmtMain, { color: Colors.placeholder }]}>레슨권 없음 · 잔여 {memberRemaining}회</Text>
+                      ? <Text style={styles.lessonMgmtMain} numberOfLines={1}>{lessonPackage.title}</Text>
+                      : <Text style={[styles.lessonMgmtMain, { color: Colors.placeholder }]}>레슨권 없음</Text>
                     }
                   </View>
                   <Text style={styles.lessonMgmtAction}>변경 〉</Text>
                 </TouchableOpacity>
 
-                {/* ③ 앞으로 예정된 일정 */}
+                {/* ③ 레슨 횟수 */}
+                {(() => {
+                  const total = parseInt(String((member as any).total_credits ?? lessonPackage?.total_credits ?? 0));
+                  const remaining = currentRemaining;
+                  const used = Math.max(0, total - remaining);
+                  return (
+                    <TouchableOpacity style={styles.lessonMgmtRow} onPress={openAdjustSheet} activeOpacity={0.7}>
+                      <View style={styles.lessonMgmtIconWrap}>
+                        <Ionicons name="ticket-outline" size={16} color={Colors.primary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.lessonMgmtLabel}>레슨 횟수</Text>
+                        <Text style={styles.lessonMgmtMain} numberOfLines={1}>
+                          총 {total}회 · 사용 {used}회 ·{' '}
+                          <Text style={{ color: Colors.primary, fontWeight: '800' }}>잔여 {remaining}회</Text>
+                        </Text>
+                      </View>
+                      <Text style={styles.lessonMgmtAction}>조정 〉</Text>
+                    </TouchableOpacity>
+                  );
+                })()}
+
+                {/* ④ 앞으로 예정된 일정 */}
                 <TouchableOpacity style={[styles.lessonMgmtRow, { borderBottomWidth: 0 }]} onPress={() => setScheduleListSheet(true)} activeOpacity={0.7}>
                   <View style={styles.lessonMgmtIconWrap}><Ionicons name="calendar-outline" size={16} color={Colors.primary} /></View>
                   <View style={{ flex: 1 }}>
@@ -2515,6 +2598,166 @@ const MINUTES = ['00', '10', '20', '30', '40', '50'];
                 : <Text style={{ fontSize: 16, fontWeight: '700', color: changePkgSelectedId ? '#fff' : Colors.mutedFg }}>변경사항 저장</Text>
               }
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ─── 횟수 조정 바텀시트 ─── */}
+      <Modal visible={showAdjustSheet} transparent animationType="slide" onRequestClose={() => { if (!adjustSaving) setShowAdjustSheet(false); }}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: insets.bottom + 16 }}>
+            {/* 핸들 */}
+            <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: Colors.border }} />
+            </View>
+            {/* 헤더 */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.border }}>
+              <Text style={{ fontSize: 17, fontWeight: '800', color: Colors.foreground }}>레슨 횟수 조정</Text>
+              <TouchableOpacity onPress={() => setShowAdjustSheet(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={22} color={Colors.mutedFg} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 480 }} keyboardShouldPersistTaps="handled">
+              <View style={{ padding: 20, gap: 20 }}>
+
+                {/* 현재 잔여 횟수 */}
+                <View style={{ backgroundColor: Colors.primaryLight, borderRadius: 12, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Ionicons name="ticket-outline" size={20} color={Colors.primary} />
+                  <View>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.mutedFg, textTransform: 'uppercase', letterSpacing: 0.3 }}>현재 잔여 횟수</Text>
+                    <Text style={{ fontSize: 22, fontWeight: '800', color: Colors.primary, marginTop: 2 }}>{currentRemaining}회</Text>
+                  </View>
+                </View>
+
+                {/* 추가 / 차감 선택 */}
+                <View>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 8 }}>조정 방식</Text>
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    {(['add', 'subtract'] as const).map(mode => (
+                      <TouchableOpacity
+                        key={mode}
+                        style={[
+                          { flex: 1, borderRadius: 10, paddingVertical: 12, alignItems: 'center', borderWidth: 2 },
+                          adjustMode === mode
+                            ? { backgroundColor: Colors.primary, borderColor: Colors.primary }
+                            : { backgroundColor: '#fff', borderColor: Colors.border },
+                        ]}
+                        onPress={() => setAdjustMode(mode)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons
+                          name={mode === 'add' ? 'add-circle-outline' : 'remove-circle-outline'}
+                          size={20}
+                          color={adjustMode === mode ? '#fff' : Colors.mutedFg}
+                        />
+                        <Text style={{ fontSize: 14, fontWeight: '700', marginTop: 4, color: adjustMode === mode ? '#fff' : Colors.foreground }}>
+                          {mode === 'add' ? '추가' : '차감'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* 조정 횟수 */}
+                <View>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 8 }}>조정할 횟수</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <TouchableOpacity
+                      style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center' }}
+                      onPress={() => setAdjustAmount(String(Math.max(1, adjustAmountNum - 1)))}
+                    >
+                      <Ionicons name="remove" size={20} color={Colors.foreground} />
+                    </TouchableOpacity>
+                    <TextInput
+                      style={{ flex: 1, textAlign: 'center', fontSize: 24, fontWeight: '800', color: Colors.foreground, borderBottomWidth: 2, borderBottomColor: Colors.primary, paddingVertical: 4 }}
+                      value={adjustAmount}
+                      onChangeText={v => setAdjustAmount(v.replace(/[^0-9]/g, ''))}
+                      keyboardType="number-pad"
+                      maxLength={3}
+                    />
+                    <TouchableOpacity
+                      style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: Colors.border, alignItems: 'center', justifyContent: 'center' }}
+                      onPress={() => setAdjustAmount(String(adjustAmountNum + 1))}
+                    >
+                      <Ionicons name="add" size={20} color={Colors.foreground} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* 조정 후 미리보기 */}
+                <View style={{ backgroundColor: adjustMode === 'subtract' && adjustAmountNum > currentRemaining ? '#FEF2F2' : Colors.primaryLight, borderRadius: 10, padding: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 13, color: Colors.mutedFg }}>조정 후 잔여</Text>
+                  <Text style={{ fontSize: 20, fontWeight: '800', color: adjustMode === 'subtract' && adjustAmountNum > currentRemaining ? '#EF4444' : Colors.primary }}>
+                    {adjustMode === 'subtract' && adjustAmountNum > currentRemaining ? '! 음수 불가' : `${adjustPreview}회`}
+                  </Text>
+                </View>
+
+                {/* 조정 사유 */}
+                <View>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 8 }}>조정 사유 <Text style={{ color: '#EF4444' }}>*</Text></Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {ADJUST_REASONS.map(r => (
+                      <TouchableOpacity
+                        key={r}
+                        style={[
+                          { borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1.5 },
+                          adjustReason === r
+                            ? { backgroundColor: Colors.primary, borderColor: Colors.primary }
+                            : { backgroundColor: '#fff', borderColor: Colors.border },
+                        ]}
+                        onPress={() => setAdjustReason(r)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: adjustReason === r ? '#fff' : Colors.foreground }}>{r}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* 메모 (선택) */}
+                <View>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.mutedFg, marginBottom: 8 }}>메모 <Text style={{ fontWeight: '400' }}>(선택)</Text></Text>
+                  <TextInput
+                    style={{ backgroundColor: Colors.mutedBg, borderRadius: 10, padding: 12, fontSize: 14, color: Colors.foreground, minHeight: 60 }}
+                    value={adjustNote}
+                    onChangeText={setAdjustNote}
+                    placeholder="추가 정보를 입력하세요"
+                    placeholderTextColor={Colors.placeholder}
+                    multiline
+                    maxLength={200}
+                  />
+                </View>
+
+              </View>
+            </ScrollView>
+
+            {/* 버튼 영역 */}
+            <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 20, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border }}>
+              <TouchableOpacity
+                style={{ flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center', backgroundColor: Colors.mutedBg }}
+                onPress={() => setShowAdjustSheet(false)}
+                disabled={adjustSaving}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.mutedFg }}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  { flex: 2, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+                  (!adjustReason || adjustAmountNum <= 0 || (adjustMode === 'subtract' && adjustAmountNum > currentRemaining))
+                    ? { backgroundColor: Colors.border }
+                    : { backgroundColor: Colors.primary },
+                ]}
+                onPress={handleSaveAdjust}
+                disabled={adjustSaving || !adjustReason || adjustAmountNum <= 0 || (adjustMode === 'subtract' && adjustAmountNum > currentRemaining)}
+                activeOpacity={0.8}
+              >
+                {adjustSaving
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={{ fontSize: 15, fontWeight: '700', color: (!adjustReason || adjustAmountNum <= 0) ? Colors.mutedFg : '#fff' }}>변경 저장</Text>
+                }
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
