@@ -123,21 +123,23 @@ export default function ChatScreen() {
     );
   }
 
-  // 입력바 하단 safe area 패딩
+  // 입력바 하단 safe area 패딩 (키보드 열렸을 때는 0, 닫혔을 때만 safe area)
   const inputBarBottomPad = Platform.OS === 'ios'
     ? insets.bottom
     : Math.max(insets.bottom, 8);
 
-  // SettingsHeader 높이 = 52(row) + insets.top + hairline divider ≈ 52 + insets.top
-  const headerHeight = 52 + insets.top;
+  // SettingsHeader는 내부에서 insets.top을 직접 처리함 (paddingTop: insets.top)
+  // → SafeAreaView edges=[] 로 top 중복 적용 방지
+  // → KAV offset = SettingsHeader row(52) + insets.top (헤더 전체 실제 높이)
+  const kbOffset = 52 + insets.top;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <View style={styles.container}>
       <SettingsHeader title="KERRI 도우미" onBack={() => router.back()} />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={headerHeight}
+        keyboardVerticalOffset={kbOffset}
       >
         <FlatList
           ref={flatListRef}
@@ -206,12 +208,12 @@ export default function ChatScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  // SafeAreaView 배경을 헤더와 동일한 흰색으로 → 상태바 영역까지 컬러 통일
+  // SettingsHeader가 자체적으로 insets.top 처리 → View로 감싸고 배경 흰색으로 상태바 영역 커버
   container: { flex: 1, backgroundColor: '#FFFFFF' },
   flex: { flex: 1, backgroundColor: Colors.background },
   messageList: { padding: 16, paddingBottom: 8 },
