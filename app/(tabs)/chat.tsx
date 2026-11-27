@@ -1,8 +1,8 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput,
   TouchableOpacity, KeyboardAvoidingView, Platform,
-  ActivityIndicator,
+  ActivityIndicator, Keyboard,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -41,7 +41,17 @@ export default function ChatScreen() {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+
+  // 키보드 상태 감지
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvt, () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener(hideEvt, () => setKeyboardVisible(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   // 대화 히스토리 (Anthropic 형식)
   const historyRef = useRef<{ role: string; content: string }[]>([]);
@@ -123,15 +133,14 @@ export default function ChatScreen() {
     );
   }
 
-  // 입력바 하단 safe area 패딩 (키보드 열렸을 때는 0, 닫혔을 때만 safe area)
-  const inputBarBottomPad = Platform.OS === 'ios'
-    ? insets.bottom
-    : Math.max(insets.bottom, 8);
+  // 키보드 열렸을 때는 paddingBottom 8px만, 닫혔을 때는 safe area + 8px
+  const inputBarBottomPad = keyboardVisible
+    ? 8
+    : (Platform.OS === 'ios' ? insets.bottom + 8 : Math.max(insets.bottom, 8));
 
-  // SettingsHeader는 내부에서 insets.top을 직접 처리함 (paddingTop: insets.top)
-  // → SafeAreaView edges=[] 로 top 중복 적용 방지
-  // → KAV offset = SettingsHeader row(52) + insets.top (헤더 전체 실제 높이)
-  const kbOffset = 52 + insets.top;
+  // KAV offset: SettingsHeader가 스스로 insets.top 처리하므로
+  // View 기준으로 헤더 실제 점유 높이 = insets.top + 52(row height)
+  const kbOffset = insets.top + 52;
 
   return (
     <View style={styles.container}>
