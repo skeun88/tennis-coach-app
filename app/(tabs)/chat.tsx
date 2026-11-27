@@ -128,13 +128,16 @@ export default function ChatScreen() {
     ? insets.bottom
     : Math.max(insets.bottom, 8);
 
+  // SettingsHeader 높이 = 52(row) + insets.top + hairline divider ≈ 52 + insets.top
+  const headerHeight = 52 + insets.top;
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <SettingsHeader title="KERRI 도우미" onBack={() => router.back()} />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}
+        keyboardVerticalOffset={headerHeight}
       >
         <FlatList
           ref={flatListRef}
@@ -179,7 +182,7 @@ export default function ChatScreen() {
           }
         />
 
-        <View style={[styles.inputBar, { paddingBottom: inputBarBottomPad + 8 }]}>
+        <View style={[styles.inputBar, { paddingBottom: inputBarBottomPad }]}>
           <TextInput
             style={styles.input}
             value={input}
@@ -208,8 +211,9 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background, },  // SafeAreaView로 교체됨
-  flex: { flex: 1 },
+  // SafeAreaView 배경을 헤더와 동일한 흰색으로 → 상태바 영역까지 컬러 통일
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  flex: { flex: 1, backgroundColor: Colors.background },
   messageList: { padding: 16, paddingBottom: 8 },
 
   // Quick questions
