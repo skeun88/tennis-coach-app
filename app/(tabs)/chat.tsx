@@ -138,9 +138,9 @@ export default function ChatScreen() {
     ? 8
     : (Platform.OS === 'ios' ? insets.bottom + 8 : Math.max(insets.bottom, 8));
 
-  // KAV offset: SettingsHeader가 스스로 insets.top 처리하므로
-  // View 기준으로 헤더 실제 점유 높이 = insets.top + 52(row height)
-  const kbOffset = insets.top + 52;
+  // KAV는 헤더 바로 아래에서 시작하므로 offset = 0
+  // behavior="padding"에서 offset은 "화면 상단~KAV 상단 사이 고정 요소 높이"
+  // KAV가 헤더 아래 flex:1로 시작하므로 0이어야 함
 
   return (
     <View style={styles.container}>
@@ -148,7 +148,7 @@ export default function ChatScreen() {
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={kbOffset}
+        keyboardVerticalOffset={0}
       >
         <FlatList
           ref={flatListRef}
